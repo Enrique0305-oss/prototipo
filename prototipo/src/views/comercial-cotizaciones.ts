@@ -74,30 +74,35 @@ export function renderComercialCotizaciones() {
         </div>
       </div>
 
-      <div class="search-filter-bar">
-        <div class="search-input-wrapper">
+      <!-- Filters -->
+      <div class="op-filters-bar">
+        <div class="op-search-box">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle>
             <path d="m21 21-4.35-4.35"></path>
           </svg>
-          <input type="text" placeholder="Buscar cotización..." class="search-input">
+          <input type="text" placeholder="Buscar por nombre o ID..." class="op-search-input">
         </div>
-        <select class="filter-select">
-          <option>Todos los estados</option>
-          <option>Pendiente</option>
-          <option>Aceptada</option>
-          <option>Rechazada</option>
-        </select>
-        <select class="filter-select">
-          <option>Todos los tipos</option>
-          <option>Servicio</option>
-          <option>Producto</option>
-          <option>Capacitación</option>
-        </select>
+
+        <div class="op-filter-group">
+          <select class="op-filter-select">
+            <option value="">Todos los estados</option>
+            <option value="al-dia">Al día</option>
+            <option value="proximo">Próximo</option>
+            <option value="vencido">Vencido</option>
+          </select>
+
+          <select class="op-filter-select">
+            <option value="">Todas las garantías</option>
+            <option value="vigente">Vigente</option>
+            <option value="vencer">Por Vencer</option>
+            <option value="expirada">Expirada</option>
+          </select>
+        </div>
       </div>
 
       <div class="table-container">
-        <table class="data-table">
+        <table class="op-table">
           <thead>
             <tr>
               <th>N° Cotización</th>

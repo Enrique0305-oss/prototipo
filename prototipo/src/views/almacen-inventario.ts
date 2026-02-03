@@ -174,23 +174,32 @@ export function renderProductosTab() {
 // Vista de Kardex (Tab 2)
 export function renderKardexTab() {
   return `
-    <div class="search-filter-bar">
-      <div class="search-input-wrapper">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-        <input type="text" placeholder="Buscar movimiento..." class="search-input">
+    <!-- Filters -->
+      <div class="op-filters-bar">
+        <div class="op-search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <input type="text" placeholder="Buscar por nombre o ID..." class="op-search-input">
+        </div>
+
+        <div class="op-filter-group">
+          <select class="op-filter-select">
+            <option value="">Todos los estados</option>
+            <option value="al-dia">Al día</option>
+            <option value="proximo">Próximo</option>
+            <option value="vencido">Vencido</option>
+          </select>
+
+          <select class="op-filter-select">
+            <option value="">Todas las garantías</option>
+            <option value="vigente">Vigente</option>
+            <option value="vencer">Por Vencer</option>
+            <option value="expirada">Expirada</option>
+          </select>
+        </div>
       </div>
-      <select class="filter-select">
-        <option>Todos los productos</option>
-        <option>Cipermetrina 25% EC</option>
-        <option>Deltametrina Gel 2%</option>
-        <option>Guantes Nitrilo</option>
-      </select>
-      <input type="date" class="filter-select" value="2025-01-31">
-      <button class="btn-filter">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-        Filtrar
-      </button>
-    </div>
 
     <div class="kardex-header">
       <h3>Kardex: Cipermetrina 25% EC</h3>
@@ -215,7 +224,7 @@ export function renderKardexTab() {
     </div>
 
     <div class="table-container">
-      <table class="data-table kardex-table">
+      <table class="op-table kardex-table">
         <thead>
           <tr>
             <th>FECHA</th>
