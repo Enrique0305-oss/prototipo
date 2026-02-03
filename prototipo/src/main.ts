@@ -79,7 +79,7 @@ function getMainContent() {
 
 function renderApp() {
   const app = document.querySelector<HTMLDivElement>('#app')!;
-  
+
   app.innerHTML = `
     <div class="app-container">
       <!-- Sidebar -->
@@ -150,69 +150,69 @@ function renderApp() {
     </div>
   `;
 
- 
+
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const target = e.currentTarget as HTMLButtonElement;
       const menuName = target.dataset.menu || 'Dashboard';
-      
+
 
       if (activeMenu === menuName) {
         return;
       }
-      
+
       activeMenu = menuName;
       activeSubMenu = '';
       renderApp();
     });
   });
 
- 
+
   document.querySelectorAll('.submenu-item').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const target = e.currentTarget as HTMLButtonElement;
       activeSubMenu = target.dataset.submenu || '';
-      activeInventoryTab = 'productos'; 
+      activeInventoryTab = 'productos';
       renderApp();
     });
   });
 
- 
+
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const target = e.currentTarget as HTMLButtonElement;
       const tabName = target.dataset.tab;
-      
+
       if (tabName && activeMenu === 'Almacén' && activeSubMenu === 'Inventario') {
         activeInventoryTab = tabName;
         updateInventoryTabContent();
       }
-      
+
       if (tabName && activeMenu === 'Almacén' && activeSubMenu === 'Entradas y Salidas') {
         activeEntradasTab = tabName;
         updateEntradasTabContent();
       }
-      
+
       if (tabName && activeMenu === 'Logística') {
         activeLogisticaTab = tabName;
         updateLogisticaTabContent();
       }
-      
+
       if (tabName && activeMenu === 'Finanzas') {
         activeFinanzasTab = tabName;
         updateFinanzasTabContent();
       }
-      
+
       if (tabName && activeMenu === 'Facturación') {
         activeFacturacionTab = tabName;
         updateFacturacionTabContent();
       }
-      
+
       if (tabName && activeMenu === 'Recursos Humanos') {
         activeRecursosTab = tabName;
         updateRecursosTabContent();
       }
-      
+
       if (tabName && activeMenu === 'Operaciones') {
         activeOperacionesTab = tabName;
         updateOperacionesTabContent();
@@ -225,9 +225,9 @@ function renderApp() {
 function updateInventoryTabContent() {
   const tabContent = document.querySelector('.tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
-  
+
   if (!tabContent) return;
-  
+
   tabButtons.forEach(btn => {
     const target = btn as HTMLButtonElement;
     if (target.dataset.tab === activeInventoryTab) {
@@ -236,7 +236,7 @@ function updateInventoryTabContent() {
       target.classList.remove('active');
     }
   });
-  
+
 
   switch (activeInventoryTab) {
     case 'kardex':
@@ -254,9 +254,9 @@ function updateInventoryTabContent() {
 function updateEntradasTabContent() {
   const tabContent = document.querySelector('#entradas-tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
-  
+
   if (!tabContent) return;
-  
+
 
   tabButtons.forEach(btn => {
     const target = btn as HTMLButtonElement;
@@ -283,9 +283,9 @@ function updateEntradasTabContent() {
 function updateLogisticaTabContent() {
   const tabContent = document.querySelector('#logistica-tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
-  
+
   if (!tabContent) return;
-  
+
 
   tabButtons.forEach(btn => {
     const target = btn as HTMLButtonElement;
@@ -295,7 +295,7 @@ function updateLogisticaTabContent() {
       target.classList.remove('active');
     }
   });
-  
+
 
   switch (activeLogisticaTab) {
     case 'servicios':
@@ -313,10 +313,10 @@ function updateLogisticaTabContent() {
 function updateFinanzasTabContent() {
   const tabContent = document.querySelector('#finanzas-tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
-  
+
   if (!tabContent) return;
-  
- 
+
+
   tabButtons.forEach(btn => {
     const target = btn as HTMLButtonElement;
     if (target.dataset.tab === activeFinanzasTab) {
@@ -325,8 +325,8 @@ function updateFinanzasTabContent() {
       target.classList.remove('active');
     }
   });
-  
- 
+
+
   switch (activeFinanzasTab) {
     case 'caja':
       tabContent.innerHTML = renderCajaChicaTab();
@@ -343,9 +343,9 @@ function updateFinanzasTabContent() {
 function updateFacturacionTabContent() {
   const tabContent = document.querySelector('#facturacion-tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
-  
+
   if (!tabContent) return;
-  
+
 
   tabButtons.forEach(btn => {
     const target = btn as HTMLButtonElement;
@@ -355,7 +355,7 @@ function updateFacturacionTabContent() {
       target.classList.remove('active');
     }
   });
-  
+
   // Actualizar contenido según el tab activo
   switch (activeFacturacionTab) {
     case 'contratos':
@@ -373,9 +373,9 @@ function updateFacturacionTabContent() {
 function updateRecursosTabContent() {
   const tabContent = document.querySelector('#recursos-tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
-  
+
   if (!tabContent) return;
-  
+
 
   tabButtons.forEach(btn => {
     const target = btn as HTMLButtonElement;
@@ -385,7 +385,7 @@ function updateRecursosTabContent() {
       target.classList.remove('active');
     }
   });
-  
+
 
   switch (activeRecursosTab) {
     case 'empleados':
@@ -403,9 +403,9 @@ function updateRecursosTabContent() {
 function updateOperacionesTabContent() {
   const tabContent = document.querySelector('#operaciones-tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
-  
+
   if (!tabContent) return;
-  
+
 
   tabButtons.forEach(btn => {
     const target = btn as HTMLButtonElement;
@@ -415,7 +415,7 @@ function updateOperacionesTabContent() {
       target.classList.remove('active');
     }
   });
-  
+
 
   switch (activeOperacionesTab) {
     case 'informes':

@@ -1,33 +1,111 @@
 // Almacén - Mantenimiento de Equipos View
 export function renderAlmacenMantenimiento() {
   return `
-    <div class="page-header-with-breadcrumb">
-      <div class="breadcrumb">Mantenimiento de Equipos <span class="breadcrumb-sub">Almacén Central</span></div>
-      <div class="page-actions">
-        <button class="btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Exportar
-        </button>
-        <button class="btn-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Agendar Mantenimiento
-        </button>
-      </div>
-    </div>
+    <div class="op-main-container">
+      <!-- Header -->
+      <div class="op-header">
+        <div class="op-header-top">
+          <h1 class="op-title">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="18" rx="2"></rect>
+              <line x1="2" y1="8" x2="22" y2="8"></line>
+            </svg>
+            Mantenimiento de Equipos
+          </h1>
+          <button class="btn-primary" id="btnAgendarMantenimiento">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Agendar Mantenimiento
+          </button>
+        </div>
 
-    <div class="search-filter-bar">
-      <div class="search-input-wrapper">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-        <input type="text" placeholder="Buscar equipo..." class="search-input">
-      </div>
-      <button class="btn-filter">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-        Filtrar
-      </button>
-    </div>
+        <!-- Stats Cards -->
+        <div class="op-stats-grid">
+          <div class="op-stat-card">
+            <div class="op-stat-icon op-stat-blue">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="6" x2="12" y2="12"></line>
+                <line x1="12" y1="12" x2="16" y2="14"></line>
+              </svg>
+            </div>
+            <div class="op-stat-info">
+              <span class="op-stat-label">Total Equipos</span>
+              <span class="op-stat-value">156</span>
+            </div>
+          </div>
 
+          <div class="op-stat-card">
+            <div class="op-stat-icon op-stat-warning">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1v12"></path>
+                <circle cx="12" cy="16" r="1"></circle>
+              </svg>
+            </div>
+            <div class="op-stat-info">
+              <span class="op-stat-label">Mantenimientos Próximos</span>
+              <span class="op-stat-value">12</span>
+            </div>
+          </div>
+
+          <div class="op-stat-card">
+            <div class="op-stat-icon op-stat-success">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <div class="op-stat-info">
+              <span class="op-stat-label">Garantías Vigentes</span>
+              <span class="op-stat-value">140</span>
+            </div>
+          </div>
+
+          <div class="op-stat-card">
+            <div class="op-stat-icon op-stat-green">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="1" x2="12" y2="23"></line>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+            </div>
+            <div class="op-stat-info">
+              <span class="op-stat-label">Garantías por Vencer</span>
+              <span class="op-stat-value">8</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="op-filters-bar">
+        <div class="op-search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <input type="text" placeholder="Buscar por nombre o ID..." class="op-search-input">
+        </div>
+
+        <div class="op-filter-group">
+          <select class="op-filter-select">
+            <option value="">Todos los estados</option>
+            <option value="al-dia">Al día</option>
+            <option value="proximo">Próximo</option>
+            <option value="vencido">Vencido</option>
+          </select>
+
+          <select class="op-filter-select">
+            <option value="">Todas las garantías</option>
+            <option value="vigente">Vigente</option>
+            <option value="vencer">Por Vencer</option>
+            <option value="expirada">Expirada</option>
+          </select>
+        </div>
+      </div>
     <div class="table-container">
-      <table class="data-table">
+      <table class="op-table">
         <thead>
           <tr>
             <th>NOMBRE DEL EQUIPO</th>
