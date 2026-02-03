@@ -757,6 +757,15 @@
   padding-left: 40px;
   margin-top: 4px;
   margin-bottom: 8px;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+
+.sidebar:hover .submenu {
+  opacity: 1;
+  max-height: 1000px;
 }
 
 .submenu-item {
@@ -766,22 +775,23 @@
   background: transparent;
   border: none;
   border-left: 2px solid transparent;
-  color: var(--text-medium);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
   margin-bottom: 2px;
+  white-space: nowrap;
 }
 
 .submenu-item:hover {
-  background: rgba(124, 179, 66, 0.1);
-  color: var(--accent-green);
+  background: rgba(124, 179, 66, 0.2);
+  color: white;
   border-left-color: var(--accent-green);
 }
 
 .submenu-item.active {
-  background: rgba(124, 179, 66, 0.15);
-  color: var(--accent-green);
+  background: rgba(124, 179, 66, 0.25);
+  color: white;
   border-left-color: var(--accent-green);
   font-weight: 600;
 }

@@ -117,12 +117,12 @@ function renderApp() {
             <button class="contact-btn">Contactar</button>
           </div>
           <button class="logout-btn" onclick="logout()" style="margin-top: 16px; width: 100%; padding: 10px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
               <polyline points="16 17 21 12 16 7"></polyline>
               <line x1="21" y1="12" x2="9" y2="12"></line>
             </svg>
-            Cerrar Sesión
+            <span class="logout-text">Cerrar Sesión</span>
           </button>
         </div>
       </aside>
@@ -156,8 +156,11 @@ function renderApp() {
       const target = e.currentTarget as HTMLButtonElement;
       const menuName = target.dataset.menu || 'Dashboard';
 
-
+      // Si haces clic en el mismo menú que ya está activo, lo cierra
       if (activeMenu === menuName) {
+        activeMenu = 'Dashboard';
+        activeSubMenu = '';
+        renderApp();
         return;
       }
 
@@ -219,6 +222,20 @@ function renderApp() {
       }
     });
   });
+
+  // Sidebar hover para empujar el contenido
+  const sidebar = document.querySelector('.sidebar');
+  const mainContent = document.querySelector('.main-content');
+
+  if (sidebar && mainContent) {
+    sidebar.addEventListener('mouseenter', () => {
+      mainContent.classList.add('sidebar-expanded');
+    });
+
+    sidebar.addEventListener('mouseleave', () => {
+      mainContent.classList.remove('sidebar-expanded');
+    });
+  }
 }
 
 
