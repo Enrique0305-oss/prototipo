@@ -592,3 +592,202 @@ body {
   background: #e2e8f0;
   border-color: #cbd5e1;
 }
+/* Estilos para Formulario de Cotización */
+.form-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.form-section {
+  margin-bottom: 32px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.form-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.form-control {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-dark);
+  transition: all 0.2s;
+  background: white;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(44, 74, 124, 0.1);
+}
+
+.form-control:disabled,
+.form-control[readonly] {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.form-control-sm {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-back {
+  background: transparent;
+  border: none;
+  color: var(--text-medium);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  margin-right: 12px;
+}
+
+.btn-back:hover {
+  background: var(--bg-light);
+  color: var(--text-dark);
+}
+
+/* Totales Container */
+.totales-container {
+  max-width: 400px;
+  margin-left: auto;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.totales-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.totales-label {
+  font-size: 14px;
+  color: var(--text-medium);
+  font-weight: 500;
+}
+
+.totales-value {
+  font-size: 15px;
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.totales-total {
+  border-top: 2px solid var(--border-color);
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.totales-total .totales-label {
+  font-size: 16px;
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.totales-total .totales-value {
+  font-size: 18px;
+  color: var(--accent-blue);
+}
+
+/* Estilos para inputs en tablas */
+.data-table input.form-control-sm,
+.data-table select.form-control-sm {
+  width: 100%;
+  min-width: 80px;
+}
+
+.data-table .subtotal-linea {
+  color: var(--accent-blue);
+  font-size: 14px;
+}
+
+.btn-icon.btn-danger {
+  color: #dc3545;
+}
+
+.btn-icon.btn-danger:hover {
+  background: #fee;
+  color: #c82333;
+}
+
+/* Badge adicionales para cotizaciones */
+.badge.badge-blue {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge.badge-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge.badge-green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge.orange {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.badge.green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge.red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.stat-box-icon.red {
+  background: #fee2e2;
+  color: #dc2626;
+}
