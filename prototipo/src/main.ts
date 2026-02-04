@@ -6,7 +6,7 @@ import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCat
 import { renderAlmacenProveedores } from './views/almacen-proveedores'
 import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './views/almacen-entradas-salidas'
 import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab } from './views/logistica'
-import { renderProgramaciones } from './views/programaciones'
+import { renderProgramaciones, initProgramacionesEvents } from './views/programaciones'
 import { renderComercialProspectos } from './views/comercial-prospectos'
 import { renderComercialCotizaciones } from './views/comercial-cotizaciones'
 import { renderComercialOrdenesServicio } from './views/comercial-ordenes-servicio'
@@ -235,6 +235,11 @@ function renderApp() {
     sidebar.addEventListener('mouseleave', () => {
       mainContent.classList.remove('sidebar-expanded');
     });
+  }
+
+  // Inicializar eventos del módulo de Programaciones
+  if (activeMenu === 'Programaciones') {
+    initProgramacionesEvents();
   }
 }
 
