@@ -8,12 +8,12 @@ export function renderAsistenciaTab() {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
         <input type="text" placeholder="Buscar trabajador..." class="search-input">
       </div>
-      <select class="filter-select">
+      <select class="op-filter-select">
         <option>Todos</option>
         <option>Administrativos</option>
         <option>Campo</option>
       </select>
-      <input type="date" class="filter-select" value="2025-01-15">
+      <input type="date" class="op-filter-select" value="2025-01-15">
       <button class="btn-filter">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
         Filtrar
@@ -21,7 +21,7 @@ export function renderAsistenciaTab() {
     </div>
 
     <div class="table-container">
-      <table class="data-table">
+      <table class="op-table">
         <thead>
           <tr>
             <th>TRABAJADOR</th>
@@ -53,7 +53,28 @@ export function renderAsistenciaTab() {
             <td>05:30 PM</td>
             <td>9.5 hrs</td>
             <td><span class="status-indicator success">Completo</span></td>
-            <td><button class="action-btn">⋮</button></td>
+            <td>
+                <div class="op-action-buttons">
+                  <button class="op-btn-icon" title="Ver">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                  <button class="op-btn-icon" title="Editar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
+                  <button class="op-btn-icon" title="PDF">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                  </button>
+                </div>
+            </td>
           </tr>
           <tr>
             <td>
@@ -73,7 +94,28 @@ export function renderAsistenciaTab() {
             <td>06:00 PM</td>
             <td>9.75 hrs</td>
             <td><span class="status-indicator success">Completo</span></td>
-            <td><button class="action-btn">⋮</button></td>
+            <td>
+                <div class="op-action-buttons">
+                  <button class="op-btn-icon" title="Ver">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                  <button class="op-btn-icon" title="Editar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
+                  <button class="op-btn-icon" title="PDF">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                  </button>
+                </div>
+            </td>
           </tr>
           <tr>
             <td>
@@ -93,7 +135,28 @@ export function renderAsistenciaTab() {
             <td>05:15 PM</td>
             <td>9.5 hrs</td>
             <td><span class="status-indicator success">Completo</span></td>
-            <td><button class="action-btn">⋮</button></td>
+            <td>
+                <div class="op-action-buttons">
+                  <button class="op-btn-icon" title="Ver">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                  <button class="op-btn-icon" title="Editar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
+                  <button class="op-btn-icon" title="PDF">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                  </button>
+                </div>
+            </td>
           </tr>
           <tr>
             <td>
@@ -219,14 +282,14 @@ export function renderEmpleadosTab() {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
         <input type="text" placeholder="Buscar empleado..." class="search-input">
       </div>
-      <select class="filter-select">
+      <select class="op-filter-select">
         <option>Todos los Departamentos</option>
         <option>Administrativo</option>
         <option>Campo</option>
         <option>Logística</option>
         <option>Ventas</option>
       </select>
-      <select class="filter-select">
+      <select class="op-filter-select">
         <option>Todos los Estados</option>
         <option>Activo</option>
         <option>Inactivo</option>
@@ -239,7 +302,7 @@ export function renderEmpleadosTab() {
     </div>
 
     <div class="table-container">
-      <table class="data-table">
+      <table class="op-table">
         <thead>
           <tr>
             <th>EMPLEADO</th>
@@ -454,12 +517,12 @@ export function renderEmpleadosTab() {
 export function renderReportesTab() {
   return `
     <div class="search-filter-bar">
-      <select class="filter-select">
+      <select class="op-filter-select">
         <option>Enero 2025</option>
         <option>Diciembre 2024</option>
         <option>Noviembre 2024</option>
       </select>
-      <select class="filter-select">
+      <select class="op-filter-select">
         <option>Todos los Departamentos</option>
         <option>Administrativo</option>
         <option>Campo</option>
@@ -515,7 +578,7 @@ export function renderReportesTab() {
       <div class="card">
         <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Asistencia por Departamento</h3>
         <div class="table-container">
-          <table class="data-table">
+          <table class="op-table">
             <thead>
               <tr>
                 <th>DEPARTAMENTO</th>
@@ -562,7 +625,7 @@ export function renderReportesTab() {
       <div class="card">
         <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Top Empleados del Mes</h3>
         <div class="table-container">
-          <table class="data-table">
+          <table class="op-table">
             <thead>
               <tr>
                 <th>EMPLEADO</th>
@@ -817,7 +880,7 @@ export function renderMarcarAsistenciaTab() {
         <h3 style="font-size: 18px; margin: 0 0 20px 0; color: #1a2332;">Mi Asistencia - Esta Semana</h3>
         
         <div class="table-container">
-          <table class="data-table">
+          <table class="op-table">
             <thead>
               <tr>
                 <th>DÍA</th>

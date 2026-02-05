@@ -99,7 +99,7 @@ export function renderDashboardFinancieroTab() {
       <div class="finance-recent">
         <h3>Movimientos Recientes de Caja Chica</h3>
         <div class="table-container">
-          <table class="data-table">
+          <table class="op-table">
             <thead>
               <tr>
                 <th>FECHA</th>
@@ -108,6 +108,7 @@ export function renderDashboardFinancieroTab() {
                 <th>MONTO</th>
                 <th>EVIDENCIA</th>
                 <th>RESPONSABLE</th>
+                <th>ACCIONES</th>
               </tr>
             </thead>
             <tbody>
@@ -204,35 +205,47 @@ export function renderCajaChicaTab() {
       </div>
     </div>
 
-    <div class="search-filter-bar">
-      <div class="search-input-wrapper">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-        <input type="text" placeholder="Buscar movimiento..." class="search-input">
+    <div class="oc-filters-bar">
+        <div class="oc-search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <input type="text" placeholder="Buscar por número de orden, cliente, servicio..." class="oc-search-input">
+        </div>
+        
+        <div class="oc-filter-group">
+          <select class="oc-filter-select">
+            <option value="">Todas las modalidades</option>
+            <option value="presencial">Presencial</option>
+            <option value="virtual">Virtual</option>
+            <option value="hibrido">Híbrido</option>
+          </select>
+          
+          <select class="oc-filter-select">
+            <option value="">Todos los meses</option>
+            <option value="01">Enero</option>
+            <option value="02">Febrero</option>
+            <option value="03">Marzo</option>
+          </select>
+        </div>
       </div>
-      <select class="filter-select">
-        <option>Todas las categorías</option>
-        <option>Transporte</option>
-        <option>Suministros</option>
-        <option>Alimentación</option>
-        <option>Mantenimiento</option>
-      </select>
-      <input type="date" class="filter-select" value="2025-01-31">
-      <button class="btn-filter">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-        Filtrar
-      </button>
-    </div>
 
     <div class="table-container">
-      <table class="data-table">
+      <table class="op-table">
         <thead>
           <tr>
             <th>FECHA</th>
+            <th>SOLICITANTE</th>
+            <th>ÁREA</th>
+            <th>PROVEEDOR</th>
+            <th>N° DOCUMENTO</th>
             <th>CONCEPTO</th>
-            <th>CATEGORÍA</th>
-            <th>MONTO</th>
-            <th>EVIDENCIA</th>
-            <th>RESPONSABLE</th>
+            <th>SUBTOTAL</th>
+            <th>EGRESO</th>
+            <th>INGRESO</th>
+            <th>SALDO</th>
+            <th>COLUMNA 1</th>
             <th>ACCIONES</th>
           </tr>
         </thead>
@@ -249,7 +262,33 @@ export function renderCajaChicaTab() {
               </span>
             </td>
             <td>Juan Pérez</td>
-            <td><button class="action-btn">⋮</button></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>
+                <div class="oc-action-buttons">
+                  <button class="oc-btn-icon" title="Ver">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                  <button class="oc-btn-icon" title="Editar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
+                  <button class="oc-btn-icon" title="PDF">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                  </button>
+                </div>
+            </td>
           </tr>
           <tr>
             <td>14/01/2025 11:20</td>
