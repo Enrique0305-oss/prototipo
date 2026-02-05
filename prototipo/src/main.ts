@@ -15,7 +15,7 @@ import { renderComercialOrdenesCapacitacion } from './views/comercial-ordenes-ca
 import { renderComercialConversiones } from './views/comercial-conversiones'
 import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './views/finanzas'
 import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab, renderEstadoCobranzaTab } from './views/facturacion';
-import { renderRecursosHumanos, renderAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './views/recursos-humanos'
+import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './views/recursos-humanos'
 import { renderOperaciones, renderServiciosDiaTab, renderInformesClienteTab, renderReportesGeneralesTab } from './views/operaciones'
 import { renderReportes } from './views/reportes'
 
@@ -410,6 +410,9 @@ function updateRecursosTabContent() {
 
 
   switch (activeRecursosTab) {
+    case 'marcar':
+      tabContent.innerHTML = renderMarcarAsistenciaTab();
+      break;
     case 'empleados':
       tabContent.innerHTML = renderEmpleadosTab();
       break;
@@ -418,6 +421,34 @@ function updateRecursosTabContent() {
       break;
     default:
       tabContent.innerHTML = renderAsistenciaTab();
+  }
+  
+  // Inicializar event listeners para Marcar Asistencia
+  if (activeRecursosTab === 'marcar') {
+    initMarcarAsistenciaEvents();
+  }
+}
+
+function initMarcarAsistenciaEvents() {
+  const btnEntrada = document.getElementById('btnMarcarEntrada');
+  const btnSalida = document.getElementById('btnMarcarSalida');
+
+  if (btnEntrada) {
+    btnEntrada.addEventListener('click', () => {
+      const horaActual = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+      console.log('Marcando entrada:', horaActual);
+      // TODO: Aquí irá la llamada al backend
+      alert(`Entrada registrada a las ${horaActual}`);
+    });
+  }
+
+  if (btnSalida) {
+    btnSalida.addEventListener('click', () => {
+      const horaActual = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+      console.log('Marcando salida:', horaActual);
+      // TODO: Aquí irá la llamada al backend
+      alert(`Salida registrada a las ${horaActual}`);
+    });
   }
 }
 
