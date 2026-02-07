@@ -33,7 +33,7 @@ class AuthService {
 
   async loginMock(credenciales: Credenciales): Promise<AuthResponse> {
     // Simular delay de red
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Validación simple
     if (!credenciales.email || !credenciales.password) {

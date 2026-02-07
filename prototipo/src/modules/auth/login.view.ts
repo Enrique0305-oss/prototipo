@@ -118,9 +118,8 @@ export function initLoginEvents() {
       if (response.success) {
         // Login exitoso - redirigir al dashboard
         loginBtn.textContent = '✓ Sesión iniciada';
-        setTimeout(() => {
-          window.location.href = './dashboard.html';
-        }, 500);
+        // Navegar inmediatamente sin delay
+        window.location.href = './dashboard.html';
       }
     } catch (error) {
       // Manejar error de login
