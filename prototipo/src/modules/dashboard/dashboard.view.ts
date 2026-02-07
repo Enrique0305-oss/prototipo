@@ -1,5 +1,9 @@
-// Dashboard View
-export function renderDashboard() {
+import type { DashboardData } from './dashboard.types';
+
+export function renderDashboard(data?: DashboardData) {
+  // Si no hay datos, mostrar loading o usar mock
+  // En producción, data vendrá de dashboardService.getDashboardData()
+  
   return `
     <div class="page-header">
       <h1>Panel de Control Multidisciplinario</h1>

@@ -1,23 +1,35 @@
 import './style.css'
 import './additional-styles.css'
-import { renderDashboard } from './views/dashboard'
-import { renderAlmacenMantenimiento } from './views/almacen-mantenimiento'
-import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab } from './views/almacen-inventario'
-import { renderAlmacenProveedores } from './views/almacen-proveedores'
-import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './views/almacen-entradas-salidas'
-import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab } from './views/logistica'
-import { renderProgramaciones, initProgramacionesEvents } from './views/programaciones'
-import { renderComercialProspectos } from './views/comercial-prospectos'
-import { renderComercialCotizaciones } from './views/comercial-cotizaciones'
-import { renderComercialOrdenesServicio } from './views/comercial-ordenes-servicio'
-import { renderComercialOrdenesProducto } from './views/comercial-ordenes-producto'
-import { renderComercialOrdenesCapacitacion } from './views/comercial-ordenes-capacitacion'
-import { renderComercialConversiones } from './views/comercial-conversiones'
-import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './views/finanzas'
-import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab, renderEstadoCobranzaTab } from './views/facturacion';
-import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './views/recursos-humanos'
-import { renderOperaciones, renderServiciosDiaTab, renderInformesClienteTab, renderReportesGeneralesTab } from './views/operaciones'
-import { renderReportes } from './views/reportes'
+import { initAuthGuard } from './modules/auth/auth.guard'
+import { authService } from './modules/auth/auth.service'
+
+// Inicializar guard de autenticación
+initAuthGuard();
+import { renderDashboard } from './modules/dashboard/dashboard.view'
+import { renderProgramaciones, initProgramacionesEvents } from './modules/programaciones/programaciones.view'
+import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './modules/recursos-humanos/recursos-humanos.view'
+// Almacén
+import { renderAlmacenMantenimiento } from './modules/almacen/mantenimiento/mantenimiento.view'
+import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab } from './modules/almacen/inventario/inventario.view'
+import { renderAlmacenProveedores } from './modules/almacen/proveedores/proveedores.view'
+import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './modules/almacen/entradas-salidas/entradas-salidas.view'
+// Logística
+import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab } from './modules/logistica/logistica.view'
+// Comercial
+import { renderComercialProspectos } from './modules/comercial/prospectos/prospectos.view'
+import { renderComercialCotizaciones } from './modules/comercial/cotizaciones/cotizaciones.view'
+import { renderComercialOrdenesServicio } from './modules/comercial/ordenes-servicio/ordenes-servicio.view'
+import { renderComercialOrdenesProducto } from './modules/comercial/ordenes-producto/ordenes-producto.view'
+import { renderComercialOrdenesCapacitacion } from './modules/comercial/ordenes-capacitacion/ordenes-capacitacion.view'
+import { renderComercialConversiones } from './modules/comercial/conversiones/conversiones.view'
+// Finanzas
+import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
+// Facturación
+import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab, renderEstadoCobranzaTab } from './modules/facturacion/facturacion.view'
+// Operaciones
+import { renderOperaciones, renderServiciosDiaTab, renderInformesClienteTab, renderReportesGeneralesTab } from './modules/operaciones/operaciones.view'
+// Reportes
+import { renderReportes } from './modules/reportes/reportes.view'
 
 let activeMenu = 'Dashboard';
 let activeSubMenu = '';
@@ -481,5 +493,13 @@ function updateOperacionesTabContent() {
       tabContent.innerHTML = renderServiciosDiaTab();
   }
 }
+
+function logout() {
+  if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+    authService.logout();
+  }
+}
+
+(window as any).logout = logout;
 
 renderApp();

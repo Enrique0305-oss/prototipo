@@ -1,5 +1,5 @@
 // Programaciones View
-import '../styles/programaciones.css';
+import './programaciones.css';
 
 // Datos de ejemplo 
 const programacionesEjemplo = [

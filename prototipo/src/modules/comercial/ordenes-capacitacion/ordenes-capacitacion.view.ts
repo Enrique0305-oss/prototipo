@@ -1,4 +1,4 @@
-import '../styles/ordenes-capacitacion.css';
+import './ordenes-capacitacion.css';
 
 export function renderComercialOrdenesCapacitacion() {
   const content = `

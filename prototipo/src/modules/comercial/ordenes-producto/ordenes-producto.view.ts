@@ -1,4 +1,4 @@
-import '../styles/ordenes-producto.css';
+import './ordenes-producto.css';
 
 export function renderComercialOrdenesProducto() {
   const content = `

@@ -1,5 +1,5 @@
 // Comercial - Órdenes de Servicio
-import '../styles/ordenes-servicio.css';
+import './ordenes-servicio.css';
 
 // Declarar funciones globales
 declare function mostrarFormularioOrdenServicio(): void;
