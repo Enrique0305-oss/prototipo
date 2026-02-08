@@ -3,24 +3,21 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\OrdenServicio;
-use App\Models\DetalleOrdenServicio;
+use App\Models\OrdenProducto;
+use App\Models\DetalleOrdenProducto;
 use App\Models\Cotizacion;
 use App\Models\CotizacionDetalle;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
-class OrdenServicioController extends Controller
+class OrdenProductoController extends Controller
 {
-    /**
-     * Listar todas las órdenes de servicio
-     */
     public function index(Request $request): JsonResponse
     {
-        $query = OrdenServicio::with(['cliente', 'emisor', 'cotizacion']);
+        $query = OrdenProducto::with(['cliente', 'emisor', 'cotizacion']);
 
-        // Filtro por búsqueda
+        // Filtro por número de orden
         if ($request->has('search')) {
             $query->where(function($q) use ($request) {
                 $q->where('numero_orden', 'like', '%' . $request->search . '%')
@@ -32,22 +29,21 @@ class OrdenServicioController extends Controller
 
         // Filtro por fecha
         if ($request->has('fecha_desde')) {
-            $query->where('fecha_aceptacion', '>=', $request->fecha_desde);
+            $query->where('fecha_envio', '>=', $request->fecha_desde);
         }
         if ($request->has('fecha_hasta')) {
-            $query->where('fecha_aceptacion', '<=', $request->fecha_hasta);
+            $query->where('fecha_envio', '<=', $request->fecha_hasta);
         }
 
-        $ordenes = $query->orderBy('fecha_aceptacion', 'desc')->get();
+        $ordenes = $query->orderBy('fecha_envio', 'desc')->get();
 
         // Formatear respuesta
         $data = $ordenes->map(function($orden) {
             return [
                 'id' => $orden->id,
                 'numero_orden' => $orden->numero_orden,
-                'fecha_aceptacion' => $orden->fecha_aceptacion->format('Y-m-d'),
-                'fecha_tentativa' => $orden->fecha_tentativa ? $orden->fecha_tentativa->format('Y-m-d') : null,
-                'total_costo' => $orden->total_costo,
+                'fecha_envio' => $orden->fecha_envio->format('Y-m-d'),
+                'total' => $orden->total,
                 'cliente' => [
                     'id' => $orden->cliente->id,
                     'nombre_empresa' => $orden->cliente->nombre_empresa,
@@ -64,15 +60,12 @@ class OrdenServicioController extends Controller
         ]);
     }
 
-    /**
-     * Listar cotizaciones tipo "Servicio" disponibles para crear órdenes
-     */
     public function cotizacionesDisponibles(): JsonResponse
     {
         $cotizaciones = Cotizacion::with(['cliente', 'creador'])
-            ->where('tipo_cotizacion', 'Servicio')
+            ->where('tipo_cotizacion', 'Producto')
             ->where('estado', 'Aceptada')
-            ->whereDoesntHave('ordenServicio') // Solo las que no tienen orden aún
+            ->whereDoesntHave('ordenProducto') // Solo las que no tienen orden aún
             ->orderBy('fecha_emision', 'desc')
             ->get();
 
@@ -98,12 +91,12 @@ class OrdenServicioController extends Controller
         ]);
     }
 
-    /**
-     * Obtener datos de una cotización para crear orden de servicio
-     */
+    
+     // Obtener datos de una cotización para crear orden de producto
+     
     public function desdeCotizacion($cotizacionId): JsonResponse
     {
-        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio'])
+        $cotizacion = Cotizacion::with(['cliente', 'detalles.producto'])
             ->find($cotizacionId);
 
         if (!$cotizacion) {
@@ -113,10 +106,10 @@ class OrdenServicioController extends Controller
             ], 404);
         }
 
-        if ($cotizacion->tipo_cotizacion !== 'Servicio') {
+        if ($cotizacion->tipo_cotizacion !== 'Producto') {
             return response()->json([
                 'success' => false,
-                'message' => 'La cotización no es de tipo Servicio'
+                'message' => 'La cotización no es de tipo Producto'
             ], 400);
         }
 
@@ -128,21 +121,22 @@ class OrdenServicioController extends Controller
         }
 
         // Verificar si ya tiene orden
-        if ($cotizacion->ordenServicio) {
+        if ($cotizacion->ordenProducto) {
             return response()->json([
                 'success' => false,
-                'message' => 'Esta cotización ya tiene una orden de servicio creada',
-                'orden_existente' => $cotizacion->ordenServicio->numero_orden
+                'message' => 'Esta cotización ya tiene una orden de producto creada',
+                'orden_existente' => $cotizacion->ordenProducto->numero_orden
             ], 400);
         }
 
         // Preparar datos para la orden
         $detalles = $cotizacion->detalles->map(function($detalle) {
             return [
-                'id_servicio' => $detalle->id_servicio,
-                'servicio_nombre' => $detalle->servicio ? $detalle->servicio->nombre : null,
-                'frecuencia' => $detalle->frecuencia_sugerida,
-                'precio' => $detalle->precio_unitario,
+                'id_producto' => $detalle->id_producto,
+                'producto_nombre' => $detalle->producto ? $detalle->producto->nombre : null,
+                'cantidad' => $detalle->cantidad,
+                'precio_unitario' => $detalle->precio_unitario,
+                'subtotal' => $detalle->subtotal,
             ];
         });
 
@@ -166,41 +160,33 @@ class OrdenServicioController extends Controller
         ]);
     }
 
-
-    /**
-     * Crear una nueva orden de servicio
-     */
+    // Crear una nueva orden de producto 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'id_cotizacion' => 'required|exists:cotizacion,id',
-            'fecha_aceptacion' => 'required|date',
-            'fecha_tentativa' => 'nullable|date',
+            'fecha_envio' => 'required|date',
             'emitido_por' => 'required|exists:personal,id',
-            'codigo_doc' => 'nullable|string|max:20',
-            'version' => 'nullable|string|max:10',
             'detalles' => 'required|array|min:1',
-            'detalles.*.id_servicio' => 'required|exists:servicios,id',
-            'detalles.*.local' => 'nullable|string|max:255',
-            'detalles.*.frecuencia' => 'nullable|string|max:100',
-            'detalles.*.precio' => 'required|numeric|min:0',
+            'detalles.*.id_producto' => 'required|exists:productos,id',
+            'detalles.*.cantidad' => 'required|integer|min:1',
+            'detalles.*.precio_unitario' => 'required|numeric|min:0',
         ]);
 
-        // Verificar que la cotización sea tipo Servicio
         $cotizacion = Cotizacion::find($validated['id_cotizacion']);
         
-        if ($cotizacion->tipo_cotizacion !== 'Servicio') {
+        if ($cotizacion->tipo_cotizacion !== 'Producto') {
             return response()->json([
                 'success' => false,
-                'message' => 'La cotización debe ser de tipo Servicio'
+                'message' => 'La cotización debe ser de tipo Producto'
             ], 400);
         }
 
         // Verificar que no tenga ya una orden
-        if ($cotizacion->ordenServicio) {
+        if ($cotizacion->ordenProducto) {
             return response()->json([
                 'success' => false,
-                'message' => 'Esta cotización ya tiene una orden de servicio'
+                'message' => 'Esta cotización ya tiene una orden de producto'
             ], 400);
         }
 
@@ -210,41 +196,41 @@ class OrdenServicioController extends Controller
             // Calcular total
             $total = 0;
             foreach ($validated['detalles'] as $detalle) {
-                $total += $detalle['precio'];
+                $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
+                $total += $subtotal;
             }
 
-            // Crear orden de servicio
-            $orden = OrdenServicio::create([
-                'numero_orden' => OrdenServicio::generarNumero(),
-                'codigo_doc' => $validated['codigo_doc'] ?? null,
-                'version' => $validated['version'] ?? '1.0',
+            // Crear orden de producto
+            $orden = OrdenProducto::create([
+                'numero_orden' => OrdenProducto::generarNumero(),
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
-                'fecha_aceptacion' => $validated['fecha_aceptacion'],
-                'fecha_tentativa' => $validated['fecha_tentativa'] ?? null,
-                'total_costo' => $total,
+                'fecha_envio' => $validated['fecha_envio'],
+                'total' => $total,
                 'emitido_por' => $validated['emitido_por'],
             ]);
 
             // Crear detalles
             foreach ($validated['detalles'] as $detalle) {
-                DetalleOrdenServicio::create([
-                    'id_orden_servicio' => $orden->id,
-                    'id_servicio' => $detalle['id_servicio'],
-                    'local' => $detalle['local'] ?? null,
-                    'frecuencia' => $detalle['frecuencia'] ?? null,
-                    'precio' => $detalle['precio'],
+                $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
+                
+                DetalleOrdenProducto::create([
+                    'id_orden_producto' => $orden->id,
+                    'id_producto' => $detalle['id_producto'],
+                    'cantidad' => $detalle['cantidad'],
+                    'precio_unitario' => $detalle['precio_unitario'],
+                    'subtotal' => $subtotal,
                 ]);
             }
 
             DB::commit();
 
             // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion']);
+            $orden->load(['cliente', 'emisor', 'detalles.producto', 'cotizacion']);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Orden de servicio creada exitosamente',
+                'message' => 'Orden de producto creada exitosamente',
                 'data' => $orden
             ], 201);
 
@@ -253,28 +239,26 @@ class OrdenServicioController extends Controller
             
             return response()->json([
                 'success' => false,
-                'message' => 'Error al crear la orden de servicio',
+                'message' => 'Error al crear la orden de producto',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
-    /**
-     * Obtener una orden específica
-     */
+    //Obtener una orden en especifico
     public function show($id): JsonResponse
     {
-        $orden = OrdenServicio::with([
+        $orden = OrdenProducto::with([
             'cliente', 
             'emisor', 
             'cotizacion',
-            'detalles.servicio'
+            'detalles.producto'
         ])->find($id);
 
         if (!$orden) {
             return response()->json([
                 'success' => false,
-                'message' => 'Orden de servicio no encontrada'
+                'message' => 'Orden de producto no encontrada'
             ], 404);
         }
 
@@ -284,80 +268,65 @@ class OrdenServicioController extends Controller
         ]);
     }
 
-    /**
-     * Actualizar una orden de servicio
-     */
+    // Actualizar una orden de producto
     public function update(Request $request, $id): JsonResponse
     {
-        $orden = OrdenServicio::find($id);
+        $orden = OrdenProducto::find($id);
 
         if (!$orden) {
             return response()->json([
                 'success' => false,
-                'message' => 'Orden de servicio no encontrada'
+                'message' => 'Orden de producto no encontrada'
             ], 404);
         }
 
         $validated = $request->validate([
-            'fecha_aceptacion' => 'sometimes|date',
-            'fecha_tentativa' => 'nullable|date',
-            'codigo_doc' => 'nullable|string|max:20',
-            'version' => 'nullable|string|max:10',
+            'fecha_envio' => 'sometimes|date',
             'detalles' => 'sometimes|array|min:1',
-            'detalles.*.id_servicio' => 'required_with:detalles|exists:servicios,id',
-            'detalles.*.local' => 'nullable|string|max:255',
-            'detalles.*.frecuencia' => 'nullable|string|max:100',
-            'detalles.*.precio' => 'required_with:detalles|numeric|min:0',
+            'detalles.*.id_producto' => 'required_with:detalles|exists:productos,id',
+            'detalles.*.cantidad' => 'required_with:detalles|integer|min:1',
+            'detalles.*.precio_unitario' => 'required_with:detalles|numeric|min:0',
         ]);
 
         try {
             DB::beginTransaction();
 
-            // Actualizar campos básicos
-            if (isset($validated['fecha_aceptacion'])) {
-                $orden->fecha_aceptacion = $validated['fecha_aceptacion'];
-            }
-            if (isset($validated['fecha_tentativa'])) {
-                $orden->fecha_tentativa = $validated['fecha_tentativa'];
-            }
-            if (isset($validated['codigo_doc'])) {
-                $orden->codigo_doc = $validated['codigo_doc'];
-            }
-            if (isset($validated['version'])) {
-                $orden->version = $validated['version'];
+            // Actualizar fecha si viene
+            if (isset($validated['fecha_envio'])) {
+                $orden->fecha_envio = $validated['fecha_envio'];
             }
 
             // Si se actualizan detalles
             if (isset($validated['detalles'])) {
-                // Eliminar detalles antiguos
                 $orden->detalles()->delete();
 
                 // Crear nuevos detalles y calcular total
                 $total = 0;
                 foreach ($validated['detalles'] as $detalle) {
-                    $total += $detalle['precio'];
+                    $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
+                    $total += $subtotal;
                     
-                    DetalleOrdenServicio::create([
-                        'id_orden_servicio' => $orden->id,
-                        'id_servicio' => $detalle['id_servicio'],
-                        'local' => $detalle['local'] ?? null,
-                        'frecuencia' => $detalle['frecuencia'] ?? null,
-                        'precio' => $detalle['precio'],
+                    DetalleOrdenProducto::create([
+                        'id_orden_producto' => $orden->id,
+                        'id_producto' => $detalle['id_producto'],
+                        'cantidad' => $detalle['cantidad'],
+                        'precio_unitario' => $detalle['precio_unitario'],
+                        'subtotal' => $subtotal,
                     ]);
                 }
 
-                $orden->total_costo = $total;
+                $orden->total = $total;
             }
 
             $orden->save();
 
             DB::commit();
 
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion']);
+            $orden->load(['cliente', 'emisor', 'detalles.producto', 'cotizacion']);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Orden de servicio actualizada exitosamente',
+                'message' => 'Orden de producto actualizada exitosamente',
                 'data' => $orden
             ]);
 
@@ -366,23 +335,21 @@ class OrdenServicioController extends Controller
             
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar la orden de servicio',
+                'message' => 'Error al actualizar la orden de producto',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
-    /**
-     * Eliminar una orden de servicio
-     */
+    // Eliminar una orden de producto
     public function destroy($id): JsonResponse
     {
-        $orden = OrdenServicio::find($id);
+        $orden = OrdenProducto::find($id);
 
         if (!$orden) {
             return response()->json([
                 'success' => false,
-                'message' => 'Orden de servicio no encontrada'
+                'message' => 'Orden de producto no encontrada'
             ], 404);
         }
 
@@ -399,7 +366,7 @@ class OrdenServicioController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Orden de servicio eliminada exitosamente'
+                'message' => 'Orden de producto eliminada exitosamente'
             ]);
 
         } catch (\Exception $e) {
@@ -407,26 +374,24 @@ class OrdenServicioController extends Controller
             
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar la orden de servicio',
+                'message' => 'Error al eliminar la orden de producto',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
-    /**
-     * Obtener estadísticas de órdenes de servicio
-     */
+    // Obtener estadísticas de órdenes de producto
     public function estadisticas(): JsonResponse
     {
         $stats = [
-            'total_ordenes' => OrdenServicio::count(),
-            'total_valor' => OrdenServicio::sum('total_costo'),
-            'ordenes_mes_actual' => OrdenServicio::whereMonth('fecha_aceptacion', date('m'))
-                                                 ->whereYear('fecha_aceptacion', date('Y'))
+            'total_ordenes' => OrdenProducto::count(),
+            'total_valor' => OrdenProducto::sum('total'),
+            'ordenes_mes_actual' => OrdenProducto::whereMonth('fecha_envio', date('m'))
+                                                 ->whereYear('fecha_envio', date('Y'))
                                                  ->count(),
-            'valor_mes_actual' => OrdenServicio::whereMonth('fecha_aceptacion', date('m'))
-                                              ->whereYear('fecha_aceptacion', date('Y'))
-                                              ->sum('total_costo'),
+            'valor_mes_actual' => OrdenProducto::whereMonth('fecha_envio', date('m'))
+                                              ->whereYear('fecha_envio', date('Y'))
+                                              ->sum('total'),
         ];
 
         return response()->json([

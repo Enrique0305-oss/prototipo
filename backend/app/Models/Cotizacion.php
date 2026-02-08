@@ -55,6 +55,11 @@ class Cotizacion extends Model
         return $this->hasOne(OrdenProducto::class, 'id_cotizacion');
     }
 
+    public function ordenCapacitacionAuditoria()
+    {
+        return $this->hasOne(OrdenCapacitacionAuditoria::class, 'id_cotizacion');
+    }
+
     // Scopes
     public function scopePendientes($query)
     {

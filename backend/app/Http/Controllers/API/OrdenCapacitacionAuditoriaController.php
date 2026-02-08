@@ -4,186 +4,382 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\OrdenCapacitacionAuditoria;
+use App\Models\Cotizacion;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class OrdenCapacitacionAuditoriaController extends Controller
 {
     /**
      * Listar todas las órdenes de capacitación/auditoría
-     * GET /api/ordenes-capacitacion-auditoria
      */
     public function index(Request $request): JsonResponse
     {
-        try {
-            $query = OrdenCapacitacionAuditoria::with(['cliente', 'cotizacion', 'servicio', 'ponente']);
+        $query = OrdenCapacitacionAuditoria::with(['cliente', 'ponente', 'cotizacion', 'servicio']);
 
-            // Filtros opcionales
-            if ($request->has('id_cliente')) {
-                $query->where('id_cliente', $request->id_cliente);
-            }
-
-            if ($request->has('numero_orden')) {
-                $query->where('numero_orden', 'like', '%' . $request->numero_orden . '%');
-            }
-
-            // Paginación
-            $perPage = $request->input('per_page', 15);
-            $ordenes = $query->paginate($perPage);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Órdenes de capacitación/auditoría obtenidas',
-                'data' => $ordenes
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Error al listar órdenes de capacitación/auditoría: ' . $e->getMessage()
-            ], 500);
+        // Filtro por búsqueda
+        if ($request->has('search')) {
+            $query->where(function($q) use ($request) {
+                $q->where('numero_orden', 'like', '%' . $request->search . '%')
+                  ->orWhereHas('cliente', function($q) use ($request) {
+                      $q->where('nombre_empresa', 'like', '%' . $request->search . '%');
+                  });
+            });
         }
+
+        // Filtro por modalidad
+        if ($request->has('modalidad')) {
+            $query->where('modalidad', $request->modalidad);
+        }
+
+        // Filtro por fecha
+        if ($request->has('fecha_desde')) {
+            $query->where('fecha_servicio', '>=', $request->fecha_desde);
+        }
+        if ($request->has('fecha_hasta')) {
+            $query->where('fecha_servicio', '<=', $request->fecha_hasta);
+        }
+
+        $ordenes = $query->orderBy('fecha_servicio', 'desc')->get();
+
+        // Formatear respuesta
+        $data = $ordenes->map(function($orden) {
+            return [
+                'id' => $orden->id,
+                'numero_orden' => $orden->numero_orden,
+                'fecha_servicio' => $orden->fecha_servicio->format('Y-m-d'),
+                'hora_servicio' => $orden->hora_servicio ? $orden->hora_servicio->format('H:i') : null,
+                'modalidad' => $orden->modalidad,
+                'num_participantes' => $orden->num_participantes,
+                'num_certificados' => $orden->num_certificados,
+                'costo' => $orden->costo,
+                'aprobacion' => $orden->aprobacion,
+                'cliente' => [
+                    'id' => $orden->cliente->id,
+                    'nombre_empresa' => $orden->cliente->nombre_empresa,
+                    'ruc' => $orden->cliente->ruc,
+                ],
+                'ponente' => $orden->ponente ? $orden->ponente->nombre : null,
+                'servicio' => $orden->servicio ? $orden->servicio->nombre : null,
+                'cotizacion_numero' => $orden->cotizacion ? $orden->cotizacion->numero_cotizacion : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
     }
 
     /**
-     * Obtener una orden de capacitación/auditoría específica
-     * GET /api/ordenes-capacitacion-auditoria/{id}
+     * Listar cotizaciones tipo "Capacitacion" disponibles
      */
-    public function show($id): JsonResponse
+    public function cotizacionesDisponibles(): JsonResponse
     {
-        try {
-            $orden = OrdenCapacitacionAuditoria::with(['cliente', 'cotizacion', 'servicio', 'ponente'])
-                ->findOrFail($id);
+        $cotizaciones = Cotizacion::with(['cliente', 'creador'])
+            ->where('tipo_cotizacion', 'Capacitacion')
+            ->where('estado', 'Aceptada')
+            ->whereDoesntHave('ordenCapacitacionAuditoria') // Solo las que no tienen orden aún
+            ->orderBy('fecha_emision', 'desc')
+            ->get();
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Orden de capacitación/auditoría obtenida',
-                'data' => $orden
-            ], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Orden de capacitación/auditoría no encontrada'
-            ], 404);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Error al obtener la orden: ' . $e->getMessage()
-            ], 500);
-        }
+        $data = $cotizaciones->map(function($cot) {
+            return [
+                'id' => $cot->id,
+                'numero_cotizacion' => $cot->numero_cotizacion,
+                'fecha_emision' => $cot->fecha_emision->format('Y-m-d'),
+                'cliente' => [
+                    'id' => $cot->cliente->id,
+                    'nombre_empresa' => $cot->cliente->nombre_empresa,
+                    'ruc' => $cot->cliente->ruc,
+                ],
+                'total' => $cot->total,
+                'subtotal' => $cot->subtotal,
+                'igv' => $cot->igv,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
     }
+
+    /**
+     * Obtener datos de una cotización para crear orden
+     */
+    public function desdeCotizacion($cotizacionId): JsonResponse
+    {
+        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio'])
+            ->find($cotizacionId);
+
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        }
+
+        if ($cotizacion->tipo_cotizacion !== 'Capacitacion') {
+            return response()->json([
+                'success' => false,
+                'message' => 'La cotización no es de tipo Capacitacion'
+            ], 400);
+        }
+
+        if ($cotizacion->estado !== 'Aceptada') {
+            return response()->json([
+                'success' => false,
+                'message' => 'La cotización debe estar Aceptada'
+            ], 400);
+        }
+
+        // Verificar si ya tiene orden
+        if ($cotizacion->ordenCapacitacionAuditoria) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta cotización ya tiene una orden de capacitación/auditoría creada',
+                'orden_existente' => $cotizacion->ordenCapacitacionAuditoria->numero_orden
+            ], 400);
+        }
+
+        // Obtener el primer servicio (normalmente capacitaciones tienen 1 servicio)
+        $servicio = $cotizacion->detalles->first();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'cotizacion' => [
+                    'id' => $cotizacion->id,
+                    'numero_cotizacion' => $cotizacion->numero_cotizacion,
+                    'fecha_emision' => $cotizacion->fecha_emision->format('Y-m-d'),
+                ],
+                'cliente' => [
+                    'id' => $cotizacion->cliente->id,
+                    'nombre_empresa' => $cotizacion->cliente->nombre_empresa,
+                    'ruc' => $cotizacion->cliente->ruc,
+                    'direccion' => $cotizacion->cliente->direccion,
+                ],
+                'costo_total' => $cotizacion->total,
+                'servicio' => $servicio ? [
+                    'id' => $servicio->id_servicio,
+                    'nombre' => $servicio->servicio ? $servicio->servicio->nombre : null,
+                    'modalidad_sugerida' => $servicio->modalidad_sugerida,
+                ] : null,
+            ]
+        ]);
+    }
+
 
     /**
      * Crear una nueva orden de capacitación/auditoría
-     * POST /api/ordenes-capacitacion-auditoria
      */
     public function store(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'id_cotizacion' => 'required|exists:cotizacion,id',
+            'id_servicio' => 'required|exists:servicios,id',
+            'id_ponente' => 'required|exists:personal,id',
+            'fecha_servicio' => 'required|date',
+            'hora_servicio' => 'nullable|date_format:H:i',
+            'modalidad' => 'required|in:Presencial,Virtual,Híbrida',
+            'num_participantes' => 'required|integer|min:1',
+            'num_certificados' => 'nullable|integer|min:0',
+            'costo' => 'required|numeric|min:0',
+            'aprobacion' => 'nullable|in:Aprobado,Pendiente,Rechazado',
+            'observaciones' => 'nullable|string',
+        ]);
+
+        // Verificar que la cotización sea tipo Capacitacion
+        $cotizacion = Cotizacion::find($validated['id_cotizacion']);
+        
+        if ($cotizacion->tipo_cotizacion !== 'Capacitacion') {
+            return response()->json([
+                'success' => false,
+                'message' => 'La cotización debe ser de tipo Capacitacion'
+            ], 400);
+        }
+
+        // Verificar que no tenga ya una orden
+        if ($cotizacion->ordenCapacitacionAuditoria) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta cotización ya tiene una orden de capacitación/auditoría'
+            ], 400);
+        }
+
         try {
-            // Validar datos
-            $validated = $request->validate([
-                'numero_orden' => 'required|string|max:20|unique:orden_capacitacion_auditoria',
-                'id_cotizacion' => 'nullable|integer|exists:cotizacion,id',
-                'id_cliente' => 'required|integer|exists:cliente,id',
-                'id_servicio' => 'nullable|integer|exists:servicios,id',
-                'fecha_capacitacion' => 'nullable|date',
-                'fecha_limite' => 'nullable|date',
-                'id_ponente' => 'nullable|integer|exists:personal,id',
-                'observaciones' => 'nullable|string'
+            DB::beginTransaction();
+
+            // Crear orden de capacitación/auditoría
+            $orden = OrdenCapacitacionAuditoria::create([
+                'numero_orden' => OrdenCapacitacionAuditoria::generarNumero(),
+                'id_cotizacion' => $validated['id_cotizacion'],
+                'id_cliente' => $cotizacion->id_cliente,
+                'id_servicio' => $validated['id_servicio'],
+                'id_ponente' => $validated['id_ponente'],
+                'fecha_servicio' => $validated['fecha_servicio'],
+                'hora_servicio' => $validated['hora_servicio'] ?? null,
+                'modalidad' => $validated['modalidad'],
+                'num_participantes' => $validated['num_participantes'],
+                'num_certificados' => $validated['num_certificados'] ?? 0,
+                'costo' => $validated['costo'],
+                'aprobacion' => $validated['aprobacion'] ?? 'Pendiente',
+                'observaciones' => $validated['observaciones'] ?? null,
             ]);
 
-            $orden = OrdenCapacitacionAuditoria::create($validated);
-            $orden->load(['cliente', 'cotizacion', 'servicio', 'ponente']);
+            DB::commit();
+
+            // Cargar relaciones para respuesta
+            $orden->load(['cliente', 'ponente', 'servicio', 'cotizacion']);
 
             return response()->json([
-                'status' => 'success',
-                'message' => 'Orden de capacitación/auditoría creada correctamente',
+                'success' => true,
+                'message' => 'Orden de capacitación/auditoría creada exitosamente',
                 'data' => $orden
             ], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Errores de validación',
-                'errors' => $e->errors()
-            ], 422);
+
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             return response()->json([
-                'status' => 'error',
-                'message' => 'Error al crear la orden: ' . $e->getMessage()
+                'success' => false,
+                'message' => 'Error al crear la orden de capacitación/auditoría',
+                'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Obtener una orden específica
+     */
+    public function show($id): JsonResponse
+    {
+        $orden = OrdenCapacitacionAuditoria::with([
+            'cliente', 
+            'ponente', 
+            'cotizacion',
+            'servicio'
+        ])->find($id);
+
+        if (!$orden) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Orden de capacitación/auditoría no encontrada'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $orden
+        ]);
     }
 
     /**
      * Actualizar una orden de capacitación/auditoría
-     * PUT /api/ordenes-capacitacion-auditoria/{id}
      */
     public function update(Request $request, $id): JsonResponse
     {
-        try {
-            $orden = OrdenCapacitacionAuditoria::findOrFail($id);
+        $orden = OrdenCapacitacionAuditoria::find($id);
 
-            $validated = $request->validate([
-                'numero_orden' => 'sometimes|string|max:20|unique:orden_capacitacion_auditoria,numero_orden,' . $id,
-                'id_cotizacion' => 'nullable|integer|exists:cotizacion,id',
-                'id_cliente' => 'sometimes|integer|exists:cliente,id',
-                'id_servicio' => 'nullable|integer|exists:servicios,id',
-                'fecha_capacitacion' => 'nullable|date',
-                'fecha_limite' => 'nullable|date',
-                'id_ponente' => 'nullable|integer|exists:personal,id',
-                'observaciones' => 'nullable|string'
-            ]);
-
-            $orden->update($validated);
-            $orden->load(['cliente', 'cotizacion', 'servicio', 'ponente']);
-
+        if (!$orden) {
             return response()->json([
-                'status' => 'success',
-                'message' => 'Orden de capacitación/auditoría actualizada correctamente',
-                'data' => $orden
-            ], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Orden de capacitación/auditoría no encontrada'
             ], 404);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        }
+
+        $validated = $request->validate([
+            'id_servicio' => 'sometimes|exists:servicios,id',
+            'id_ponente' => 'sometimes|exists:personal,id',
+            'fecha_servicio' => 'sometimes|date',
+            'hora_servicio' => 'nullable|date_format:H:i',
+            'modalidad' => 'sometimes|in:Presencial,Virtual,Híbrida',
+            'num_participantes' => 'sometimes|integer|min:1',
+            'num_certificados' => 'nullable|integer|min:0',
+            'costo' => 'sometimes|numeric|min:0',
+            'aprobacion' => 'nullable|in:Aprobado,Pendiente,Rechazado',
+            'observaciones' => 'nullable|string',
+        ]);
+
+        try {
+            $orden->update($validated);
+            $orden->load(['cliente', 'ponente', 'servicio', 'cotizacion']);
+
             return response()->json([
-                'status' => 'error',
-                'message' => 'Errores de validación',
-                'errors' => $e->errors()
-            ], 422);
+                'success' => true,
+                'message' => 'Orden de capacitación/auditoría actualizada exitosamente',
+                'data' => $orden
+            ]);
+
         } catch (\Exception $e) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Error al actualizar la orden: ' . $e->getMessage()
+                'success' => false,
+                'message' => 'Error al actualizar la orden de capacitación/auditoría',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
      * Eliminar una orden de capacitación/auditoría
-     * DELETE /api/ordenes-capacitacion-auditoria/{id}
      */
     public function destroy($id): JsonResponse
     {
+        $orden = OrdenCapacitacionAuditoria::find($id);
+
+        if (!$orden) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Orden de capacitación/auditoría no encontrada'
+            ], 404);
+        }
+
         try {
-            $orden = OrdenCapacitacionAuditoria::findOrFail($id);
             $orden->delete();
 
             return response()->json([
-                'status' => 'success',
-                'message' => 'Orden de capacitación/auditoría eliminada correctamente'
-            ], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Orden de capacitación/auditoría no encontrada'
-            ], 404);
+                'success' => true,
+                'message' => 'Orden de capacitación/auditoría eliminada exitosamente'
+            ]);
+
         } catch (\Exception $e) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Error al eliminar la orden: ' . $e->getMessage()
+                'success' => false,
+                'message' => 'Error al eliminar la orden de capacitación/auditoría',
+                'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Obtener estadísticas de órdenes de capacitación/auditoría
+     */
+    public function estadisticas(): JsonResponse
+    {
+        $stats = [
+            'total_ordenes' => OrdenCapacitacionAuditoria::count(),
+            'total_valor' => OrdenCapacitacionAuditoria::sum('costo'),
+            'total_participantes' => OrdenCapacitacionAuditoria::sum('num_participantes'),
+            'total_certificados' => OrdenCapacitacionAuditoria::sum('num_certificados'),
+            'ordenes_mes_actual' => OrdenCapacitacionAuditoria::whereMonth('fecha_servicio', date('m'))
+                                                              ->whereYear('fecha_servicio', date('Y'))
+                                                              ->count(),
+            'valor_mes_actual' => OrdenCapacitacionAuditoria::whereMonth('fecha_servicio', date('m'))
+                                                            ->whereYear('fecha_servicio', date('Y'))
+                                                            ->sum('costo'),
+            'por_modalidad' => OrdenCapacitacionAuditoria::select('modalidad', DB::raw('count(*) as total'))
+                                                         ->groupBy('modalidad')
+                                                         ->get(),
+            'por_aprobacion' => OrdenCapacitacionAuditoria::select('aprobacion', DB::raw('count(*) as total'))
+                                                          ->groupBy('aprobacion')
+                                                          ->get(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats
+        ]);
     }
 }
