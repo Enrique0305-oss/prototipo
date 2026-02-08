@@ -4,6 +4,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\ClienteController;
 use App\Http\Controllers\API\CotizacionController;
+use App\Http\Controllers\API\OrdenServicioController;
+use App\Http\Controllers\API\OrdenCapacitacionAuditoriaController;
+use App\Http\Controllers\API\OrdenProductoController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -23,5 +26,32 @@ Route::prefix('v1')->group(function () {
     Route::patch('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado']);
     Route::delete('/cotizaciones/{id}', [CotizacionController::class, 'destroy']);
     Route::get('/cotizaciones/estadisticas/resumen', [CotizacionController::class, 'estadisticas']);
+
+    // para las ordenes de producto :v
+    Route::get('/ordenes-producto/cotizaciones-disponibles', [OrdenProductoController::class, 'cotizacionesDisponibles']);
+    Route::get('/ordenes-producto/desde-cotizacion/{id}', [OrdenProductoController::class, 'desdeCotizacion']);
+    Route::get('/ordenes-producto', [OrdenProductoController::class, 'index']);
+    Route::get('/ordenes-producto/{id}', [OrdenProductoController::class, 'show']);
+    Route::post('/ordenes-producto', [OrdenProductoController::class, 'store']);
+    Route::put('/ordenes-producto/{id}', [OrdenProductoController::class, 'update']);
+    Route::delete('/ordenes-producto/{id}', [OrdenProductoController::class, 'destroy']);
+    Route::get('/ordenes-producto/estadisticas/resumen', [OrdenProductoController::class, 'estadisticas']);
+
+    // para las órdenes de servicio :v
+    Route::get('/ordenes-servicio/cotizaciones-disponibles', [OrdenServicioController::class, 'cotizacionesDisponibles']);
+    Route::get('/ordenes-servicio/desde-cotizacion/{id}', [OrdenServicioController::class, 'desdeCotizacion']);
+    Route::get('/ordenes-servicio', [OrdenServicioController::class, 'index']);
+    Route::get('/ordenes-servicio/{id}', [OrdenServicioController::class, 'show']);
+    Route::post('/ordenes-servicio', [OrdenServicioController::class, 'store']);
+    Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
+    Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
+    Route::get('/ordenes-servicio/estadisticas/resumen', [OrdenServicioController::class, 'estadisticas']);
+
+    // para las órdenes de capacitación/auditoría :v
+    Route::get('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'index']);
+    Route::get('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'show']);
+    Route::post('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'store']);
+    Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
+    Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
 
 });

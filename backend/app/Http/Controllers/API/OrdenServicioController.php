@@ -4,190 +4,434 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\OrdenServicio;
+use App\Models\DetalleOrdenServicio;
+use App\Models\Cotizacion;
+use App\Models\CotizacionDetalle;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class OrdenServicioController extends Controller
 {
     /**
      * Listar todas las órdenes de servicio
-     * GET /api/ordenes-servicio
      */
     public function index(Request $request): JsonResponse
     {
-        try {
-            $query = OrdenServicio::with(['cliente', 'cotizacion', 'emisor', 'detalles']);
+        $query = OrdenServicio::with(['cliente', 'emisor', 'cotizacion']);
 
-            // Filtros opcionales
-            if ($request->has('id_cliente')) {
-                $query->where('id_cliente', $request->id_cliente);
-            }
-
-            if ($request->has('numero_orden')) {
-                $query->where('numero_orden', 'like', '%' . $request->numero_orden . '%');
-            }
-
-            // Nota: la tabla `orden_servicio` no tiene campo `estado`, por eso se omite el filtro
-
-            // Paginación
-            $perPage = $request->input('per_page', 15);
-            $ordenes = $query->paginate($perPage);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Órdenes de servicio obtenidas',
-                'data' => $ordenes
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Error al listar órdenes de servicio: ' . $e->getMessage()
-            ], 500);
+        // Filtro por búsqueda
+        if ($request->has('search')) {
+            $query->where(function($q) use ($request) {
+                $q->where('numero_orden', 'like', '%' . $request->search . '%')
+                  ->orWhereHas('cliente', function($q) use ($request) {
+                      $q->where('nombre_empresa', 'like', '%' . $request->search . '%');
+                  });
+            });
         }
+
+        // Filtro por fecha
+        if ($request->has('fecha_desde')) {
+            $query->where('fecha_aceptacion', '>=', $request->fecha_desde);
+        }
+        if ($request->has('fecha_hasta')) {
+            $query->where('fecha_aceptacion', '<=', $request->fecha_hasta);
+        }
+
+        $ordenes = $query->orderBy('fecha_aceptacion', 'desc')->get();
+
+        // Formatear respuesta
+        $data = $ordenes->map(function($orden) {
+            return [
+                'id' => $orden->id,
+                'numero_orden' => $orden->numero_orden,
+                'fecha_aceptacion' => $orden->fecha_aceptacion->format('Y-m-d'),
+                'fecha_tentativa' => $orden->fecha_tentativa ? $orden->fecha_tentativa->format('Y-m-d') : null,
+                'total_costo' => $orden->total_costo,
+                'cliente' => [
+                    'id' => $orden->cliente->id,
+                    'nombre_empresa' => $orden->cliente->nombre_empresa,
+                    'ruc' => $orden->cliente->ruc,
+                ],
+                'emisor' => $orden->emisor ? $orden->emisor->nombre : null,
+                'cotizacion_numero' => $orden->cotizacion ? $orden->cotizacion->numero_cotizacion : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
     }
 
     /**
-     * Obtener una orden de servicio específica
-     * GET /api/ordenes-servicio/{id}
+     * Listar cotizaciones tipo "Servicio" disponibles para crear órdenes
      */
-    public function show($id): JsonResponse
+    public function cotizacionesDisponibles(): JsonResponse
     {
-        try {
-            $orden = OrdenServicio::with(['cliente', 'cotizacion', 'emisor', 'detalles'])
-                ->findOrFail($id);
+        $cotizaciones = Cotizacion::with(['cliente', 'creador'])
+            ->where('tipo_cotizacion', 'Servicio')
+            ->where('estado', 'Aceptada')
+            ->whereDoesntHave('ordenServicio') // Solo las que no tienen orden aún
+            ->orderBy('fecha_emision', 'desc')
+            ->get();
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Orden de servicio obtenida',
-                'data' => $orden
-            ], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Orden de servicio no encontrada'
-            ], 404);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Error al obtener la orden: ' . $e->getMessage()
-            ], 500);
-        }
+        $data = $cotizaciones->map(function($cot) {
+            return [
+                'id' => $cot->id,
+                'numero_cotizacion' => $cot->numero_cotizacion,
+                'fecha_emision' => $cot->fecha_emision->format('Y-m-d'),
+                'cliente' => [
+                    'id' => $cot->cliente->id,
+                    'nombre_empresa' => $cot->cliente->nombre_empresa,
+                    'ruc' => $cot->cliente->ruc,
+                ],
+                'total' => $cot->total,
+                'subtotal' => $cot->subtotal,
+                'igv' => $cot->igv,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
     }
+
+    /**
+     * Obtener datos de una cotización para crear orden de servicio
+     */
+    public function desdeCotizacion($cotizacionId): JsonResponse
+    {
+        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio'])
+            ->find($cotizacionId);
+
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        }
+
+        if ($cotizacion->tipo_cotizacion !== 'Servicio') {
+            return response()->json([
+                'success' => false,
+                'message' => 'La cotización no es de tipo Servicio'
+            ], 400);
+        }
+
+        if ($cotizacion->estado !== 'Aceptada') {
+            return response()->json([
+                'success' => false,
+                'message' => 'La cotización debe estar Aceptada'
+            ], 400);
+        }
+
+        // Verificar si ya tiene orden
+        if ($cotizacion->ordenServicio) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta cotización ya tiene una orden de servicio creada',
+                'orden_existente' => $cotizacion->ordenServicio->numero_orden
+            ], 400);
+        }
+
+        // Preparar datos para la orden
+        $detalles = $cotizacion->detalles->map(function($detalle) {
+            return [
+                'id_servicio' => $detalle->id_servicio,
+                'servicio_nombre' => $detalle->servicio ? $detalle->servicio->nombre : null,
+                'frecuencia' => $detalle->frecuencia_sugerida,
+                'precio' => $detalle->precio_unitario,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'cotizacion' => [
+                    'id' => $cotizacion->id,
+                    'numero_cotizacion' => $cotizacion->numero_cotizacion,
+                    'fecha_emision' => $cotizacion->fecha_emision->format('Y-m-d'),
+                ],
+                'cliente' => [
+                    'id' => $cotizacion->cliente->id,
+                    'nombre_empresa' => $cotizacion->cliente->nombre_empresa,
+                    'ruc' => $cotizacion->cliente->ruc,
+                    'direccion' => $cotizacion->cliente->direccion,
+                ],
+                'total' => $cotizacion->total,
+                'detalles' => $detalles,
+            ]
+        ]);
+    }
+
 
     /**
      * Crear una nueva orden de servicio
-     * POST /api/ordenes-servicio
      */
     public function store(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'id_cotizacion' => 'required|exists:cotizacion,id',
+            'fecha_aceptacion' => 'required|date',
+            'fecha_tentativa' => 'nullable|date',
+            'emitido_por' => 'required|exists:personal,id',
+            'codigo_doc' => 'nullable|string|max:20',
+            'version' => 'nullable|string|max:10',
+            'detalles' => 'required|array|min:1',
+            'detalles.*.id_servicio' => 'required|exists:servicios,id',
+            'detalles.*.local' => 'nullable|string|max:255',
+            'detalles.*.frecuencia' => 'nullable|string|max:100',
+            'detalles.*.precio' => 'required|numeric|min:0',
+        ]);
+
+        // Verificar que la cotización sea tipo Servicio
+        $cotizacion = Cotizacion::find($validated['id_cotizacion']);
+        
+        if ($cotizacion->tipo_cotizacion !== 'Servicio') {
+            return response()->json([
+                'success' => false,
+                'message' => 'La cotización debe ser de tipo Servicio'
+            ], 400);
+        }
+
+        // Verificar que no tenga ya una orden
+        if ($cotizacion->ordenServicio) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta cotización ya tiene una orden de servicio'
+            ], 400);
+        }
+
         try {
-            // Validar datos
-            $validated = $request->validate([
-                'numero_orden' => 'required|string|max:20|unique:orden_servicio',
-                'codigo_doc' => 'nullable|string|max:20',
-                'version' => 'nullable|string|max:10',
-                'id_cotizacion' => 'nullable|integer|exists:cotizacion,id',
-                'id_cliente' => 'required|integer|exists:cliente,id',
-                'fecha_aceptacion' => 'nullable|date',
-                'fecha_tentativa' => 'nullable|date',
-                'total_costo' => 'nullable|numeric|min:0',
-                'emitido_por' => 'nullable|integer|exists:personal,id'
+            DB::beginTransaction();
+
+            // Calcular total
+            $total = 0;
+            foreach ($validated['detalles'] as $detalle) {
+                $total += $detalle['precio'];
+            }
+
+            // Crear orden de servicio
+            $orden = OrdenServicio::create([
+                'numero_orden' => OrdenServicio::generarNumero(),
+                'codigo_doc' => $validated['codigo_doc'] ?? null,
+                'version' => $validated['version'] ?? '1.0',
+                'id_cotizacion' => $validated['id_cotizacion'],
+                'id_cliente' => $cotizacion->id_cliente,
+                'fecha_aceptacion' => $validated['fecha_aceptacion'],
+                'fecha_tentativa' => $validated['fecha_tentativa'] ?? null,
+                'total_costo' => $total,
+                'emitido_por' => $validated['emitido_por'],
             ]);
 
-            $orden = OrdenServicio::create($validated);
-            $orden->load(['cliente', 'cotizacion', 'emisor', 'detalles']);
+            // Crear detalles
+            foreach ($validated['detalles'] as $detalle) {
+                DetalleOrdenServicio::create([
+                    'id_orden_servicio' => $orden->id,
+                    'id_servicio' => $detalle['id_servicio'],
+                    'local' => $detalle['local'] ?? null,
+                    'frecuencia' => $detalle['frecuencia'] ?? null,
+                    'precio' => $detalle['precio'],
+                ]);
+            }
+
+            DB::commit();
+
+            // Cargar relaciones para respuesta
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion']);
 
             return response()->json([
-                'status' => 'success',
-                'message' => 'Orden de servicio creada correctamente',
+                'success' => true,
+                'message' => 'Orden de servicio creada exitosamente',
                 'data' => $orden
             ], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Errores de validación',
-                'errors' => $e->errors()
-            ], 422);
+
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             return response()->json([
-                'status' => 'error',
-                'message' => 'Error al crear la orden: ' . $e->getMessage()
+                'success' => false,
+                'message' => 'Error al crear la orden de servicio',
+                'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Obtener una orden específica
+     */
+    public function show($id): JsonResponse
+    {
+        $orden = OrdenServicio::with([
+            'cliente', 
+            'emisor', 
+            'cotizacion',
+            'detalles.servicio'
+        ])->find($id);
+
+        if (!$orden) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Orden de servicio no encontrada'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $orden
+        ]);
     }
 
     /**
      * Actualizar una orden de servicio
-     * PUT /api/ordenes-servicio/{id}
      */
     public function update(Request $request, $id): JsonResponse
     {
-        try {
-            $orden = OrdenServicio::findOrFail($id);
+        $orden = OrdenServicio::find($id);
 
-            $validated = $request->validate([
-                'numero_orden' => 'sometimes|string|max:20|unique:orden_servicio,numero_orden,' . $id,
-                'codigo_doc' => 'nullable|string|max:20',
-                'version' => 'nullable|string|max:10',
-                'id_cotizacion' => 'nullable|integer|exists:cotizacion,id',
-                'id_cliente' => 'sometimes|integer|exists:cliente,id',
-                'fecha_aceptacion' => 'nullable|date',
-                'fecha_tentativa' => 'nullable|date',
-                'total_costo' => 'nullable|numeric|min:0',
-                'emitido_por' => 'nullable|integer|exists:personal,id'
-            ]);
-
-            $orden->update($validated);
-            $orden->load(['cliente', 'cotizacion', 'emisor', 'detalles']);
-
+        if (!$orden) {
             return response()->json([
-                'status' => 'success',
-                'message' => 'Orden de servicio actualizada correctamente',
-                'data' => $orden
-            ], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Orden de servicio no encontrada'
             ], 404);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        }
+
+        $validated = $request->validate([
+            'fecha_aceptacion' => 'sometimes|date',
+            'fecha_tentativa' => 'nullable|date',
+            'codigo_doc' => 'nullable|string|max:20',
+            'version' => 'nullable|string|max:10',
+            'detalles' => 'sometimes|array|min:1',
+            'detalles.*.id_servicio' => 'required_with:detalles|exists:servicios,id',
+            'detalles.*.local' => 'nullable|string|max:255',
+            'detalles.*.frecuencia' => 'nullable|string|max:100',
+            'detalles.*.precio' => 'required_with:detalles|numeric|min:0',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // Actualizar campos básicos
+            if (isset($validated['fecha_aceptacion'])) {
+                $orden->fecha_aceptacion = $validated['fecha_aceptacion'];
+            }
+            if (isset($validated['fecha_tentativa'])) {
+                $orden->fecha_tentativa = $validated['fecha_tentativa'];
+            }
+            if (isset($validated['codigo_doc'])) {
+                $orden->codigo_doc = $validated['codigo_doc'];
+            }
+            if (isset($validated['version'])) {
+                $orden->version = $validated['version'];
+            }
+
+            // Si se actualizan detalles
+            if (isset($validated['detalles'])) {
+                // Eliminar detalles antiguos
+                $orden->detalles()->delete();
+
+                // Crear nuevos detalles y calcular total
+                $total = 0;
+                foreach ($validated['detalles'] as $detalle) {
+                    $total += $detalle['precio'];
+                    
+                    DetalleOrdenServicio::create([
+                        'id_orden_servicio' => $orden->id,
+                        'id_servicio' => $detalle['id_servicio'],
+                        'local' => $detalle['local'] ?? null,
+                        'frecuencia' => $detalle['frecuencia'] ?? null,
+                        'precio' => $detalle['precio'],
+                    ]);
+                }
+
+                $orden->total_costo = $total;
+            }
+
+            $orden->save();
+
+            DB::commit();
+
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion']);
+
             return response()->json([
-                'status' => 'error',
-                'message' => 'Errores de validación',
-                'errors' => $e->errors()
-            ], 422);
+                'success' => true,
+                'message' => 'Orden de servicio actualizada exitosamente',
+                'data' => $orden
+            ]);
+
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             return response()->json([
-                'status' => 'error',
-                'message' => 'Error al actualizar la orden: ' . $e->getMessage()
+                'success' => false,
+                'message' => 'Error al actualizar la orden de servicio',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
      * Eliminar una orden de servicio
-     * DELETE /api/ordenes-servicio/{id}
      */
     public function destroy($id): JsonResponse
     {
-        try {
-            $orden = OrdenServicio::findOrFail($id);
-            $orden->delete();
+        $orden = OrdenServicio::find($id);
 
+        if (!$orden) {
             return response()->json([
-                'status' => 'success',
-                'message' => 'Orden de servicio eliminada correctamente'
-            ], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Orden de servicio no encontrada'
             ], 404);
-        } catch (\Exception $e) {
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Eliminar detalles
+            $orden->detalles()->delete();
+            
+            // Eliminar orden
+            $orden->delete();
+
+            DB::commit();
+
             return response()->json([
-                'status' => 'error',
-                'message' => 'Error al eliminar la orden: ' . $e->getMessage()
+                'success' => true,
+                'message' => 'Orden de servicio eliminada exitosamente'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar la orden de servicio',
+                'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Obtener estadísticas de órdenes de servicio
+     */
+    public function estadisticas(): JsonResponse
+    {
+        $stats = [
+            'total_ordenes' => OrdenServicio::count(),
+            'total_valor' => OrdenServicio::sum('total_costo'),
+            'ordenes_mes_actual' => OrdenServicio::whereMonth('fecha_aceptacion', date('m'))
+                                                 ->whereYear('fecha_aceptacion', date('Y'))
+                                                 ->count(),
+            'valor_mes_actual' => OrdenServicio::whereMonth('fecha_aceptacion', date('m'))
+                                              ->whereYear('fecha_aceptacion', date('Y'))
+                                              ->sum('total_costo'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats
+        ]);
     }
 }
