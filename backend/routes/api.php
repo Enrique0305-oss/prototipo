@@ -48,10 +48,13 @@ Route::prefix('v1')->group(function () {
     Route::get('/ordenes-servicio/estadisticas/resumen', [OrdenServicioController::class, 'estadisticas']);
 
     // para las órdenes de capacitación/auditoría :v
+    Route::get('/ordenes-capacitacion-auditoria/cotizaciones-disponibles', [OrdenCapacitacionAuditoriaController::class, 'cotizacionesDisponibles']);
+    Route::get('/ordenes-capacitacion-auditoria/desde-cotizacion/{id}', [OrdenCapacitacionAuditoriaController::class, 'desdeCotizacion']);
     Route::get('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'index']);
     Route::get('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'show']);
     Route::post('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'store']);
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
     Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
+    Route::get('/ordenes-capacitacion-auditoria/estadisticas/resumen', [OrdenCapacitacionAuditoriaController::class, 'estadisticas']);
 
 });
