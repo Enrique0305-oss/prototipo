@@ -27,6 +27,7 @@ Route::prefix('v1')->group(function () {
     Route::patch('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado']);
     Route::delete('/cotizaciones/{id}', [CotizacionController::class, 'destroy']);
     Route::get('/cotizaciones/estadisticas/resumen', [CotizacionController::class, 'estadisticas']);
+    Route::get('/cotizaciones/{id}/pdf', [CotizacionController::class, 'generarPDF']);
 
     // para las ordenes de producto :v
     Route::get('/ordenes-producto/cotizaciones-disponibles', [OrdenProductoController::class, 'cotizacionesDisponibles']);
@@ -57,6 +58,13 @@ Route::prefix('v1')->group(function () {
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
     Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
     Route::get('/ordenes-capacitacion-auditoria/estadisticas/resumen', [OrdenCapacitacionAuditoriaController::class, 'estadisticas']);
+
+    // para los equipos :v
+    Route::get('/equipos', [EquipoController::class, 'index']);
+    Route::get('/equipos/{id}', [EquipoController::class, 'show']);
+    Route::post('/equipos', [EquipoController::class, 'store']);
+    Route::put('/equipos/{id}', [EquipoController::class, 'update']);
+    Route::delete('/equipos/{id}', [EquipoController::class, 'destroy']);
 
     // para los equipos :v
     Route::get('/equipos', [EquipoController::class, 'index']);
