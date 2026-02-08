@@ -7,6 +7,7 @@ use App\Http\Controllers\API\CotizacionController;
 use App\Http\Controllers\API\OrdenServicioController;
 use App\Http\Controllers\API\OrdenCapacitacionAuditoriaController;
 use App\Http\Controllers\API\OrdenProductoController;
+use App\Http\Controllers\API\EquipoController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -56,5 +57,12 @@ Route::prefix('v1')->group(function () {
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
     Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
     Route::get('/ordenes-capacitacion-auditoria/estadisticas/resumen', [OrdenCapacitacionAuditoriaController::class, 'estadisticas']);
+
+    // para los equipos :v
+    Route::get('/equipos', [EquipoController::class, 'index']);
+    Route::get('/equipos/{id}', [EquipoController::class, 'show']);
+    Route::post('/equipos', [EquipoController::class, 'store']);
+    Route::put('/equipos/{id}', [EquipoController::class, 'update']);
+    Route::delete('/equipos/{id}', [EquipoController::class, 'destroy']);
 
 });
