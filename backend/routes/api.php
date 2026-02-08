@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\ClienteController;
 use App\Http\Controllers\API\CotizacionController;
+use App\Http\Controllers\API\OrdenServicioController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -23,5 +24,12 @@ Route::prefix('v1')->group(function () {
     Route::patch('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado']);
     Route::delete('/cotizaciones/{id}', [CotizacionController::class, 'destroy']);
     Route::get('/cotizaciones/estadisticas/resumen', [CotizacionController::class, 'estadisticas']);
+
+    // para las órdenes de servicio :v
+    Route::get('/ordenes-servicio', [OrdenServicioController::class, 'index']);
+    Route::get('/ordenes-servicio/{id}', [OrdenServicioController::class, 'show']);
+    Route::post('/ordenes-servicio', [OrdenServicioController::class, 'store']);
+    Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
+    Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
 
 });
