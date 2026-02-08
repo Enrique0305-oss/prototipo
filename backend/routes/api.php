@@ -8,6 +8,8 @@ use App\Http\Controllers\API\OrdenServicioController;
 use App\Http\Controllers\API\OrdenCapacitacionAuditoriaController;
 use App\Http\Controllers\API\OrdenProductoController;
 use App\Http\Controllers\API\EquipoController;
+use App\Http\Controllers\API\ProductoController;
+use App\Http\Controllers\API\CategoriaController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -66,11 +68,22 @@ Route::prefix('v1')->group(function () {
     Route::put('/equipos/{id}', [EquipoController::class, 'update']);
     Route::delete('/equipos/{id}', [EquipoController::class, 'destroy']);
 
-    // para los equipos :v
-    Route::get('/equipos', [EquipoController::class, 'index']);
-    Route::get('/equipos/{id}', [EquipoController::class, 'show']);
-    Route::post('/equipos', [EquipoController::class, 'store']);
-    Route::put('/equipos/{id}', [EquipoController::class, 'update']);
-    Route::delete('/equipos/{id}', [EquipoController::class, 'destroy']);
+    // para los productos :v
+    Route::get('/productos/estadisticas/resumen', [ProductoController::class, 'estadisticas']);
+    Route::get('/productos', [ProductoController::class, 'index']);
+    Route::get('/productos/{id}', [ProductoController::class, 'show']);
+    Route::post('/productos', [ProductoController::class, 'store']);
+    Route::put('/productos/{id}', [ProductoController::class, 'update']);
+    Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
+    Route::patch('/productos/{id}/reactivar', [ProductoController::class, 'reactivar']);
+
+    // para las categorías :v
+    Route::get('/categorias/estadisticas/resumen', [CategoriaController::class, 'estadisticas']);
+    Route::get('/categorias', [CategoriaController::class, 'index']);
+    Route::get('/categorias/{id}', [CategoriaController::class, 'show']);
+    Route::post('/categorias', [CategoriaController::class, 'store']);
+    Route::put('/categorias/{id}', [CategoriaController::class, 'update']);
+    Route::delete('/categorias/{id}', [CategoriaController::class, 'destroy']);
+    Route::patch('/categorias/{id}/reactivar', [CategoriaController::class, 'reactivar']);
 
 });
