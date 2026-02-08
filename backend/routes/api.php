@@ -7,6 +7,8 @@ use App\Http\Controllers\API\CotizacionController;
 use App\Http\Controllers\API\OrdenServicioController;
 use App\Http\Controllers\API\OrdenCapacitacionAuditoriaController;
 use App\Http\Controllers\API\OrdenProductoController;
+use App\Http\Controllers\API\ProductoController;
+use App\Http\Controllers\API\CategoriaController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -56,5 +58,23 @@ Route::prefix('v1')->group(function () {
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
     Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
     Route::get('/ordenes-capacitacion-auditoria/estadisticas/resumen', [OrdenCapacitacionAuditoriaController::class, 'estadisticas']);
+
+    // para los productos :v
+    Route::get('/productos/estadisticas/resumen', [ProductoController::class, 'estadisticas']);
+    Route::get('/productos', [ProductoController::class, 'index']);
+    Route::get('/productos/{id}', [ProductoController::class, 'show']);
+    Route::post('/productos', [ProductoController::class, 'store']);
+    Route::put('/productos/{id}', [ProductoController::class, 'update']);
+    Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
+    Route::patch('/productos/{id}/reactivar', [ProductoController::class, 'reactivar']);
+
+    // para las categorías :v
+    Route::get('/categorias/estadisticas/resumen', [CategoriaController::class, 'estadisticas']);
+    Route::get('/categorias', [CategoriaController::class, 'index']);
+    Route::get('/categorias/{id}', [CategoriaController::class, 'show']);
+    Route::post('/categorias', [CategoriaController::class, 'store']);
+    Route::put('/categorias/{id}', [CategoriaController::class, 'update']);
+    Route::delete('/categorias/{id}', [CategoriaController::class, 'destroy']);
+    Route::patch('/categorias/{id}/reactivar', [CategoriaController::class, 'reactivar']);
 
 });
