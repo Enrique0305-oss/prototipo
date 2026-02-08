@@ -4,7 +4,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\ClienteController;
 use App\Http\Controllers\API\CotizacionController;
-use App\Http\Controllers\API\OrdenProductoController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -24,15 +23,5 @@ Route::prefix('v1')->group(function () {
     Route::patch('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado']);
     Route::delete('/cotizaciones/{id}', [CotizacionController::class, 'destroy']);
     Route::get('/cotizaciones/estadisticas/resumen', [CotizacionController::class, 'estadisticas']);
-
-    // para las ordenes de producto :v
-    Route::get('/ordenes-producto/cotizaciones-disponibles', [OrdenProductoController::class, 'cotizacionesDisponibles']);
-    Route::get('/ordenes-producto/desde-cotizacion/{id}', [OrdenProductoController::class, 'desdeCotizacion']);
-    Route::get('/ordenes-producto', [OrdenProductoController::class, 'index']);
-    Route::get('/ordenes-producto/{id}', [OrdenProductoController::class, 'show']);
-    Route::post('/ordenes-producto', [OrdenProductoController::class, 'store']);
-    Route::put('/ordenes-producto/{id}', [OrdenProductoController::class, 'update']);
-    Route::delete('/ordenes-producto/{id}', [OrdenProductoController::class, 'destroy']);
-    Route::get('/ordenes-producto/estadisticas/resumen', [OrdenProductoController::class, 'estadisticas']);
 
 });
