@@ -8,6 +8,7 @@ use App\Models\CotizacionDetalle;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class CotizacionController extends Controller
 {
@@ -247,5 +248,32 @@ class CotizacionController extends Controller
                 'message' => 'Error al eliminar la cotización'
             ], 500);
         }
+    }
+
+    /**
+     * Generar PDF de cotización
+     */
+    public function generarPDF($id, Request $request)
+    {
+        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.producto', 'creador'])
+                                ->find($id);
+
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        }
+
+        $pdf = Pdf::loadView('CotizacionPDF', compact('cotizacion'))
+                  ->setPaper('a4', 'portrait');
+
+        // Si se pasa parámetro descargar=true, descarga automáticamente
+        // Si no, muestra en navegador
+        if ($request->get('descargar') === 'true') {
+            return $pdf->download('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
+        }
+
+        return $pdf->stream('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
     }
 }
