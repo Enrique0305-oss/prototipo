@@ -44,7 +44,12 @@ class OrdenProducto extends Model
     {
         return $this->hasMany(DetalleOrdenProducto::class, 'id_orden_producto');
     }
-
+    
+    // Relación con Proyecciones
+    public function proyecciones()
+    {
+        return $this->hasMany(Proyeccion::class, 'id_orden_producto');
+    }
     // Generar número de orden
     public static function generarNumero()
     {
