@@ -93,8 +93,11 @@ class EquipoController extends Controller
                 'encargado' => 'required|string|max:100',
                 'responsable' => 'required|string|max:100',
                 'contacto' => 'required|integer',
-                'estado' => 'required|in:Activo,Inactivo'
+                'estado' => 'nullable|in:Activo,Inactivo'
             ]);
+
+            // Asignar estado por defecto si no se envía
+            $validated['estado'] = $validated['estado'] ?? 'Activo';
 
             $equipo = Equipo::create($validated);
 

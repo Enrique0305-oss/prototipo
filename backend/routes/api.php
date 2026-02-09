@@ -13,6 +13,8 @@ use App\Http\Controllers\API\CategoriaController;
 use App\Http\Controllers\API\VehiculoController;
 use App\Http\Controllers\API\AreaController;
 use App\Http\Controllers\API\TecnicoController;
+use App\Http\Controllers\API\MantenimientoController;
+use App\Http\Controllers\API\ActividadMantenimientoController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -113,6 +115,23 @@ Route::prefix('v1')->group(function () {
     Route::put('/tecnicos/{id}', [TecnicoController::class, 'update']);
     Route::delete('/tecnicos/{id}', [TecnicoController::class, 'destroy']);
     Route::patch('/tecnicos/{id}/reactivar', [TecnicoController::class, 'reactivar']);
-    Route::patch('/tecnicos/{id}/licencia', [TecnicoController::class, 'ponerEnLicencia']);  
+    Route::patch('/tecnicos/{id}/licencia', [TecnicoController::class, 'ponerEnLicencia']);
+
+    // para los mantenimientos :v
+    Route::get('/mantenimientos/estadisticas/resumen', [MantenimientoController::class, 'estadisticas']);
+    Route::get('/mantenimientos/equipo/{id_equipo}/historial', [MantenimientoController::class, 'historialEquipo']);
+    Route::get('/mantenimientos', [MantenimientoController::class, 'index']);
+    Route::get('/mantenimientos/{id}', [MantenimientoController::class, 'show']);
+    Route::post('/mantenimientos', [MantenimientoController::class, 'store']);
+    Route::put('/mantenimientos/{id}', [MantenimientoController::class, 'update']);
+    Route::delete('/mantenimientos/{id}', [MantenimientoController::class, 'destroy']);
+
+    // para las actividades de mantenimiento :v
+    Route::get('/actividades-mantenimiento', [ActividadMantenimientoController::class, 'index']);
+    Route::get('/actividades-mantenimiento/{id}', [ActividadMantenimientoController::class, 'show']);
+    Route::post('/actividades-mantenimiento', [ActividadMantenimientoController::class, 'store']);
+    Route::put('/actividades-mantenimiento/{id}', [ActividadMantenimientoController::class, 'update']);
+    Route::delete('/actividades-mantenimiento/{id}', [ActividadMantenimientoController::class, 'destroy']);
+    Route::patch('/actividades-mantenimiento/{id}/reactivar', [ActividadMantenimientoController::class, 'reactivar']);  
 
 });
