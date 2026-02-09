@@ -12,6 +12,7 @@ use App\Http\Controllers\API\ProductoController;
 use App\Http\Controllers\API\CategoriaController;
 use App\Http\Controllers\API\VehiculoController;
 use App\Http\Controllers\API\AreaController;
+use App\Http\Controllers\API\TecnicoController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -102,6 +103,16 @@ Route::prefix('v1')->group(function () {
     Route::get('/areas/{id}', [AreaController::class, 'show']);
     Route::post('/areas', [AreaController::class, 'store']);
     Route::put('/areas/{id}', [AreaController::class, 'update']);
-    Route::delete('/areas/{id}', [AreaController::class, 'destroy']);  
+    Route::delete('/areas/{id}', [AreaController::class, 'destroy']);
+
+    // para los técnicos :v
+    Route::get('/tecnicos/estadisticas/resumen', [TecnicoController::class, 'estadisticas']);
+    Route::get('/tecnicos', [TecnicoController::class, 'index']);
+    Route::get('/tecnicos/{id}', [TecnicoController::class, 'show']);
+    Route::post('/tecnicos', [TecnicoController::class, 'store']);
+    Route::put('/tecnicos/{id}', [TecnicoController::class, 'update']);
+    Route::delete('/tecnicos/{id}', [TecnicoController::class, 'destroy']);
+    Route::patch('/tecnicos/{id}/reactivar', [TecnicoController::class, 'reactivar']);
+    Route::patch('/tecnicos/{id}/licencia', [TecnicoController::class, 'ponerEnLicencia']);  
 
 });
