@@ -10,6 +10,7 @@ use App\Http\Controllers\API\OrdenProductoController;
 use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\ProductoController;
 use App\Http\Controllers\API\CategoriaController;
+use App\Http\Controllers\API\AreaController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -85,5 +86,12 @@ Route::prefix('v1')->group(function () {
     Route::put('/categorias/{id}', [CategoriaController::class, 'update']);
     Route::delete('/categorias/{id}', [CategoriaController::class, 'destroy']);
     Route::patch('/categorias/{id}/reactivar', [CategoriaController::class, 'reactivar']);
+
+    // para las áreas :v
+    Route::get('/areas', [AreaController::class, 'index']);
+    Route::get('/areas/{id}', [AreaController::class, 'show']);
+    Route::post('/areas', [AreaController::class, 'store']);
+    Route::put('/areas/{id}', [AreaController::class, 'update']);
+    Route::delete('/areas/{id}', [AreaController::class, 'destroy']);    
 
 });
