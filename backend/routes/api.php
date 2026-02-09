@@ -15,6 +15,7 @@ use App\Http\Controllers\API\AreaController;
 use App\Http\Controllers\API\TecnicoController;
 use App\Http\Controllers\API\MantenimientoController;
 use App\Http\Controllers\API\ActividadMantenimientoController;
+use App\Http\Controllers\API\MulticimController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -134,4 +135,10 @@ Route::prefix('v1')->group(function () {
     Route::delete('/actividades-mantenimiento/{id}', [ActividadMantenimientoController::class, 'destroy']);
     Route::patch('/actividades-mantenimiento/{id}/reactivar', [ActividadMantenimientoController::class, 'reactivar']);  
 
+    // para multi :v
+    Route::get('/multicim', [MulticimController::class, 'index']);
+    Route::get('multicim/{id}', [MulticimController::class, 'show']);
+    Route::post('/multicim', [MulticimController::class, 'store']);
+    Route::put('/multicim/{id}', [MulticimController::class, 'update']);
+    Route::delete('/multicim/{id}', [MulticimController::class, 'destroy']);
 });
