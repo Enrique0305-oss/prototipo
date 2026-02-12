@@ -266,5 +266,65 @@ export function initFacturacionEvents(datosReales: any[] = []) {
     }
   });
   
-  // Agrega aquí los manejadores de abrir/cerrar modal...
+  // --- Abrir modal ---
+  const btnNueva = document.getElementById('btn-nueva-factura');
+  const modal = document.getElementById('modal-factura');
+  const btnCerrar = document.getElementById('btn-cerrar-modal');
+
+  btnNueva?.addEventListener('click', () => {
+    if (modal) {
+      modal.style.display = 'block';
+      // Reset: ocultar form y limpiar select
+      if (selectOrden) selectOrden.value = '';
+      if (form) form.style.display = 'none';
+    }
+  });
+
+  // --- Cerrar modal ---
+  btnCerrar?.addEventListener('click', () => {
+    if (modal) modal.style.display = 'none';
+  });
+
+  // Cerrar al hacer clic fuera del modal
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  });
+
+  // --- Submit del form ---
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const numFactura = (document.getElementById('in-num-factura') as HTMLInputElement)?.value;
+    const fechaEmision = (document.getElementById('in-fecha-emision') as HTMLInputElement)?.value;
+    const diasCredito = (document.getElementById('in-dias-credito') as HTMLInputElement)?.value;
+
+    if (!selectOrden?.value || !numFactura || !fechaEmision) {
+      alert('Complete todos los campos requeridos.');
+      return;
+    }
+
+    try {
+      const resp = await fetch('http://localhost:8000/api/v1/proyecciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_referencia: selectOrden.value,
+          n_factura: numFactura,
+          fecha_factura: fechaEmision,
+          dias_credito: Number(diasCredito) || 30
+        })
+      });
+
+      if (resp.ok) {
+        alert('Proyección registrada correctamente.');
+        if (modal) modal.style.display = 'none';
+        window.location.reload();
+      } else {
+        const err = await resp.json();
+        alert(err.message || 'Error al registrar la proyección.');
+      }
+    } catch (error) {
+      console.error('Error al registrar proyección:', error);
+      alert('Error de conexión al servidor.');
+    }
+  });
 }
