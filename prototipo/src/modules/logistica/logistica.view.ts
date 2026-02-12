@@ -1,4 +1,20 @@
 // Logística View
+import { clienteService } from '../../services/clienteService';
+import type { Cliente } from '../../core/api/types';
+
+let clientesLogisticaData: Cliente[] = [];
+let filtroSearchLogistica = '';
+
+function getInitials(name: string): string {
+  return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+}
+
+function getAvatarColor(name: string): string {
+  const colors = ['#1e3a5f', '#2d5a27', '#7c3aed', '#dc2626', '#ea580c', '#0891b2', '#4f46e5', '#be185d'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
 
 // Tab: Clientes
 export function renderClientesTab() {
@@ -6,155 +22,162 @@ export function renderClientesTab() {
     <div class="search-filter-bar">
       <div class="search-input-wrapper">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-        <input type="text" placeholder="Buscar cliente..." class="search-input">
+        <input type="text" id="logistica-search-clientes" placeholder="Buscar cliente..." class="search-input">
       </div>
-      <select class="filter-select">
-        <option>Todos los sectores</option>
-        <option>Industrial</option>
-        <option>Comercial</option>
-        <option>Residencial</option>
-        <option>Alimenticio</option>
+      <select class="filter-select" id="logistica-filter-rubro">
+        <option value="">Todos los sectores</option>
       </select>
-      <button class="btn-filter">
+      <button class="btn-filter" id="logistica-btn-filtrar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
         Filtrar
       </button>
     </div>
 
-    <div class="client-grid">
-      <div class="client-card">
-        <div class="client-header">
-          <div class="client-avatar">LT</div>
-          <div class="client-info">
-            <h3>Logística Transandina</h3>
-            <p class="client-type">Industrial</p>
-          </div>
-          <span class="client-status active">Activo</span>
-        </div>
-        <div class="client-details">
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-            <span>Av. Industrial 245, Callao</span>
-          </div>
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-            <span>(01) 420-8500</span>
-          </div>
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-            <span>Carlos Mendoza - Gerente</span>
-          </div>
-        </div>
-        <div class="client-stats">
-          <div class="client-stat">
-            <div class="stat-number">12</div>
-            <div class="stat-label">Servicios</div>
-          </div>
-          <div class="client-stat">
-            <div class="stat-number">Mensual</div>
-            <div class="stat-label">Frecuencia</div>
-          </div>
-          <div class="client-stat">
-            <div class="stat-number">$2,800</div>
-            <div class="stat-label">Facturado</div>
-          </div>
-        </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
-      </div>
-
-      <div class="client-card">
-        <div class="client-header">
-          <div class="client-avatar">AN</div>
-          <div class="client-info">
-            <h3>Almacenes del Norte</h3>
-            <p class="client-type">Comercial</p>
-          </div>
-          <span class="client-status active">Activo</span>
-        </div>
-        <div class="client-details">
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-            <span>Jr. Los Pinos 890, San Juan</span>
-          </div>
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-            <span>(01) 356-7421</span>
-          </div>
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-            <span>Ana Torres - Administradora</span>
-          </div>
-        </div>
-        <div class="client-stats">
-          <div class="client-stat">
-            <div class="stat-number">8</div>
-            <div class="stat-label">Servicios</div>
-          </div>
-          <div class="client-stat">
-            <div class="stat-number">Quincenal</div>
-            <div class="stat-label">Frecuencia</div>
-          </div>
-          <div class="client-stat">
-            <div class="stat-number">$1,600</div>
-            <div class="stat-label">Facturado</div>
-          </div>
-        </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
-      </div>
-
-      <div class="client-card">
-        <div class="client-header">
-          <div class="client-avatar">FC</div>
-          <div class="client-info">
-            <h3>Farmacéutica Central</h3>
-            <p class="client-type">Alimenticio</p>
-          </div>
-          <span class="client-status active">Activo</span>
-        </div>
-        <div class="client-details">
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-            <span>Av. Salud 123, Miraflores</span>
-          </div>
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-            <span>(01) 445-9800</span>
-          </div>
-          <div class="detail-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-            <span>Roberto Díaz - Director</span>
-          </div>
-        </div>
-        <div class="client-stats">
-          <div class="client-stat">
-            <div class="stat-number">15</div>
-            <div class="stat-label">Servicios</div>
-          </div>
-          <div class="client-stat">
-            <div class="stat-number">Semanal</div>
-            <div class="stat-label">Frecuencia</div>
-          </div>
-          <div class="client-stat">
-            <div class="stat-number">$3,200</div>
-            <div class="stat-label">Facturado</div>
-          </div>
-        </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
-      </div>
+    <div class="client-grid" id="logistica-clientes-grid">
+      <div style="text-align: center; padding: 40px; color: #64748b;">Cargando clientes...</div>
     </div>
 
-    <div class="pagination">
-      <span class="pagination-info">Mostrando 1-6 de 24 clientes</span>
-      <div class="pagination-controls">
-        <button class="pagination-btn" disabled>Anterior</button>
-        <button class="pagination-btn active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">3</button>
-        <button class="pagination-btn">4</button>
-        <button class="pagination-btn">Siguiente</button>
-      </div>
+    <div class="pagination" id="logistica-clientes-pagination">
+      <span class="pagination-info"></span>
     </div>
   `;
+}
+
+async function cargarClientesLogistica() {
+  try {
+    const params: any = { estado: 'Acepta' };
+    if (filtroSearchLogistica) params.search = filtroSearchLogistica;
+
+    const rubroSelect = document.getElementById('logistica-filter-rubro') as HTMLSelectElement;
+    if (rubroSelect && rubroSelect.value) params.rubro = rubroSelect.value;
+
+    const response = await clienteService.getAll(params);
+    const data = response.data || response;
+
+    clientesLogisticaData = Array.isArray(data) ? data : (data as any).data || [];
+    renderizarGridClientes();
+    actualizarRubrosFilter();
+  } catch (error) {
+    console.error('Error cargando clientes:', error);
+    const grid = document.getElementById('logistica-clientes-grid');
+    if (grid) grid.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">Error al cargar clientes</div>';
+  }
+}
+
+function actualizarRubrosFilter() {
+  const select = document.getElementById('logistica-filter-rubro') as HTMLSelectElement;
+  if (!select) return;
+  const currentVal = select.value;
+  const rubros = [...new Set(clientesLogisticaData.map(c => c.rubro).filter(Boolean))];
+  select.innerHTML = '<option value="">Todos los sectores</option>' +
+    rubros.map(r => `<option value="${r}" ${r === currentVal ? 'selected' : ''}>${r}</option>`).join('');
+}
+
+function renderizarGridClientes() {
+  const grid = document.getElementById('logistica-clientes-grid');
+  if (!grid) return;
+
+  let filtered = clientesLogisticaData;
+  const rubroSelect = document.getElementById('logistica-filter-rubro') as HTMLSelectElement;
+  if (rubroSelect && rubroSelect.value) {
+    filtered = filtered.filter(c => c.rubro === rubroSelect.value);
+  }
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div style="text-align: center; padding: 60px; color: #64748b; grid-column: 1 / -1;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 12px;">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <p>No se encontraron clientes</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(cliente => {
+    const initials = getInitials(cliente.nombre_empresa);
+    const color = getAvatarColor(cliente.nombre_empresa);
+
+    return `
+      <div class="client-card">
+        <div class="client-header">
+          <div class="client-avatar" style="background: ${color};">${initials}</div>
+          <div class="client-info">
+            <h3>${cliente.nombre_empresa}</h3>
+            <p class="client-type">${cliente.rubro || '—'}</p>
+          </div>
+          <span class="client-status active">Activo</span>
+        </div>
+        <div class="client-details">
+          ${cliente.direccion ? `
+          <div class="detail-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            <span>${cliente.direccion}</span>
+          </div>` : ''}
+          ${cliente.telefono_contacto ? `
+          <div class="detail-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>${cliente.telefono_contacto}</span>
+          </div>` : ''}
+          ${cliente.persona_contacto ? `
+          <div class="detail-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>${cliente.persona_contacto}</span>
+          </div>` : ''}
+        </div>
+        <div class="client-stats">
+          <div class="client-stat">
+            <div class="stat-number">${cliente.ruc || '—'}</div>
+            <div class="stat-label">RUC</div>
+          </div>
+          <div class="client-stat">
+            <div class="stat-number">${cliente.origen || '—'}</div>
+            <div class="stat-label">Origen</div>
+          </div>
+          <div class="client-stat">
+            <div class="stat-number">${cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : '—'}</div>
+            <div class="stat-label">Registro</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Pagination info
+  const pagination = document.querySelector('#logistica-clientes-pagination .pagination-info');
+  if (pagination) {
+    pagination.textContent = `Mostrando ${filtered.length} de ${clientesLogisticaData.length} clientes`;
+  }
+}
+
+export function initClientesLogisticaEvents() {
+  // Cargar datos
+  cargarClientesLogistica();
+
+  // Búsqueda con debounce
+  let debounce: ReturnType<typeof setTimeout>;
+  const searchInput = document.getElementById('logistica-search-clientes') as HTMLInputElement;
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        filtroSearchLogistica = searchInput.value.trim();
+        cargarClientesLogistica();
+      }, 400);
+    });
+  }
+
+  // Filtrar por rubro
+  const btnFiltrar = document.getElementById('logistica-btn-filtrar');
+  if (btnFiltrar) {
+    btnFiltrar.addEventListener('click', () => renderizarGridClientes());
+  }
+
+  const rubroSelect = document.getElementById('logistica-filter-rubro');
+  if (rubroSelect) {
+    rubroSelect.addEventListener('change', () => renderizarGridClientes());
+  }
 }
 
 // Tab: Servicios Disponibles
@@ -511,10 +534,6 @@ export function renderLogistica() {
         <button class="btn-secondary">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Exportar
-        </button>
-        <button class="btn-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Agregar Cliente
         </button>
       </div>
     </div>

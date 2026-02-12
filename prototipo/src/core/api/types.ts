@@ -20,23 +20,23 @@ export interface FilterParams {
 //Clientes
 
 export interface Cliente {
-  id_cliente: number;
-  razon_social: string;
+  id: number;
+  nombre_empresa: string;
   ruc: string;
-  direccion: string;
-  telefono?: string;
-  email?: string;
+  rubro: string;
+  direccion?: string;
   persona_contacto?: string;
-  cargo_contacto?: string;
   telefono_contacto?: string;
-  email_contacto?: string;
-  estado: 'Activo' | 'Inactivo';
-  created_at?: string;
-  updated_at?: string;
+  origen?: 'Referido' | 'Web' | 'Llamada' | 'Visita' | 'Redes sociales' | 'Otro';
+  fecha_registro?: string;
+  estado: 'Acepta' | 'No acepta' | 'Contactado';
+  cotizaciones?: any[];
+  ordenes_servicio?: any[];
 }
 
 export interface ClienteFilters extends FilterParams {
   ruc?: string;
+  origen?: string;
 }
 
 // Cotizaciones

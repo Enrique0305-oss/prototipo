@@ -68,6 +68,10 @@ class ClienteController extends Controller
             'ruc' => 'required|string|size:11|unique:cliente,ruc',
             'rubro' => 'required|string|max:150',
             'direccion' => 'nullable|string|max:255',
+            'persona_contacto' => 'nullable|string|max:100',
+            'telefono_contacto' => 'nullable|string|max:20',
+            'origen' => 'nullable|string|in:Referido,Web,Llamada,Visita,Redes sociales,Otro',
+            'fecha_registro' => 'nullable|date',
             'estado' => 'nullable|in:Acepta,No acepta,Contactado'
         ]);
 
@@ -99,6 +103,10 @@ class ClienteController extends Controller
             'ruc' => 'sometimes|string|size:11|unique:cliente,ruc,' . $id,
             'rubro' => 'sometimes|string|max:150',
             'direccion' => 'nullable|string|max:255',
+            'persona_contacto' => 'nullable|string|max:100',
+            'telefono_contacto' => 'nullable|string|max:20',
+            'origen' => 'nullable|string|in:Referido,Web,Llamada,Visita,Redes sociales,Otro',
+            'fecha_registro' => 'nullable|date',
             'estado' => 'sometimes|in:Acepta,No acepta,Contactado'
         ]);
 
