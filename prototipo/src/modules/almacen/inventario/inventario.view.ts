@@ -1,15 +1,29 @@
+import { productoService } from '../../../services/productoService';
+import { categoriaService } from '../../../services/categoriaService';
+import type { Producto, EstadisticasProductos, Categoria } from '../../../core/api/types';
+
+// Estado global para el módulo de inventario
+let productosData: Producto[] = [];
+let estadisticasData: EstadisticasProductos | null = null;
+let categoriasData: Categoria[] = [];
+let currentFilters = {
+  search: '',
+  estado: '',
+  id_categoria: null as number | null,
+};
+
 // Vista de Productos (Tab 1)
 export function renderProductosTab() {
   return `
 
-    <div class="stats-row" style="margin-bottom: 24px;">
+    <div class="stats-row" id="productos-stats" style="margin-bottom: 24px;">
       <div class="stat-box">
         <div class="stat-box-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
         </div>
         <div class="stat-box-content">
           <div class="stat-box-label">Stock Disponible</div>
-          <div class="stat-box-value">1,284 <span class="stat-box-note">unidades</span></div>
+          <div class="stat-box-value"><span class="loading-text">Cargando...</span></div>
         </div>
       </div>
       <div class="stat-box">
@@ -18,7 +32,7 @@ export function renderProductosTab() {
         </div>
         <div class="stat-box-content">
           <div class="stat-box-label">Inventario Total</div>
-          <div class="stat-box-value">$42,580 <span class="stat-box-note">valorizado</span></div>
+          <div class="stat-box-value"><span class="loading-text">Cargando...</span></div>
         </div>
       </div>
       <div class="stat-box">
@@ -27,7 +41,7 @@ export function renderProductosTab() {
         </div>
         <div class="stat-box-content">
           <div class="stat-box-label">Stock Bajo</div>
-          <div class="stat-box-value">15 <span class="stat-box-note">productos</span></div>
+          <div class="stat-box-value"><span class="loading-text">Cargando...</span></div>
         </div>
       </div>
     </div>
@@ -39,22 +53,20 @@ export function renderProductosTab() {
             <circle cx="11" cy="11" r="8"></circle>
             <path d="m21 21-4.35-4.35"></path>
           </svg>
-          <input type="text" placeholder="Buscar por nombre o ID..." class="op-search-input">
+          <input type="text" id="productos-search" placeholder="Buscar por nombre, SKU o ID..." class="op-search-input">
         </div>
 
         <div class="op-filter-group">
-          <select class="op-filter-select">
+          <select class="op-filter-select" id="productos-estado-filter">
             <option value="">Todos los estados</option>
-            <option value="al-dia">Al día</option>
-            <option value="proximo">Próximo</option>
-            <option value="vencido">Vencido</option>
+            <option value="Activo">Activo</option>
+            <option value="Inactivo">Inactivo</option>
           </select>
 
-          <select class="op-filter-select">
-            <option value="">Todas las garantías</option>
-            <option value="vigente">Vigente</option>
-            <option value="vencer">Por Vencer</option>
-            <option value="expirada">Expirada</option>
+          <select class="op-filter-select" id="productos-stock-filter">
+            <option value="">Todo el stock</option>
+            <option value="con_stock">Con Stock</option>
+            <option value="proximos_vencer">Próximos a Vencer</option>
           </select>
         </div>
       </div>
@@ -73,99 +85,22 @@ export function renderProductosTab() {
             <th>ACCIONES</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="productos-table-body">
           <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Cipermetrina 25% EC</div>
-                  <div class="equipment-id">SKU: QSC-QUI-001</div>
-                </div>
-              </div>
+            <td colspan="8" style="text-align: center; padding: 40px;">
+              <div class="loading-text">Cargando productos...</div>
             </td>
-            <td>Químicos</td>
-            <td>45</td>
-            <td>Litros</td>
-            <td>$28.50</td>
-            <td>$1,282.50</td>
-            <td><span class="status-indicator success">Disponible</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Deltametrina Gel 2%</div>
-                  <div class="equipment-id">SKU: QSC-QUI-015</div>
-                </div>
-              </div>
-            </td>
-            <td>Químicos</td>
-            <td>8</td>
-            <td>Unidades</td>
-            <td>$42.00</td>
-            <td>$336.00</td>
-            <td><span class="status-indicator warning">Stock Bajo</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Guantes Nitrilo (Caja x100)</div>
-                  <div class="equipment-id">SKU: QSC-EPP-042</div>
-                </div>
-              </div>
-            </td>
-            <td>EPP</td>
-            <td>25</td>
-            <td>Cajas</td>
-            <td>$15.00</td>
-            <td>$375.00</td>
-            <td><span class="status-indicator success">Disponible</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Mascarilla Respirador N95</div>
-                  <div class="equipment-id">SKU: QSC-EPP-088</div>
-                </div>
-              </div>
-            </td>
-            <td>EPP</td>
-            <td>120</td>
-            <td>Unidades</td>
-            <td>$3.50</td>
-            <td>$420.00</td>
-            <td><span class="status-indicator success">Disponible</span></td>
-            <td><button class="action-btn">⋮</button></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div class="pagination">
-      <span class="pagination-info">Mostrando 1-10 de 86 productos</span>
+    <div class="pagination" id="productos-pagination">
+      <span class="pagination-info">Cargando...</span>
       <div class="pagination-controls">
         <button class="pagination-btn" disabled>Anterior</button>
         <button class="pagination-btn active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">3</button>
-        <button class="pagination-btn">Siguiente</button>
+        <button class="pagination-btn" disabled>Siguiente</button>
       </div>
     </div>
   `;
@@ -306,133 +241,442 @@ export function renderKardexTab() {
 }
 
 // Vista de Categorías (Tab 3)
+let allCategoriasData: any[] = [];
+
 export function renderCategoriasTab() {
   return `
     <div class="page-actions" style="margin-bottom: 24px;">
-      <button class="btn-primary">
+      <button class="btn-primary" id="btn-agregar-categoria">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         Agregar Categoría
       </button>
     </div>
 
-    <div class="categories-grid">
-      <div class="category-card">
+    <div class="categories-grid" id="categorias-grid">
+      <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #64748b;">
+        <span class="loading-text">Cargando categorías...</span>
+      </div>
+    </div>
+  `;
+}
+
+// Colores de íconos por índice
+const categoryColors = ['#16a34a', '#3b82f6', '#a855f7', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
+const categoryBgColors = ['#f0fdf4', '#eff6ff', '#faf5ff', '#fffbeb', '#fef2f2', '#ecfeff', '#fdf2f8', '#f7fee7'];
+
+function getCategoryIcon(index: number): string {
+  const icons = [
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"></path><path d="M8.5 2h7"></path><path d="M7 16h10"></path></svg>',
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 0 1 9 9v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 9-9z"></path><path d="M8 12h.01M16 12h.01M15 16H9"></path></svg>',
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>',
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>',
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>',
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>',
+  ];
+  return icons[index % icons.length];
+}
+
+async function cargarCategoriasGrid() {
+  try {
+    const response = await categoriaService.getAll();
+    if (response.success && response.data) {
+      allCategoriasData = response.data;
+      renderizarCategoriasGrid();
+    }
+  } catch (error) {
+    console.error('Error cargando categorías:', error);
+    const grid = document.getElementById('categorias-grid');
+    if (grid) {
+      grid.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #e74c3c;">
+          Error al cargar las categorías. Intente nuevamente.
+        </div>`;
+    }
+  }
+}
+
+function renderizarCategoriasGrid() {
+  const grid = document.getElementById('categorias-grid');
+  if (!grid) return;
+
+  if (allCategoriasData.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #64748b;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" style="margin-bottom: 16px;">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <p style="font-size: 15px; margin-bottom: 8px;">No hay categorías registradas</p>
+        <p style="font-size: 13px; color: #94a3b8;">Haz clic en "Agregar Categoría" para crear la primera</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = allCategoriasData.map((cat, index) => {
+    const catId = cat.id_categoria || cat.id;
+    const color = categoryColors[index % categoryColors.length];
+    const bgColor = categoryBgColors[index % categoryBgColors.length];
+    const icon = getCategoryIcon(index);
+    const totalProductos = cat.total_productos || cat.productos_count || 0;
+    const estadoBadge = cat.estado === 'Activo'
+      ? '<span style="font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #f0fdf4; color: #16a34a; font-weight: 500;">Activo</span>'
+      : '<span style="font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #fef2f2; color: #dc2626; font-weight: 500;">Inactivo</span>';
+
+    return `
+      <div class="category-card" data-categoria-id="${catId}">
         <div class="category-header">
-          <div class="category-icon quimicos">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"></path><path d="M8.5 2h7"></path><path d="M7 16h10"></path></svg>
+          <div class="category-icon" style="background: ${bgColor}; color: ${color};">
+            ${icon}
           </div>
           <div class="category-info">
-            <h3>Químicos</h3>
-            <p>Productos químicos para fumigación</p>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3>${cat.nombre}</h3>
+              ${estadoBadge}
+            </div>
+            <p>${cat.descripcion || 'Sin descripción'}</p>
+          </div>
+          <div class="category-card-actions">
+            <button class="action-btn-icon edit" data-action="edit-cat" data-cat-id="${catId}" title="Editar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </button>
+            <button class="action-btn-icon delete" data-action="delete-cat" data-cat-id="${catId}" title="Eliminar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
           </div>
         </div>
         <div class="category-stats">
           <div class="category-stat">
-            <div class="stat-number">28</div>
-            <div class="stat-label">Productos</div>
-          </div>
-          <div class="category-stat">
-            <div class="stat-number">$28,450</div>
-            <div class="stat-label">Valor Total</div>
-          </div>
-          <div class="category-stat">
-            <div class="stat-number">5</div>
-            <div class="stat-label">Stock Bajo</div>
+            <div class="stat-number" style="color: ${color};">${totalProductos}</div>
+            <div class="stat-label">PRODUCTOS</div>
           </div>
         </div>
         <div class="category-actions">
-          <button class="btn-secondary fullwidth">Ver Productos</button>
+          <button class="btn-secondary fullwidth btn-ver-productos" data-cat-id="${catId}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            Ver Productos
+          </button>
         </div>
       </div>
+    `;
+  }).join('');
 
-      <div class="category-card">
-        <div class="category-header">
-          <div class="category-icon epp">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 0 1 9 9v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 9-9z"></path><path d="M8 12h.01M16 12h.01M15 16H9"></path></svg>
-          </div>
-          <div class="category-info">
-            <h3>EPP</h3>
-            <p>Equipos de protección personal</p>
-          </div>
+  // Eventos de editar categoría
+  document.querySelectorAll('[data-action="edit-cat"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = parseInt((e.currentTarget as HTMLElement).dataset.catId || '0');
+      abrirModalEditarCategoria(id);
+    });
+  });
+
+  // Eventos de eliminar categoría
+  document.querySelectorAll('[data-action="delete-cat"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = parseInt((e.currentTarget as HTMLElement).dataset.catId || '0');
+      confirmarEliminarCategoria(id);
+    });
+  });
+
+  // Eventos de ver productos (filtra por categoría en tab Productos)
+  document.querySelectorAll('.btn-ver-productos').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const catId = parseInt((e.currentTarget as HTMLElement).dataset.catId || '0');
+      // Cambiar a tab productos con filtro de categoría
+      currentFilters.id_categoria = catId;
+      const tabBtn = document.querySelector('[data-tab="productos"]') as HTMLButtonElement;
+      if (tabBtn) tabBtn.click();
+    });
+  });
+}
+
+// ===== MODAL NUEVA CATEGORÍA =====
+
+function abrirModalNuevaCategoria() {
+  const modalAnterior = document.getElementById('modal-nueva-categoria');
+  if (modalAnterior) modalAnterior.remove();
+
+  const html = `
+    <div id="modal-nueva-categoria" class="modal-overlay" style="display: flex;">
+      <div class="modal-container" style="max-width: 480px;">
+        <div class="modal-header">
+          <h2>Agregar Categoría</h2>
+          <button class="modal-close" id="btn-cerrar-nueva-cat">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
-        <div class="category-stats">
-          <div class="category-stat">
-            <div class="stat-number">35</div>
-            <div class="stat-label">Productos</div>
+        <form id="form-nueva-categoria" class="modal-body">
+          <div class="form-group">
+            <label for="new-cat-nombre">Nombre *</label>
+            <input type="text" id="new-cat-nombre" name="nombre" required maxlength="100"
+                   placeholder="Ej: Insecticidas" class="form-input">
           </div>
-          <div class="category-stat">
-            <div class="stat-number">$8,920</div>
-            <div class="stat-label">Valor Total</div>
+          <div class="form-group">
+            <label for="new-cat-descripcion">Descripción</label>
+            <textarea id="new-cat-descripcion" name="descripcion" maxlength="255"
+                      placeholder="Descripción de la categoría" class="form-input"
+                      rows="3" style="resize: vertical;"></textarea>
           </div>
-          <div class="category-stat">
-            <div class="stat-number">8</div>
-            <div class="stat-label">Stock Bajo</div>
+          <div class="modal-footer" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+            <button type="button" class="btn-secondary" id="btn-cancelar-nueva-cat">Cancelar</button>
+            <button type="submit" class="btn-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Crear Categoría
+            </button>
           </div>
-        </div>
-        <div class="category-actions">
-          <button class="btn-secondary fullwidth">Ver Productos</button>
-        </div>
+        </form>
       </div>
+    </div>
+  `;
 
-      <div class="category-card">
-        <div class="category-header">
-          <div class="category-icon equipos">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-          </div>
-          <div class="category-info">
-            <h3>Equipos</h3>
-            <p>Equipos de fumigación y herramientas</p>
-          </div>
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  const modal = document.getElementById('modal-nueva-categoria')!;
+  const form = document.getElementById('form-nueva-categoria') as HTMLFormElement;
+
+  document.getElementById('btn-cerrar-nueva-cat')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-nueva-cat')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const nombre = formData.get('nombre') as string;
+    const descripcion = formData.get('descripcion') as string;
+
+    if (!nombre.trim()) {
+      mostrarToast('warning', 'Atención', 'El nombre es requerido');
+      return;
+    }
+
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creando...'; }
+
+    try {
+      const response = await categoriaService.create({ nombre: nombre.trim(), descripcion: descripcion?.trim() || undefined });
+      if (response.success) {
+        modal.remove();
+        mostrarToast('success', 'Categoría creada', `"${nombre}" fue creada exitosamente`);
+        await cargarCategoriasGrid();
+        // Actualizar también la lista de categorías para el dropdown de productos
+        await cargarCategorias();
+      }
+    } catch (error: any) {
+      let msg = 'Error al crear la categoría';
+      if (error.data?.errors?.nombre) {
+        msg = Array.isArray(error.data.errors.nombre) ? error.data.errors.nombre[0] : error.data.errors.nombre;
+      } else if (error.data?.message) {
+        msg = error.data.message;
+      }
+      mostrarToast('error', 'Error', msg);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Crear Categoría'; }
+    }
+  });
+
+  // Focus al campo nombre
+  setTimeout(() => document.getElementById('new-cat-nombre')?.focus(), 100);
+}
+
+// ===== MODAL EDITAR CATEGORÍA =====
+
+async function abrirModalEditarCategoria(id: number) {
+  const cat = allCategoriasData.find(c => (c.id_categoria || c.id) === id);
+  if (!cat) {
+    mostrarToast('error', 'Error', 'Categoría no encontrada');
+    return;
+  }
+
+  const modalAnterior = document.getElementById('modal-editar-categoria');
+  if (modalAnterior) modalAnterior.remove();
+
+  const html = `
+    <div id="modal-editar-categoria" class="modal-overlay" style="display: flex;">
+      <div class="modal-container" style="max-width: 480px;">
+        <div class="modal-header">
+          <h2>Editar Categoría</h2>
+          <button class="modal-close" id="btn-cerrar-editar-cat">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
-        <div class="category-stats">
-          <div class="category-stat">
-            <div class="stat-number">18</div>
-            <div class="stat-label">Productos</div>
+        <form id="form-editar-categoria" class="modal-body" data-cat-id="${id}">
+          <div class="form-group">
+            <label for="edit-cat-nombre">Nombre *</label>
+            <input type="text" id="edit-cat-nombre" name="nombre" required maxlength="100"
+                   value="${cat.nombre}" class="form-input">
           </div>
-          <div class="category-stat">
-            <div class="stat-number">$4,250</div>
-            <div class="stat-label">Valor Total</div>
+          <div class="form-group">
+            <label for="edit-cat-descripcion">Descripción</label>
+            <textarea id="edit-cat-descripcion" name="descripcion" maxlength="255"
+                      class="form-input" rows="3" style="resize: vertical;">${cat.descripcion || ''}</textarea>
           </div>
-          <div class="category-stat">
-            <div class="stat-number">2</div>
-            <div class="stat-label">Stock Bajo</div>
+          <div class="form-group">
+            <label for="edit-cat-estado">Estado</label>
+            <select id="edit-cat-estado" name="estado" class="form-input">
+              <option value="Activo" ${cat.estado === 'Activo' ? 'selected' : ''}>Activo</option>
+              <option value="Inactivo" ${cat.estado === 'Inactivo' ? 'selected' : ''}>Inactivo</option>
+            </select>
           </div>
-        </div>
-        <div class="category-actions">
-          <button class="btn-secondary fullwidth">Ver Productos</button>
-        </div>
+          <div class="modal-footer" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+            <button type="button" class="btn-secondary" id="btn-cancelar-editar-cat">Cancelar</button>
+            <button type="submit" class="btn-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Guardar Cambios
+            </button>
+          </div>
+        </form>
       </div>
+    </div>
+  `;
 
-      <div class="category-card">
-        <div class="category-header">
-          <div class="category-icon herramientas">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-          </div>
-          <div class="category-info">
-            <h3>Herramientas</h3>
-            <p>Herramientas y accesorios</p>
-          </div>
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  const modal = document.getElementById('modal-editar-categoria')!;
+  const form = document.getElementById('form-editar-categoria') as HTMLFormElement;
+
+  document.getElementById('btn-cerrar-editar-cat')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-editar-cat')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const catId = parseInt(form.dataset.catId || '0');
+
+    const data: any = {
+      nombre: (formData.get('nombre') as string).trim(),
+      descripcion: (formData.get('descripcion') as string)?.trim() || null,
+      estado: formData.get('estado') as string,
+    };
+
+    if (!data.nombre) {
+      mostrarToast('warning', 'Atención', 'El nombre es requerido');
+      return;
+    }
+
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Guardando...'; }
+
+    try {
+      const response = await categoriaService.update(catId, data);
+      if (response.success) {
+        modal.remove();
+        mostrarToast('success', 'Categoría actualizada', `"${data.nombre}" fue actualizada exitosamente`);
+        await cargarCategoriasGrid();
+        await cargarCategorias();
+      }
+    } catch (error: any) {
+      let msg = 'Error al actualizar la categoría';
+      if (error.data?.errors?.nombre) {
+        msg = Array.isArray(error.data.errors.nombre) ? error.data.errors.nombre[0] : error.data.errors.nombre;
+      } else if (error.data?.message) {
+        msg = error.data.message;
+      }
+      mostrarToast('error', 'Error', msg);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Guardar Cambios'; }
+    }
+  });
+}
+
+// ===== ELIMINAR CATEGORÍA =====
+
+function confirmarEliminarCategoria(id: number) {
+  const cat = allCategoriasData.find(c => (c.id_categoria || c.id) === id);
+  if (!cat) return;
+
+  const totalProductos = cat.total_productos || cat.productos_count || 0;
+  const modalAnterior = document.getElementById('modal-confirmar-eliminar-cat');
+  if (modalAnterior) modalAnterior.remove();
+
+  const html = `
+    <div id="modal-confirmar-eliminar-cat" class="modal-overlay" style="display: flex;">
+      <div class="modal-container" style="max-width: 440px;">
+        <div class="modal-header">
+          <h2>Eliminar Categoría</h2>
+          <button class="modal-close" id="btn-cerrar-eliminar-cat">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
-        <div class="category-stats">
-          <div class="category-stat">
-            <div class="stat-number">12</div>
-            <div class="stat-label">Productos</div>
+        <div class="modal-body" style="text-align: center; padding: 32px 24px;">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
           </div>
-          <div class="category-stat">
-            <div class="stat-number">$960</div>
-            <div class="stat-label">Valor Total</div>
-          </div>
-          <div class="category-stat">
-            <div class="stat-number">0</div>
-            <div class="stat-label">Stock Bajo</div>
-          </div>
+          <p style="font-size: 15px; color: #334155; margin-bottom: 8px;">¿Estás seguro de eliminar esta categoría?</p>
+          <p style="font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">${cat.nombre}</p>
+          ${totalProductos > 0 
+            ? `<p style="font-size: 13px; color: #dc2626; margin-top: 12px; background: #fef2f2; padding: 8px 12px; border-radius: 6px;">⚠️ Esta categoría tiene ${totalProductos} producto(s) asociado(s). No se puede eliminar.</p>`
+            : `<p style="font-size: 13px; color: #94a3b8; margin-top: 12px;">La categoría será desactivada.</p>`
+          }
         </div>
-        <div class="category-actions">
-          <button class="btn-secondary fullwidth">Ver Productos</button>
+        <div class="modal-footer" style="display: flex; gap: 12px; justify-content: center; padding: 20px 24px; border-top: 1px solid #e2e8f0;">
+          <button class="btn-secondary" id="btn-cancelar-eliminar-cat">Cancelar</button>
+          ${totalProductos === 0 
+            ? `<button class="btn-primary" id="btn-confirmar-eliminar-cat" style="background: #dc2626; border-color: #dc2626;">Eliminar</button>`
+            : ''
+          }
         </div>
       </div>
     </div>
   `;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  const modal = document.getElementById('modal-confirmar-eliminar-cat')!;
+  document.getElementById('btn-cerrar-eliminar-cat')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-eliminar-cat')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  const btnConfirmar = document.getElementById('btn-confirmar-eliminar-cat');
+  if (btnConfirmar) {
+    btnConfirmar.addEventListener('click', async () => {
+      const btn = btnConfirmar as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = 'Eliminando...';
+
+      try {
+        const response = await categoriaService.delete(id);
+        if (response.success) {
+          modal.remove();
+          mostrarToast('success', 'Categoría eliminada', `"${cat.nombre}" fue desactivada correctamente`);
+          await cargarCategoriasGrid();
+          await cargarCategorias();
+        }
+      } catch (error: any) {
+        const msg = error.data?.message || 'Error al eliminar la categoría';
+        mostrarToast('error', 'Error', msg);
+        btn.disabled = false;
+        btn.textContent = 'Eliminar';
+      }
+    });
+  }
+}
+
+// Inicializar eventos de la pestaña Categorías
+export function initCategoriasEvents() {
+  cargarCategoriasGrid();
+
+  // Botón agregar categoría
+  const btnAgregar = document.getElementById('btn-agregar-categoria');
+  if (btnAgregar) {
+    btnAgregar.addEventListener('click', abrirModalNuevaCategoria);
+  }
 }
 
 // Función principal que maneja los tabs
@@ -469,3 +713,832 @@ export function renderAlmacenInventario() {
     </div>
   `;
 }
+// Funciones para cargar datos dinámicamente
+
+async function cargarEstadisticas() {
+  try {
+    const response = await productoService.getEstadisticas();
+    if (response.success && response.data) {
+      estadisticasData = response.data;
+      actualizarEstadisticas();
+    }
+  } catch (error) {
+    console.error('Error cargando estadísticas:', error);
+  }
+}
+
+function actualizarEstadisticas() {
+  const statsContainer = document.getElementById('productos-stats');
+  if (!statsContainer || !estadisticasData) return;
+
+  // Calcular total de stock y valor
+  const totalStock = productosData.reduce((sum, p) => 
+    sum + (p.inventario?.cantidad_disponible || 0), 0
+  );
+  
+  const valorTotal = productosData.reduce((sum, p) => {
+    const stock = p.inventario?.cantidad_disponible || 0;
+    const precio = p.precio_unitario || 0;
+    return sum + (stock * precio);
+  }, 0);
+
+  statsContainer.innerHTML = `
+    <div class="stat-box">
+      <div class="stat-box-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+      </div>
+      <div class="stat-box-content">
+        <div class="stat-box-label">Stock Disponible</div>
+        <div class="stat-box-value">${totalStock.toLocaleString()} <span class="stat-box-note">unidades</span></div>
+      </div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-box-icon blue">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>
+      </div>
+      <div class="stat-box-content">
+        <div class="stat-box-label">Inventario Total</div>
+        <div class="stat-box-value">$${valorTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span class="stat-box-note">valorizado</span></div>
+      </div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-box-icon orange">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      </div>
+      <div class="stat-box-content">
+        <div class="stat-box-label">Stock Bajo</div>
+        <div class="stat-box-value">${estadisticasData.sin_stock || 0} <span class="stat-box-note">productos</span></div>
+      </div>
+    </div>
+  `;
+}
+
+async function cargarProductos() {
+  try {
+    const filters: any = {};
+    
+    if (currentFilters.search) {
+      filters.search = currentFilters.search;
+    }
+    
+    if (currentFilters.estado) {
+      filters.estado = currentFilters.estado;
+    }
+    
+    if (currentFilters.id_categoria) {
+      filters.id_categoria = currentFilters.id_categoria;
+    }
+
+    const response = await productoService.getAll(filters);
+    
+    if (response.success && response.data) {
+      productosData = response.data;
+      renderizarTablaProductos();
+      actualizarEstadisticas();
+    }
+  } catch (error) {
+    console.error('Error cargando productos:', error);
+    const tbody = document.getElementById('productos-table-body');
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align: center; padding: 40px; color: #e74c3c;">
+            <div>Error al cargar los productos. Por favor, intente nuevamente.</div>
+          </td>
+        </tr>
+      `;
+    }
+  }
+}
+
+function renderizarTablaProductos() {
+  const tbody = document.getElementById('productos-table-body');
+  if (!tbody) return;
+
+  if (productosData.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 40px;">
+          <div style="color: #7f8c8d;">No se encontraron productos</div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = productosData.map(producto => {
+    const stock = producto.inventario?.cantidad_disponible || 0;
+    const stockMinimo = producto.inventario?.cantidad_minima || 0;
+    const precio = producto.precio_unitario || 0;
+    const valorTotal = stock * precio;
+    const stockBajo = stock <= stockMinimo && stock > 0;
+    const sinStock = stock === 0;
+
+    let estadoBadge = '';
+    if (sinStock) {
+      estadoBadge = '<span class="status-indicator danger">Sin Stock</span>';
+    } else if (stockBajo) {
+      estadoBadge = '<span class="status-indicator warning">Stock Bajo</span>';
+    } else {
+      estadoBadge = '<span class="status-indicator success">Disponible</span>';
+    }
+
+    return `
+      <tr>
+        <td>
+          <div class="equipment-info">
+            <div class="equipment-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>
+            </div>
+            <div>
+              <div class="equipment-name">${producto.descripcion}</div>
+              <div class="equipment-id">SKU: ${producto.sku || 'N/A'}</div>
+            </div>
+          </div>
+        </td>
+        <td>${producto.categoria?.nombre || 'Sin categoría'}</td>
+        <td>${stock}</td>
+        <td>${producto.unidad || '-'}</td>
+        <td>$${precio.toFixed(2)}</td>
+        <td>$${valorTotal.toFixed(2)}</td>
+        <td>${estadoBadge}</td>
+        <td>
+          <div class="action-buttons">
+            <button class="action-btn-icon edit" data-action="edit" data-producto-id="${producto.id}" title="Editar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </button>
+            <button class="action-btn-icon delete" data-action="delete" data-producto-id="${producto.id}" title="Eliminar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // Actualizar paginación
+  const paginationInfo = document.querySelector('#productos-pagination .pagination-info');
+  if (paginationInfo) {
+    paginationInfo.textContent = `Mostrando ${productosData.length} producto${productosData.length !== 1 ? 's' : ''}`;
+  }
+
+  // Asignar eventos a botones de editar y eliminar
+  document.querySelectorAll('.action-btn-icon[data-action="edit"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = parseInt((e.currentTarget as HTMLElement).dataset.productoId || '0');
+      abrirModalEditarProducto(id);
+    });
+  });
+
+  document.querySelectorAll('.action-btn-icon[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = parseInt((e.currentTarget as HTMLElement).dataset.productoId || '0');
+      confirmarEliminarProducto(id);
+    });
+  });
+}
+
+export function initProductosEvents() {
+  // Cargar datos iniciales
+  cargarEstadisticas();
+  cargarProductos();
+
+  // Búsqueda
+  const searchInput = document.getElementById('productos-search') as HTMLInputElement;
+  if (searchInput) {
+    let searchTimeout: number;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = window.setTimeout(() => {
+        currentFilters.search = (e.target as HTMLInputElement).value;
+        cargarProductos();
+      }, 500);
+    });
+  }
+
+  // Filtro de estado
+  const estadoFilter = document.getElementById('productos-estado-filter') as HTMLSelectElement;
+  if (estadoFilter) {
+    estadoFilter.addEventListener('change', (e) => {
+      currentFilters.estado = (e.target as HTMLSelectElement).value;
+      cargarProductos();
+    });
+  }
+
+  // Filtro de stock
+  const stockFilter = document.getElementById('productos-stock-filter') as HTMLSelectElement;
+  if (stockFilter) {
+    stockFilter.addEventListener('change', (e) => {
+      const value = (e.target as HTMLSelectElement).value;
+      // Estos filtros se pasan como parámetros adicionales
+      cargarProductos();
+    });
+  }
+
+  // Botón Agregar Producto
+  const btnAgregarProducto = document.querySelector('.btn-primary') as HTMLButtonElement;
+  if (btnAgregarProducto && btnAgregarProducto.textContent?.includes('Agregar Producto')) {
+    btnAgregarProducto.addEventListener('click', abrirModalNuevoProducto);
+  }
+}
+
+// Modal de Nuevo Producto
+function renderModalNuevoProducto(): string {
+  console.log('Renderizando modal con categorías:', categoriasData);
+  const categoriasOptions = categoriasData.map(cat => {
+    // Las categorías vienen con 'id' no 'id_categoria'
+    const catId = cat.id_categoria || (cat as any).id;
+    console.log('Categoría:', catId, cat.nombre);
+    return `<option value="${catId}">${cat.nombre}</option>`;
+  }).join('');
+
+  return `
+    <div id="modal-nuevo-producto" class="modal-overlay" style="display: none;">
+      <div class="modal-container" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2>Agregar Nuevo Producto</h2>
+          <button class="modal-close" onclick="cerrarModalNuevoProducto()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        
+        <form id="form-nuevo-producto" class="modal-body">
+          <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label for="producto-descripcion">Descripción del Producto *</label>
+              <input type="text" id="producto-descripcion" name="descripcion" required 
+                     placeholder="Ej: Cipermetrina 25% EC" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="producto-categoria">Categoría *</label>
+              <select id="producto-categoria" name="id_categoria" required class="form-input">
+                <option value="">Seleccionar categoría</option>
+                ${categoriasOptions}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="producto-lote">Número de Lote *</label>
+              <input type="text" id="producto-lote" name="n_lote" required 
+                     placeholder="Ej: L2026-001" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="producto-ubicacion">Ubicación *</label>
+              <input type="text" id="producto-ubicacion" name="ubicacion" required 
+                     placeholder="Ej: Almacén A - Estante 3" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="producto-unidad">Unidad</label>
+              <select id="producto-unidad" name="unidad" class="form-input">
+                <option value="">Seleccionar unidad</option>
+                <option value="Litros">Litros</option>
+                <option value="Kilogramos">Kilogramos</option>
+                <option value="Unidades">Unidades</option>
+                <option value="Cajas">Cajas</option>
+                <option value="Galones">Galones</option>
+                <option value="Gramos">Gramos</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="producto-precio">Precio Unitario</label>
+              <input type="number" id="producto-precio" name="precio_unitario" 
+                     step="0.01" min="0" placeholder="0.00" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="producto-fecha-vencim">Fecha de Vencimiento</label>
+              <input type="date" id="producto-fecha-vencim" name="fecha_vencim" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="producto-estado">Estado</label>
+              <select id="producto-estado" name="estado" class="form-input">
+                <option value="Activo">Activo</option>
+                <option value="Inactivo">Inactivo</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+            <button type="button" class="btn-secondary" onclick="cerrarModalNuevoProducto()">
+              Cancelar
+            </button>
+            <button type="submit" class="btn-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Guardar Producto
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+async function cargarCategorias() {
+  try {
+    const response = await categoriaService.getAll();
+    if (response.success && response.data) {
+      categoriasData = response.data;
+      console.log('Categorías cargadas:', categoriasData.length, categoriasData);
+    }
+  } catch (error) {
+    console.error('Error cargando categorías:', error);
+    categoriasData = [];
+  }
+}
+
+function abrirModalNuevoProducto() {
+  // Cargar categorías si aún no se han cargado
+  if (categoriasData.length === 0) {
+    cargarCategorias().then(() => {
+      mostrarModal();
+    });
+  } else {
+    mostrarModal();
+  }
+
+  function mostrarModal() {
+    // Verificar si el modal ya existe
+    let modal = document.getElementById('modal-nuevo-producto');
+    
+    if (!modal) {
+      // Crear el modal
+      const modalHTML = renderModalNuevoProducto();
+      document.body.insertAdjacentHTML('beforeend', modalHTML);
+      modal = document.getElementById('modal-nuevo-producto');
+    } else {
+      // Actualizar contenido del modal con categorías actualizadas
+      const modalContainer = modal.querySelector('.modal-container');
+      if (modalContainer) {
+        modalContainer.innerHTML = renderModalNuevoProducto().match(/<div class="modal-container"[^>]*>([\s\S]*)<\/div>\s*$/)?.[1] || '';
+      }
+    }
+
+    // Mostrar modal
+    if (modal) {
+      modal.style.display = 'flex';
+      
+      // Event listener para el formulario
+      const form = document.getElementById('form-nuevo-producto') as HTMLFormElement;
+      if (form) {
+        form.addEventListener('submit', handleSubmitNuevoProducto);
+      }
+
+      // Cerrar al hacer clic fuera del modal
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          cerrarModalNuevoProducto();
+        }
+      });
+    }
+  }
+}
+
+function cerrarModalNuevoProducto() {
+  const modal = document.getElementById('modal-nuevo-producto');
+  if (modal) {
+    modal.style.display = 'none';
+    const form = document.getElementById('form-nuevo-producto') as HTMLFormElement;
+    if (form) {
+      form.reset();
+    }
+  }
+}
+
+async function handleSubmitNuevoProducto(e: Event) {
+  e.preventDefault();
+  
+  const form = e.target as HTMLFormElement;
+  const formData = new FormData(form);
+  
+  // Validar que la categoría esté seleccionada
+  const idCategoriaStr = formData.get('id_categoria') as string;
+  if (!idCategoriaStr || idCategoriaStr === '') {
+    mostrarToast('warning', 'Campo requerido', 'Por favor selecciona una categoría');
+    return;
+  }
+  
+  const data: any = {
+    descripcion: formData.get('descripcion') as string,
+    id_categoria: Number(idCategoriaStr),
+    n_lote: formData.get('n_lote') as string,
+    ubicacion: formData.get('ubicacion') as string,
+  };
+
+  // Validar que id_categoria sea un número válido
+  if (isNaN(data.id_categoria)) {
+    mostrarToast('error', 'Error', 'Categoría inválida');
+    return;
+  }
+
+  // Campos opcionales
+  const unidad = formData.get('unidad') as string;
+  if (unidad) data.unidad = unidad;
+
+  const precioUnitario = formData.get('precio_unitario') as string;
+  if (precioUnitario) data.precio_unitario = parseFloat(precioUnitario);
+
+  const fechaVencim = formData.get('fecha_vencim') as string;
+  if (fechaVencim) data.fecha_vencim = fechaVencim;
+
+  const estado = formData.get('estado') as string;
+  if (estado) data.estado = estado;
+
+  console.log('Datos a enviar:', data);
+
+  try {
+    // Deshabilitar botón de submit
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+        </svg>
+        Guardando...
+      `;
+    }
+
+    const response = await productoService.create(data);
+    
+    if (response.success) {
+      // Cerrar modal
+      cerrarModalNuevoProducto();
+      
+      // Mostrar notificación de éxito
+      mostrarToast('success', 'Producto creado', `SKU: ${response.data.sku} — ${response.data.descripcion}`);
+      
+      // Recargar productos
+      await cargarProductos();
+      await cargarEstadisticas();
+    }
+  } catch (error: any) {
+    console.error('Error creando producto:', error);
+    console.error('Error data:', error.data);
+    
+    let errorMessage = 'Error al crear el producto. Por favor, intente nuevamente.';
+    
+    if (error.data?.errors) {
+      const errors = Object.entries(error.data.errors).map(([field, messages]: [string, any]) => {
+        return `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`;
+      });
+      errorMessage = errors.join('\n');
+    } else if (error.data?.message) {
+      errorMessage = error.data.message;
+    }
+    
+    console.log('Mensaje de error:', errorMessage);
+    mostrarToast('error', 'Error al crear producto', errorMessage);
+    
+    // Rehabilitar botón
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Guardar Producto
+      `;
+    }
+  }
+}
+
+// Sistema de notificaciones Toast
+function mostrarToast(tipo: 'success' | 'error' | 'warning', titulo: string, mensaje: string) {
+  // Crear contenedor si no existe
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const iconos: Record<string, string> = {
+    success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+    error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
+    warning: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+  };
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tipo}`;
+  toast.innerHTML = `
+    <div class="toast-icon">${iconos[tipo]}</div>
+    <div class="toast-content">
+      <div class="toast-title">${titulo}</div>
+      <div class="toast-message">${mensaje}</div>
+    </div>
+    <button class="toast-close">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  `;
+
+  container.appendChild(toast);
+
+  // Cerrar al hacer clic en X
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => cerrarToast(toast));
+  }
+
+  // Auto-cerrar después de 4 segundos
+  setTimeout(() => cerrarToast(toast), 4000);
+}
+
+function cerrarToast(toast: HTMLElement) {
+  toast.classList.add('toast-exit');
+  setTimeout(() => toast.remove(), 300);
+}
+
+// ===== MODAL EDITAR PRODUCTO =====
+
+function renderModalEditarProducto(producto: Producto): string {
+  const categoriasOptions = categoriasData.map(cat => {
+    const catId = cat.id_categoria || (cat as any).id;
+    const selected = catId === producto.id_categoria ? 'selected' : '';
+    return `<option value="${catId}" ${selected}>${cat.nombre}</option>`;
+  }).join('');
+
+  const unidades = ['Litros', 'Kilogramos', 'Unidades', 'Cajas', 'Galones', 'Gramos'];
+  const unidadOptions = unidades.map(u => 
+    `<option value="${u}" ${producto.unidad === u ? 'selected' : ''}>${u}</option>`
+  ).join('');
+
+  return `
+    <div id="modal-editar-producto" class="modal-overlay" style="display: flex;">
+      <div class="modal-container" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2>Editar Producto</h2>
+          <button class="modal-close" id="btn-cerrar-editar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        
+        <form id="form-editar-producto" class="modal-body" data-producto-id="${producto.id}">
+          <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label>SKU</label>
+              <input type="text" value="${producto.sku || 'N/A'}" class="form-input" disabled style="background: #f1f5f9; color: #64748b;">
+            </div>
+
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label for="edit-descripcion">Descripción del Producto *</label>
+              <input type="text" id="edit-descripcion" name="descripcion" required 
+                     value="${producto.descripcion}" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-categoria">Categoría *</label>
+              <select id="edit-categoria" name="id_categoria" required class="form-input">
+                <option value="">Seleccionar categoría</option>
+                ${categoriasOptions}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-lote">Número de Lote *</label>
+              <input type="text" id="edit-lote" name="n_lote" required 
+                     value="${producto.n_lote}" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-ubicacion">Ubicación *</label>
+              <input type="text" id="edit-ubicacion" name="ubicacion" required 
+                     value="${producto.ubicacion}" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-unidad">Unidad</label>
+              <select id="edit-unidad" name="unidad" class="form-input">
+                <option value="">Seleccionar unidad</option>
+                ${unidadOptions}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-precio">Precio Unitario</label>
+              <input type="number" id="edit-precio" name="precio_unitario" 
+                     step="0.01" min="0" value="${producto.precio_unitario || ''}" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-fecha-vencim">Fecha de Vencimiento</label>
+              <input type="date" id="edit-fecha-vencim" name="fecha_vencim" 
+                     value="${producto.fecha_vencim || ''}" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-estado">Estado</label>
+              <select id="edit-estado" name="estado" class="form-input">
+                <option value="Activo" ${producto.estado === 'Activo' ? 'selected' : ''}>Activo</option>
+                <option value="Inactivo" ${producto.estado === 'Inactivo' ? 'selected' : ''}>Inactivo</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+            <button type="button" class="btn-secondary" id="btn-cancelar-editar">
+              Cancelar
+            </button>
+            <button type="submit" class="btn-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+async function abrirModalEditarProducto(id: number) {
+  // Cargar categorías si no están
+  if (categoriasData.length === 0) {
+    await cargarCategorias();
+  }
+
+  // Buscar producto en los datos cargados o traer del API
+  let producto = productosData.find(p => p.id === id);
+  if (!producto) {
+    try {
+      const response = await productoService.getById(id);
+      if (response.success && response.data) {
+        producto = response.data;
+      }
+    } catch (error) {
+      mostrarToast('error', 'Error', 'No se pudo cargar el producto');
+      return;
+    }
+  }
+
+  if (!producto) {
+    mostrarToast('error', 'Error', 'Producto no encontrado');
+    return;
+  }
+
+  // Eliminar modal anterior si existe
+  const modalAnterior = document.getElementById('modal-editar-producto');
+  if (modalAnterior) modalAnterior.remove();
+
+  document.body.insertAdjacentHTML('beforeend', renderModalEditarProducto(producto));
+
+  const modal = document.getElementById('modal-editar-producto')!;
+  const form = document.getElementById('form-editar-producto') as HTMLFormElement;
+
+  // Eventos de cerrar
+  document.getElementById('btn-cerrar-editar')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-editar')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  // Submit
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const productoId = parseInt(form.dataset.productoId || '0');
+
+    const data: any = {};
+    const descripcion = formData.get('descripcion') as string;
+    if (descripcion) data.descripcion = descripcion;
+
+    const idCat = formData.get('id_categoria') as string;
+    if (idCat) data.id_categoria = Number(idCat);
+
+    const nLote = formData.get('n_lote') as string;
+    if (nLote) data.n_lote = nLote;
+
+    const ubicacion = formData.get('ubicacion') as string;
+    if (ubicacion) data.ubicacion = ubicacion;
+
+    const unidad = formData.get('unidad') as string;
+    data.unidad = unidad || null;
+
+    const precio = formData.get('precio_unitario') as string;
+    data.precio_unitario = precio ? parseFloat(precio) : null;
+
+    const fecha = formData.get('fecha_vencim') as string;
+    data.fecha_vencim = fecha || null;
+
+    const estado = formData.get('estado') as string;
+    if (estado) data.estado = estado;
+
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = 'Guardando...';
+    }
+
+    try {
+      const response = await productoService.update(productoId, data);
+      if (response.success) {
+        modal.remove();
+        mostrarToast('success', 'Producto actualizado', `${data.descripcion || 'Producto'} se actualizó correctamente`);
+        await cargarProductos();
+        await cargarEstadisticas();
+      }
+    } catch (error: any) {
+      let msg = 'Error al actualizar el producto';
+      if (error.data?.errors) {
+        msg = Object.entries(error.data.errors).map(([f, m]: [string, any]) => `${f}: ${Array.isArray(m) ? m.join(', ') : m}`).join('\n');
+      } else if (error.data?.message) {
+        msg = error.data.message;
+      }
+      mostrarToast('error', 'Error', msg);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Guardar Cambios';
+      }
+    }
+  });
+}
+
+// ===== ELIMINAR PRODUCTO =====
+
+function confirmarEliminarProducto(id: number) {
+  const producto = productosData.find(p => p.id === id);
+  if (!producto) return;
+
+  // Eliminar modal anterior si existe
+  const modalAnterior = document.getElementById('modal-confirmar-eliminar');
+  if (modalAnterior) modalAnterior.remove();
+
+  const html = `
+    <div id="modal-confirmar-eliminar" class="modal-overlay" style="display: flex;">
+      <div class="modal-container" style="max-width: 440px;">
+        <div class="modal-header">
+          <h2>Eliminar Producto</h2>
+          <button class="modal-close" id="btn-cerrar-eliminar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="text-align: center; padding: 32px 24px;">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </div>
+          <p style="font-size: 15px; color: #334155; margin-bottom: 8px;">¿Estás seguro de eliminar este producto?</p>
+          <p style="font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">${producto.descripcion}</p>
+          <p style="font-size: 13px; color: #64748b;">SKU: ${producto.sku || 'N/A'}</p>
+          <p style="font-size: 13px; color: #94a3b8; margin-top: 12px;">El producto será desactivado y no se mostrará en el inventario.</p>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 12px; justify-content: center; padding: 20px 24px; border-top: 1px solid #e2e8f0;">
+          <button class="btn-secondary" id="btn-cancelar-eliminar">Cancelar</button>
+          <button class="btn-primary" id="btn-confirmar-eliminar" style="background: #dc2626; border-color: #dc2626;">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  const modal = document.getElementById('modal-confirmar-eliminar')!;
+  document.getElementById('btn-cerrar-eliminar')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-eliminar')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  document.getElementById('btn-confirmar-eliminar')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-eliminar') as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = 'Eliminando...';
+
+    try {
+      const response = await productoService.delete(id);
+      if (response.success) {
+        modal.remove();
+        mostrarToast('success', 'Producto eliminado', `${producto.descripcion} fue desactivado correctamente`);
+        await cargarProductos();
+        await cargarEstadisticas();
+      }
+    } catch (error: any) {
+      const msg = error.data?.message || 'Error al eliminar el producto';
+      mostrarToast('error', 'Error', msg);
+      btn.disabled = false;
+      btn.textContent = 'Eliminar';
+    }
+  });
+}
+
+// Exponer funciones al contexto global para que puedan ser llamadas desde el HTML
+(window as any).cerrarModalNuevoProducto = cerrarModalNuevoProducto;

@@ -10,7 +10,7 @@ import { renderProgramaciones, initProgramacionesEvents } from './modules/progra
 import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './modules/recursos-humanos/recursos-humanos.view'
 // Almacén
 import { renderAlmacenMantenimiento } from './modules/almacen/mantenimiento/mantenimiento.view'
-import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab } from './modules/almacen/inventario/inventario.view'
+import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents } from './modules/almacen/inventario/inventario.view'
 import { renderAlmacenProveedores } from './modules/almacen/proveedores/proveedores.view'
 import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './modules/almacen/entradas-salidas/entradas-salidas.view'
 // Logística
@@ -253,6 +253,11 @@ function renderApp() {
   if (activeMenu === 'Programaciones') {
     initProgramacionesEvents();
   }
+
+  // Inicializar eventos del módulo de Inventario - Productos
+  if (activeMenu === 'Almacén' && activeSubMenu === 'Inventario' && activeInventoryTab === 'productos') {
+    setTimeout(() => initProductosEvents(), 0);
+  }
 }
 
 
@@ -278,9 +283,12 @@ function updateInventoryTabContent() {
       break;
     case 'categorias':
       tabContent.innerHTML = renderCategoriasTab();
+      setTimeout(() => initCategoriasEvents(), 0);
       break;
     default:
       tabContent.innerHTML = renderProductosTab();
+      // Inicializar eventos para cargar datos dinámicos
+      setTimeout(() => initProductosEvents(), 0);
   }
 }
 

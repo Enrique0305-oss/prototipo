@@ -63,7 +63,14 @@ export class ApiClient {
   }
 
   private buildURL(endpoint: string, params?: Record<string, any>): string {
-    const url = new URL(endpoint, this.baseURL);
+    // Remover barra inicial del endpoint si existe
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+    
+    // Asegurar que baseURL termine con /
+    const baseURL = this.baseURL.endsWith('/') ? this.baseURL : `${this.baseURL}/`;
+    
+    // Construir URL completa
+    const url = new URL(cleanEndpoint, baseURL);
     
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
