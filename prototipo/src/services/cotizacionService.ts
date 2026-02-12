@@ -5,7 +5,6 @@ import type {
   CotizacionFilters,
   PaginationParams,
   EstadisticasCotizaciones,
-  DetalleCotizacion,
 } from '../core/api/types';
 
 export const cotizacionService = {
@@ -20,14 +19,17 @@ export const cotizacionService = {
 
   create: async (data: {
     id_cliente: number;
-    fecha: string;
-    tipo_servicio: string;
-    descripcion?: string;
+    tipo_cotizacion: string;
+    incluye_igv?: boolean;
     observaciones?: string;
     detalles: Array<{
-      descripcion: string;
+      id_servicio?: number | null;
+      id_producto?: number | null;
+      descripcion_manual?: string | null;
       cantidad: number;
       precio_unitario: number;
+      frecuencia_sugerida?: string | null;
+      modalidad_sugerida?: string | null;
     }>;
   }) => {
     return apiClient.post<ApiResponse<Cotizacion>>('/cotizaciones', data);
@@ -37,14 +39,7 @@ export const cotizacionService = {
     return apiClient.get<ApiResponse<Cotizacion>>(`/cotizaciones/${id}`);
   },
 
-  update: async (id: number, data: Partial<Cotizacion>) => {
-    return apiClient.post<ApiResponse<Cotizacion>>(`/cotizaciones/${id}`, {
-      ...data,
-      _method: 'PUT',
-    });
-  },
-
-  cambiarEstado: async (id: number, estado: 'Pendiente' | 'Aceptado' | 'Rechazado') => {
+  cambiarEstado: async (id: number, estado: 'Pendiente' | 'Aceptada' | 'Rechazada') => {
     return apiClient.patch<ApiResponse<Cotizacion>>(`/cotizaciones/${id}/estado`, { estado });
   },
 

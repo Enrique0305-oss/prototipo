@@ -31,11 +31,11 @@ Route::prefix('v1')->group(function () {
 
     // para las cotizaciones :v
     Route::get('/cotizaciones', [CotizacionController::class, 'index']);
+    Route::get('/cotizaciones/estadisticas/resumen', [CotizacionController::class, 'estadisticas']);
     Route::get('/cotizaciones/{id}', [CotizacionController::class, 'show']);
     Route::post('/cotizaciones', [CotizacionController::class, 'store']);
     Route::patch('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado']);
     Route::delete('/cotizaciones/{id}', [CotizacionController::class, 'destroy']);
-    Route::get('/cotizaciones/estadisticas/resumen', [CotizacionController::class, 'estadisticas']);
     Route::get('/cotizaciones/{id}/pdf', [CotizacionController::class, 'generarPDF']);
 
     // para las ordenes de producto :v
@@ -147,4 +147,12 @@ Route::prefix('v1')->group(function () {
     Route::get('proyecciones', [ProyeccionesController::class, 'index']);
     Route::post('proyecciones', [ProyeccionesController::class, 'store']);
     Route::get('proyecciones/buscar-orden/{tipo}/{id}', [ProyeccionesController::class, 'obtenerDatosOrden']);
+
+    // Listados auxiliares para formularios
+    Route::get('/servicios', function () {
+        return response()->json([
+            'success' => true,
+            'data' => \App\Models\Servicio::select('id', 'nombre', 'descripcion', 'estado')->where('estado', 'Activo')->get()
+        ]);
+    });
 });

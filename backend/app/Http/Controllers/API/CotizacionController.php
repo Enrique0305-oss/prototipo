@@ -57,6 +57,8 @@ class CotizacionController extends Controller
                 'subtotal' => (float) $cot->subtotal,
                 'igv' => (float) $cot->igv,
                 'total' => (float) $cot->total,
+                'incluye_igv' => (bool) $cot->incluye_igv,
+                'observaciones' => $cot->observaciones,
                 'estado' => $cot->estado,
                 'creador' => $cot->creador->nombre_completo ?? 'N/A'
             ];
@@ -97,6 +99,7 @@ class CotizacionController extends Controller
         $validated = $request->validate([
             'id_cliente' => 'required|exists:cliente,id',
             'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion',
+            'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
@@ -115,20 +118,32 @@ class CotizacionController extends Controller
             foreach ($validated['detalles'] as $detalle) {
                 $subtotal += $detalle['cantidad'] * $detalle['precio_unitario'];
             }
-            $igv = $subtotal * 0.18;
+
+            $incluyeIgv = $validated['incluye_igv'] ?? true;
+            $igv = $incluyeIgv ? round($subtotal * 0.18, 2) : 0;
             $total = $subtotal + $igv;
+
+            // Observación automática si no incluye IGV
+            $observaciones = $validated['observaciones'] ?? null;
+            if (!$incluyeIgv && empty($observaciones)) {
+                $observaciones = 'Esta cotización no incluye IGV.';
+            } elseif (!$incluyeIgv && $observaciones) {
+                $observaciones = $observaciones . ' | Nota: Esta cotización no incluye IGV.';
+            }
 
             // Crear cotización
             $cotizacion = Cotizacion::create([
                 'numero_cotizacion' => Cotizacion::generarNumero(),
                 'id_cliente' => $validated['id_cliente'],
                 'fecha_emision' => now(),
-                'id_personal_creador' => auth()->id() ?? 1, // TODO: Usar auth real
+                'id_personal_creador' => auth()->id() ?? 1,
                 'estado' => 'Pendiente',
                 'tipo_cotizacion' => $validated['tipo_cotizacion'],
+                'incluye_igv' => $incluyeIgv,
                 'subtotal' => $subtotal,
                 'igv' => $igv,
                 'total' => $total,
+                'observaciones' => $observaciones,
             ]);
 
             // Crear detalles
@@ -201,6 +216,7 @@ class CotizacionController extends Controller
             'rechazadas' => Cotizacion::rechazadas()->count(),
             'valor_total' => (float) Cotizacion::sum('total'),
             'valor_pendiente' => (float) Cotizacion::pendientes()->sum('total'),
+            'siguiente_numero' => Cotizacion::generarNumero(),
         ];
 
         return response()->json([

@@ -15,7 +15,15 @@ class Cliente extends Model
         'ruc',
         'rubro',
         'direccion',
+        'persona_contacto',
+        'telefono_contacto',
+        'origen',
+        'fecha_registro',
         'estado'
+    ];
+
+    protected $casts = [
+        'fecha_registro' => 'date',
     ];
 
     // Relaciones
@@ -50,7 +58,8 @@ class Cliente extends Model
         return $query->where(function($q) use ($termino) {
             $q->where('nombre_empresa', 'LIKE', "%{$termino}%")
               ->orWhere('ruc', 'LIKE', "%{$termino}%")
-              ->orWhere('rubro', 'LIKE', "%{$termino}%");
+              ->orWhere('rubro', 'LIKE', "%{$termino}%")
+              ->orWhere('persona_contacto', 'LIKE', "%{$termino}%");
         });
     }
 }

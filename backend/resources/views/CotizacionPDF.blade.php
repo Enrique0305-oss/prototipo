@@ -379,6 +379,22 @@
                 </tr>
             </table>
         </div>
+
+        <!-- NOTA SOBRE IGV -->
+        <div style="margin-top: 15px; padding: 12px 16px; border: 2px solid {{ $cotizacion->incluye_igv ? '#6CB52D' : '#dc3545' }}; border-radius: 4px; background-color: {{ $cotizacion->incluye_igv ? '#f0f9e8' : '#fff3f3' }};">
+            <strong style="color: {{ $cotizacion->incluye_igv ? '#2E4A7C' : '#dc3545' }}; font-size: 12px;">
+                @if($cotizacion->incluye_igv)
+                     Esta cotización INCLUYE IGV (18%)
+                @else
+                     Esta cotización NO incluye IGV
+                @endif
+            </strong>
+            @if($cotizacion->observaciones)
+                <p style="margin-top: 6px; font-size: 11px; color: #555;">
+                    <strong>Observaciones:</strong> {{ $cotizacion->observaciones }}
+                </p>
+            @endif
+        </div>
         
         <!-- CONDICIONES COMERCIALES -->
         <div class="conditions">

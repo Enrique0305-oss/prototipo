@@ -17,13 +17,16 @@ class Cotizacion extends Model
         'id_personal_creador',
         'estado',
         'tipo_cotizacion',
+        'incluye_igv',
         'subtotal',
         'igv',
-        'total'
+        'total',
+        'observaciones'
     ];
 
     protected $casts = [
         'fecha_emision' => 'date',
+        'incluye_igv' => 'boolean',
         'subtotal' => 'decimal:2',
         'igv' => 'decimal:2',
         'total' => 'decimal:2',
