@@ -1,61 +1,59 @@
 // --- MODAL DE NUEVA FACTURA (Componente Interno) ---
-function renderModalFactura() {
+// --- MODAL DE NUEVA FACTURA ---
+function renderModalFactura(ordenesPendientes: any[] = []) {
   return `
   <div id="modal-factura" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background: rgba(0,0,0,0.5); overflow-y: auto;">
-      <div class="modal-content" style="background:#fff; margin:5% auto; padding:20px; width:750px; border-radius:12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);">
-          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:15px;">
-              <h3 style="margin:0; font-size: 1.25rem; color: #1e293b;">Proyectar Nueva Factura</h3>
-              <button id="btn-cerrar-modal" style="background:none; border:none; font-size:24px; cursor:pointer; color: #64748b;">&times;</button>
+      <div class="modal-content" style="background:#fff; margin:5% auto; padding:20px; width:800px; border-radius:12px;">
+          <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:15px;">
+              <h3 style="margin:0;">Proyectar Factura desde Orden</h3>
+              <button id="btn-cerrar-modal" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
           </div>
 
           <div class="modal-body" style="padding:20px 0;">
-              <div style="background:#f8fafc; padding:15px; border-radius:8px; display:grid; grid-template-columns: 1fr 2fr; gap:15px; margin-bottom:20px; border: 1px solid #e2e8f0;">
-                  <div>
-                      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px; color: #475569;">Tipo de Origen</label>
-                      <select id="modal-tipo-ref" class="filter-select" style="width:100%; height: 38px;">
-                          <option value="OS">Órdenes de Servicio</option>
-                          <option value="OP">Órdenes de Producto</option>
-                          <option value="OC">Órdenes de Capacitación</option>
-                      </select>
-                  </div>
-                  <div>
-                      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px; color: #475569;">Seleccionar Orden Pendiente</label>
-                      <select id="modal-select-orden" class="filter-select" style="width:100%; height: 38px;">
-                          <option value="">-- Seleccione una orden --</option>
-                          <option value="1">OS-2025-001 | Cliente: ABC Corp | S/ 1,500</option>
-                          <option value="2">OS-2025-005 | Cliente: Inversiones SAC | S/ 3,200</option>
-                      </select>
-                  </div>
+              <div style="background:#f8fafc; padding:15px; border-radius:8px; margin-bottom:20px; border: 1px solid #e2e8f0;">
+                  <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Seleccionar Orden de Servicio</label>
+                  <select id="modal-select-orden" class="filter-select" style="width:100%;">
+                      <option value="">-- Seleccione una orden --</option>
+                      ${ordenesPendientes.map(o => `
+                        <option value="${o.id_referencia}">
+                            ${o.numero_orden} | ${o.nombre_cliente} | S/ ${o.precio_total_os}
+                        </option>
+                      `).join('')}
+                  </select>
               </div>
 
               <form id="form-nueva-factura" style="display:none; border-top: 2px dashed #e2e8f0; padding-top: 20px;">
-                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
-                      <div style="background:#f1f5f9; padding:15px; border-radius:8px;">
-                          <h4 style="margin:0 0 10px 0; font-size:13px; color: #64748b; text-transform: uppercase;">Resumen de la Orden</h4>
-                          <div style="display:grid; gap:8px; font-size:13px;">
-                              <p style="margin:0;"><strong>Cliente:</strong> <span id="res-cliente">---</span></p>
-                              <p style="margin:0;"><strong>Monto Sugerido:</strong> <span id="res-monto">---</span></p>
-                          </div>
+                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                      <div style="background:#f1f5f9; padding:15px; border-radius:8px; font-size: 13px;">
+                          <h4 style="margin-top:0;">Detalle Económico</h4>
+                          <p><strong>Cliente:</strong> <span id="res-cliente"></span></p>
+                          <p><strong>Subtotal:</strong> S/ <span id="res-subtotal"></span></p>
+                          <p><strong>IGV:</strong> S/ <span id="res-igv"></span></p>
+                          <hr>
+                          <p><strong>Total OS:</strong> S/ <span id="res-total"></span></p>
+                          <p style="color: #dc2626;"><strong>Detracción (12%):</strong> S/ <span id="res-detrax"></span></p>
+                          <p style="color: #16a34a; font-size: 1.1em;"><strong>Neto a Cobrar:</strong> S/ <span id="res-neto"></span></p>
                       </div>
+
                       <div style="display:grid; gap:12px;">
                           <div>
-                              <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Número de Factura Proyectada</label>
-                              <input type="text" id="in-num-factura" placeholder="F001-00000" class="search-input" style="width:100%;" required>
+                              <label style="display:block; font-size:12px; font-weight:600;">Número de Factura</label>
+                              <input type="text" id="in-num-factura" placeholder="F001-..." class="search-input" style="width:100%;" required>
                           </div>
                           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                               <div>
-                                  <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Fecha Emisión</label>
+                                  <label style="display:block; font-size:12px; font-weight:600;">Emisión</label>
                                   <input type="date" id="in-fecha-emision" class="filter-select" style="width:100%;" required>
                               </div>
                               <div>
-                                  <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px;">Días Crédito</label>
+                                  <label style="display:block; font-size:12px; font-weight:600;">Días Crédito</label>
                                   <input type="number" id="in-dias-credito" value="30" class="filter-select" style="width:100%;">
                               </div>
                           </div>
                       </div>
                   </div>
                   <div style="text-align:right; margin-top:20px;">
-                      <button type="submit" class="btn-primary">Registrar en Proyecciones</button>
+                      <button type="submit" class="btn-primary">Registrar Proyección</button>
                   </div>
               </form>
           </div>
@@ -63,63 +61,64 @@ function renderModalFactura() {
   </div>`;
 }
 
-// --- TAB: ÓRDENES PROYECTADAS ---
+// --- TAB: ÓRDENES PROYECTADAS (Tabla principal) ---
 export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
-  // Si no hay datos, mostrar estado vacío
   if (proyecciones.length === 0) {
-    return `
-      <div style="text-align: center; padding: 50px; background: #fff; border-radius: 12px; border: 1px dashed #cbd5e1;">
-        <div style="font-size: 48px; margin-bottom: 10px;">📄</div>
-        <h3 style="color: #64748b;">No hay proyecciones registradas</h3>
-        <p style="color: #94a3b8;">Haz clic en "Nueva Factura" para empezar a proyectar tus cobros.</p>
-      </div>
-    `;
+    return `<div style="text-align:center; padding:50px;">No hay registros de proyecciones.</div>`;
   }
 
-  // Si hay datos, renderizar la tabla con los campos correctos
   return `
-    <div class="table-container">
-      <table class="data-table">
+    <div class="table-container" style="overflow-x: auto;">
+      <table class="data-table" style="min-width: 1200px;">
         <thead>
           <tr>
+            <th>N° ORDEN / CLIENTE</th>
+            <th>SERVICIO / ACTIVIDAD</th>
+            <th>SUBTOTAL</th>
+            <th>IGV</th>
+            <th>TOTAL OS</th>
+            <th>DETRACCIÓN (12%)</th>
+            <th>NETO A PAGAR</th>
             <th>N° FACTURA</th>
-            <th>ORIGEN / ORDEN</th>
-            <th>CLIENTE</th>
-            <th>EMISIÓN</th>
-            <th>VENCIMIENTO (CRÉDITO)</th>
-            <th>MONTO</th>
+            <th>VENCIMIENTO</th>
             <th>ESTADO</th>
-            <th>ACCIONES</th>
           </tr>
         </thead>
-        <tbody>
-          ${proyecciones.map(p => `
-            <tr>
-              <td><strong style="color: #2563eb;">${p.num_factura}</strong></td>
-              <td>
-                <div class="equipment-id">${p.tipo_orden}</div>
-                <div style="font-size: 11px; font-weight: bold;">${p.codigo_orden}</div>
-              </td>
-              <td>${p.cliente}</td>
-              <td>${p.fecha_emision}</td>
-              <td>
-                <div>${p.fecha_vencimiento}</div>
-                <div style="font-size: 10px; color: #64748b;">${p.dias_credito} días</div>
-              </td>
-              <td><strong>S/ ${p.monto}</strong></td>
-              <td><span class="status-indicator warning">Pendiente</span></td>
-              <td>
-                <button class="action-btn" title="Editar">✏️</button>
-                <button class="action-btn" title="Eliminar" style="color: #ef4444;">🗑️</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
+              <tbody>
+        ${proyecciones.map(p => `
+          <tr>
+            <td>
+              <div style="font-weight: bold; color: #2563eb;">${p.numero_orden || 'S/N'}</div>
+              <div style="font-size: 11px; color: #64748b;">${p.nombre_cliente || 'Sin cliente'} (${p.alias_empresa || '---'})</div>
+            </td>
+            <td>
+              <div style="font-size: 13px;">${p.servicio || 'Servicio General'}</div>
+              <div style="font-size: 11px; color: #94a3b8;">${p.actividad || 'Sin actividad'}</div>
+            </td>
+            <td>S/ ${p.subtotal ? Number(p.subtotal).toFixed(2) : '0.00'}</td>
+            <td>S/ ${p.igv ? Number(p.igv).toFixed(2) : '0.00'}</td>
+            <td><strong style="color: #1e293b;">S/ ${p.precio_total_os ? Number(p.precio_total_os).toFixed(2) : '0.00'}</strong></td>
+            <td style="color: #dc2626;">S/ ${p.monto_detrax ? Number(p.monto_detrax).toFixed(2) : '0.00'}</td>
+            <td><strong style="color: #16a34a;">S/ ${p.total_final ? Number(p.total_final).toFixed(2) : '0.00'}</strong></td>
+            <td>
+              <span style="font-family: monospace; font-weight: 600;">${p.n_factura || '---'}</span>
+            </td>
+            <td>
+              <div style="font-size: 12px;">${p.fecha_vcto || '---'}</div>
+              <div style="font-size: 10px; color: #ef4444;">${p.dia_vencer ? p.dia_vencer + ' días' : ''}</div>
+            </td>
+            <td>
+              <span class="status-indicator ${p.n_factura ? 'success' : 'warning'}">
+                ${p.n_factura ? 'Facturado' : 'Por Facturar'}
+              </span>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
       </table>
     </div>
   `;
 }
-
 // --- TABS INTACTOS (SOLO LECTURA/REPRESENTACIÓN) ---
 
 export function renderContratosFijosTab() {
@@ -234,71 +233,38 @@ export function renderEstadoCobranzaTab() {
 export function renderFacturacion(datos: any[] = []) {
   return `
     <div class="page-header-with-breadcrumb">
-      <div class="breadcrumb">Facturación y Cobranza</div>
-      <div class="page-actions">
-        <button class="btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Exportar
-        </button>
-        <button class="btn-primary" id="btn-nueva-factura">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Nueva Factura
-        </button>
-      </div>
-    </div>
-
-    <div class="inventory-tabs">
-      <button class="tab-btn active" data-tab="ordenes">Órdenes Proyectadas</button>
-      <button class="tab-btn" data-tab="contratos">Contratos Fijos</button>
-      <button class="tab-btn" data-tab="cobranza">Estado de Cobranza</button>
+       <div class="page-actions">
+         <button class="btn-primary" id="btn-nueva-factura">Nueva Factura</button>
+       </div>
     </div>
 
     <div id="facturacion-tab-content">
       ${renderOrdenesProyectadasTab(datos)}
     </div>
 
-    ${renderModalFactura()}
-  `;
+    ${renderModalFactura(datos)} `;
 }
 
 // --- LÓGICA DE EVENTOS (LLAMAR DESDE MAIN.TS) ---
-
-export function initFacturacionEvents() {
-  const modal = document.getElementById('modal-factura');
-  const btnAbrir = document.getElementById('btn-nueva-factura');
-  const btnCerrar = document.getElementById('btn-cerrar-modal');
+export function initFacturacionEvents(datosReales: any[] = []) {
   const selectOrden = document.getElementById('modal-select-orden') as HTMLSelectElement;
-  const tipoRef = document.getElementById('modal-tipo-ref') as HTMLSelectElement;
   const form = document.getElementById('form-nueva-factura');
 
-  if (btnAbrir) btnAbrir.onclick = () => { modal!.style.display = 'block'; };
-  if (btnCerrar) btnCerrar.onclick = () => { modal!.style.display = 'none'; };
-
-  // Al cambiar el tipo (OS, OP, OC), deberías recargar el select de órdenes
-  tipoRef?.addEventListener('change', () => {
-      console.log("Cargando órdenes de tipo:", tipoRef.value);
-      // Aquí harías el fetch a Laravel: /api/ordenes-pendientes?tipo=${tipoRef.value}
-  });
-
-  // Al seleccionar una orden específica del listado
   selectOrden?.addEventListener('change', () => {
-    if (selectOrden.value !== "") {
+    const encontrada = datosReales.find(o => String(o.id_referencia) === selectOrden.value);
+
+    if (encontrada) {
       form!.style.display = 'block';
-      
-      // Simulación: Estos datos vendrían del objeto seleccionado en el array de órdenes
-      document.getElementById('res-cliente')!.innerText = "Cliente Ejemplo desde Select";
-      document.getElementById('res-monto')!.innerText = "S/ 1,500.00";
+      document.getElementById('res-cliente')!.innerText = encontrada.nombre_cliente;
+      document.getElementById('res-subtotal')!.innerText = encontrada.subtotal.toFixed(2);
+      document.getElementById('res-igv')!.innerText = encontrada.igv.toFixed(2);
+      document.getElementById('res-total')!.innerText = encontrada.precio_total_os.toFixed(2);
+      document.getElementById('res-detrax')!.innerText = encontrada.monto_detrax.toFixed(2);
+      document.getElementById('res-neto')!.innerText = encontrada.total_final.toFixed(2);
     } else {
       form!.style.display = 'none';
     }
   });
-
-  form?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    // Aquí enviarías el ID de la orden y los datos de la factura a Laravel
-    alert("Factura proyectada correctamente y vinculada a la orden.");
-    modal!.style.display = 'none';
-    (e.target as HTMLFormElement).reset();
-    form!.style.display = 'none';
-  });
+  
+  // Agrega aquí los manejadores de abrir/cerrar modal...
 }

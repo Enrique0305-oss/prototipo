@@ -168,28 +168,45 @@ function renderApp() {
   `;
   // Al final de tu función renderApp() o donde inicializas otros eventos:
 if (activeMenu === 'Facturación') {
-  initFacturacionEvents();
+  initFacturacionEvents(misProyecciones);
 }
 
 
   document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const target = e.currentTarget as HTMLButtonElement;
-      const menuName = target.dataset.menu || 'Dashboard';
+  btn.addEventListener('click', async (e) => {
+    const target = e.currentTarget as HTMLButtonElement;
+    const menuName = target.dataset.menu || 'Dashboard';
 
-      // Si haces clic en el mismo menú que ya está activo, lo cierra
-      if (activeMenu === menuName) {
-        activeMenu = 'Dashboard';
-        activeSubMenu = '';
-        renderApp();
-        return;
-      }
-
+    // 1. Si es el mismo menú, volvemos al inicio
+    if (activeMenu === menuName) {
+      activeMenu = 'Dashboard';
+      activeSubMenu = '';
+    } else {
       activeMenu = menuName;
       activeSubMenu = '';
-      renderApp();
-    });
+    }
+
+    // 2. SOLO si es Facturación, traemos la data real
+    if (menuName === 'Facturación') {
+      try {
+        const respuesta = await fetch('http://localhost:8000/api/v1/ordenes-servicio');
+        const result = await respuesta.json();
+        
+        // Accedemos a result.data. Si es un solo objeto, lo metemos en un array []
+        const rawData = result.data;
+        misProyecciones = Array.isArray(rawData) ? rawData : [rawData];
+        
+        console.log("Data procesada:", misProyecciones);
+      } catch (error) {
+        console.error("Error:", error);
+        misProyecciones = [];
+      }
+    }
+
+    // 3. Dibujamos la pantalla UNA SOLA VEZ
+    renderApp();
   });
+});
 
 
   document.querySelectorAll('.submenu-item').forEach(btn => {
