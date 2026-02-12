@@ -55,6 +55,12 @@ class OrdenCapacitacionAuditoria extends Model
         return $this->belongsTo(Personal::class, 'id_ponente');
     }
 
+    // Relación con Proyecciones
+    public function proyecciones()
+    {
+        return $this->hasMany(Proyeccion::class, 'id_orden_capacitacion_auditoria');
+    }
+
     // Generar número de orden
     public static function generarNumero()
     {
