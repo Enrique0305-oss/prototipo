@@ -229,20 +229,29 @@ export function renderEstadoCobranzaTab() {
 }
 
 // --- VISTA PRINCIPAL ---
-
-export function renderFacturacion(datos: any[] = []) {
+export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: any[] = []) {
   return `
-    <div class="page-header-with-breadcrumb">
-       <div class="page-actions">
-         <button class="btn-primary" id="btn-nueva-factura">Nueva Factura</button>
-       </div>
+    <div class="page-header">
+      <div>
+        <h1>Facturación y Cobranza</h1>
+      </div>
+      <button id="btn-nueva-factura" class="btn-primary"> + Nueva Proyección</button>
     </div>
 
-    <div id="facturacion-tab-content">
-      ${renderOrdenesProyectadasTab(datos)}
+    <div class="tabs-container">
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="ordenes">Órdenes Proyectadas</button>
+        <button class="tab-btn" data-tab="contratos">Contratos Fijos</button>
+        <button class="tab-btn" data-tab="cobranza">Estado de Cobranza</button>
+      </div>
+      
+      <div id="facturacion-tab-content" class="tab-content">
+        ${renderOrdenesProyectadasTab(proyecciones)}
+      </div>
     </div>
 
-    ${renderModalFactura(datos)} `;
+    ${renderModalFactura(ordenesPendientes)}
+  `;
 }
 
 // --- LÓGICA DE EVENTOS (LLAMAR DESDE MAIN.TS) ---
