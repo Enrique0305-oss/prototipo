@@ -16,6 +16,7 @@ use App\Http\Controllers\API\TecnicoController;
 use App\Http\Controllers\API\MantenimientoController;
 use App\Http\Controllers\API\ActividadMantenimientoController;
 use App\Http\Controllers\API\MulticimController;
+use App\Http\Controllers\API\ProyeccionesController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -141,4 +142,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/multicim', [MulticimController::class, 'store']);
     Route::put('/multicim/{id}', [MulticimController::class, 'update']);
     Route::delete('/multicim/{id}', [MulticimController::class, 'destroy']);
+
+    // para las proyecciones :v
+    Route::get('proyecciones', [ProyeccionesController::class, 'index']);
+    Route::post('proyecciones', [ProyeccionesController::class, 'store']);
+    Route::get('proyecciones/buscar-orden/{tipo}/{id}', [ProyeccionesController::class, 'obtenerDatosOrden']);
 });

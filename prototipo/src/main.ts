@@ -25,7 +25,7 @@ import { renderComercialConversiones } from './modules/comercial/conversiones/co
 // Finanzas
 import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
 // Facturación
-import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab, renderEstadoCobranzaTab } from './modules/facturacion/facturacion.view'
+import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab, renderEstadoCobranzaTab, initFacturacionEvents } from './modules/facturacion/facturacion.view'
 // Operaciones
 import { renderOperaciones, renderServiciosDiaTab, renderInformesClienteTab, renderReportesGeneralesTab } from './modules/operaciones/operaciones.view'
 // Reportes
@@ -40,6 +40,7 @@ let activeFinanzasTab = 'dashboard'; // Estado para el tab de finanzas
 let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
 let activeRecursosTab = 'asistencia'; // Estado para el tab de recursos humanos
 let activeOperacionesTab = 'servicios'; // Estado para el tab de operaciones
+let misProyecciones: any[] = []; // Lista de proyecciones para facturación
 
 const menuItems = [
   { name: 'Dashboard', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>', submenu: [] },
@@ -85,7 +86,11 @@ function getMainContent() {
   } else if (activeMenu === 'Finanzas') {
     return renderFinanzas();
   } else if (activeMenu === 'Facturación') {
-    return renderFacturacion();
+    // Lógica de submenús de Facturación integrada aquí para evitar "Unreachable code"
+    if (activeSubMenu === 'Contratos') return renderContratosFijosTab();
+    if (activeSubMenu === 'Cobranza') return renderEstadoCobranzaTab();
+    // Por defecto muestra la tabla con los datos
+    return renderFacturacion(misProyecciones);
   } else if (activeMenu === 'Recursos Humanos') {
     return renderRecursosHumanos();
   } else if (activeMenu === 'Operaciones') {
@@ -169,6 +174,10 @@ function renderApp() {
       </main>
     </div>
   `;
+  // Al final de tu función renderApp() o donde inicializas otros eventos:
+if (activeMenu === 'Facturación') {
+  initFacturacionEvents();
+}
 
 
   document.querySelectorAll('.nav-item').forEach(btn => {
@@ -416,7 +425,8 @@ function updateFacturacionTabContent() {
       tabContent.innerHTML = renderEstadoCobranzaTab();
       break;
     default:
-      tabContent.innerHTML = renderOrdenesProyectadasTab();
+      // facturación por defecto
+      tabContent.innerHTML = renderOrdenesProyectadasTab(misProyecciones);
   }
 }
 
