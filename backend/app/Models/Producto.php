@@ -11,16 +11,20 @@ class Producto extends Model
     public $timestamps = false;
     
     protected $fillable = [
+        'sku',
         'descripcion',
         'id_categoria',
         'fecha_vencim',
         'ubicacion',
         'n_lote',
+        'unidad',
+        'precio_unitario',
         'estado'
     ];
 
     protected $casts = [
         'fecha_vencim' => 'date',
+        'precio_unitario' => 'decimal:2',
     ];
 
     // Relaciones

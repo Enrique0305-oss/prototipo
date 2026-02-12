@@ -31,12 +31,13 @@ class ProductoController extends Controller
             $query->where('id_categoria', $request->id_categoria);
         }
 
-        // Búsqueda por descripción o lote
+        // Búsqueda por descripción, lote o SKU
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('descripcion', 'like', "%{$search}%")
-                  ->orWhere('n_lote', 'like', "%{$search}%");
+                  ->orWhere('n_lote', 'like', "%{$search}%")
+                  ->orWhere('sku', 'like', "%{$search}%");
             });
         }
 
@@ -59,10 +60,13 @@ class ProductoController extends Controller
         $data = $productos->map(function($producto) {
             return [
                 'id' => $producto->id,
+                'sku' => $producto->sku,
                 'descripcion' => $producto->descripcion,
                 'n_lote' => $producto->n_lote,
                 'fecha_vencim' => $producto->fecha_vencim ? $producto->fecha_vencim->format('Y-m-d') : null,
                 'ubicacion' => $producto->ubicacion,
+                'unidad' => $producto->unidad,
+                'precio_unitario' => $producto->precio_unitario,
                 'estado' => $producto->estado,
                 'categoria' => $producto->categoria ? [
                     'id' => $producto->categoria->id,
@@ -91,14 +95,18 @@ class ProductoController extends Controller
             'descripcion' => 'required|string|max:255',
             'id_categoria' => 'required|exists:categoria,id',
             'fecha_vencim' => 'nullable|date',
-            'ubicacion' => 'nullable|string|max:100',
+            'ubicacion' => 'required|string|max:100',
             'n_lote' => 'required|string|max:50',
+            'unidad' => 'nullable|string|max:20',
+            'precio_unitario' => 'nullable|numeric|min:0',
             'estado' => 'nullable|in:Activo,Inactivo',
         ], [
             'descripcion.required' => 'La descripción del producto es requerida',
             'id_categoria.required' => 'La categoría es requerida',
             'id_categoria.exists' => 'La categoría seleccionada no existe',
+            'ubicacion.required' => 'La ubicación es requerida',
             'n_lote.required' => 'El número de lote es requerido',
+            'precio_unitario.numeric' => 'El precio debe ser un número válido',
         ]);
 
         if ($validator->fails()) {
@@ -109,13 +117,20 @@ class ProductoController extends Controller
             ], 422);
         }
 
+        // Generar SKU automático
+        $categoria = Categoria::find($request->id_categoria);
+        $sku = $this->generarSKU($categoria->nombre ?? 'PRD', $request->descripcion);
+
         $producto = Producto::create([
+            'sku' => $sku,
             'descripcion' => $request->descripcion,
             'id_categoria' => $request->id_categoria,
             'fecha_vencim' => $request->fecha_vencim,
             'ubicacion' => $request->ubicacion,
             'n_lote' => $request->n_lote,
-            'estado' => $request->estado ?? 'Activo', // Por defecto Activo
+            'unidad' => $request->unidad,
+            'precio_unitario' => $request->precio_unitario,
+            'estado' => $request->estado ?? 'Activo',
         ]);
 
         $producto->load(['categoria', 'inventario']);
@@ -125,6 +140,42 @@ class ProductoController extends Controller
             'message' => 'Producto creado exitosamente',
             'data' => $producto
         ], 201);
+    }
+
+    /**
+     * Generar SKU único para el producto
+     * Formato: [CAT]-[PRD]-0001
+     */
+    private function generarSKU(string $categoriaNombre, string $productoNombre): string
+    {
+        // Obtener las primeras 3 letras de la categoría
+        $catPrefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $categoriaNombre), 0, 3));
+        if (strlen($catPrefix) < 3) {
+            $catPrefix = str_pad($catPrefix, 3, 'X');
+        }
+
+        // Obtener las primeras 3 letras del producto
+        $prodPrefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $productoNombre), 0, 3));
+        if (strlen($prodPrefix) < 3) {
+            $prodPrefix = str_pad($prodPrefix, 3, 'X');
+        }
+
+        // Obtener el último número usado para este prefijo
+        $prefix = "{$catPrefix}-{$prodPrefix}";
+        $ultimoProducto = Producto::where('sku', 'LIKE', "{$prefix}-%")
+            ->orderBy('sku', 'desc')
+            ->first();
+
+        if ($ultimoProducto) {
+            // Extraer el número del último SKU y sumar 1
+            $partes = explode('-', $ultimoProducto->sku);
+            $ultimoNumero = isset($partes[2]) ? intval($partes[2]) : 0;
+            $numero = str_pad($ultimoNumero + 1, 4, '0', STR_PAD_LEFT);
+        } else {
+            $numero = '0001';
+        }
+
+        return "{$prefix}-{$numero}";
     }
 
     /**
@@ -143,10 +194,13 @@ class ProductoController extends Controller
 
         $data = [
             'id' => $producto->id,
+            'sku' => $producto->sku,
             'descripcion' => $producto->descripcion,
             'n_lote' => $producto->n_lote,
             'fecha_vencim' => $producto->fecha_vencim ? $producto->fecha_vencim->format('Y-m-d') : null,
             'ubicacion' => $producto->ubicacion,
+            'unidad' => $producto->unidad,
+            'precio_unitario' => $producto->precio_unitario,
             'estado' => $producto->estado,
             'categoria' => $producto->categoria ? [
                 'id' => $producto->categoria->id,
@@ -188,6 +242,8 @@ class ProductoController extends Controller
             'fecha_vencim' => 'nullable|date',
             'ubicacion' => 'nullable|string|max:100',
             'n_lote' => 'sometimes|required|string|max:50',
+            'unidad' => 'nullable|string|max:20',
+            'precio_unitario' => 'nullable|numeric|min:0',
             'estado' => 'sometimes|in:Activo,Inactivo',
         ]);
 
@@ -199,12 +255,29 @@ class ProductoController extends Controller
             ], 422);
         }
 
+        // Regenerar SKU si cambia la categoría o descripción
+        if ($request->has('id_categoria') || $request->has('descripcion')) {
+            $nuevaCategoria = $request->has('id_categoria') 
+                ? Categoria::find($request->id_categoria)
+                : $producto->categoria;
+            $nuevaDescripcion = $request->has('descripcion') 
+                ? $request->descripcion 
+                : $producto->descripcion;
+            
+            $producto->sku = $this->generarSKU(
+                $nuevaCategoria->nombre ?? 'PRD', 
+                $nuevaDescripcion
+            );
+        }
+
         $producto->update($request->only([
             'descripcion',
             'id_categoria',
             'fecha_vencim',
             'ubicacion',
             'n_lote',
+            'unidad',
+            'precio_unitario',
             'estado'
         ]));
 
