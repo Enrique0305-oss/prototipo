@@ -42,57 +42,54 @@ export interface ClienteFilters extends FilterParams {
 // Cotizaciones
 
 export interface Cotizacion {
-  id_cotizacion: number;
-  numero_cotizacion: string;
+  id: number;
+  numero: string;
+  numero_cotizacion?: string;
   id_cliente: number;
-  fecha: string;
-  tipo_servicio: 'Control de Plagas' | 'Auditoría' | 'Capacitación' | 'Multicim';
-  descripcion?: string;
+  cliente_nombre?: string;
+  fecha_emision: string;
+  tipo: string;
+  tipo_cotizacion?: string;
+  incluye_igv: boolean;
   subtotal: number;
   igv: number;
   total: number;
-  estado: 'Pendiente' | 'Aceptado' | 'Rechazado';
-  observaciones?: string;
-  created_at?: string;
-  updated_at?: string;
+  estado: 'Pendiente' | 'Aceptada' | 'Rechazada';
+  observaciones?: string | null;
+  creador?: string;
   cliente?: Cliente;
   detalles?: DetalleCotizacion[];
 }
 
 export interface DetalleCotizacion {
-  id_detalle_cot: number;
+  id: number;
   id_cotizacion: number;
-  descripcion: string;
+  id_servicio?: number | null;
+  id_producto?: number | null;
+  descripcion_manual?: string | null;
   cantidad: number;
   precio_unitario: number;
-  subtotal: number;
+  subtotal?: number;
+  frecuencia_sugerida?: string | null;
+  modalidad_sugerida?: string | null;
+  servicio?: any;
+  producto?: any;
 }
 
 export interface CotizacionFilters extends FilterParams {
-  estado?: 'Pendiente' | 'Aceptado' | 'Rechazado';
-  tipo_servicio?: string;
+  estado?: 'Pendiente' | 'Aceptada' | 'Rechazada';
+  tipo?: string;
   fecha_desde?: string;
   fecha_hasta?: string;
-  id_cliente?: number;
 }
 
 export interface EstadisticasCotizaciones {
-  total_cotizaciones: number;
-  total_pendientes: number;
-  total_aceptadas: number;
-  total_rechazadas: number;
-  valor_total_cotizaciones: number;
-  promedio_por_cotizacion: number;
-  por_tipo_servicio: Array<{
-    tipo_servicio: string;
-    cantidad: number;
-    valor_total: number;
-  }>;
-  por_mes: Array<{
-    mes: string;
-    cantidad: number;
-    valor_total: number;
-  }>;
+  total: number;
+  pendientes: number;
+  aceptadas: number;
+  rechazadas: number;
+  valor_total: number;
+  valor_pendiente: number;
 }
 
 // Órdenes de Servicio

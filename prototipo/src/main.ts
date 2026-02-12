@@ -17,7 +17,7 @@ import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTa
 import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab, initClientesLogisticaEvents } from './modules/logistica/logistica.view'
 // Comercial
 import { renderComercialProspectos, initProspectosEvents } from './modules/comercial/prospectos/prospectos.view'
-import { renderComercialCotizaciones } from './modules/comercial/cotizaciones/cotizaciones.view'
+import { renderComercialCotizaciones, initCotizacionesEvents } from './modules/comercial/cotizaciones/cotizaciones.view'
 import { renderComercialOrdenesServicio } from './modules/comercial/ordenes-servicio/ordenes-servicio.view'
 import { renderComercialOrdenesProducto } from './modules/comercial/ordenes-producto/ordenes-producto.view'
 import { renderComercialOrdenesCapacitacion } from './modules/comercial/ordenes-capacitacion/ordenes-capacitacion.view'
@@ -75,7 +75,11 @@ function getMainContent() {
       setTimeout(() => initProspectosEvents(), 0);
       return html;
     }
-    if (activeSubMenu === 'Cotizaciones') return renderComercialCotizaciones();
+    if (activeSubMenu === 'Cotizaciones') {
+      const html = renderComercialCotizaciones();
+      setTimeout(() => initCotizacionesEvents(), 0);
+      return html;
+    }
     if (activeSubMenu === 'Órdenes de Servicio') return renderComercialOrdenesServicio();
     if (activeSubMenu === 'Órdenes de Producto') return renderComercialOrdenesProducto();
     if (activeSubMenu === 'Órdenes de Capacitación') return renderComercialOrdenesCapacitacion();

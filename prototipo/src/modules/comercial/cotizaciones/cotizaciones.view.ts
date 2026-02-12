@@ -1,390 +1,466 @@
-// Comercial - Cotizaciones
+// Comercial - Cotizaciones (Conectado al Backend)
+import { cotizacionService } from '../../../services/cotizacionService';
+import { clienteService } from '../../../services/clienteService';
+import { apiClient } from '../../../core/api/api.client';
+import type { Cotizacion, EstadisticasCotizaciones } from '../../../core/api/types';
 
-// Declarar funciones globales
-declare function mostrarFormularioCotizacion(): void;
-declare function ocultarFormularioCotizacion(): void;
-declare function agregarLineaDetalle(): void;
+//  STATE 
+let cotizacionesData: Cotizacion[] = [];
+let estadisticasData: EstadisticasCotizaciones | null = null;
+let filtros = { search: '', estado: '', tipo: '' };
+let contadorLineas = 0;
+let incluyeIgv = true;
 
-export function renderComercialCotizaciones() {
+//  RENDER PRINCIPAL 
+export function renderComercialCotizaciones(): string {
   return `
     <div class="page-header">
       <h1>Órdenes de Cotización</h1>
       <div class="header-actions">
-        <button class="btn-primary" onclick="mostrarFormularioCotizacion()">
+        <button class="btn-primary" id="btn-nueva-cotizacion">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
           Nueva Cotización
         </button>
       </div>
     </div>
 
-    <!-- Lista de cotizaciones existentes -->
+    <!-- Lista de cotizaciones -->
     <div id="lista-cotizaciones">
-      <div class="stats-row" style="margin-bottom: 24px;">
+      <div class="stats-row" style="margin-bottom: 24px;" id="cotizaciones-stats">
         <div class="stat-box">
-          <div class="stat-box-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-          </div>
+          <div class="stat-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></div>
           <div class="stat-box-content">
-            <div class="stat-box-label">Total Cotizaciones</div>
-            <div class="stat-box-value">45</div>
+            <div class="stat-box-label">TOTAL COTIZACIONES</div>
+            <div class="stat-box-value" id="stat-total">0</div>
           </div>
         </div>
         <div class="stat-box">
-          <div class="stat-box-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <polyline points="12 6 12 12 16 14"></polyline>
-            </svg>
-          </div>
+          <div class="stat-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
           <div class="stat-box-content">
-            <div class="stat-box-label">Pendientes</div>
-            <div class="stat-box-value">12</div>
+            <div class="stat-box-label">PENDIENTES</div>
+            <div class="stat-box-value" id="stat-pendientes">0</div>
           </div>
         </div>
         <div class="stat-box">
-          <div class="stat-box-icon green">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-              <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
-          </div>
+          <div class="stat-box-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>
           <div class="stat-box-content">
-            <div class="stat-box-label">Aceptadas</div>
-            <div class="stat-box-value">28</div>
+            <div class="stat-box-label">ACEPTADAS</div>
+            <div class="stat-box-value" id="stat-aceptadas">0</div>
           </div>
         </div>
         <div class="stat-box">
-          <div class="stat-box-icon red">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="15" y1="9" x2="9" y2="15"></line>
-              <line x1="9" y1="9" x2="15" y2="15"></line>
-            </svg>
-          </div>
+          <div class="stat-box-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg></div>
           <div class="stat-box-content">
-            <div class="stat-box-label">Rechazadas</div>
-            <div class="stat-box-value">5</div>
+            <div class="stat-box-label">RECHAZADAS</div>
+            <div class="stat-box-value" id="stat-rechazadas">0</div>
           </div>
         </div>
       </div>
 
-      <!-- Filters -->
+      <!-- Filtros -->
       <div class="op-filters-bar">
         <div class="op-search-box">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="m21 21-4.35-4.35"></path>
-          </svg>
-          <input type="text" placeholder="Buscar por nombre o ID..." class="op-search-input">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+          <input type="text" placeholder="Buscar cotización o cliente..." class="op-search-input" id="cotiz-search">
         </div>
-
         <div class="op-filter-group">
-          <select class="op-filter-select">
+          <select class="op-filter-select" id="cotiz-filter-estado">
             <option value="">Todos los estados</option>
-            <option value="al-dia">Al día</option>
-            <option value="proximo">Próximo</option>
-            <option value="vencido">Vencido</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Aceptada">Aceptada</option>
+            <option value="Rechazada">Rechazada</option>
           </select>
-
-          <select class="op-filter-select">
-            <option value="">Todas las garantías</option>
-            <option value="vigente">Vigente</option>
-            <option value="vencer">Por Vencer</option>
-            <option value="expirada">Expirada</option>
+          <select class="op-filter-select" id="cotiz-filter-tipo">
+            <option value="">Todos los tipos</option>
+            <option value="Servicio">Servicio</option>
+            <option value="Producto">Producto</option>
+            <option value="Capacitacion">Capacitación</option>
           </select>
         </div>
       </div>
 
       <div class="table-container">
-        <table class="op-table">
+        <table class="data-table">
           <thead>
             <tr>
-              <th>N° Cotización</th>
-              <th>Cliente</th>
-              <th>Fecha Emisión</th>
-              <th>Tipo</th>
-              <th>Total</th>
-              <th>Estado</th>
-              <th>Acciones</th>
+              <th>N° COTIZACIÓN</th>
+              <th>CLIENTE</th>
+              <th>FECHA EMISIÓN</th>
+              <th>TIPO</th>
+              <th>IGV</th>
+              <th>TOTAL</th>
+              <th>ESTADO</th>
+              <th>ACCIONES</th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td><strong>COT-2024-001</strong></td>
-              <td>Empresa ABC S.A.C.</td>
-              <td>15/01/2024</td>
-              <td><span class="badge badge-blue">Servicio</span></td>
-              <td>S/ 4,500.00</td>
-              <td><span class="badge badge-warning">Pendiente</span></td>
-              <td>
-                <button class="btn-icon" title="Ver">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
-                <button class="btn-icon" title="Editar" onclick="editarCotizacion('COT-2024-001')">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
-              </td>
-            </tr>
+          <tbody id="cotizaciones-tbody">
+            <tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b;">Cargando cotizaciones...</td></tr>
           </tbody>
         </table>
       </div>
-    </div>
 
-    <!-- Formulario de Nueva/Editar Cotización (Inicialmente oculto) -->
-    <div id="formulario-cotizacion" style="display: none;">
-      <div class="page-header">
-        <h1>
-          <button class="btn-back" onclick="ocultarFormularioCotizacion()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
-            </svg>
-          </button>
-          Nueva Orden de Cotización
-        </h1>
-      </div>
-
-      <div class="form-card">
-        <form id="form-cotizacion">
-          <!-- Información General -->
-          <div class="form-section">
-            <h3 class="form-section-title">Información General</h3>
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="numero_cotizacion">N° Cotización</label>
-                <input type="text" id="numero_cotizacion" class="form-control" value="COT-2024-AUTO" readonly>
-              </div>
-              
-              <div class="form-group">
-                <label for="fecha_emision">Fecha de Emisión</label>
-                <input type="date" id="fecha_emision" class="form-control" required>
-              </div>
-
-              <div class="form-group">
-                <label for="id_cliente">Cliente</label>
-                <select id="id_cliente" class="form-control" required>
-                  <option value="">Seleccione un cliente...</option>
-                  <option value="1">Empresa ABC S.A.C.</option>
-                  <option value="2">Corporación XYZ E.I.R.L.</option>
-                  <option value="3">Servicios Generales S.A.</option>
-                  <option value="4">Industrias del Norte S.A.C.</option>
-                  <option value="5">Comercial Sur E.I.R.L.</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="tipo_cotizacion">Tipo de Cotización</label>
-                <select id="tipo_cotizacion" class="form-control" required onchange="actualizarTipoCotizacion()">
-                  <option value="">Seleccione tipo...</option>
-                  <option value="Servicio">Servicio</option>
-                  <option value="Producto">Producto</option>
-                  <option value="Capacitacion">Capacitación</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="estado">Estado</label>
-                <select id="estado" class="form-control">
-                  <option value="Pendiente" selected>Pendiente</option>
-                  <option value="Aceptada">Aceptada</option>
-                  <option value="Rechazada">Rechazada</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="id_personal_creador">Creado por</label>
-                <select id="id_personal_creador" class="form-control" required>
-                  <option value="">Seleccione personal...</option>
-                  <option value="1" selected>Juan Pérez - Comercial</option>
-                  <option value="2">María González - Ventas</option>
-                  <option value="3">Carlos Ruiz - Gerente</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <!-- Detalle de Cotización -->
-          <div class="form-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <h3 class="form-section-title" style="margin: 0;">Detalle de Cotización</h3>
-              <button type="button" class="btn-secondary" onclick="agregarLineaDetalle()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-                Agregar Línea
-              </button>
-            </div>
-
-            <div class="table-container">
-              <table class="data-table" id="tabla-detalle-cotizacion">
-                <thead>
-                  <tr>
-                    <th style="width: 20%;">Servicio/Producto</th>
-                    <th style="width: 20%;">Descripción Manual</th>
-                    <th style="width: 10%;">Cantidad</th>
-                    <th style="width: 12%;">Precio Unit.</th>
-                    <th style="width: 13%;">Frecuencia</th>
-                    <th style="width: 13%;">Modalidad</th>
-                    <th style="width: 12%;">Subtotal</th>
-                    <th style="width: 5%;"></th>
-                  </tr>
-                </thead>
-                <tbody id="detalle-cotizacion-body">
-                  <!-- Las filas se agregarán dinámicamente -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Totales -->
-          <div class="form-section">
-            <div class="totales-container">
-              <div class="totales-row">
-                <span class="totales-label">Subtotal:</span>
-                <span class="totales-value" id="subtotal-value">S/ 0.00</span>
-              </div>
-              <div class="totales-row">
-                <span class="totales-label">IGV (18%):</span>
-                <span class="totales-value" id="igv-value">S/ 0.00</span>
-              </div>
-              <div class="totales-row totales-total">
-                <span class="totales-label">Total:</span>
-                <span class="totales-value" id="total-value">S/ 0.00</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Botones de Acción -->
-          <div class="form-actions">
-            <button type="button" class="btn-secondary" onclick="ocultarFormularioCotizacion()">Cancelar</button>
-            <button type="submit" class="btn-primary">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-              </svg>
-              Guardar y Descargar PDF
-            </button>
-          </div>
-        </form>
+      <div id="cotizaciones-pagination" class="pagination">
+        <span class="pagination-info"></span>
       </div>
     </div>
+
+    <!-- Formulario de nueva cotización (oculto) -->
+    <div id="formulario-cotizacion" style="display: none;"></div>
   `;
 }
 
-// Funciones para manejar el formulario
-(window as any).mostrarFormularioCotizacion = function() {
+//  CARGAR DATOS 
+async function cargarEstadisticas() {
+  try {
+    const response = await cotizacionService.getEstadisticas();
+    estadisticasData = response.data || response;
+    renderizarEstadisticas();
+  } catch (error) {
+    console.error('Error cargando estadísticas:', error);
+  }
+}
+
+function renderizarEstadisticas() {
+  if (!estadisticasData) return;
+  const s = estadisticasData;
+  const el = (id: string, val: any) => { const e = document.getElementById(id); if (e) e.textContent = String(val); };
+  el('stat-total', s.total);
+  el('stat-pendientes', s.pendientes);
+  el('stat-aceptadas', s.aceptadas);
+  el('stat-rechazadas', s.rechazadas);
+}
+
+async function cargarCotizaciones() {
+  try {
+    const params: any = {};
+    if (filtros.search) params.search = filtros.search;
+    if (filtros.estado) params.estado = filtros.estado;
+    if (filtros.tipo) params.tipo = filtros.tipo;
+
+    const response = await cotizacionService.getAll(params);
+    const data = response.data || response;
+    cotizacionesData = Array.isArray(data) ? data : (data as any).data || [];
+    renderizarTabla();
+  } catch (error) {
+    console.error('Error cargando cotizaciones:', error);
+    const tbody = document.getElementById('cotizaciones-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar cotizaciones</td></tr>';
+  }
+}
+
+function renderizarTabla() {
+  const tbody = document.getElementById('cotizaciones-tbody');
+  if (!tbody) return;
+
+  if (cotizacionesData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b;">No se encontraron cotizaciones</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = cotizacionesData.map(cot => {
+    const numero = cot.numero || cot.numero_cotizacion || '—';
+    const cliente = cot.cliente_nombre || (cot.cliente as any)?.nombre_empresa || '—';
+    const fecha = cot.fecha_emision ? new Date(cot.fecha_emision).toLocaleDateString('es-PE') : '—';
+    const tipo = cot.tipo || cot.tipo_cotizacion || '—';
+    const total = typeof cot.total === 'number' ? `S/ ${cot.total.toFixed(2)}` : '—';
+    const tieneIgv = cot.incluye_igv !== false;
+
+    const tipoBadge: Record<string, string> = {
+      'Servicio': 'badge-blue',
+      'Producto': 'badge-purple',
+      'Capacitacion': 'badge-orange'
+    };
+    const estadoBadge: Record<string, string> = {
+      'Pendiente': 'badge-warning',
+      'Aceptada': 'badge-success',
+      'Rechazada': 'badge-danger'
+    };
+
+    return `
+      <tr>
+        <td><strong>${numero}</strong></td>
+        <td>${cliente}</td>
+        <td>${fecha}</td>
+        <td><span class="badge ${tipoBadge[tipo] || 'badge-blue'}">${tipo}</span></td>
+        <td>${tieneIgv ? '<span style="color:#16a34a;font-weight:600;">Sí</span>' : '<span style="color:#94a3b8;">No</span>'}</td>
+        <td><strong>${total}</strong></td>
+        <td><span class="badge ${estadoBadge[cot.estado] || ''}">${cot.estado}</span></td>
+        <td>
+          <div class="action-buttons">
+            ${cot.estado === 'Pendiente' ? `
+              <button class="action-btn-icon edit" data-action="aceptar-cotiz" data-id="${cot.id}" title="Aceptar" style="color:#16a34a;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </button>
+              <button class="action-btn-icon delete" data-action="rechazar-cotiz" data-id="${cot.id}" title="Rechazar" style="color:#f59e0b;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+              </button>
+            ` : ''}
+            <button class="action-btn-icon edit" data-action="pdf-cotiz" data-id="${cot.id}" title="Descargar PDF">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            </button>
+            ${cot.estado === 'Pendiente' ? `
+              <button class="action-btn-icon delete" data-action="delete-cotiz" data-id="${cot.id}" title="Eliminar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const pag = document.querySelector('#cotizaciones-pagination .pagination-info');
+  if (pag) pag.textContent = `Mostrando ${cotizacionesData.length} cotizaciones`;
+}
+
+//  FORMULARIO NUEVA COTIZACIÓN 
+async function abrirFormularioCotizacion() {
   const lista = document.getElementById('lista-cotizaciones');
   const formulario = document.getElementById('formulario-cotizacion');
-  if (lista) lista.style.display = 'none';
-  if (formulario) {
-    formulario.style.display = 'block';
-    // Establecer fecha actual
-    const fechaInput = document.getElementById('fecha_emision') as HTMLInputElement;
-    if (fechaInput) {
-      const hoy = new Date().toISOString().split('T')[0];
-      fechaInput.value = hoy;
-    }
-    // Agregar primera línea
-    agregarLineaDetalle();
-  }
-};
+  if (!lista || !formulario) return;
 
-(window as any).ocultarFormularioCotizacion = function() {
+  // Cargar clientes aceptados y servicios/productos
+  let clientesOptions = '<option value="">Seleccione un cliente...</option>';
+  let serviciosData: any[] = [];
+  let productosData: any[] = [];
+  let numeroCotizacion = estadisticasData ? (estadisticasData as any).siguiente_numero || '' : '';
+
+  try {
+    const [clientesRes, serviciosRes, productosRes] = await Promise.all([
+      clienteService.getAll({ estado: 'Acepta' } as any),
+      apiClient.get<any>('/servicios'),
+      apiClient.get<any>('/productos')
+    ]);
+
+    const clientes = Array.isArray(clientesRes.data) ? clientesRes.data : (clientesRes as any).data || [];
+    clientes.forEach((c: any) => {
+      clientesOptions += `<option value="${c.id}">${c.nombre_empresa} - ${c.ruc}</option>`;
+    });
+
+    serviciosData = Array.isArray(serviciosRes.data) ? serviciosRes.data : [];
+    productosData = Array.isArray(productosRes.data) ? productosRes.data : [];
+
+    // Si no se tenía el número, obtenerlo de estadísticas
+    if (!numeroCotizacion) {
+      const statsRes = await cotizacionService.getEstadisticas();
+      const stats = statsRes.data || statsRes;
+      numeroCotizacion = (stats as any).siguiente_numero || '';
+    }
+  } catch (error) {
+    console.error('Error cargando datos para formulario:', error);
+  }
+
+  // Guardar en window para acceso desde las líneas
+  (window as any).__serviciosData = serviciosData;
+  (window as any).__productosData = productosData;
+
+  const hoy = new Date().toISOString().split('T')[0];
+  incluyeIgv = true;
+  contadorLineas = 0;
+
+  formulario.innerHTML = `
+    <div class="page-header">
+      <h1>
+        <button class="btn-back" id="btn-volver-lista" style="background:none;border:none;cursor:pointer;margin-right:8px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        Nueva Orden de Cotización
+      </h1>
+    </div>
+
+    <div class="form-card" style="background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+      <form id="form-cotizacion">
+        <div class="form-section" style="margin-bottom: 24px;">
+          <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">Información General</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">N° Cotización</label>
+              <input type="text" class="form-control" value="${numeroCotizacion || 'Generando...'}" readonly style="background: #f1f5f9; color: #1e293b; font-weight: 600; width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Fecha de Emisión</label>
+              <input type="date" id="cot-fecha" class="form-control" value="${hoy}" readonly style="background: #f1f5f9; width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Cliente *</label>
+              <select id="cot-cliente" class="form-control" required style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+                ${clientesOptions}
+              </select>
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tipo de Cotización *</label>
+              <select id="cot-tipo" class="form-control" required style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+                <option value="">Seleccione tipo...</option>
+                <option value="Servicio">Servicio</option>
+                <option value="Producto">Producto</option>
+                <option value="Capacitacion">Capacitación</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">¿Incluye IGV?</label>
+              <select id="cot-igv" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+                <option value="1" selected>Sí - Con IGV (18%)</option>
+                <option value="0">No - Sin IGV</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Observaciones</label>
+              <input type="text" id="cot-observaciones" class="form-control" placeholder="Observaciones adicionales..." style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
+            <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Detalle de Cotización</h3>
+            <button type="button" class="btn-secondary" id="btn-agregar-linea" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:#475569;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Agregar Línea
+            </button>
+          </div>
+          <div class="table-container">
+            <table class="data-table" id="tabla-detalle-cotizacion">
+              <thead>
+                <tr>
+                  <th style="width: 22%;">Servicio/Producto</th>
+                  <th style="width: 18%;">Descripción</th>
+                  <th style="width: 9%;">Cantidad</th>
+                  <th style="width: 11%;">Precio Unit.</th>
+                  <th style="width: 12%;">Frecuencia</th>
+                  <th style="width: 12%;">Modalidad</th>
+                  <th style="width: 10%;">Subtotal</th>
+                  <th style="width: 6%;"></th>
+                </tr>
+              </thead>
+              <tbody id="detalle-cotizacion-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="form-section" style="margin-bottom: 24px;">
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; width: 280px;">
+              <span style="font-size: 14px; color: #64748b;">Subtotal:</span>
+              <span style="font-size: 14px; font-weight: 600; color: #1e293b;" id="subtotal-value">S/ 0.00</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; width: 280px;" id="igv-row">
+              <span style="font-size: 14px; color: #64748b;">IGV (18%):</span>
+              <span style="font-size: 14px; font-weight: 600; color: #1e293b;" id="igv-value">S/ 0.00</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; width: 280px; padding-top: 8px; border-top: 2px solid #cbd5e1;">
+              <span style="font-size: 16px; font-weight: 700; color: #1e293b;">Total:</span>
+              <span style="font-size: 16px; font-weight: 700; color: #16a34a;" id="total-value">S/ 0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+          <button type="button" class="btn-secondary" id="btn-cancelar-cotiz" style="padding:10px 24px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#475569;">Cancelar</button>
+          <button type="submit" class="btn-primary" id="btn-guardar-cotiz" style="display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            Guardar Cotización
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  lista.style.display = 'none';
+  formulario.style.display = 'block';
+
+  // Eventos del formulario
+  document.getElementById('btn-volver-lista')?.addEventListener('click', cerrarFormulario);
+  document.getElementById('btn-cancelar-cotiz')?.addEventListener('click', cerrarFormulario);
+
+  document.getElementById('cot-igv')?.addEventListener('change', (e) => {
+    incluyeIgv = (e.target as HTMLSelectElement).value === '1';
+    const igvRow = document.getElementById('igv-row');
+    if (igvRow) {
+      igvRow.style.display = incluyeIgv ? 'flex' : 'none';
+    }
+    calcularTotales();
+  });
+
+  document.getElementById('cot-tipo')?.addEventListener('change', () => {
+    const tbody = document.getElementById('detalle-cotizacion-body');
+    if (tbody) tbody.innerHTML = '';
+    contadorLineas = 0;
+    calcularTotales();
+  });
+
+  document.getElementById('btn-agregar-linea')?.addEventListener('click', () => agregarLineaDetalle());
+
+  const form = document.getElementById('form-cotizacion') as HTMLFormElement;
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await guardarCotizacion();
+  });
+}
+
+function cerrarFormulario() {
   const lista = document.getElementById('lista-cotizaciones');
   const formulario = document.getElementById('formulario-cotizacion');
   if (lista) lista.style.display = 'block';
-  if (formulario) {
-    formulario.style.display = 'none';
-    // Limpiar formulario
-    const form = document.getElementById('form-cotizacion') as HTMLFormElement;
-    if (form) form.reset();
-    const tbody = document.getElementById('detalle-cotizacion-body');
-    if (tbody) tbody.innerHTML = '';
-    calcularTotales();
-  }
-};
+  if (formulario) { formulario.style.display = 'none'; formulario.innerHTML = ''; }
+}
 
-(window as any).editarCotizacion = function(numeroCotizacion: string) {
-  mostrarFormularioCotizacion();
-  // Aquí cargarías los datos de la cotización desde el backend
-  console.log('Editando cotización:', numeroCotizacion);
-};
-
-let contadorLineas = 0;
-
-(window as any).agregarLineaDetalle = function() {
+function agregarLineaDetalle() {
   const tbody = document.getElementById('detalle-cotizacion-body');
-  const tipoCotizacion = (document.getElementById('tipo_cotizacion') as HTMLSelectElement)?.value;
-  
-  if (!tipoCotizacion) {
-    alert('Por favor seleccione el tipo de cotización primero');
+  const tipoSelect = document.getElementById('cot-tipo') as HTMLSelectElement;
+  const tipo = tipoSelect?.value;
+
+  if (!tipo) {
+    mostrarToast('warning', 'Atención', 'Seleccione el tipo de cotización primero');
     return;
   }
 
   contadorLineas++;
   const lineaId = `linea-${contadorLineas}`;
 
-  let opcionesItem = '';
-  if (tipoCotizacion === 'Servicio') {
-    opcionesItem = `
-      <option value="">Seleccione servicio...</option>
-      <option value="1">Fumigación Residencial</option>
-      <option value="2">Fumigación Industrial</option>
-      <option value="3">Control de Plagas</option>
-      <option value="4">Desinfección de Ambientes</option>
-      <option value="5">Limpieza Profunda</option>
-    `;
-  } else if (tipoCotizacion === 'Producto') {
-    opcionesItem = `
-      <option value="">Seleccione producto...</option>
-      <option value="1">Insecticida Profesional 1L</option>
-      <option value="2">Raticida en Gel</option>
-      <option value="3">Trampas para Roedores</option>
-      <option value="4">Desinfectante Industrial 5L</option>
-      <option value="5">Kit de Fumigación</option>
-    `;
-  } else if (tipoCotizacion === 'Capacitacion') {
-    opcionesItem = `
-      <option value="">Seleccione capacitación...</option>
-      <option value="1">Manejo de Productos Químicos</option>
-      <option value="2">Seguridad en Fumigación</option>
-      <option value="3">Control de Plagas Urbanas</option>
-      <option value="4">Primeros Auxilios</option>
-    `;
+  const servicios = (window as any).__serviciosData || [];
+  const productos = (window as any).__productosData || [];
+
+  let opcionesItem = '<option value="">Seleccione...</option>';
+  if (tipo === 'Servicio' || tipo === 'Capacitacion') {
+    servicios.forEach((s: any) => {
+      const desc = (s.descripcion || '').replace(/"/g, '&quot;');
+      opcionesItem += `<option value="s-${s.id}" data-descripcion="${desc}">${s.nombre}</option>`;
+    });
+  } else if (tipo === 'Producto') {
+    productos.forEach((p: any) => {
+      const nombre = p.nombre || p.nombre_producto || p.descripcion || 'Producto';
+      const precio = p.precio_unitario || 0;
+      opcionesItem += `<option value="p-${p.id}" data-precio="${precio}">${nombre}</option>`;
+    });
   }
+
+  const inputStyle = 'width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;';
+  const selectStyle = inputStyle;
 
   const nuevaLinea = `
     <tr id="${lineaId}">
       <td>
-        <select class="form-control form-control-sm item-select" onchange="calcularSubtotalLinea('${lineaId}')" required>
+        <select class="item-select" style="${selectStyle}" required>
           ${opcionesItem}
         </select>
       </td>
       <td>
-        <input type="text" class="form-control form-control-sm descripcion-input" placeholder="Descripción adicional...">
+        <input type="text" class="descripcion-input" placeholder="Descripción..." readonly style="${inputStyle} background:#f8fafc; color:#475569;">
       </td>
       <td>
-        <input type="number" class="form-control form-control-sm cantidad-input" value="1" min="1" onchange="calcularSubtotalLinea('${lineaId}')" required>
+        <input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}">
       </td>
       <td>
-        <input type="number" class="form-control form-control-sm precio-input" value="0.00" min="0" step="0.01" onchange="calcularSubtotalLinea('${lineaId}')" required>
+        <input type="number" class="precio-input" value="0.00" min="0" step="0.01" style="${inputStyle}">
       </td>
       <td>
-        <select class="form-control form-control-sm frecuencia-input">
-          <option value="">Sin frecuencia</option>
+        <select class="frecuencia-input" style="${selectStyle}">
+          <option value="">—</option>
           <option value="Semanal">Semanal</option>
           <option value="Quincenal">Quincenal</option>
           <option value="Mensual">Mensual</option>
@@ -394,22 +470,19 @@ let contadorLineas = 0;
         </select>
       </td>
       <td>
-        <select class="form-control form-control-sm modalidad-input">
-          <option value="">Sin modalidad</option>
+        <select class="modalidad-input" style="${selectStyle}">
+          <option value="">—</option>
           <option value="Presencial">Presencial</option>
           <option value="Virtual">Virtual</option>
           <option value="Hibrido">Híbrido</option>
         </select>
       </td>
       <td>
-        <strong class="subtotal-linea">S/ 0.00</strong>
+        <strong class="subtotal-linea" style="font-size:13px;">S/ 0.00</strong>
       </td>
       <td>
-        <button type="button" class="btn-icon btn-danger" onclick="eliminarLineaDetalle('${lineaId}')" title="Eliminar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
+        <button type="button" class="btn-eliminar-linea" data-linea="${lineaId}" title="Eliminar" style="background:none;border:none;cursor:pointer;color:#ef4444;padding:4px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
         </button>
       </td>
     </tr>
@@ -417,32 +490,45 @@ let contadorLineas = 0;
 
   if (tbody) {
     tbody.insertAdjacentHTML('beforeend', nuevaLinea);
-  }
-};
 
-(window as any).eliminarLineaDetalle = function(lineaId: string) {
-  const linea = document.getElementById(lineaId);
-  if (linea) {
-    linea.remove();
-    calcularTotales();
-  }
-};
+    const fila = document.getElementById(lineaId)!;
 
-(window as any).calcularSubtotalLinea = function(lineaId: string) {
+    // Auto-llenar descripción (servicio) o precio (producto) al seleccionar
+    const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
+    itemSelect?.addEventListener('change', () => {
+      const opt = itemSelect.options[itemSelect.selectedIndex];
+      const descripcion = opt?.dataset?.descripcion;
+      if (descripcion) {
+        const descInput = fila.querySelector('.descripcion-input') as HTMLInputElement;
+        if (descInput) descInput.value = descripcion;
+      }
+      const precio = opt?.dataset?.precio;
+      if (precio) {
+        const precioInput = fila.querySelector('.precio-input') as HTMLInputElement;
+        if (precioInput) precioInput.value = precio;
+      }
+      calcularSubtotalLinea(lineaId);
+    });
+
+    fila.querySelector('.cantidad-input')?.addEventListener('input', () => calcularSubtotalLinea(lineaId));
+    fila.querySelector('.precio-input')?.addEventListener('input', () => calcularSubtotalLinea(lineaId));
+    fila.querySelector('.btn-eliminar-linea')?.addEventListener('click', () => {
+      fila.remove();
+      calcularTotales();
+    });
+  }
+}
+
+function calcularSubtotalLinea(lineaId: string) {
   const linea = document.getElementById(lineaId);
   if (!linea) return;
-
   const cantidad = parseFloat((linea.querySelector('.cantidad-input') as HTMLInputElement)?.value || '0');
   const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
   const subtotal = cantidad * precio;
-
-  const subtotalElement = linea.querySelector('.subtotal-linea');
-  if (subtotalElement) {
-    subtotalElement.textContent = `S/ ${subtotal.toFixed(2)}`;
-  }
-
+  const el = linea.querySelector('.subtotal-linea');
+  if (el) el.textContent = `S/ ${subtotal.toFixed(2)}`;
   calcularTotales();
-};
+}
 
 function calcularTotales() {
   const lineas = document.querySelectorAll('#detalle-cotizacion-body tr');
@@ -454,105 +540,277 @@ function calcularTotales() {
     subtotalGeneral += cantidad * precio;
   });
 
-  const igv = subtotalGeneral * 0.18;
+  const igv = incluyeIgv ? subtotalGeneral * 0.18 : 0;
   const total = subtotalGeneral + igv;
 
-  const subtotalElement = document.getElementById('subtotal-value');
-  const igvElement = document.getElementById('igv-value');
-  const totalElement = document.getElementById('total-value');
+  const subtotalEl = document.getElementById('subtotal-value');
+  const igvEl = document.getElementById('igv-value');
+  const totalEl = document.getElementById('total-value');
 
-  if (subtotalElement) subtotalElement.textContent = `S/ ${subtotalGeneral.toFixed(2)}`;
-  if (igvElement) igvElement.textContent = `S/ ${igv.toFixed(2)}`;
-  if (totalElement) totalElement.textContent = `S/ ${total.toFixed(2)}`;
+  if (subtotalEl) subtotalEl.textContent = `S/ ${subtotalGeneral.toFixed(2)}`;
+  if (igvEl) igvEl.textContent = `S/ ${igv.toFixed(2)}`;
+  if (totalEl) totalEl.textContent = `S/ ${total.toFixed(2)}`;
 }
 
-(window as any).actualizarTipoCotizacion = function() {
-  // Limpiar tabla de detalles cuando cambia el tipo
-  const tbody = document.getElementById('detalle-cotizacion-body');
-  if (tbody) tbody.innerHTML = '';
-  contadorLineas = 0;
-  calcularTotales();
-};
+async function guardarCotizacion() {
+  const clienteId = parseInt((document.getElementById('cot-cliente') as HTMLSelectElement)?.value || '0');
+  const tipoCotizacion = (document.getElementById('cot-tipo') as HTMLSelectElement)?.value;
+  const observaciones = (document.getElementById('cot-observaciones') as HTMLInputElement)?.value?.trim();
 
-// Manejar submit del formulario
-if (typeof window !== 'undefined') {
-  setTimeout(() => {
-    const form = document.getElementById('form-cotizacion');
-    if (form) {
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const lineas = document.querySelectorAll('#detalle-cotizacion-body tr');
-        if (lineas.length === 0) {
-          alert('Debe agregar al menos una línea de detalle');
-          return;
-        }
+  if (!clienteId || !tipoCotizacion) {
+    mostrarToast('warning', 'Campos obligatorios', 'Seleccione cliente y tipo de cotización');
+    return;
+  }
 
-        // Recopilar datos del formulario
-        const numeroCotizacion = (document.getElementById('numero_cotizacion') as HTMLInputElement).value;
-        const idCliente = (document.getElementById('id_cliente') as HTMLSelectElement).value;
-        const fechaEmision = (document.getElementById('fecha_emision') as HTMLInputElement).value;
-        const idPersonalCreador = (document.getElementById('id_personal_creador') as HTMLSelectElement).value;
-        const estado = (document.getElementById('estado') as HTMLSelectElement).value;
-        const tipoCotizacion = (document.getElementById('tipo_cotizacion') as HTMLSelectElement).value;
+  const lineas = document.querySelectorAll('#detalle-cotizacion-body tr');
+  if (lineas.length === 0) {
+    mostrarToast('warning', 'Sin detalles', 'Agregue al menos una línea de detalle');
+    return;
+  }
 
-        const subtotal = parseFloat(document.getElementById('subtotal-value')?.textContent?.replace('S/ ', '') || '0');
-        const igv = parseFloat(document.getElementById('igv-value')?.textContent?.replace('S/ ', '') || '0');
-        const total = parseFloat(document.getElementById('total-value')?.textContent?.replace('S/ ', '') || '0');
+  const detalles: any[] = [];
+  lineas.forEach(linea => {
+    const itemSelect = linea.querySelector('.item-select') as HTMLSelectElement;
+    const itemValue = itemSelect?.value || '';
+    const descripcion = (linea.querySelector('.descripcion-input') as HTMLInputElement)?.value?.trim();
+    const cantidad = parseInt((linea.querySelector('.cantidad-input') as HTMLInputElement)?.value || '1');
+    const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
+    const frecuencia = (linea.querySelector('.frecuencia-input') as HTMLSelectElement)?.value || null;
+    const modalidad = (linea.querySelector('.modalidad-input') as HTMLSelectElement)?.value || null;
 
-        // Recopilar detalles
-        const detalles: any[] = [];
-        lineas.forEach(linea => {
-          const itemSelect = linea.querySelector('.item-select') as HTMLSelectElement;
-          const descripcion = (linea.querySelector('.descripcion-input') as HTMLInputElement).value;
-          const cantidad = (linea.querySelector('.cantidad-input') as HTMLInputElement).value;
-          const precio = (linea.querySelector('.precio-input') as HTMLInputElement).value;
-          const frecuencia = (linea.querySelector('.frecuencia-input') as HTMLSelectElement).value;
-          const modalidad = (linea.querySelector('.modalidad-input') as HTMLSelectElement).value;
+    let id_servicio: number | null = null;
+    let id_producto: number | null = null;
 
-          detalles.push({
-            id_servicio: tipoCotizacion === 'Servicio' ? itemSelect.value : null,
-            id_producto: tipoCotizacion === 'Producto' ? itemSelect.value : null,
-            descripcion_manual: descripcion,
-            cantidad: parseInt(cantidad),
-            precio_unitario: parseFloat(precio),
-            frecuencia_sugerida: frecuencia || null,
-            modalidad_sugerida: modalidad || null
-          });
-        });
-
-        const datosCompletos = {
-          cotizacion: {
-            numero_cotizacion: numeroCotizacion,
-            id_cliente: parseInt(idCliente),
-            fecha_emision: fechaEmision,
-            id_personal_creador: parseInt(idPersonalCreador),
-            estado,
-            tipo_cotizacion: tipoCotizacion,
-            subtotal,
-            igv,
-            total
-          },
-          detalles
-        };
-
-        console.log('Datos a guardar:', datosCompletos);
-
-        // Aquí iría la llamada al backend
-        // await fetch('/api/cotizaciones', { method: 'POST', body: JSON.stringify(datosCompletos) });
-
-        // Generar PDF
-        generarPDFCotizacion(datosCompletos);
-
-        alert('Cotización guardada y PDF descargado exitosamente');
-        ocultarFormularioCotizacion();
-      });
+    if (itemValue.startsWith('s-')) {
+      id_servicio = parseInt(itemValue.replace('s-', ''));
+    } else if (itemValue.startsWith('p-')) {
+      id_producto = parseInt(itemValue.replace('p-', ''));
     }
-  }, 500);
+
+    detalles.push({
+      id_servicio,
+      id_producto,
+      descripcion_manual: descripcion || null,
+      cantidad,
+      precio_unitario: precio,
+      frecuencia_sugerida: frecuencia,
+      modalidad_sugerida: modalidad
+    });
+  });
+
+  const data = {
+    id_cliente: clienteId,
+    tipo_cotizacion: tipoCotizacion,
+    incluye_igv: incluyeIgv,
+    observaciones: observaciones || undefined,
+    detalles
+  };
+
+  const submitBtn = document.getElementById('btn-guardar-cotiz') as HTMLButtonElement;
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Guardando...'; }
+
+  try {
+    const response = await cotizacionService.create(data);
+    if (response.success !== false) {
+      mostrarToast('success', 'Cotización creada', 'La cotización fue registrada exitosamente');
+
+      // Generar PDF automáticamente
+      const nuevaId = response.data?.id;
+      if (nuevaId) {
+        mostrarToast('success', 'PDF', 'Generando PDF de la cotización...');
+        try {
+          await cotizacionService.downloadPDF(nuevaId);
+        } catch (e) {
+          console.error('Error generando PDF:', e);
+        }
+      }
+
+      cerrarFormulario();
+      await cargarCotizaciones();
+      await cargarEstadisticas();
+    }
+  } catch (error: any) {
+    let msg = 'Error al crear la cotización';
+    if (error.data?.errors) {
+      msg = Object.entries(error.data.errors).map(([f, m]: [string, any]) => `${f}: ${Array.isArray(m) ? m.join(', ') : m}`).join('\n');
+    } else if (error.data?.message) {
+      msg = error.data.message;
+    }
+    mostrarToast('error', 'Error', msg);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Guardar Cotización`;
+    }
+  }
 }
 
-function generarPDFCotizacion(datos: any) {
-  console.log('Generando PDF con datos:', datos);
-  // Aquí iria la lógica para generar y descargar el PDF
-  alert('Funcionalidad de PDF en desarrollo. Los datos se han guardado correctamente.');
+//  ACCIONES: CAMBIAR ESTADO, ELIMINAR, PDF 
+async function cambiarEstadoCotizacion(id: number, estado: 'Aceptada' | 'Rechazada') {
+  const accion = estado === 'Aceptada' ? 'aceptar' : 'rechazar';
+
+  const modalHtml = `
+    <div id="modal-estado-cotiz" class="modal-overlay" style="display: flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+      <div class="modal-container" style="background:#fff; border-radius:12px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid #e2e8f0;">
+          <h2 style="font-size:18px; font-weight:700; color:#1e293b; margin:0;">${estado === 'Aceptada' ? 'Aceptar' : 'Rechazar'} Cotización</h2>
+          <button id="btn-cerrar-estado-cotiz" style="background:none;border:none;cursor:pointer;color:#94a3b8;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div style="padding: 24px;">
+          <p style="color:#475569;">¿Está seguro de ${accion} esta cotización?</p>
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px; border-top: 1px solid #e2e8f0;">
+          <button id="btn-cancelar-estado" style="padding:8px 20px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:600;color:#475569;">Cancelar</button>
+          <button id="btn-confirmar-estado" style="padding:8px 20px;background:${estado === 'Aceptada' ? '#16a34a' : '#dc2626'};color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Confirmar</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modal = document.getElementById('modal-estado-cotiz')!;
+
+  document.getElementById('btn-cerrar-estado-cotiz')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-estado')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  document.getElementById('btn-confirmar-estado')?.addEventListener('click', async () => {
+    try {
+      await cotizacionService.cambiarEstado(id, estado);
+      modal.remove();
+      mostrarToast('success', 'Estado actualizado', `Cotización marcada como ${estado}`);
+      await cargarCotizaciones();
+      await cargarEstadisticas();
+    } catch (error: any) {
+      mostrarToast('error', 'Error', error.data?.message || 'Error al cambiar estado');
+    }
+  });
+}
+
+async function eliminarCotizacion(id: number) {
+  const modalHtml = `
+    <div id="modal-eliminar-cotiz" class="modal-overlay" style="display: flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+      <div class="modal-container" style="background:#fff; border-radius:12px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid #e2e8f0;">
+          <h2 style="font-size:18px; font-weight:700; color:#1e293b; margin:0;">Eliminar Cotización</h2>
+          <button id="btn-cerrar-del-cotiz" style="background:none;border:none;cursor:pointer;color:#94a3b8;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div style="padding: 24px;">
+          <p style="color: #dc2626;">⚠️ Esta acción no se puede deshacer. ¿Desea eliminar esta cotización?</p>
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px; border-top: 1px solid #e2e8f0;">
+          <button id="btn-cancelar-del-cotiz" style="padding:8px 20px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:600;color:#475569;">Cancelar</button>
+          <button id="btn-confirmar-del-cotiz" style="padding:8px 20px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Eliminar</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  const modal = document.getElementById('modal-eliminar-cotiz')!;
+
+  document.getElementById('btn-cerrar-del-cotiz')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-del-cotiz')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  document.getElementById('btn-confirmar-del-cotiz')?.addEventListener('click', async () => {
+    try {
+      await cotizacionService.delete(id);
+      modal.remove();
+      mostrarToast('success', 'Eliminada', 'Cotización eliminada correctamente');
+      await cargarCotizaciones();
+      await cargarEstadisticas();
+    } catch (error: any) {
+      mostrarToast('error', 'Error', error.data?.message || 'Error al eliminar cotización');
+    }
+  });
+}
+
+async function descargarPDF(id: number) {
+  try {
+    mostrarToast('success', 'Descargando', 'Generando PDF...');
+    await cotizacionService.downloadPDF(id);
+  } catch (error) {
+    mostrarToast('error', 'Error', 'No se pudo descargar el PDF');
+  }
+}
+
+//  TOAST 
+function mostrarToast(tipo: 'success' | 'error' | 'warning', titulo: string, mensaje: string) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const colors = { success: '#16a34a', error: '#dc2626', warning: '#f59e0b' };
+  const icons = {
+    success: '<polyline points="20 6 9 17 4 12"></polyline>',
+    error: '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>',
+    warning: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>'
+  };
+
+  const toastId = 'toast-' + Date.now();
+  container.insertAdjacentHTML('beforeend', `
+    <div id="${toastId}" class="toast toast-${tipo}" style="animation: slideIn 0.3s ease;">
+      <div class="toast-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${colors[tipo]}" stroke-width="2">${icons[tipo]}</svg></div>
+      <div class="toast-content"><div class="toast-title">${titulo}</div><div class="toast-message">${mensaje}</div></div>
+      <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    </div>`);
+  setTimeout(() => document.getElementById(toastId)?.remove(), 4000);
+}
+
+//  INIT EVENTS 
+export function initCotizacionesEvents() {
+  // Cargar datos iniciales
+  cargarEstadisticas();
+  cargarCotizaciones();
+
+  // Botón nueva cotización
+  document.getElementById('btn-nueva-cotizacion')?.addEventListener('click', () => abrirFormularioCotizacion());
+
+  // Búsqueda con debounce
+  let debounce: ReturnType<typeof setTimeout>;
+  const searchInput = document.getElementById('cotiz-search') as HTMLInputElement;
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        filtros.search = searchInput.value.trim();
+        cargarCotizaciones();
+      }, 400);
+    });
+  }
+
+  // Filtros de estado y tipo
+  document.getElementById('cotiz-filter-estado')?.addEventListener('change', (e) => {
+    filtros.estado = (e.target as HTMLSelectElement).value;
+    cargarCotizaciones();
+  });
+
+  document.getElementById('cotiz-filter-tipo')?.addEventListener('change', (e) => {
+    filtros.tipo = (e.target as HTMLSelectElement).value;
+    cargarCotizaciones();
+  });
+
+  // Delegación de clicks en tabla para acciones
+  document.getElementById('cotizaciones-tbody')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement;
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    const id = parseInt(btn.dataset.id || '0');
+    if (!id) return;
+
+    switch (action) {
+      case 'aceptar-cotiz': cambiarEstadoCotizacion(id, 'Aceptada'); break;
+      case 'rechazar-cotiz': cambiarEstadoCotizacion(id, 'Rechazada'); break;
+      case 'pdf-cotiz': descargarPDF(id); break;
+      case 'delete-cotiz': eliminarCotizacion(id); break;
+    }
+  });
 }
