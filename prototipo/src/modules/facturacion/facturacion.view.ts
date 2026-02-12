@@ -1,48 +1,61 @@
 // --- MODAL DE NUEVA FACTURA (Componente Interno) ---
 // --- MODAL DE NUEVA FACTURA ---
-function renderModalFactura(ordenesPendientes: any[] = []) {
+function renderModalFactura() {
   return `
   <div id="modal-factura" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background: rgba(0,0,0,0.5); overflow-y: auto;">
-      <div class="modal-content" style="background:#fff; margin:5% auto; padding:20px; width:800px; border-radius:12px;">
+      <div class="modal-content" style="background:#fff; margin:5% auto; padding:20px; width:850px; border-radius:12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
           <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding-bottom:15px;">
-              <h3 style="margin:0;">Proyectar Factura desde Orden</h3>
-              <button id="btn-cerrar-modal" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+              <h3 style="margin:0; color: #1e293b;">Proyectar Factura</h3>
+              <button id="btn-cerrar-modal" style="background:none; border:none; font-size:24px; cursor:pointer; color: #64748b;">&times;</button>
           </div>
 
           <div class="modal-body" style="padding:20px 0;">
-              <div style="background:#f8fafc; padding:15px; border-radius:8px; margin-bottom:20px; border: 1px solid #e2e8f0;">
-                  <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Seleccionar Orden de Servicio</label>
-                  <select id="modal-select-orden" class="filter-select" style="width:100%;">
-                      <option value="">-- Seleccione una orden --</option>
-                      ${ordenesPendientes.map(o => `
-                        <option value="${o.id_referencia}">
-                            ${o.numero_orden} | ${o.nombre_cliente} | S/ ${o.precio_total_os}
-                        </option>
-                      `).join('')}
-                  </select>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; background:#f8fafc; padding:15px; border-radius:8px; margin-bottom:20px; border: 1px solid #e2e8f0;">
+                  <div>
+                      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">1. Tipo de Orden</label>
+                      <select id="modal-tipo-orden" class="filter-select" style="width:100%;">
+                          <option value="">-- Seleccione Tipo --</option>
+                          <option value="servicio">Orden de Servicio</option>
+                          <option value="producto">Orden de Producto</option>
+                          <option value="capacitacion">Orden de Capacitación</option>
+                      </select>
+                  </div>
+                  <div>
+                      <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">2. Seleccionar Número de Orden</label>
+                      <select id="modal-select-orden" class="filter-select" style="width:100%;" disabled>
+                          <option value="">-- Primero elija tipo --</option>
+                      </select>
+                  </div>
               </div>
 
               <form id="form-nueva-factura" style="display:none; border-top: 2px dashed #e2e8f0; padding-top: 20px;">
                   <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                      <div style="background:#f1f5f9; padding:15px; border-radius:8px; font-size: 13px;">
-                          <h4 style="margin-top:0;">Detalle Económico</h4>
-                          <p><strong>Cliente:</strong> <span id="res-cliente"></span></p>
-                          <p><strong>Subtotal:</strong> S/ <span id="res-subtotal"></span></p>
-                          <p><strong>IGV:</strong> S/ <span id="res-igv"></span></p>
-                          <hr>
-                          <p><strong>Total OS:</strong> S/ <span id="res-total"></span></p>
-                          <p style="color: #dc2626;"><strong>Detracción (12%):</strong> S/ <span id="res-detrax"></span></p>
-                          <p style="color: #16a34a; font-size: 1.1em;"><strong>Neto a Cobrar:</strong> S/ <span id="res-neto"></span></p>
+                      <div style="background:#f1f5f9; padding:20px; border-radius:8px; font-size: 13px;">
+                          <h4 style="margin:0 0 15px 0; color: #334155; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px;">Detalles de la Orden</h4>
+                          <div style="display:grid; gap:8px;">
+                            <p><strong>Cliente:</strong> <span id="res-cliente"></span></p>
+                            <p><strong>Actividad:</strong> <span id="res-actividad"></span></p>
+                            <p><strong>Servicio:</strong> <span id="res-servicio"></span></p>
+                            <hr style="border: 0; border-top: 1px solid #cbd5e1;">
+                            <p style="display:flex; justify-content:space-between;"><span>Subtotal:</span> <span>S/ <span id="res-subtotal">0.00</span></span></p>
+                            <p style="display:flex; justify-content:space-between;"><span>IGV (18%):</span> <span>S/ <span id="res-igv">0.00</span></span></p>
+                            <p style="display:flex; justify-content:space-between; font-weight:bold; font-size: 1.1em;"><span>Total OS:</span> <span>S/ <span id="res-total">0.00</span></span></p>
+                            <p style="display:flex; justify-content:space-between; color: #dc2626;"><span>Detracción (12%):</span> <span>- S/ <span id="res-detrax">0.00</span></span></p>
+                            <p style="display:flex; justify-content:space-between; color: #16a34a; font-size: 1.2em; font-weight: bold; background: #fff; padding: 5px; border-radius: 4px;">
+                                <span>Neto a Cobrar:</span> <span>S/ <span id="res-neto">0.00</span></span>
+                            </p>
+                          </div>
                       </div>
 
-                      <div style="display:grid; gap:12px;">
+                      <div style="display:grid; gap:15px; align-content: start;">
+                          <h4 style="margin:0; color: #334155;">Datos de Proyección</h4>
                           <div>
                               <label style="display:block; font-size:12px; font-weight:600;">Número de Factura</label>
-                              <input type="text" id="in-num-factura" placeholder="F001-..." class="search-input" style="width:100%;" required>
+                              <input type="text" id="in-num-factura" placeholder="F001-000000" class="search-input" style="width:100%; border: 1px solid #cbd5e1;" required>
                           </div>
                           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                               <div>
-                                  <label style="display:block; font-size:12px; font-weight:600;">Emisión</label>
+                                  <label style="display:block; font-size:12px; font-weight:600;">Fecha Emisión</label>
                                   <input type="date" id="in-fecha-emision" class="filter-select" style="width:100%;" required>
                               </div>
                               <div>
@@ -52,15 +65,15 @@ function renderModalFactura(ordenesPendientes: any[] = []) {
                           </div>
                       </div>
                   </div>
-                  <div style="text-align:right; margin-top:20px;">
-                      <button type="submit" class="btn-primary">Registrar Proyección</button>
+                  <div style="text-align:right; margin-top:25px; border-top: 1px solid #eee; padding-top: 15px;">
+                      <button type="button" id="btn-cancelar" style="background:#e2e8f0; color:#475569; border:none; padding:10px 20px; border-radius:6px; margin-right:10px; cursor:pointer;">Cancelar</button>
+                      <button type="submit" class="btn-primary" style="padding:10px 30px;">Registrar en Proyecciones</button>
                   </div>
               </form>
           </div>
       </div>
   </div>`;
 }
-
 // --- TAB: ÓRDENES PROYECTADAS (Tabla principal) ---
 export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
   if (proyecciones.length === 0) {
@@ -250,90 +263,171 @@ export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: a
       </div>
     </div>
 
-    ${renderModalFactura(ordenesPendientes)}
+    ${renderModalFactura()}
   `;
 }
 
 // --- LÓGICA DE EVENTOS (LLAMAR DESDE MAIN.TS) ---
-export function initFacturacionEvents(datosReales: any[] = []) {
+// 1. Definimos la forma de la Orden (el JSON que me pasaste)
+interface OrdenReferencia {
+  id_referencia: number;
+  numero_orden: string;
+  actividad: string;
+  alias_empresa: string;
+  nombre_cliente: string;
+  servicio: string;
+  subtotal: number;
+  igv: number;
+  precio_total_os: number;
+  monto_detrax: number;
+  total_final: number;
+}
+
+export function initFacturacionEvents(proyecciones: any[] = []) {
+  const modalTipo = document.getElementById('modal-tipo-orden') as HTMLSelectElement;
   const selectOrden = document.getElementById('modal-select-orden') as HTMLSelectElement;
-  const form = document.getElementById('form-nueva-factura');
-
-  selectOrden?.addEventListener('change', () => {
-    const encontrada = datosReales.find(o => String(o.id_referencia) === selectOrden.value);
-
-    if (encontrada) {
-      form!.style.display = 'block';
-      document.getElementById('res-cliente')!.innerText = encontrada.nombre_cliente;
-      document.getElementById('res-subtotal')!.innerText = encontrada.subtotal.toFixed(2);
-      document.getElementById('res-igv')!.innerText = encontrada.igv.toFixed(2);
-      document.getElementById('res-total')!.innerText = encontrada.precio_total_os.toFixed(2);
-      document.getElementById('res-detrax')!.innerText = encontrada.monto_detrax.toFixed(2);
-      document.getElementById('res-neto')!.innerText = encontrada.total_final.toFixed(2);
-    } else {
-      form!.style.display = 'none';
-    }
-  });
-  
-  // --- Abrir modal ---
-  const btnNueva = document.getElementById('btn-nueva-factura');
+  const form = document.getElementById('form-nueva-factura') as HTMLFormElement;
   const modal = document.getElementById('modal-factura');
-  const btnCerrar = document.getElementById('btn-cerrar-modal');
 
+  // --- 1. ABRIR MODAL ---
+  const btnNueva = document.getElementById('btn-nueva-factura');
   btnNueva?.addEventListener('click', () => {
     if (modal) {
       modal.style.display = 'block';
-      // Reset: ocultar form y limpiar select
-      if (selectOrden) selectOrden.value = '';
+      // Resetear el estado del modal al abrir
+      if (modalTipo) modalTipo.value = '';
+      if (selectOrden) {
+        selectOrden.innerHTML = '<option value="">-- Primero elija tipo --</option>';
+        selectOrden.disabled = true;
+      }
+      if (form) {
+        form.reset();
+        form.style.display = 'none';
+      }
+    }
+  });
+
+  // --- 2. CERRAR MODAL ---
+  const btnCerrar = document.getElementById('btn-cerrar-modal');
+  const btnCancelar = document.getElementById('btn-cancelar');
+
+  const cerrarModal = () => { if (modal) modal.style.display = 'none'; };
+
+  btnCerrar?.addEventListener('click', cerrarModal);
+  btnCancelar?.addEventListener('click', cerrarModal);
+  modal?.addEventListener('click', (e) => { if (e.target === modal) cerrarModal(); });
+
+  // --- 3. CAMBIO DE TIPO (SERVICIO/PRODUCTO/CAPACITACION) ---
+  modalTipo?.addEventListener('change', async () => {
+    const tipo = modalTipo.value;
+    if (!tipo) {
+      selectOrden.disabled = true;
+      selectOrden.innerHTML = '<option value="">-- Primero elija tipo --</option>';
+      return;
+    }
+
+    try {
+      const endpoint = tipo === 'servicio' ? 'ordenes-servicio' : `ordenes-${tipo}`;
+      const resp = await fetch(`http://localhost:8000/api/v1/${endpoint}`);
+      const result = await resp.json();
+      console.log("2. Datos que llegaron del servidor:", result);
+      
+      const ordenes: OrdenReferencia[] = Array.isArray(result.data) ? result.data : [result.data];
+      const IDsProyectados = proyecciones.map((p: any) => p.id_referencia);
+      const disponibles = ordenes.filter((o: OrdenReferencia) => !IDsProyectados.includes(o.id_referencia));
+
+      selectOrden.disabled = false;
+      selectOrden.innerHTML = '<option value="">-- Seleccione Número de Orden --</option>';
+      
+      disponibles.forEach((o: OrdenReferencia) => {
+        const opt = document.createElement('option');
+        opt.value = String(o.id_referencia);
+        opt.text = `${o.numero_orden} | ${o.nombre_cliente}`;
+        opt.dataset.info = JSON.stringify(o);
+        selectOrden.appendChild(opt);
+      });
+    } catch (error) {
+      console.error("Error cargando órdenes:", error);
+    }
+  });
+
+  // --- 4. SELECCIÓN DE ORDEN ESPECÍFICA ---
+  selectOrden?.addEventListener('change', () => {
+    const selectedOption = selectOrden.options[selectOrden.selectedIndex];
+    if (selectedOption.value && selectedOption.dataset.info) {
+      const data: OrdenReferencia = JSON.parse(selectedOption.dataset.info);
+      if (form) form.style.display = 'block';
+
+      // Llenado de etiquetas de resumen
+      const fields = {
+        'res-cliente': data.nombre_cliente,
+        'res-actividad': data.actividad || 'Sin actividad',
+        'res-servicio': data.servicio,
+        'res-subtotal': data.subtotal.toFixed(2),
+        'res-igv': data.igv.toFixed(2),
+        'res-total': data.precio_total_os.toFixed(2),
+        'res-detrax': data.monto_detrax.toFixed(2),
+        'res-neto': data.total_final.toFixed(2)
+      };
+
+      Object.entries(fields).forEach(([id, val]) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = String(val || '---');
+      });
+    } else {
       if (form) form.style.display = 'none';
     }
   });
 
-  // --- Cerrar modal ---
-  btnCerrar?.addEventListener('click', () => {
-    if (modal) modal.style.display = 'none';
-  });
-
-  // Cerrar al hacer clic fuera del modal
-  modal?.addEventListener('click', (e) => {
-    if (e.target === modal) modal.style.display = 'none';
-  });
-
-  // --- Submit del form ---
+  // --- 5. SUBMIT DEL FORMULARIO ---
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const numFactura = (document.getElementById('in-num-factura') as HTMLInputElement)?.value;
-    const fechaEmision = (document.getElementById('in-fecha-emision') as HTMLInputElement)?.value;
-    const diasCredito = (document.getElementById('in-dias-credito') as HTMLInputElement)?.value;
+    
+    // 1. Obtener valores de los inputs
+    const idRef = Number(selectOrden.value);
+    const tipo = modalTipo.value; // servicio, producto o capacitacion
+    const numFactura = (document.getElementById('in-num-factura') as HTMLInputElement).value;
+    const fechaEmi = (document.getElementById('in-fecha-emision') as HTMLInputElement).value;
+    const diasCred = Number((document.getElementById('in-dias-credito') as HTMLInputElement).value);
 
-    if (!selectOrden?.value || !numFactura || !fechaEmision) {
-      alert('Complete todos los campos requeridos.');
-      return;
-    }
+    // 2. Obtener datos que ya calculamos y mostramos en los labels (para que coincidan con tu JSON)
+    const actividad = document.getElementById('res-actividad')?.innerText || "";
+    const montoDetrax = Number(document.getElementById('res-detrax')?.innerText || 0);
+    const totalFinal = Number(document.getElementById('res-neto')?.innerText || 0);
+
+    // 3. Construir el objeto siguiendo tu estructura SQL
+    const payload: any = {
+      actividad: actividad,
+      id_multicim: 1, // Ajustar según tu lógica de empresa/usuario
+      n_factura: numFactura,
+      monto_detrax: montoDetrax,
+      total_final: totalFinal,
+      fecha_factura: fechaEmi,
+      dias_credito: diasCred,
+      // Los campos de ID según el tipo (como tu tabla SQL)
+      id_orden_servicio: tipo === 'servicio' ? idRef : null,
+      id_orden_producto: tipo === 'producto' ? idRef : null,
+      id_orden_capacitacion_auditoria: tipo === 'capacitacion' ? idRef : null
+    };
 
     try {
       const resp = await fetch('http://localhost:8000/api/v1/proyecciones', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_referencia: selectOrden.value,
-          n_factura: numFactura,
-          fecha_factura: fechaEmision,
-          dias_credito: Number(diasCredito) || 30
-        })
+        body: JSON.stringify(payload)
       });
 
       if (resp.ok) {
-        alert('Proyección registrada correctamente.');
-        if (modal) modal.style.display = 'none';
-        window.location.reload();
+        alert('Proyección registrada con éxito');
+        cerrarModal();
+        window.location.reload(); 
       } else {
-        const err = await resp.json();
-        alert(err.message || 'Error al registrar la proyección.');
+        const errorData = await resp.json();
+        alert('Error del servidor: ' + (errorData.message || 'No se pudo registrar'));
       }
     } catch (error) {
-      console.error('Error al registrar proyección:', error);
-      alert('Error de conexión al servidor.');
+      console.error("Error en submit:", error);
+      alert('Error al conectar con el servidor');
     }
   });
 }

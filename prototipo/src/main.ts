@@ -201,16 +201,16 @@ if (activeMenu === 'Facturación') {
     // 2. SOLO si es Facturación, traemos la data real
     if (menuName === 'Facturación') {
       try {
-        const respuesta = await fetch('http://localhost:8000/api/v1/ordenes-servicio');
+        const respuesta = await fetch('http://localhost:8000/api/v1/proyecciones'); 
         const result = await respuesta.json();
         
-        // Accedemos a result.data. Si es un solo objeto, lo metemos en un array []
-        const rawData = result.data;
-        misProyecciones = Array.isArray(rawData) ? rawData : [rawData];
+        // El backend de proyecciones debería devolver lo que ya está facturado
+        const rawData = result.data || result; 
+        misProyecciones = Array.isArray(rawData) ? rawData : [];
         
-        console.log("Data procesada:", misProyecciones);
+        console.log("Proyecciones reales cargadas:", misProyecciones);
       } catch (error) {
-        console.error("Error:", error);
+        console.error("Error cargando proyecciones:", error);
         misProyecciones = [];
       }
     }
