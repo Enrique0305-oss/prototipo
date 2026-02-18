@@ -141,18 +141,18 @@ export function renderComercialOrdenesServicio() {
                 <input type="text" id="ods-numero-orden" class="os-input" readonly placeholder="Auto-generado">
               </div>
               <div class="os-field">
-                <label>Codigo Doc</label>
-                <input type="text" id="ods-codigo-doc" class="os-input" value="OS-AC-001">
+                <label>Cotizacion Referencia <span style="color:#ef4444">*</span></label>
+                <select id="ods-cotizacion-ref" class="os-input">
+                  <option value="">Cargando cotizaciones...</option>
+                </select>
               </div>
               <div class="os-field">
                 <label>Version</label>
                 <input type="text" id="ods-version" class="os-input" value="01">
               </div>
               <div class="os-field">
-                <label>Cotizacion Referencia <span style="color:#ef4444">*</span></label>
-                <select id="ods-cotizacion-ref" class="os-input">
-                  <option value="">Cargando cotizaciones...</option>
-                </select>
+                <label>Codigo Doc</label>
+                <input type="text" id="ods-codigo-doc" class="os-input" value="OS-AC-001">
               </div>
               <div class="os-field">
                 <label>Cliente</label>

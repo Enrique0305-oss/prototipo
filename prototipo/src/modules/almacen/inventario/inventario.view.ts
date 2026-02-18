@@ -843,6 +843,7 @@ function renderizarTablaProductos() {
 
     // Semáforo de estado basado en stock vs stock_seguridad
     let estadoBadge = '';
+    const esCritico = stock < stockSeguridad; 
     if (stock > stockSeguridad) {
       estadoBadge = '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#f0fdf4;color:#16a34a;"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block;"></span>Óptimo</span>';
     } else if (stock === stockSeguridad) {
@@ -852,7 +853,8 @@ function renderizarTablaProductos() {
     }
 
     return `
-      <tr>
+      <!-- Si esCritico=true, se añade inline style al <tr> para sombrear la fila -->
+      <tr style="${esCritico ? 'background-color: #ec6060;' : ''}">
         <td>
           <div class="equipment-info">
             <div class="equipment-icon">
