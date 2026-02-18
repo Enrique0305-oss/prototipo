@@ -75,7 +75,7 @@ class CotizacionController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $cotizacion = Cotizacion::with(['cliente', 'creador', 'detalles.servicio', 'detalles.producto'])
+        $cotizacion = Cotizacion::with(['cliente', 'creador', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud'])
                                 ->find($id);
 
         if (!$cotizacion) {
@@ -104,6 +104,7 @@ class CotizacionController extends Controller
             'detalles' => 'required|array|min:1',
             'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
             'detalles.*.id_producto' => 'nullable|exists:productos,id',
+            'detalles.*.id_catalogo_cap_aud' => 'nullable|exists:catalogo_capacitacion_auditoria,id',
             'detalles.*.descripcion_manual' => 'nullable|string',
             'detalles.*.cantidad' => 'required|integer|min:1',
             'detalles.*.precio_unitario' => 'required|numeric|min:0',
@@ -152,6 +153,7 @@ class CotizacionController extends Controller
                     'id_cotizacion' => $cotizacion->id,
                     'id_servicio' => $detalle['id_servicio'] ?? null,
                     'id_producto' => $detalle['id_producto'] ?? null,
+                    'id_catalogo_cap_aud' => $detalle['id_catalogo_cap_aud'] ?? null,
                     'descripcion_manual' => $detalle['descripcion_manual'] ?? null,
                     'cantidad' => $detalle['cantidad'],
                     'precio_unitario' => $detalle['precio_unitario'],
@@ -271,7 +273,7 @@ class CotizacionController extends Controller
      */
     public function generarPDF($id, Request $request)
     {
-        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.producto', 'creador'])
+        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'creador'])
                                 ->find($id);
 
         if (!$cotizacion) {

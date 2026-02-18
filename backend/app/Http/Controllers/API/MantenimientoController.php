@@ -67,7 +67,7 @@ class MantenimientoController extends Controller
             'id_equipo' => 'required|integer|exists:equipo,id',
             'id_actmanten' => 'required|integer|exists:actividades_mantenieminto,id',
             'fecha' => 'required|date',
-            'observaciones' => 'required|string|max:100'
+            'observaciones' => 'nullable|string|max:100'
         ], [
             'id_equipo.required' => 'El equipo es obligatorio',
             'id_equipo.exists' => 'El equipo seleccionado no existe',
@@ -75,7 +75,6 @@ class MantenimientoController extends Controller
             'id_actmanten.exists' => 'La actividad seleccionada no existe',
             'fecha.required' => 'La fecha es obligatoria',
             'fecha.date' => 'La fecha debe ser válida',
-            'observaciones.required' => 'Las observaciones son obligatorias',
             'observaciones.max' => 'Las observaciones no pueden exceder 100 caracteres'
         ]);
 
@@ -83,7 +82,7 @@ class MantenimientoController extends Controller
             'id_equipo' => $request->id_equipo,
             'id_actmanten' => $request->id_actmanten,
             'fecha' => $request->fecha,
-            'observaciones' => $request->observaciones
+            'observaciones' => $request->observaciones ?? ''
         ]);
 
         $mantenimiento->load(['equipo', 'actividad']);

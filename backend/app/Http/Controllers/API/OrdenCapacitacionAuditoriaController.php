@@ -54,7 +54,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'num_participantes' => $orden->num_participantes,
                 'num_certificados' => $orden->num_certificados,
                 'costo' => $orden->costo,
-                'aprobacion' => $orden->aprobacion,
+                'estado' => $orden->estado,
                 'cliente' => [
                     'id' => $orden->cliente->id,
                     'nombre_empresa' => $orden->cliente->nombre_empresa,
@@ -111,7 +111,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
      */
     public function desdeCotizacion($cotizacionId): JsonResponse
     {
-        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio'])
+        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.catalogoCapAud'])
             ->find($cotizacionId);
 
         if (!$cotizacion) {
@@ -144,8 +144,23 @@ class OrdenCapacitacionAuditoriaController extends Controller
             ], 400);
         }
 
-        // Obtener el primer servicio (normalmente capacitaciones tienen 1 servicio)
-        $servicio = $cotizacion->detalles->first();
+        // Obtener el primer servicio/catalogo
+        $primerDetalle = $cotizacion->detalles->first();
+
+        // Mapear todos los detalles de la cotización
+        $detalles = $cotizacion->detalles->map(function($d) {
+            return [
+                'id_servicio' => $d->id_servicio,
+                'id_catalogo_cap_aud' => $d->id_catalogo_cap_aud,
+                'nombre' => $d->catalogoCapAud ? $d->catalogoCapAud->nombre : ($d->servicio ? $d->servicio->nombre : ($d->descripcion_manual ?? 'Sin nombre')),
+                'tipo' => $d->catalogoCapAud ? $d->catalogoCapAud->tipo : null,
+                'descripcion' => $d->descripcion_manual ?? ($d->catalogoCapAud ? $d->catalogoCapAud->descripcion : null),
+                'cantidad' => $d->cantidad,
+                'precio_unitario' => $d->precio_unitario,
+                'modalidad_sugerida' => $d->modalidad_sugerida,
+                'duracion_horas' => $d->catalogoCapAud ? $d->catalogoCapAud->duracion_horas : null,
+            ];
+        });
 
         return response()->json([
             'success' => true,
@@ -154,6 +169,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
                     'id' => $cotizacion->id,
                     'numero_cotizacion' => $cotizacion->numero_cotizacion,
                     'fecha_emision' => $cotizacion->fecha_emision->format('Y-m-d'),
+                    'incluye_igv' => (bool) $cotizacion->incluye_igv,
+                    'subtotal' => (float) $cotizacion->subtotal,
+                    'igv' => (float) $cotizacion->igv,
+                    'total' => (float) $cotizacion->total,
                 ],
                 'cliente' => [
                     'id' => $cotizacion->cliente->id,
@@ -161,11 +180,12 @@ class OrdenCapacitacionAuditoriaController extends Controller
                     'ruc' => $cotizacion->cliente->ruc,
                     'direccion' => $cotizacion->cliente->direccion,
                 ],
-                'costo_total' => $cotizacion->total,
-                'servicio' => $servicio ? [
-                    'id' => $servicio->id_servicio,
-                    'nombre' => $servicio->servicio ? $servicio->servicio->nombre : null,
-                    'modalidad_sugerida' => $servicio->modalidad_sugerida,
+                'costo_total' => (float) $cotizacion->total,
+                'detalles' => $detalles,
+                'servicio' => $primerDetalle ? [
+                    'id' => $primerDetalle->id_servicio ?? $primerDetalle->id_catalogo_cap_aud,
+                    'nombre' => $primerDetalle->catalogoCapAud ? $primerDetalle->catalogoCapAud->nombre : ($primerDetalle->servicio ? $primerDetalle->servicio->nombre : null),
+                    'modalidad_sugerida' => $primerDetalle->modalidad_sugerida,
                 ] : null,
             ]
         ]);
@@ -179,15 +199,15 @@ class OrdenCapacitacionAuditoriaController extends Controller
     {
         $validated = $request->validate([
             'id_cotizacion' => 'required|exists:cotizacion,id',
-            'id_servicio' => 'required|exists:servicios,id',
+            'id_servicio' => 'nullable|exists:servicios,id',
             'id_ponente' => 'required|exists:personal,id',
             'fecha_servicio' => 'required|date',
             'hora_servicio' => 'nullable|date_format:H:i',
-            'modalidad' => 'required|in:Presencial,Virtual,Híbrida',
+            'modalidad' => 'required|in:Presencial,Virtual,Híbrido',
             'num_participantes' => 'required|integer|min:1',
             'num_certificados' => 'nullable|integer|min:0',
             'costo' => 'required|numeric|min:0',
-            'aprobacion' => 'nullable|in:Aprobado,Pendiente,Rechazado',
+            'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
             'observaciones' => 'nullable|string',
         ]);
 
@@ -217,7 +237,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'numero_orden' => OrdenCapacitacionAuditoria::generarNumero(),
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
-                'id_servicio' => $validated['id_servicio'],
+                'id_servicio' => $validated['id_servicio'] ?? null,
                 'id_ponente' => $validated['id_ponente'],
                 'fecha_servicio' => $validated['fecha_servicio'],
                 'hora_servicio' => $validated['hora_servicio'] ?? null,
@@ -225,7 +245,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'num_participantes' => $validated['num_participantes'],
                 'num_certificados' => $validated['num_certificados'] ?? 0,
                 'costo' => $validated['costo'],
-                'aprobacion' => $validated['aprobacion'] ?? 'Pendiente',
+                'estado' => 'Aprobado',
                 'observaciones' => $validated['observaciones'] ?? null,
             ]);
 
@@ -291,15 +311,15 @@ class OrdenCapacitacionAuditoriaController extends Controller
         }
 
         $validated = $request->validate([
-            'id_servicio' => 'sometimes|exists:servicios,id',
+            'id_servicio' => 'nullable|exists:servicios,id',
             'id_ponente' => 'sometimes|exists:personal,id',
             'fecha_servicio' => 'sometimes|date',
             'hora_servicio' => 'nullable|date_format:H:i',
-            'modalidad' => 'sometimes|in:Presencial,Virtual,Híbrida',
+            'modalidad' => 'sometimes|in:Presencial,Virtual,Híbrido',
             'num_participantes' => 'sometimes|integer|min:1',
             'num_certificados' => 'nullable|integer|min:0',
             'costo' => 'sometimes|numeric|min:0',
-            'aprobacion' => 'nullable|in:Aprobado,Pendiente,Rechazado',
+            'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
             'observaciones' => 'nullable|string',
         ]);
 
@@ -369,11 +389,12 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'valor_mes_actual' => OrdenCapacitacionAuditoria::whereMonth('fecha_servicio', date('m'))
                                                             ->whereYear('fecha_servicio', date('Y'))
                                                             ->sum('costo'),
+            'siguiente_numero' => OrdenCapacitacionAuditoria::generarNumero(),
             'por_modalidad' => OrdenCapacitacionAuditoria::select('modalidad', DB::raw('count(*) as total'))
                                                          ->groupBy('modalidad')
                                                          ->get(),
-            'por_aprobacion' => OrdenCapacitacionAuditoria::select('aprobacion', DB::raw('count(*) as total'))
-                                                          ->groupBy('aprobacion')
+            'por_estado' => OrdenCapacitacionAuditoria::select('estado', DB::raw('count(*) as total'))
+                                                          ->groupBy('estado')
                                                           ->get(),
         ];
 

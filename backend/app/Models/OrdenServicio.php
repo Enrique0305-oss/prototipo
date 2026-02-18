@@ -19,13 +19,20 @@ class OrdenServicio extends Model
         'fecha_aceptacion',
         'fecha_tentativa',
         'total_costo',
-        'emitido_por'
+        'subtotal',
+        'igv',
+        'incluye_igv',
+        'emitido_por',
+        'estado'
     ];
 
     protected $casts = [
         'fecha_aceptacion' => 'date',
         'fecha_tentativa' => 'date',
         'total_costo' => 'decimal:2',
+        'subtotal' => 'decimal:2',
+        'igv' => 'decimal:2',
+        'incluye_igv' => 'boolean',
     ];
 
     // Relaciones

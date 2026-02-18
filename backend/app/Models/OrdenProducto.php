@@ -16,12 +16,19 @@ class OrdenProducto extends Model
         'id_cliente',
         'fecha_envio',
         'total',
-        'emitido_por'
+        'subtotal',
+        'igv',
+        'incluye_igv',
+        'emitido_por',
+        'estado'
     ];
 
     protected $casts = [
         'fecha_envio' => 'date',
         'total' => 'decimal:2',
+        'subtotal' => 'decimal:2',
+        'igv' => 'decimal:2',
+        'incluye_igv' => 'boolean',
     ];
 
     // Relaciones

@@ -482,7 +482,21 @@
 }
 
 .oc-input:disabled,
-.oc-input:read-only {
+input.oc-input:read-only,
+textarea.oc-input:read-only {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+select.oc-input {
+  appearance: auto;
+  cursor: pointer;
+  background: white;
+  color: #1e293b;
+}
+
+select.oc-input:disabled {
   background: #f1f5f9;
   color: #64748b;
   cursor: not-allowed;

@@ -1,7 +1,10 @@
 // Comercial - Cotizaciones (Conectado al Backend)
 import { cotizacionService } from '../../../services/cotizacionService';
 import { clienteService } from '../../../services/clienteService';
-import { apiClient } from '../../../core/api/api.client';
+import { productoService } from '../../../services/productoService';
+import { servicioService } from '../../../services/servicioService';
+import { catalogoCapAudService } from '../../../services/catalogoCapAudService';
+import { mostrarToast } from '../../../shared/toast';
 import type { Cotizacion, EstadisticasCotizaciones } from '../../../core/api/types';
 
 //  STATE 
@@ -225,13 +228,15 @@ async function abrirFormularioCotizacion() {
   let clientesOptions = '<option value="">Seleccione un cliente...</option>';
   let serviciosData: any[] = [];
   let productosData: any[] = [];
+  let catalogoCapAudData: any[] = [];
   let numeroCotizacion = estadisticasData ? (estadisticasData as any).siguiente_numero || '' : '';
 
   try {
-    const [clientesRes, serviciosRes, productosRes] = await Promise.all([
+    const [clientesRes, serviciosRes, productosRes, catalogoRes] = await Promise.all([
       clienteService.getAll({ estado: 'Acepta' } as any),
-      apiClient.get<any>('/servicios'),
-      apiClient.get<any>('/productos')
+      servicioService.getAll({ estado: 'activo', per_page: 100 }),
+      productoService.getAll({ estado: 'Activo', per_page: 100 } as any),
+      catalogoCapAudService.getAll({ estado: 'activo' })
     ]);
 
     const clientes = Array.isArray(clientesRes.data) ? clientesRes.data : (clientesRes as any).data || [];
@@ -241,6 +246,7 @@ async function abrirFormularioCotizacion() {
 
     serviciosData = Array.isArray(serviciosRes.data) ? serviciosRes.data : [];
     productosData = Array.isArray(productosRes.data) ? productosRes.data : [];
+    catalogoCapAudData = Array.isArray(catalogoRes.data) ? catalogoRes.data : [];
 
     // Si no se tenía el número, obtenerlo de estadísticas
     if (!numeroCotizacion) {
@@ -255,6 +261,7 @@ async function abrirFormularioCotizacion() {
   // Guardar en window para acceso desde las líneas
   (window as any).__serviciosData = serviciosData;
   (window as any).__productosData = productosData;
+  (window as any).__catalogoCapAudData = catalogoCapAudData;
 
   const hoy = new Date().toISOString().split('T')[0];
   incluyeIgv = true;
@@ -424,16 +431,24 @@ function agregarLineaDetalle() {
 
   const servicios = (window as any).__serviciosData || [];
   const productos = (window as any).__productosData || [];
+  const catalogoCapAud = (window as any).__catalogoCapAudData || [];
 
   let opcionesItem = '<option value="">Seleccione...</option>';
-  if (tipo === 'Servicio' || tipo === 'Capacitacion') {
+  if (tipo === 'Servicio') {
     servicios.forEach((s: any) => {
       const desc = (s.descripcion || '').replace(/"/g, '&quot;');
       opcionesItem += `<option value="s-${s.id}" data-descripcion="${desc}">${s.nombre}</option>`;
     });
+  } else if (tipo === 'Capacitacion') {
+    catalogoCapAud.forEach((c: any) => {
+      const desc = (c.descripcion || '').replace(/"/g, '&quot;');
+      const precio = c.precio_referencial || 0;
+      const duracion = c.duracion_horas ? ` (${c.duracion_horas}hrs)` : '';
+      opcionesItem += `<option value="c-${c.id}" data-descripcion="${desc}" data-precio="${precio}">[${c.tipo}] ${c.nombre}${duracion}</option>`;
+    });
   } else if (tipo === 'Producto') {
     productos.forEach((p: any) => {
-      const nombre = p.nombre || p.nombre_producto || p.descripcion || 'Producto';
+      const nombre = p.descripcion || 'Producto';
       const precio = p.precio_unitario || 0;
       opcionesItem += `<option value="p-${p.id}" data-precio="${precio}">${nombre}</option>`;
     });
@@ -441,6 +456,9 @@ function agregarLineaDetalle() {
 
   const inputStyle = 'width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;';
   const selectStyle = inputStyle;
+  const esProducto = tipo === 'Producto';
+  const disabledAttr = esProducto ? 'disabled' : '';
+  const disabledStyle = esProducto ? 'background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : '';
 
   const nuevaLinea = `
     <tr id="${lineaId}">
@@ -450,7 +468,7 @@ function agregarLineaDetalle() {
         </select>
       </td>
       <td>
-        <input type="text" class="descripcion-input" placeholder="Descripción..." readonly style="${inputStyle} background:#f8fafc; color:#475569;">
+        <input type="text" class="descripcion-input" placeholder="Descripción..." ${esProducto ? '' : 'readonly'} style="${inputStyle} ${esProducto ? '' : 'background:#f8fafc; color:#475569;'}">
       </td>
       <td>
         <input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}">
@@ -459,7 +477,7 @@ function agregarLineaDetalle() {
         <input type="number" class="precio-input" value="0.00" min="0" step="0.01" style="${inputStyle}">
       </td>
       <td>
-        <select class="frecuencia-input" style="${selectStyle}">
+        <select class="frecuencia-input" style="${selectStyle}${disabledStyle}" ${disabledAttr}>
           <option value="">—</option>
           <option value="Semanal">Semanal</option>
           <option value="Quincenal">Quincenal</option>
@@ -470,7 +488,7 @@ function agregarLineaDetalle() {
         </select>
       </td>
       <td>
-        <select class="modalidad-input" style="${selectStyle}">
+        <select class="modalidad-input" style="${selectStyle}${disabledStyle}" ${disabledAttr}>
           <option value="">—</option>
           <option value="Presencial">Presencial</option>
           <option value="Virtual">Virtual</option>
@@ -580,16 +598,20 @@ async function guardarCotizacion() {
 
     let id_servicio: number | null = null;
     let id_producto: number | null = null;
+    let id_catalogo_cap_aud: number | null = null;
 
     if (itemValue.startsWith('s-')) {
       id_servicio = parseInt(itemValue.replace('s-', ''));
     } else if (itemValue.startsWith('p-')) {
       id_producto = parseInt(itemValue.replace('p-', ''));
+    } else if (itemValue.startsWith('c-')) {
+      id_catalogo_cap_aud = parseInt(itemValue.replace('c-', ''));
     }
 
     detalles.push({
       id_servicio,
       id_producto,
+      id_catalogo_cap_aud,
       descripcion_manual: descripcion || null,
       cantidad,
       precio_unitario: precio,
@@ -737,32 +759,7 @@ async function descargarPDF(id: number) {
   }
 }
 
-//  TOAST 
-function mostrarToast(tipo: 'success' | 'error' | 'warning', titulo: string, mensaje: string) {
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.className = 'toast-container';
-    document.body.appendChild(container);
-  }
-
-  const colors = { success: '#16a34a', error: '#dc2626', warning: '#f59e0b' };
-  const icons = {
-    success: '<polyline points="20 6 9 17 4 12"></polyline>',
-    error: '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>',
-    warning: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>'
-  };
-
-  const toastId = 'toast-' + Date.now();
-  container.insertAdjacentHTML('beforeend', `
-    <div id="${toastId}" class="toast toast-${tipo}" style="animation: slideIn 0.3s ease;">
-      <div class="toast-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${colors[tipo]}" stroke-width="2">${icons[tipo]}</svg></div>
-      <div class="toast-content"><div class="toast-title">${titulo}</div><div class="toast-message">${mensaje}</div></div>
-      <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
-    </div>`);
-  setTimeout(() => document.getElementById(toastId)?.remove(), 4000);
-}
+// Toast: usa componente compartido importado arriba
 
 //  INIT EVENTS 
 export function initCotizacionesEvents() {

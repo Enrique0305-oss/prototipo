@@ -16,11 +16,23 @@ export const ordenProductoService = {
     return apiClient.get<ApiResponse<OrdenProducto[]>>('/ordenes-producto', filters);
   },
 
+  getCotizacionesDisponibles: async () => {
+    return apiClient.get<ApiResponse<any[]>>('/ordenes-producto/cotizaciones-disponibles');
+  },
+
+  getDesdeCotizacion: async (cotizacionId: number) => {
+    return apiClient.get<ApiResponse<any>>(`/ordenes-producto/desde-cotizacion/${cotizacionId}`);
+  },
+
+  getPersonal: async () => {
+    return apiClient.get<ApiResponse<any[]>>('/personal');
+  },
+
   create: async (data: {
-    id_cliente: number;
-    fecha_orden: string;
-    fecha_entrega?: string;
-    observaciones?: string;
+    id_cotizacion: number;
+    fecha_envio: string;
+    emitido_por: number;
+    incluye_igv?: boolean;
     detalles: Array<{
       id_producto: number;
       cantidad: number;
@@ -34,19 +46,10 @@ export const ordenProductoService = {
     return apiClient.get<ApiResponse<OrdenProducto>>(`/ordenes-producto/${id}`);
   },
 
-  update: async (id: number, data: Partial<OrdenProducto>) => {
+  update: async (id: number, data: any) => {
     return apiClient.post<ApiResponse<OrdenProducto>>(`/ordenes-producto/${id}`, {
       ...data,
       _method: 'PUT',
-    });
-  },
-
-  cambiarEstado: async (
-    id: number,
-    estado: 'Pendiente' | 'En Preparación' | 'Enviado' | 'Entregado' | 'Cancelado'
-  ) => {
-    return apiClient.patch<ApiResponse<OrdenProducto>>(`/ordenes-producto/${id}/estado`, {
-      estado,
     });
   },
 
@@ -54,10 +57,8 @@ export const ordenProductoService = {
     return apiClient.delete<ApiResponse<null>>(`/ordenes-producto/${id}`);
   },
 
-  registrarEnvio: async (id: number, fecha_envio: string) => {
-    return apiClient.patch<ApiResponse<OrdenProducto>>(
-      `/ordenes-producto/${id}/registrar-envio`,
-      { fecha_envio }
-    );
+  getPDFUrl: (id: number, descargar: boolean = false) => {
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    return `${base}/ordenes-producto/${id}/pdf${descargar ? '?descargar=true' : ''}`;
   },
 };

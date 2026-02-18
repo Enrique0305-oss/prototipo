@@ -17,6 +17,8 @@ use App\Http\Controllers\API\MantenimientoController;
 use App\Http\Controllers\API\ActividadMantenimientoController;
 use App\Http\Controllers\API\MulticimController;
 use App\Http\Controllers\API\ProyeccionesController;
+use App\Http\Controllers\API\ServicioController;
+use App\Http\Controllers\API\CatalogoCapacitacionAuditoriaController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -39,16 +41,18 @@ Route::prefix('v1')->group(function () {
     Route::get('/cotizaciones/{id}/pdf', [CotizacionController::class, 'generarPDF']);
 
     // para las ordenes de producto :v
+    Route::get('/ordenes-producto/estadisticas/resumen', [OrdenProductoController::class, 'estadisticas']);
     Route::get('/ordenes-producto/cotizaciones-disponibles', [OrdenProductoController::class, 'cotizacionesDisponibles']);
     Route::get('/ordenes-producto/desde-cotizacion/{id}', [OrdenProductoController::class, 'desdeCotizacion']);
     Route::get('/ordenes-producto', [OrdenProductoController::class, 'index']);
+    Route::get('/ordenes-producto/{id}/pdf', [OrdenProductoController::class, 'generarPDF']);
     Route::get('/ordenes-producto/{id}', [OrdenProductoController::class, 'show']);
     Route::post('/ordenes-producto', [OrdenProductoController::class, 'store']);
     Route::put('/ordenes-producto/{id}', [OrdenProductoController::class, 'update']);
     Route::delete('/ordenes-producto/{id}', [OrdenProductoController::class, 'destroy']);
-    Route::get('/ordenes-producto/estadisticas/resumen', [OrdenProductoController::class, 'estadisticas']);
 
     // para las órdenes de servicio :v
+    Route::get('/ordenes-servicio/estadisticas/resumen', [OrdenServicioController::class, 'estadisticas']);
     Route::get('/ordenes-servicio/cotizaciones-disponibles', [OrdenServicioController::class, 'cotizacionesDisponibles']);
     Route::get('/ordenes-servicio/desde-cotizacion/{id}', [OrdenServicioController::class, 'desdeCotizacion']);
     Route::get('/ordenes-servicio', [OrdenServicioController::class, 'index']);
@@ -56,9 +60,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/ordenes-servicio', [OrdenServicioController::class, 'store']);
     Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
     Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
-    Route::get('/ordenes-servicio/estadisticas/resumen', [OrdenServicioController::class, 'estadisticas']);
 
     // para las órdenes de capacitación/auditoría :v
+    Route::get('/ordenes-capacitacion-auditoria/estadisticas/resumen', [OrdenCapacitacionAuditoriaController::class, 'estadisticas']);
     Route::get('/ordenes-capacitacion-auditoria/cotizaciones-disponibles', [OrdenCapacitacionAuditoriaController::class, 'cotizacionesDisponibles']);
     Route::get('/ordenes-capacitacion-auditoria/desde-cotizacion/{id}', [OrdenCapacitacionAuditoriaController::class, 'desdeCotizacion']);
     Route::get('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'index']);
@@ -66,7 +70,6 @@ Route::prefix('v1')->group(function () {
     Route::post('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'store']);
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
     Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
-    Route::get('/ordenes-capacitacion-auditoria/estadisticas/resumen', [OrdenCapacitacionAuditoriaController::class, 'estadisticas']);
 
     // para los equipos :v
     Route::get('/equipos', [EquipoController::class, 'index']);
@@ -148,11 +151,29 @@ Route::prefix('v1')->group(function () {
     Route::post('proyecciones', [ProyeccionesController::class, 'store']);
     Route::get('proyecciones/buscar-orden/{tipo}/{id}', [ProyeccionesController::class, 'obtenerDatosOrden']);
 
-    // Listados auxiliares para formularios
-    Route::get('/servicios', function () {
+    // Para los servicios :v
+    Route::get('/servicios/estadisticas/resumen', [ServicioController::class, 'estadisticas']);
+    Route::get('/servicios', [ServicioController::class, 'index']);
+    Route::get('/servicios/{id}', [ServicioController::class, 'show']);
+    Route::post('/servicios', [ServicioController::class, 'store']);
+    Route::put('/servicios/{id}', [ServicioController::class, 'update']);
+    Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
+    Route::patch('/servicios/{id}/reactivar', [ServicioController::class, 'reactivar']);
+
+    // Catálogo de capacitaciones y auditorías
+    Route::get('/catalogo-capacitacion-auditoria/estadisticas/resumen', [CatalogoCapacitacionAuditoriaController::class, 'estadisticas']);
+    Route::get('/catalogo-capacitacion-auditoria', [CatalogoCapacitacionAuditoriaController::class, 'index']);
+    Route::get('/catalogo-capacitacion-auditoria/{id}', [CatalogoCapacitacionAuditoriaController::class, 'show']);
+    Route::post('/catalogo-capacitacion-auditoria', [CatalogoCapacitacionAuditoriaController::class, 'store']);
+    Route::put('/catalogo-capacitacion-auditoria/{id}', [CatalogoCapacitacionAuditoriaController::class, 'update']);
+    Route::delete('/catalogo-capacitacion-auditoria/{id}', [CatalogoCapacitacionAuditoriaController::class, 'destroy']);
+    Route::patch('/catalogo-capacitacion-auditoria/{id}/reactivar', [CatalogoCapacitacionAuditoriaController::class, 'reactivar']);
+
+    // Listado auxiliar de personal
+    Route::get('/personal', function () {
         return response()->json([
             'success' => true,
-            'data' => \App\Models\Servicio::select('id', 'nombre', 'descripcion', 'estado')->where('estado', 'Activo')->get()
+            'data' => \App\Models\Personal::select('id', 'nombre', 'apellidos')->get()
         ]);
     });
 });

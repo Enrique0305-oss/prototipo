@@ -74,8 +74,8 @@ class ProductoController extends Controller
                 ] : null,
                 'inventario' => $producto->inventario ? [
                     'cantidad_disponible' => $producto->inventario->cantidad_disponible,
-                    'cantidad_minima' => $producto->inventario->cantidad_minima,
-                    'cantidad_maxima' => $producto->inventario->cantidad_maxima,
+                    'stock_seguridad' => $producto->inventario->stock_seguridad,
+                    'cantidad_total' => $producto->inventario->Cantidad_total,
                 ] : null,
             ];
         });
@@ -210,9 +210,8 @@ class ProductoController extends Controller
             'inventario' => $producto->inventario ? [
                 'id' => $producto->inventario->id,
                 'cantidad_disponible' => $producto->inventario->cantidad_disponible,
-                'cantidad_minima' => $producto->inventario->cantidad_minima,
-                'cantidad_maxima' => $producto->inventario->cantidad_maxima,
-                'fecha_ultimo_ingreso' => $producto->inventario->fecha_ultimo_ingreso,
+                'stock_seguridad' => $producto->inventario->stock_seguridad,
+                'cantidad_total' => $producto->inventario->Cantidad_total,
             ] : null,
         ];
 
@@ -361,6 +360,12 @@ class ProductoController extends Controller
             $q->where('cantidad_disponible', '<=', 0);
         })->count();
 
+        $stockBajo = Producto::where('estado', 'Activo')
+            ->whereHas('inventario', function($q) {
+                $q->whereColumn('cantidad_disponible', '<', 'stock_seguridad')
+                   ->where('cantidad_disponible', '>', 0);
+            })->count();
+
         $proximosVencer = Producto::where('estado', 'Activo')
             ->where('fecha_vencim', '<=', now()->addDays(30))
             ->where('fecha_vencim', '>=', now())
@@ -390,6 +395,7 @@ class ProductoController extends Controller
                 'productos_inactivos' => $inactivos,
                 'con_stock' => $conStock,
                 'sin_stock' => $sinStock,
+                'stock_bajo' => $stockBajo,
                 'proximos_vencer_30dias' => $proximosVencer,
                 'vencidos' => $vencidos,
                 'por_categoria' => $porCategoria

@@ -55,6 +55,7 @@ class OrdenServicioController extends Controller
                 ],
                 'emisor' => $orden->emisor ? $orden->emisor->nombre : null,
                 'cotizacion_numero' => $orden->cotizacion ? $orden->cotizacion->numero_cotizacion : null,
+                'estado' => $orden->estado ?? 'Aprobado',
             ];
         });
 
@@ -89,6 +90,7 @@ class OrdenServicioController extends Controller
                 'total' => $cot->total,
                 'subtotal' => $cot->subtotal,
                 'igv' => $cot->igv,
+                'incluye_igv' => (bool) $cot->incluye_igv,
             ];
         });
 
@@ -161,6 +163,9 @@ class OrdenServicioController extends Controller
                     'direccion' => $cotizacion->cliente->direccion,
                 ],
                 'total' => $cotizacion->total,
+                'subtotal' => $cotizacion->subtotal,
+                'igv' => $cotizacion->igv,
+                'incluye_igv' => (bool) $cotizacion->incluye_igv,
                 'detalles' => $detalles,
             ]
         ]);
@@ -184,6 +189,7 @@ class OrdenServicioController extends Controller
             'detalles.*.local' => 'nullable|string|max:255',
             'detalles.*.frecuencia' => 'nullable|string|max:100',
             'detalles.*.precio' => 'required|numeric|min:0',
+            'incluye_igv' => 'sometimes|boolean',
         ]);
 
         // Verificar que la cotización sea tipo Servicio
@@ -207,11 +213,14 @@ class OrdenServicioController extends Controller
         try {
             DB::beginTransaction();
 
-            // Calcular total
-            $total = 0;
+            // Calcular total con IGV
+            $subtotal = 0;
             foreach ($validated['detalles'] as $detalle) {
-                $total += $detalle['precio'];
+                $subtotal += $detalle['precio'];
             }
+            $incluyeIgv = $validated['incluye_igv'] ?? true;
+            $igv = $incluyeIgv ? round($subtotal * 0.18, 2) : 0;
+            $total = $subtotal + $igv;
 
             // Crear orden de servicio
             $orden = OrdenServicio::create([
@@ -222,8 +231,12 @@ class OrdenServicioController extends Controller
                 'id_cliente' => $cotizacion->id_cliente,
                 'fecha_aceptacion' => $validated['fecha_aceptacion'],
                 'fecha_tentativa' => $validated['fecha_tentativa'] ?? null,
+                'subtotal' => $subtotal,
+                'igv' => $igv,
+                'incluye_igv' => $incluyeIgv,
                 'total_costo' => $total,
                 'emitido_por' => $validated['emitido_por'],
+                'estado' => 'Aprobado',
             ]);
 
             // Crear detalles
@@ -308,10 +321,17 @@ class OrdenServicioController extends Controller
             'detalles.*.local' => 'nullable|string|max:255',
             'detalles.*.frecuencia' => 'nullable|string|max:100',
             'detalles.*.precio' => 'required_with:detalles|numeric|min:0',
+            'incluye_igv' => 'sometimes|boolean',
+            'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
         ]);
 
         try {
             DB::beginTransaction();
+
+            // Actualizar estado si viene
+            if (isset($validated['estado'])) {
+                $orden->estado = $validated['estado'];
+            }
 
             // Actualizar campos básicos
             if (isset($validated['fecha_aceptacion'])) {
@@ -332,10 +352,10 @@ class OrdenServicioController extends Controller
                 // Eliminar detalles antiguos
                 $orden->detalles()->delete();
 
-                // Crear nuevos detalles y calcular total
-                $total = 0;
+                // Crear nuevos detalles y calcular total con IGV
+                $subtotal = 0;
                 foreach ($validated['detalles'] as $detalle) {
-                    $total += $detalle['precio'];
+                    $subtotal += $detalle['precio'];
                     
                     DetalleOrdenServicio::create([
                         'id_orden_servicio' => $orden->id,
@@ -346,7 +366,19 @@ class OrdenServicioController extends Controller
                     ]);
                 }
 
-                $orden->total_costo = $total;
+                $incluyeIgv = $validated['incluye_igv'] ?? $orden->incluye_igv ?? true;
+                $igv = $incluyeIgv ? round($subtotal * 0.18, 2) : 0;
+                $orden->subtotal = $subtotal;
+                $orden->igv = $igv;
+                $orden->incluye_igv = $incluyeIgv;
+                $orden->total_costo = $subtotal + $igv;
+            } elseif (isset($validated['incluye_igv'])) {
+                // Solo cambió el IGV sin cambiar detalles
+                $subtotal = $orden->subtotal ?? $orden->total_costo;
+                $igv = $validated['incluye_igv'] ? round($subtotal * 0.18, 2) : 0;
+                $orden->incluye_igv = $validated['incluye_igv'];
+                $orden->igv = $igv;
+                $orden->total_costo = $subtotal + $igv;
             }
 
             $orden->save();

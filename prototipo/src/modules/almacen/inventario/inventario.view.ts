@@ -1,5 +1,6 @@
 import { productoService } from '../../../services/productoService';
 import { categoriaService } from '../../../services/categoriaService';
+import { mostrarToast } from '../../../shared/toast';
 import type { Producto, EstadisticasProductos, Categoria } from '../../../core/api/types';
 
 // Estado global para el módulo de inventario
@@ -77,7 +78,8 @@ export function renderProductosTab() {
           <tr>
             <th>PRODUCTO</th>
             <th>CATEGORÍA</th>
-            <th>STOCK</th>
+            <th>STOCK ACTUAL</th>
+            <th>STOCK SEGURIDAD</th>
             <th>UNIDAD</th>
             <th>PRECIO UNIT.</th>
             <th>VALOR TOTAL</th>
@@ -87,7 +89,7 @@ export function renderProductosTab() {
         </thead>
         <tbody id="productos-table-body">
           <tr>
-            <td colspan="8" style="text-align: center; padding: 40px;">
+            <td colspan="9" style="text-align: center; padding: 40px;">
               <div class="loading-text">Cargando productos...</div>
             </td>
           </tr>
@@ -742,6 +744,13 @@ function actualizarEstadisticas() {
     return sum + (stock * precio);
   }, 0);
 
+  // Contar stock bajo: productos cuyo stock actual < stock_seguridad
+  const stockBajoCount = productosData.filter(p => {
+    const stock = p.inventario?.cantidad_disponible || 0;
+    const seguridad = p.inventario?.stock_seguridad || 0;
+    return stock < seguridad;
+  }).length;
+
   statsContainer.innerHTML = `
     <div class="stat-box">
       <div class="stat-box-icon">
@@ -767,7 +776,7 @@ function actualizarEstadisticas() {
       </div>
       <div class="stat-box-content">
         <div class="stat-box-label">Stock Bajo</div>
-        <div class="stat-box-value">${estadisticasData.sin_stock || 0} <span class="stat-box-note">productos</span></div>
+        <div class="stat-box-value">${stockBajoCount} <span class="stat-box-note">productos</span></div>
       </div>
     </div>
   `;
@@ -802,7 +811,7 @@ async function cargarProductos() {
     if (tbody) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="8" style="text-align: center; padding: 40px; color: #e74c3c;">
+          <td colspan="9" style="text-align: center; padding: 40px; color: #e74c3c;">
             <div>Error al cargar los productos. Por favor, intente nuevamente.</div>
           </td>
         </tr>
@@ -818,7 +827,7 @@ function renderizarTablaProductos() {
   if (productosData.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" style="text-align: center; padding: 40px;">
+        <td colspan="9" style="text-align: center; padding: 40px;">
           <div style="color: #7f8c8d;">No se encontraron productos</div>
         </td>
       </tr>
@@ -828,19 +837,18 @@ function renderizarTablaProductos() {
 
   tbody.innerHTML = productosData.map(producto => {
     const stock = producto.inventario?.cantidad_disponible || 0;
-    const stockMinimo = producto.inventario?.cantidad_minima || 0;
+    const stockSeguridad = producto.inventario?.stock_seguridad || 0;
     const precio = producto.precio_unitario || 0;
     const valorTotal = stock * precio;
-    const stockBajo = stock <= stockMinimo && stock > 0;
-    const sinStock = stock === 0;
 
+    // Semáforo de estado basado en stock vs stock_seguridad
     let estadoBadge = '';
-    if (sinStock) {
-      estadoBadge = '<span class="status-indicator danger">Sin Stock</span>';
-    } else if (stockBajo) {
-      estadoBadge = '<span class="status-indicator warning">Stock Bajo</span>';
+    if (stock > stockSeguridad) {
+      estadoBadge = '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#f0fdf4;color:#16a34a;"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block;"></span>Óptimo</span>';
+    } else if (stock === stockSeguridad) {
+      estadoBadge = '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#fffbeb;color:#d97706;"><span style="width:8px;height:8px;border-radius:50%;background:#d97706;display:inline-block;"></span>Precaución</span>';
     } else {
-      estadoBadge = '<span class="status-indicator success">Disponible</span>';
+      estadoBadge = '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#fef2f2;color:#dc2626;"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span>Crítico</span>';
     }
 
     return `
@@ -857,7 +865,8 @@ function renderizarTablaProductos() {
           </div>
         </td>
         <td>${producto.categoria?.nombre || 'Sin categoría'}</td>
-        <td>${stock}</td>
+        <td><strong>${stock}</strong></td>
+        <td>${stockSeguridad}</td>
         <td>${producto.unidad || '-'}</td>
         <td>$${precio.toFixed(2)}</td>
         <td>$${valorTotal.toFixed(2)}</td>
@@ -1213,55 +1222,7 @@ async function handleSubmitNuevoProducto(e: Event) {
   }
 }
 
-// Sistema de notificaciones Toast
-function mostrarToast(tipo: 'success' | 'error' | 'warning', titulo: string, mensaje: string) {
-  // Crear contenedor si no existe
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.className = 'toast-container';
-    document.body.appendChild(container);
-  }
-
-  const iconos: Record<string, string> = {
-    success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>',
-    error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
-    warning: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
-  };
-
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${tipo}`;
-  toast.innerHTML = `
-    <div class="toast-icon">${iconos[tipo]}</div>
-    <div class="toast-content">
-      <div class="toast-title">${titulo}</div>
-      <div class="toast-message">${mensaje}</div>
-    </div>
-    <button class="toast-close">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </button>
-  `;
-
-  container.appendChild(toast);
-
-  // Cerrar al hacer clic en X
-  const closeBtn = toast.querySelector('.toast-close');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => cerrarToast(toast));
-  }
-
-  // Auto-cerrar después de 4 segundos
-  setTimeout(() => cerrarToast(toast), 4000);
-}
-
-function cerrarToast(toast: HTMLElement) {
-  toast.classList.add('toast-exit');
-  setTimeout(() => toast.remove(), 300);
-}
+// Toast: usa componente compartido importado arriba
 
 // ===== MODAL EDITAR PRODUCTO =====
 

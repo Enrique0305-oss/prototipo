@@ -49,7 +49,7 @@ class AuthService {
       success: true,
       token: 'mock_jwt_token_' + Date.now(),
       refreshToken: 'mock_refresh_token_' + Date.now(),
-      expiresIn: 3600, // 1 hora
+      expiresIn: 86400, // 24 horas
       usuario: {
         id: 1,
         nombre: 'Administrador',
@@ -177,6 +177,21 @@ class AuthService {
     storage.setItem(this.REFRESH_TOKEN_KEY, response.refreshToken);
     storage.setItem(this.USER_KEY, JSON.stringify(response.usuario));
     storage.setItem(this.SESSION_KEY, JSON.stringify(sessionData));
+  }
+
+  /**
+   * Extiende la sesión mock renovando el expiresAt sin llamar al backend.
+   * TODO: Reemplazar por refreshToken() real cuando se implemente auth backend.
+   */
+  extendMockSession(): void {
+    const sessionJson = this.getFromStorage(this.SESSION_KEY);
+    if (!sessionJson) return;
+    try {
+      const session = JSON.parse(sessionJson);
+      session.expiresAt = Date.now() + 86400 * 1000; // +24 horas
+      const storage = localStorage.getItem(this.SESSION_KEY) ? localStorage : sessionStorage;
+      storage.setItem(this.SESSION_KEY, JSON.stringify(session));
+    } catch { /* ignore */ }
   }
 
   private clearSession(): void {

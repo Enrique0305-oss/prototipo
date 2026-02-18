@@ -1,609 +1,721 @@
+// Comercial - Ordenes de Capacitación y Auditoría (Conectado al Backend)
 import './ordenes-capacitacion.css';
+import { ordenCapacitacionService } from '../../../services/ordenCapacitacionService';
+import { mostrarToast } from '../../../shared/toast';
+
+let ocListData: any[] = [];
+let cotizacionesDisponibles: any[] = [];
+let personalData: any[] = [];
 
 export function renderComercialOrdenesCapacitacion() {
-  const content = `
-    <div class="oc-main-container">
-      <div class="oc-header">
-        <div class="oc-header-top">
-          <h1 class="oc-title">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-            </svg>
-            Órdenes de Capacitación y Auditoría
-          </h1>
-          <button class="oc-btn-primary" id="btnNuevaOrdenCapacitacion">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Nueva Orden de Capacitación
-          </button>
-        </div>
+  return `
+  <div class="oc-main-container">
 
-        <div class="oc-stats-grid">
-          <div class="oc-stat-card">
-            <div class="oc-stat-icon oc-stat-blue">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-              </svg>
-            </div>
-            <div class="oc-stat-info">
-              <span class="oc-stat-label">Total Órdenes</span>
-              <span class="oc-stat-value">24</span>
-            </div>
-          </div>
-
-          <div class="oc-stat-card">
-            <div class="oc-stat-icon oc-stat-warning">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-            </div>
-            <div class="oc-stat-info">
-              <span class="oc-stat-label">Programadas</span>
-              <span class="oc-stat-value">8</span>
-            </div>
-          </div>
-
-          <div class="oc-stat-card">
-            <div class="oc-stat-icon oc-stat-success">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-              </svg>
-            </div>
-            <div class="oc-stat-info">
-              <span class="oc-stat-label">Completadas</span>
-              <span class="oc-stat-value">16</span>
-            </div>
-          </div>
-
-          <div class="oc-stat-card">
-            <div class="oc-stat-icon oc-stat-green">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="9" cy="7" r="4"></circle>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-              </svg>
-            </div>
-            <div class="oc-stat-info">
-              <span class="oc-stat-label">Participantes Totales</span>
-              <span class="oc-stat-value">486</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="oc-filters-bar">
-        <div class="oc-search-box">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="m21 21-4.35-4.35"></path>
+    <!-- HEADER -->
+    <div class="oc-header">
+      <div class="oc-header-top">
+        <h1 class="oc-title">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
           </svg>
-          <input type="text" placeholder="Buscar por número de orden, cliente, servicio..." class="oc-search-input">
-        </div>
-        
-        <div class="oc-filter-group">
-          <select class="oc-filter-select">
-            <option value="">Todas las modalidades</option>
-            <option value="presencial">Presencial</option>
-            <option value="virtual">Virtual</option>
-            <option value="hibrido">Híbrido</option>
-          </select>
-          
-          <select class="oc-filter-select">
-            <option value="">Todos los meses</option>
-            <option value="01">Enero</option>
-            <option value="02">Febrero</option>
-            <option value="03">Marzo</option>
-          </select>
-        </div>
+          Órdenes de Capacitación y Auditoría
+        </h1>
+        <button class="oc-btn-primary" id="btn-nueva-oc">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Nueva Orden de Capacitación
+        </button>
       </div>
 
-      <div class="oc-table-container">
-        <table class="oc-table">
-          <thead>
-            <tr>
-              <th>N° Orden</th>
-              <th>Cliente</th>
-              <th>Servicio</th>
-              <th>Fecha/Hora</th>
-              <th>Modalidad</th>
-              <th>Participantes</th>
-              <th>Costo</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>OCA-2026-001</strong></td>
-              <td>Industrias Lima SAC</td>
-              <td>BPM - Buenas Prácticas</td>
-              <td>
-                <div>18/02/2026</div>
-                <div class="oc-time">09:00 AM</div>
-              </td>
-              <td><span class="badge-info">Presencial</span></td>
-              <td>25</td>
-              <td><strong>S/ 3,500.00</strong></td>
-              <td><span class="badge-warning">Programada</span></td>
-              <td>
-                <div class="oc-action-buttons">
-                  <button class="oc-btn-icon" title="Ver">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
-                  <button class="oc-btn-icon" title="Editar">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                  <button class="oc-btn-icon" title="PDF">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td><strong>OCA-2026-002</strong></td>
-              <td>Comercial Trujillo EIRL</td>
-              <td>ISO 9001:2015</td>
-              <td>
-                <div>20/02/2026</div>
-                <div class="oc-time">02:00 PM</div>
-              </td>
-              <td><span class="badge-purple">Virtual</span></td>
-              <td>30</td>
-              <td><strong>S/ 2,800.00</strong></td>
-              <td><span class="badge-warning">Programada</span></td>
-              <td>
-                <div class="oc-action-buttons">
-                  <button class="oc-btn-icon" title="Ver">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
-                  <button class="oc-btn-icon" title="Editar">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                  <button class="oc-btn-icon" title="PDF">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td><strong>OCA-2026-003</strong></td>
-              <td>Distribuidora Norte SA</td>
-              <td>HACCP - Auditoría</td>
-              <td>
-                <div>10/02/2026</div>
-                <div class="oc-time">10:00 AM</div>
-              </td>
-              <td><span class="badge-cyan">Híbrido</span></td>
-              <td>15</td>
-              <td><strong>S/ 5,200.00</strong></td>
-              <td><span class="badge-success">Completada</span></td>
-              <td>
-                <div class="oc-action-buttons">
-                  <button class="oc-btn-icon" title="Ver">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
-                  <button class="oc-btn-icon" title="Editar">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                  <button class="oc-btn-icon" title="PDF">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Formulario de Nueva Orden (oculto por defecto) -->
-      <div id="formularioOrdenCapacitacion" class="oc-form-overlay" style="display: none;">
-        <div class="oc-form-card">
-          <div class="oc-form-header">
-            <h2 class="oc-form-title">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-              </svg>
-              Nueva Orden de Capacitación/Auditoría
-            </h2>
-            <button class="oc-btn-close" id="btnCerrarFormulario">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+      <!-- STATS -->
+      <div class="oc-stats-grid">
+        <div class="oc-stat-card">
+          <div class="oc-stat-icon oc-stat-blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
           </div>
-
-          <form id="formOrdenCapacitacion" class="oc-form-content">
-            <!-- Información General -->
-            <div class="oc-section">
-              <h3 class="oc-section-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                </svg>
-                Información General
-              </h3>
-              
-              <div class="oc-grid">
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Número de Orden
-                    <span class="oc-required">*</span>
-                  </label>
-                  <input type="text" class="oc-input" id="numero_orden" value="OCA-2026-004" readonly>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Cotización de Referencia
-                    <span class="oc-optional">(Opcional)</span>
-                  </label>
-                  <select class="oc-input" id="id_cotizacion_ref">
-                    <option value="">Sin referencia</option>
-                    <option value="1">COT-2026-001 - Industrias Lima SAC</option>
-                    <option value="2">COT-2026-002 - Comercial Trujillo EIRL</option>
-                    <option value="3">COT-2026-003 - Distribuidora Norte SA</option>
-                  </select>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Cliente
-                    <span class="oc-required">*</span>
-                  </label>
-                  <select class="oc-input" id="id_cliente" required>
-                    <option value="">Seleccionar cliente</option>
-                    <option value="1">Industrias Lima SAC</option>
-                    <option value="2">Comercial Trujillo EIRL</option>
-                    <option value="3">Distribuidora Norte SA</option>
-                    <option value="4">Productos del Sur EIRL</option>
-                    <option value="5">Servicios Integrados SAC</option>
-                  </select>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Servicio/Capacitación
-                    <span class="oc-required">*</span>
-                  </label>
-                  <select class="oc-input" id="id_servicio" required>
-                    <option value="">Seleccionar servicio</option>
-                    <option value="1">BPM - Buenas Prácticas de Manufactura</option>
-                    <option value="2">HACCP - Análisis de Peligros y Puntos Críticos</option>
-                    <option value="3">ISO 9001:2015 - Sistema de Gestión de Calidad</option>
-                    <option value="4">ISO 22000 - Gestión de Inocuidad Alimentaria</option>
-                    <option value="5">Auditoría Interna</option>
-                    <option value="6">Auditoría Externa</option>
-                    <option value="7">Seguridad y Salud en el Trabajo</option>
-                    <option value="8">Manipulación de Alimentos</option>
-                  </select>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Ponente/Auditor
-                    <span class="oc-required">*</span>
-                  </label>
-                  <select class="oc-input" id="id_ponente" required>
-                    <option value="">Seleccionar ponente</option>
-                    <option value="1">Dr. Carlos Mendoza - Ingeniero de Alimentos</option>
-                    <option value="2">Lic. Ana Torres - Auditora ISO</option>
-                    <option value="3">Ing. Roberto Silva - Especialista HACCP</option>
-                    <option value="4">Mg. Patricia Ramos - Consultora BPM</option>
-                  </select>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Modalidad
-                    <span class="oc-required">*</span>
-                  </label>
-                  <select class="oc-input" id="modalidad" required>
-                    <option value="">Seleccionar modalidad</option>
-                    <option value="Presencial">Presencial</option>
-                    <option value="Virtual">Virtual</option>
-                    <option value="Híbrido">Híbrido</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <!-- Programación -->
-            <div class="oc-section">
-              <h3 class="oc-section-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                  <line x1="16" y1="2" x2="16" y2="6"></line>
-                  <line x1="8" y1="2" x2="8" y2="6"></line>
-                  <line x1="3" y1="10" x2="21" y2="10"></line>
-                </svg>
-                Programación
-              </h3>
-              
-              <div class="oc-grid">
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Fecha del Servicio
-                    <span class="oc-required">*</span>
-                  </label>
-                  <input type="date" class="oc-input" id="fecha_servicio" required>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Hora del Servicio
-                    <span class="oc-required">*</span>
-                  </label>
-                  <input type="time" class="oc-input" id="hora_servicio" required>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Número de Participantes
-                    <span class="oc-required">*</span>
-                  </label>
-                  <input type="number" class="oc-input" id="num_participantes" min="1" required>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Número de Certificados
-                    <span class="oc-optional">(Opcional)</span>
-                  </label>
-                  <input type="number" class="oc-input" id="num_certificados" min="0">
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Costo
-                    <span class="oc-required">*</span>
-                  </label>
-                  <input type="number" class="oc-input" id="costo" step="0.01" min="0" required>
-                </div>
-
-                <div class="oc-field">
-                  <label class="oc-label">
-                    Aprobación/Autorización
-                    <span class="oc-optional">(Opcional)</span>
-                  </label>
-                  <input type="text" class="oc-input" id="aprobacion" placeholder="Ej: Gerente General">
-                </div>
-              </div>
-            </div>
-
-            <!-- Observaciones -->
-            <div class="oc-section">
-              <h3 class="oc-section-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
-                </svg>
-                Observaciones
-              </h3>
-              
-              <div class="oc-field">
-                <label class="oc-label">
-                  Observaciones o Notas Adicionales
-                  <span class="oc-optional">(Opcional)</span>
-                </label>
-                <textarea class="oc-textarea" id="observaciones" rows="4" 
-                          placeholder="Ingrese cualquier observación, requisito especial o detalle adicional..."></textarea>
-              </div>
-            </div>
-
-            <!-- Resumen de Costo -->
-            <div class="oc-cost-summary">
-              <div class="oc-summary-row">
-                <span class="oc-summary-label">Costo Total:</span>
-                <span class="oc-summary-value" id="costoTotal">S/ 0.00</span>
-              </div>
-            </div>
-
-            <!-- Botones de Acción -->
-            <div class="oc-form-actions">
-              <button type="button" class="oc-btn-cancel" id="btnCancelarFormulario">
-                Cancelar
-              </button>
-              <button type="submit" class="oc-btn-submit">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                Guardar y Generar Orden
-              </button>
-            </div>
-          </form>
+          <div class="oc-stat-info">
+            <span class="oc-stat-label">Total Órdenes</span>
+            <span class="oc-stat-value" id="stat-oc-total">-</span>
+          </div>
+        </div>
+        <div class="oc-stat-card">
+          <div class="oc-stat-icon oc-stat-green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </div>
+          <div class="oc-stat-info">
+            <span class="oc-stat-label">Valor Total</span>
+            <span class="oc-stat-value" id="stat-oc-valor">-</span>
+          </div>
+        </div>
+        <div class="oc-stat-card">
+          <div class="oc-stat-icon oc-stat-warning">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          </div>
+          <div class="oc-stat-info">
+            <span class="oc-stat-label">Participantes</span>
+            <span class="oc-stat-value" id="stat-oc-participantes">-</span>
+          </div>
+        </div>
+        <div class="oc-stat-card">
+          <div class="oc-stat-icon oc-stat-success">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+          <div class="oc-stat-info">
+            <span class="oc-stat-label">Órdenes este Mes</span>
+            <span class="oc-stat-value" id="stat-oc-mes">-</span>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- FILTROS -->
+    <div class="oc-filters-bar">
+      <div class="oc-search-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        <input type="text" id="oc-search" placeholder="Buscar por número de orden, cliente..." class="oc-search-input">
+      </div>
+      <div class="oc-filter-group">
+        <select class="oc-filter-select" id="oc-filter-modalidad">
+          <option value="">Todas las modalidades</option>
+          <option value="Presencial">Presencial</option>
+          <option value="Virtual">Virtual</option>
+          <option value="Híbrido">Híbrido</option>
+        </select>
+        <input type="date" class="oc-filter-select" id="oc-filter-desde" title="Desde">
+        <input type="date" class="oc-filter-select" id="oc-filter-hasta" title="Hasta">
+        <button class="oc-btn-secondary" id="oc-btn-filtrar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+          Filtrar
+        </button>
+      </div>
+    </div>
+
+    <!-- TABLA -->
+    <div class="oc-table-container">
+      <table class="oc-table">
+        <thead>
+          <tr>
+            <th>N° Orden</th>
+            <th>Cliente</th>
+            <th>Servicio</th>
+            <th>Fecha/Hora</th>
+            <th>Modalidad</th>
+            <th>Participantes</th>
+            <th>Costo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="oc-tabla-body">
+          <tr><td colspan="9" style="text-align:center;padding:40px;color:#64748b;">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- MODAL NUEVA/EDITAR OC -->
+    <div class="oc-form-overlay" id="modal-oc" style="display:none;">
+      <div class="oc-form-card" style="max-width:850px;">
+        <div class="oc-form-header">
+          <h2 class="oc-form-title" id="modal-oc-titulo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+            </svg>
+            Nueva Orden de Capacitación
+          </h2>
+          <button class="oc-btn-close" id="modal-oc-cerrar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="oc-form-content">
+          <input type="hidden" id="oc-edit-id">
+
+          <!-- Información General -->
+          <div class="oc-section">
+            <h3 class="oc-section-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              Información General
+            </h3>
+            <div class="oc-grid">
+              <div class="oc-field">
+                <label class="oc-label">N° Orden</label>
+                <input type="text" id="oc-numero-orden" class="oc-input" readonly placeholder="Auto-generado">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Cotización Referencia <span class="oc-required">*</span></label>
+                <select id="oc-cotizacion-ref" class="oc-input">
+                  <option value="">Cargando cotizaciones...</option>
+                </select>
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Cliente</label>
+                <input type="text" id="oc-cliente-nombre" class="oc-input" readonly placeholder="Se auto-completa al elegir cotización">
+                <input type="hidden" id="oc-cliente-id">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">RUC</label>
+                <input type="text" id="oc-cliente-ruc" class="oc-input" readonly>
+              </div>
+            </div>
+          </div>
+
+          <!-- Info cotización -->
+          <div id="oc-cotizacion-info" style="display:none;margin-bottom:20px;">
+            <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px;display:flex;align-items:center;gap:12px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+              <div>
+                <strong id="oc-cot-info-numero" style="color:#0284c7;"></strong>
+                <span id="oc-cot-info-detalle" style="color:#475569;margin-left:8px;"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detalles de la cotización -->
+          <div id="oc-detalles-cotizacion" style="display:none;margin-bottom:20px;">
+            <h4 style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px;">Detalle de la Cotización</h4>
+            <div id="oc-detalles-lista" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;"></div>
+          </div>
+
+          <!-- Datos del servicio -->
+          <div class="oc-section">
+            <h3 class="oc-section-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+              </svg>
+              Datos del Servicio
+            </h3>
+            <div class="oc-grid">
+              <div class="oc-field">
+                <label class="oc-label">Servicio / Capacitación</label>
+                <input type="text" id="oc-servicio-nombre" class="oc-input" readonly placeholder="Se auto-completa desde cotización">
+                <input type="hidden" id="oc-servicio-id">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Ponente / Expositor <span class="oc-required">*</span></label>
+                <select id="oc-ponente" class="oc-input">
+                  <option value="">Cargando personal...</option>
+                </select>
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Fecha del Servicio <span class="oc-required">*</span></label>
+                <input type="date" id="oc-fecha-servicio" class="oc-input">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Hora del Servicio</label>
+                <input type="time" id="oc-hora-servicio" class="oc-input">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Modalidad <span class="oc-required">*</span></label>
+                <select id="oc-modalidad" class="oc-input">
+                  <option value="">Seleccione...</option>
+                  <option value="Presencial">Presencial</option>
+                  <option value="Virtual">Virtual</option>
+                  <option value="Híbrido">Híbrido</option>
+                </select>
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">N° Participantes <span class="oc-required">*</span></label>
+                <input type="number" id="oc-num-participantes" class="oc-input" min="1" value="1">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">N° Certificados</label>
+                <input type="number" id="oc-num-certificados" class="oc-input" min="0" value="0">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Costo Total <span class="oc-required">*</span></label>
+                <input type="number" id="oc-costo" class="oc-input" min="0" step="0.01" value="0.00">
+              </div>
+              <div class="oc-field" style="grid-column: 1 / -1;">
+                <label class="oc-label">Observaciones</label>
+                <textarea id="oc-observaciones" class="oc-input" rows="3" placeholder="Observaciones adicionales..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="oc-form-actions" style="padding:20px 28px;">
+          <button type="button" class="oc-btn-cancel" id="modal-oc-cancelar">Cancelar</button>
+          <button type="button" class="oc-btn-submit" id="modal-oc-guardar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            Guardar Orden
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
   `;
-
-  // Esperar a que el DOM se actualice
-  setTimeout(() => {
-    initOrdenesCapacitacionHandlers();
-  }, 0);
-
-  return content;
 }
 
-function initOrdenesCapacitacionHandlers() {
-  const btnNueva = document.getElementById('btnNuevaOrdenCapacitacion');
-  const btnCerrar = document.getElementById('btnCerrarFormulario');
-  const btnCancelar = document.getElementById('btnCancelarFormulario');
-  const form = document.getElementById('formOrdenCapacitacion') as HTMLFormElement;
+// =============================
+// FUNCIONES
+// =============================
 
-  if (btnNueva) {
-    btnNueva.addEventListener('click', mostrarFormularioOrdenCapacitacion);
+async function cargarEstadisticasOC() {
+  try {
+    const res = await ordenCapacitacionService.getEstadisticas();
+    const raw = res.data || res;
+    const stats = (raw as any).data || raw;
+
+    const el = (id: string) => document.getElementById(id);
+    if (el('stat-oc-total')) el('stat-oc-total')!.textContent = String(stats.total_ordenes ?? 0);
+    if (el('stat-oc-valor')) el('stat-oc-valor')!.textContent = 'S/ ' + Number(stats.total_valor ?? 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
+    if (el('stat-oc-participantes')) el('stat-oc-participantes')!.textContent = String(stats.total_participantes ?? 0);
+    if (el('stat-oc-mes')) el('stat-oc-mes')!.textContent = String(stats.ordenes_mes_actual ?? 0);
+  } catch (e) {
+    console.error('Error cargando estadísticas OC:', e);
+  }
+}
+
+async function cargarOrdenesCapacitacion() {
+  const tbody = document.getElementById('oc-tabla-body');
+  if (!tbody) return;
+
+  try {
+    const params: any = {};
+    const search = (document.getElementById('oc-search') as HTMLInputElement)?.value?.trim();
+    const modalidad = (document.getElementById('oc-filter-modalidad') as HTMLSelectElement)?.value;
+    const desde = (document.getElementById('oc-filter-desde') as HTMLInputElement)?.value;
+    const hasta = (document.getElementById('oc-filter-hasta') as HTMLInputElement)?.value;
+    if (search) params.search = search;
+    if (modalidad) params.modalidad = modalidad;
+    if (desde) params.fecha_desde = desde;
+    if (hasta) params.fecha_hasta = hasta;
+
+    const res = await ordenCapacitacionService.getAll(params);
+    const raw = res.data || res;
+    ocListData = Array.isArray(raw) ? raw : (raw as any).data || [];
+
+    if (ocListData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#64748b;">No se encontraron órdenes de capacitación</td></tr>';
+      return;
+    }
+
+    const formatFecha = (f: string | null | undefined): string => {
+      if (!f) return '-';
+      const [y, m, d] = f.split('T')[0].split('-');
+      return `${d}/${m}/${y}`;
+    };
+
+    const getBadgeClass = (estado: string): string => {
+      switch (estado) {
+        case 'Aprobado': return 'oc-badge-success';
+        case 'Pendiente': return 'oc-badge-warning';
+        case 'Rechazado': return 'oc-badge-danger';
+        default: return 'oc-badge-info';
+      }
+    };
+
+    const getModalidadBadge = (mod: string): string => {
+      switch (mod) {
+        case 'Presencial': return 'oc-badge-info';
+        case 'Virtual': return 'oc-badge-purple';
+        case 'Híbrido': return 'oc-badge-cyan';
+        default: return 'oc-badge-info';
+      }
+    };
+
+    tbody.innerHTML = ocListData.map(o => {
+      const fecha = formatFecha(o.fecha_servicio);
+      const hora = o.hora_servicio || '';
+      const costo = Number(o.costo || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
+      return '<tr>' +
+        '<td><strong>' + (o.numero_orden || '') + '</strong></td>' +
+        '<td>' + (o.cliente?.nombre_empresa || '-') + '</td>' +
+        '<td>' + (o.servicio || '-') + '</td>' +
+        '<td><div>' + fecha + '</div><small style="color:#64748b;">' + hora + '</small></td>' +
+        '<td><span class="oc-badge ' + getModalidadBadge(o.modalidad) + '">' + (o.modalidad || '-') + '</span></td>' +
+        '<td style="text-align:center;">' + (o.num_participantes || 0) + '</td>' +
+        '<td><strong>S/ ' + costo + '</strong></td>' +
+        '<td><span class="oc-badge ' + getBadgeClass(o.estado) + '">' + (o.estado || 'Aprobado') + '</span></td>' +
+        '<td>' +
+          '<div class="oc-action-buttons">' +
+            '<button class="oc-btn-icon btn-ver-oc" data-id="' + o.id + '" title="Ver/Editar">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>' +
+                '<circle cx="12" cy="12" r="3"></circle>' +
+              '</svg>' +
+            '</button>' +
+          '</div>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    bindAccionesTablaOC();
+  } catch (e) {
+    console.error('Error cargando órdenes:', e);
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar órdenes</td></tr>';
+  }
+}
+
+function bindAccionesTablaOC() {
+  document.querySelectorAll('.btn-ver-oc').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      await abrirModalEditarOC(id);
+    });
+  });
+}
+
+async function cargarDropdownCotizaciones() {
+  const select = document.getElementById('oc-cotizacion-ref') as HTMLSelectElement;
+  if (!select) return;
+  try {
+    const res = await ordenCapacitacionService.getCotizacionesDisponibles();
+    const raw = res.data || res;
+    cotizacionesDisponibles = Array.isArray(raw) ? raw : (raw as any).data || [];
+
+    select.innerHTML = '<option value="">Seleccione una cotización...</option>' +
+      cotizacionesDisponibles.map(c =>
+        '<option value="' + c.id + '">' + c.numero_cotizacion + ' - ' + (c.cliente?.nombre_empresa || '') + ' (S/ ' + Number(c.total).toFixed(2) + ')</option>'
+      ).join('');
+  } catch (e) {
+    console.error('Error cargando cotizaciones:', e);
+    select.innerHTML = '<option value="">Error al cargar</option>';
+  }
+}
+
+async function cargarDropdownPersonal() {
+  const select = document.getElementById('oc-ponente') as HTMLSelectElement;
+  if (!select) return;
+  try {
+    const res = await ordenCapacitacionService.getPersonal();
+    const raw = res.data || res;
+    personalData = Array.isArray(raw) ? raw : (raw as any).data || [];
+
+    select.innerHTML = '<option value="">Seleccione ponente...</option>' +
+      personalData.map(p =>
+        '<option value="' + p.id + '">' + p.nombre + ' ' + (p.apellidos || '') + '</option>'
+      ).join('');
+  } catch (e) {
+    console.error('Error cargando personal:', e);
+    select.innerHTML = '<option value="">Error al cargar</option>';
+  }
+}
+
+async function cargarDatosCotizacion(cotizacionId: number) {
+  try {
+    const res = await ordenCapacitacionService.getDesdeCotizacion(cotizacionId);
+    const raw = res.data || res;
+    const data = (raw as any).data || raw;
+
+    // Auto-llenar cliente
+    (document.getElementById('oc-cliente-nombre') as HTMLInputElement).value = data.cliente?.nombre_empresa || '';
+    (document.getElementById('oc-cliente-id') as HTMLInputElement).value = String(data.cliente?.id || '');
+    (document.getElementById('oc-cliente-ruc') as HTMLInputElement).value = data.cliente?.ruc || '';
+
+    // Info cotización
+    const infoDiv = document.getElementById('oc-cotizacion-info') as HTMLElement;
+    infoDiv.style.display = 'block';
+    (document.getElementById('oc-cot-info-numero') as HTMLElement).textContent = data.cotizacion?.numero_cotizacion || '';
+    (document.getElementById('oc-cot-info-detalle') as HTMLElement).textContent =
+      '| Emitida: ' + (data.cotizacion?.fecha_emision || '') + ' | Total: S/ ' + Number(data.costo_total || 0).toFixed(2);
+
+    // Mostrar detalles de la cotización
+    const detalles = data.detalles || [];
+    const detallesDiv = document.getElementById('oc-detalles-cotizacion') as HTMLElement;
+    const detallesLista = document.getElementById('oc-detalles-lista') as HTMLElement;
+
+    if (detalles.length > 0) {
+      detallesDiv.style.display = 'block';
+      detallesLista.innerHTML =
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          '<thead>' +
+            '<tr style="background:#e2e8f0;">' +
+              '<th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569;">Servicio/Capacitación</th>' +
+              '<th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569;">Tipo</th>' +
+              '<th style="padding:8px 12px;text-align:center;font-weight:600;color:#475569;">Cant.</th>' +
+              '<th style="padding:8px 12px;text-align:right;font-weight:600;color:#475569;">Precio Unit.</th>' +
+              '<th style="padding:8px 12px;text-align:right;font-weight:600;color:#475569;">Subtotal</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' +
+            detalles.map((d: any) => {
+              const badgeClass = d.tipo === 'Capacitación' ? 'oc-badge-info' : 'oc-badge-purple';
+              return '<tr style="border-bottom:1px solid #e2e8f0;">' +
+                '<td style="padding:8px 12px;">' + (d.nombre || '-') + '</td>' +
+                '<td style="padding:8px 12px;"><span class="oc-badge ' + badgeClass + '">' + (d.tipo || '-') + '</span></td>' +
+                '<td style="padding:8px 12px;text-align:center;">' + (d.cantidad || 1) + '</td>' +
+                '<td style="padding:8px 12px;text-align:right;">S/ ' + Number(d.precio_unitario || 0).toFixed(2) + '</td>' +
+                '<td style="padding:8px 12px;text-align:right;font-weight:600;">S/ ' + (Number(d.cantidad || 1) * Number(d.precio_unitario || 0)).toFixed(2) + '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody>' +
+        '</table>';
+    } else {
+      detallesDiv.style.display = 'none';
+    }
+
+    // Auto-llenar servicio
+    if (data.servicio) {
+      (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = data.servicio.nombre || '';
+      (document.getElementById('oc-servicio-id') as HTMLInputElement).value = String(data.servicio.id || '');
+    }
+
+    // Auto-llenar modalidad sugerida
+    if (data.servicio?.modalidad_sugerida) {
+      const modalidadSelect = document.getElementById('oc-modalidad') as HTMLSelectElement;
+      const modalidadMap: any = { 'Presencial': 'Presencial', 'Virtual': 'Virtual', 'Hibrido': 'Híbrido', 'Híbrido': 'Híbrido' };
+      const mapped = modalidadMap[data.servicio.modalidad_sugerida] || data.servicio.modalidad_sugerida;
+      // DB enum uses 'Híbrido'
+      if (modalidadSelect) modalidadSelect.value = mapped;
+    }
+
+    // Auto-llenar costo
+    (document.getElementById('oc-costo') as HTMLInputElement).value = Number(data.costo_total || 0).toFixed(2);
+
+  } catch (e: any) {
+    console.error('Error cargando datos de cotización:', e);
+    const msg = e?.data?.message || 'No se pudieron cargar los datos de la cotización';
+    mostrarToast('error', 'Error', msg);
+  }
+}
+
+function limpiarFormOC() {
+  (document.getElementById('oc-edit-id') as HTMLInputElement).value = '';
+  (document.getElementById('oc-numero-orden') as HTMLInputElement).value = '';
+  (document.getElementById('oc-cotizacion-ref') as HTMLSelectElement).value = '';
+  (document.getElementById('oc-cliente-nombre') as HTMLInputElement).value = '';
+  (document.getElementById('oc-cliente-id') as HTMLInputElement).value = '';
+  (document.getElementById('oc-cliente-ruc') as HTMLInputElement).value = '';
+  (document.getElementById('oc-cotizacion-info') as HTMLElement).style.display = 'none';
+  (document.getElementById('oc-detalles-cotizacion') as HTMLElement).style.display = 'none';
+  (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = '';
+  (document.getElementById('oc-servicio-id') as HTMLInputElement).value = '';
+  (document.getElementById('oc-ponente') as HTMLSelectElement).value = '';
+  (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
+  (document.getElementById('oc-hora-servicio') as HTMLInputElement).value = '';
+  (document.getElementById('oc-modalidad') as HTMLSelectElement).value = '';
+  (document.getElementById('oc-num-participantes') as HTMLInputElement).value = '1';
+  (document.getElementById('oc-num-certificados') as HTMLInputElement).value = '0';
+  (document.getElementById('oc-costo') as HTMLInputElement).value = '0.00';
+  (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = '';
+}
+
+async function abrirModalNuevaOC() {
+  limpiarFormOC();
+  (document.getElementById('modal-oc-titulo') as HTMLElement).innerHTML =
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Nueva Orden de Capacitación';
+  const cotSelect = document.getElementById('oc-cotizacion-ref') as HTMLSelectElement;
+  cotSelect.disabled = false;
+  await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal()]);
+
+  // Cargar siguiente número de orden
+  try {
+    const res = await ordenCapacitacionService.getEstadisticas();
+    const raw = res.data || res;
+    const stats = (raw as any).data || raw;
+    if (stats.siguiente_numero) {
+      (document.getElementById('oc-numero-orden') as HTMLInputElement).value = stats.siguiente_numero;
+    }
+  } catch (e) {
+    console.error('Error obteniendo siguiente número:', e);
   }
 
-  if (btnCerrar) {
-    btnCerrar.addEventListener('click', ocultarFormularioOrdenCapacitacion);
+  (document.getElementById('modal-oc') as HTMLElement).style.display = 'flex';
+}
+
+async function abrirModalEditarOC(id: number) {
+  try {
+    const res = await ordenCapacitacionService.getById(id);
+    const raw = res.data || res;
+    const orden = (raw as any).data || raw;
+
+    limpiarFormOC();
+    await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal()]);
+
+    (document.getElementById('modal-oc-titulo') as HTMLElement).innerHTML =
+      '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Ver / Editar Orden';
+    (document.getElementById('oc-edit-id') as HTMLInputElement).value = String(orden.id);
+    (document.getElementById('oc-numero-orden') as HTMLInputElement).value = orden.numero_orden || '';
+
+    // Cotización (readonly en edición)
+    const cotSelect = document.getElementById('oc-cotizacion-ref') as HTMLSelectElement;
+    if (orden.id_cotizacion) {
+      const cotNum = orden.cotizacion?.numero_cotizacion || ('COT-' + orden.id_cotizacion);
+      const existing = Array.from(cotSelect.options).find(o => o.value === String(orden.id_cotizacion));
+      if (!existing) {
+        cotSelect.insertAdjacentHTML('beforeend', '<option value="' + orden.id_cotizacion + '">' + cotNum + '</option>');
+      }
+      cotSelect.value = String(orden.id_cotizacion);
+      cotSelect.disabled = true;
+    }
+
+    // Cliente
+    (document.getElementById('oc-cliente-nombre') as HTMLInputElement).value = orden.cliente?.nombre_empresa || '';
+    (document.getElementById('oc-cliente-id') as HTMLInputElement).value = String(orden.cliente?.id || orden.id_cliente || '');
+    (document.getElementById('oc-cliente-ruc') as HTMLInputElement).value = orden.cliente?.ruc || '';
+
+    // Servicio
+    (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = orden.servicio?.nombre || '';
+    (document.getElementById('oc-servicio-id') as HTMLInputElement).value = String(orden.id_servicio || '');
+
+    // Datos del servicio
+    (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = orden.fecha_servicio?.split('T')[0] || '';
+    (document.getElementById('oc-hora-servicio') as HTMLInputElement).value = orden.hora_servicio || '';
+
+    // Ponente
+    setTimeout(() => {
+      (document.getElementById('oc-ponente') as HTMLSelectElement).value = String(orden.id_ponente || '');
+    }, 100);
+
+    // Modalidad & rest
+    (document.getElementById('oc-modalidad') as HTMLSelectElement).value = orden.modalidad || '';
+    (document.getElementById('oc-num-participantes') as HTMLInputElement).value = String(orden.num_participantes || 1);
+    (document.getElementById('oc-num-certificados') as HTMLInputElement).value = String(orden.num_certificados || 0);
+    (document.getElementById('oc-costo') as HTMLInputElement).value = Number(orden.costo || 0).toFixed(2);
+    (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = orden.observaciones || '';
+
+    (document.getElementById('modal-oc') as HTMLElement).style.display = 'flex';
+  } catch (e) {
+    console.error('Error cargando OC:', e);
+    mostrarToast('error', 'Error', 'No se pudo cargar la orden');
+  }
+}
+
+async function guardarOC() {
+  const editId = (document.getElementById('oc-edit-id') as HTMLInputElement).value;
+  const idCotizacion = (document.getElementById('oc-cotizacion-ref') as HTMLSelectElement).value;
+  const idServicio = (document.getElementById('oc-servicio-id') as HTMLInputElement).value;
+  const idPonente = (document.getElementById('oc-ponente') as HTMLSelectElement).value;
+  const fechaServicio = (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value;
+  const horaServicio = (document.getElementById('oc-hora-servicio') as HTMLInputElement).value;
+  const modalidad = (document.getElementById('oc-modalidad') as HTMLSelectElement).value;
+  const numParticipantes = (document.getElementById('oc-num-participantes') as HTMLInputElement).value;
+  const numCertificados = (document.getElementById('oc-num-certificados') as HTMLInputElement).value;
+  const costo = (document.getElementById('oc-costo') as HTMLInputElement).value;
+  const observaciones = (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value?.trim();
+
+  if (!idCotizacion) {
+    mostrarToast('error', 'Campo requerido', 'Debe seleccionar una cotización de referencia');
+    return;
+  }
+  if (!fechaServicio) {
+    mostrarToast('error', 'Campo requerido', 'La fecha del servicio es obligatoria');
+    return;
+  }
+  if (!idPonente) {
+    mostrarToast('error', 'Campo requerido', 'Debe seleccionar un ponente');
+    return;
+  }
+  if (!modalidad) {
+    mostrarToast('error', 'Campo requerido', 'Debe seleccionar la modalidad');
+    return;
+  }
+  if (!numParticipantes || parseInt(numParticipantes) < 1) {
+    mostrarToast('error', 'Campo requerido', 'El número de participantes debe ser al menos 1');
+    return;
   }
 
-  if (btnCancelar) {
-    btnCancelar.addEventListener('click', ocultarFormularioOrdenCapacitacion);
-  }
+  const payload: any = {
+    id_cotizacion: Number(idCotizacion),
+    id_servicio: idServicio ? Number(idServicio) : null,
+    id_ponente: Number(idPonente),
+    fecha_servicio: fechaServicio,
+    hora_servicio: horaServicio || null,
+    modalidad,
+    num_participantes: parseInt(numParticipantes),
+    num_certificados: parseInt(numCertificados) || 0,
+    costo: parseFloat(costo) || 0,
+    observaciones: observaciones || null,
+  };
 
-  if (form) {
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      handleSubmitOrdenCapacitacion();
+  try {
+    if (editId) {
+      await ordenCapacitacionService.update(Number(editId), payload);
+      mostrarToast('success', 'Orden Actualizada', 'La orden se actualizó correctamente');
+    } else {
+      await ordenCapacitacionService.create(payload);
+      mostrarToast('success', 'Orden Creada', 'La orden de capacitación se creó correctamente');
+    }
+    (document.getElementById('modal-oc') as HTMLElement).style.display = 'none';
+    await Promise.all([cargarOrdenesCapacitacion(), cargarEstadisticasOC()]);
+  } catch (e: any) {
+    console.error('Error guardando OC:', e);
+    const msg = e?.data?.message || e?.message || 'No se pudo guardar la orden';
+    mostrarToast('error', 'Error', msg);
+  }
+}
+
+// =============================
+// INIT EVENTS
+// =============================
+export function initOrdenesCapacitacionEvents() {
+  // Botón nueva OC
+  document.getElementById('btn-nueva-oc')?.addEventListener('click', abrirModalNuevaOC);
+
+  // Filtrar
+  document.getElementById('oc-btn-filtrar')?.addEventListener('click', cargarOrdenesCapacitacion);
+
+  // Search con debounce
+  const searchInput = document.getElementById('oc-search') as HTMLInputElement;
+  if (searchInput) {
+    let timeout: any;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(cargarOrdenesCapacitacion, 400);
     });
   }
 
-  // Actualizar costo en tiempo real
-  const inputCosto = document.getElementById('costo') as HTMLInputElement;
-  if (inputCosto) {
-    inputCosto.addEventListener('input', actualizarCostoTotal);
-  }
+  // Modal OC cerrar/cancelar
+  const modal = document.getElementById('modal-oc') as HTMLElement;
+  document.getElementById('modal-oc-cerrar')?.addEventListener('click', () => { if (modal) modal.style.display = 'none'; });
+  document.getElementById('modal-oc-cancelar')?.addEventListener('click', () => { if (modal) modal.style.display = 'none'; });
 
-  // Cargar datos de cotización si se selecciona una referencia
-  const selectCotizacion = document.getElementById('id_cotizacion_ref') as HTMLSelectElement;
-  if (selectCotizacion) {
-    selectCotizacion.addEventListener('change', cargarDatosCotizacion);
-  }
+  // Guardar
+  document.getElementById('modal-oc-guardar')?.addEventListener('click', guardarOC);
 
-  // Establecer fecha/hora actual por defecto
-  const fechaServicio = document.getElementById('fecha_servicio') as HTMLInputElement;
-  if (fechaServicio && !fechaServicio.value) {
-    const hoy = new Date().toISOString().split('T')[0];
-    fechaServicio.value = hoy;
-  }
-}
-
-function mostrarFormularioOrdenCapacitacion() {
-  const overlay = document.getElementById('formularioOrdenCapacitacion');
-  if (overlay) {
-    overlay.style.display = 'flex';
-  }
-}
-
-function ocultarFormularioOrdenCapacitacion() {
-  const overlay = document.getElementById('formularioOrdenCapacitacion');
-  const form = document.getElementById('formOrdenCapacitacion') as HTMLFormElement;
-  
-  if (overlay) {
-    overlay.style.display = 'none';
-  }
-  
-  if (form) {
-    form.reset();
-  }
-  
-  // Resetear costo total
-  const costoTotal = document.getElementById('costoTotal');
-  if (costoTotal) {
-    costoTotal.textContent = 'S/ 0.00';
-  }
-}
-
-function cargarDatosCotizacion() {
-  const selectCotizacion = document.getElementById('id_cotizacion_ref') as HTMLSelectElement;
-  const selectCliente = document.getElementById('id_cliente') as HTMLSelectElement;
-  
-  if (selectCotizacion && selectCotizacion.value) {
-    // Aquí iría la lógica para cargar los datos de la cotización desde el backend
-    // Por ahora, solo auto-completamos el cliente basado en la selección
-    const texto = selectCotizacion.options[selectCotizacion.selectedIndex].text;
-    
-    if (texto.includes('Industrias Lima SAC')) {
-      selectCliente.value = '1';
-    } else if (texto.includes('Comercial Trujillo EIRL')) {
-      selectCliente.value = '2';
-    } else if (texto.includes('Distribuidora Norte SA')) {
-      selectCliente.value = '3';
+  // Cotización change -> auto-fill
+  document.getElementById('oc-cotizacion-ref')?.addEventListener('change', async () => {
+    const val = (document.getElementById('oc-cotizacion-ref') as HTMLSelectElement).value;
+    if (val) {
+      await cargarDatosCotizacion(Number(val));
+    } else {
+      (document.getElementById('oc-cliente-nombre') as HTMLInputElement).value = '';
+      (document.getElementById('oc-cliente-id') as HTMLInputElement).value = '';
+      (document.getElementById('oc-cliente-ruc') as HTMLInputElement).value = '';
+      (document.getElementById('oc-cotizacion-info') as HTMLElement).style.display = 'none';
+      (document.getElementById('oc-detalles-cotizacion') as HTMLElement).style.display = 'none';
+      (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = '';
+      (document.getElementById('oc-servicio-id') as HTMLInputElement).value = '';
+      (document.getElementById('oc-costo') as HTMLInputElement).value = '0.00';
     }
-    
-    // TODO: Cargar servicio y otros datos de la cotización automáticamente
-    console.log('Cargar datos de cotización:', selectCotizacion.value);
-  }
-}
+  });
 
-function actualizarCostoTotal() {
-  const inputCosto = document.getElementById('costo') as HTMLInputElement;
-  const costoTotal = document.getElementById('costoTotal');
-  
-  if (inputCosto && costoTotal) {
-    const costo = parseFloat(inputCosto.value) || 0;
-    costoTotal.textContent = `S/ ${costo.toFixed(2)}`;
-  }
-}
-
-function handleSubmitOrdenCapacitacion() {
-  const form = document.getElementById('formOrdenCapacitacion') as HTMLFormElement;
-  if (!form) return;
-  
-  // Recopilar datos del formulario
-  const formData = {
-    orden_capacitacion: {
-      numero_orden: (document.getElementById('numero_orden') as HTMLInputElement)?.value,
-      id_cotizacion: (document.getElementById('id_cotizacion_ref') as HTMLSelectElement)?.value || null,
-      id_cliente: (document.getElementById('id_cliente') as HTMLSelectElement)?.value,
-      id_servicio: (document.getElementById('id_servicio') as HTMLSelectElement)?.value,
-      id_ponente: (document.getElementById('id_ponente') as HTMLSelectElement)?.value,
-      fecha_servicio: (document.getElementById('fecha_servicio') as HTMLInputElement)?.value,
-      hora_servicio: (document.getElementById('hora_servicio') as HTMLInputElement)?.value,
-      modalidad: (document.getElementById('modalidad') as HTMLSelectElement)?.value,
-      num_participantes: (document.getElementById('num_participantes') as HTMLInputElement)?.value,
-      num_certificados: (document.getElementById('num_certificados') as HTMLInputElement)?.value || null,
-      costo: (document.getElementById('costo') as HTMLInputElement)?.value,
-      aprobacion: (document.getElementById('aprobacion') as HTMLInputElement)?.value || null,
-      observaciones: (document.getElementById('observaciones') as HTMLTextAreaElement)?.value || null
-    }
-  };
-  
-  console.log('Datos de la orden de capacitación:', formData);
-  
-  // Aquí iría la llamada al backend para guardar
-  // Por ahora, simulamos éxito
-  alert('Orden de capacitación/auditoría guardada exitosamente');
-  
-  // Generar PDF (función placeholder)
-  generarPDFOrdenCapacitacion(formData);
-  
-  // Cerrar formulario
-  ocultarFormularioOrdenCapacitacion();
-}
-
-function generarPDFOrdenCapacitacion(data: any) {
-  console.log('Generando PDF de orden de capacitación...', data);
-  // TODO: iria implementar la generación de PDF
-  alert('Función de generación de PDF en desarrollo');
+  // Cargar datos iniciales
+  cargarEstadisticasOC();
+  cargarOrdenesCapacitacion();
 }

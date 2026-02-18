@@ -21,6 +21,9 @@ export { areaService } from './areaService';
 export { mantenimientoService } from './mantenimientoService';
 export { actividadMantenimientoService } from './actividadMantenimientoService';
 
+// Servicios Logística
+export { servicioService } from './servicioService';
+
 // Servicios Finanzas
 export { multicimService } from './multicimService';
 

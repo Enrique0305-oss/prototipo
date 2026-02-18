@@ -7,9 +7,11 @@ use App\Models\OrdenProducto;
 use App\Models\DetalleOrdenProducto;
 use App\Models\Cotizacion;
 use App\Models\CotizacionDetalle;
+use App\Models\Multicim;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class OrdenProductoController extends Controller
 {
@@ -51,6 +53,7 @@ class OrdenProductoController extends Controller
                 ],
                 'emisor' => $orden->emisor ? $orden->emisor->nombre : null,
                 'cotizacion_numero' => $orden->cotizacion ? $orden->cotizacion->numero_cotizacion : null,
+                'estado' => $orden->estado ?? 'Aprobado',
             ];
         });
 
@@ -82,6 +85,7 @@ class OrdenProductoController extends Controller
                 'total' => $cot->total,
                 'subtotal' => $cot->subtotal,
                 'igv' => $cot->igv,
+                'incluye_igv' => (bool) $cot->incluye_igv,
             ];
         });
 
@@ -133,7 +137,7 @@ class OrdenProductoController extends Controller
         $detalles = $cotizacion->detalles->map(function($detalle) {
             return [
                 'id_producto' => $detalle->id_producto,
-                'producto_nombre' => $detalle->producto ? $detalle->producto->nombre : null,
+                'producto_nombre' => $detalle->producto ? $detalle->producto->descripcion : null,
                 'cantidad' => $detalle->cantidad,
                 'precio_unitario' => $detalle->precio_unitario,
                 'subtotal' => $detalle->subtotal,
@@ -155,6 +159,9 @@ class OrdenProductoController extends Controller
                     'direccion' => $cotizacion->cliente->direccion,
                 ],
                 'total' => $cotizacion->total,
+                'subtotal' => $cotizacion->subtotal,
+                'igv' => $cotizacion->igv,
+                'incluye_igv' => (bool) $cotizacion->incluye_igv,
                 'detalles' => $detalles,
             ]
         ]);
@@ -171,6 +178,7 @@ class OrdenProductoController extends Controller
             'detalles.*.id_producto' => 'required|exists:productos,id',
             'detalles.*.cantidad' => 'required|integer|min:1',
             'detalles.*.precio_unitario' => 'required|numeric|min:0',
+            'incluye_igv' => 'sometimes|boolean',
         ]);
 
         $cotizacion = Cotizacion::find($validated['id_cotizacion']);
@@ -193,12 +201,15 @@ class OrdenProductoController extends Controller
         try {
             DB::beginTransaction();
 
-            // Calcular total
-            $total = 0;
+            // Calcular subtotal, IGV y total
+            $subtotalCalc = 0;
             foreach ($validated['detalles'] as $detalle) {
-                $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
-                $total += $subtotal;
+                $subtotalCalc += $detalle['cantidad'] * $detalle['precio_unitario'];
             }
+
+            $incluyeIgv = $validated['incluye_igv'] ?? true;
+            $igvCalc = $incluyeIgv ? round($subtotalCalc * 0.18, 2) : 0;
+            $total = $subtotalCalc + $igvCalc;
 
             // Crear orden de producto
             $orden = OrdenProducto::create([
@@ -206,8 +217,12 @@ class OrdenProductoController extends Controller
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
                 'fecha_envio' => $validated['fecha_envio'],
+                'subtotal' => $subtotalCalc,
+                'igv' => $igvCalc,
+                'incluye_igv' => $incluyeIgv,
                 'total' => $total,
                 'emitido_por' => $validated['emitido_por'],
+                'estado' => 'Aprobado',
             ]);
 
             // Crear detalles
@@ -282,18 +297,30 @@ class OrdenProductoController extends Controller
 
         $validated = $request->validate([
             'fecha_envio' => 'sometimes|date',
+            'incluye_igv' => 'sometimes|boolean',
             'detalles' => 'sometimes|array|min:1',
             'detalles.*.id_producto' => 'required_with:detalles|exists:productos,id',
             'detalles.*.cantidad' => 'required_with:detalles|integer|min:1',
             'detalles.*.precio_unitario' => 'required_with:detalles|numeric|min:0',
+            'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
         ]);
 
         try {
             DB::beginTransaction();
 
+            // Actualizar estado si viene
+            if (isset($validated['estado'])) {
+                $orden->estado = $validated['estado'];
+            }
+
             // Actualizar fecha si viene
             if (isset($validated['fecha_envio'])) {
                 $orden->fecha_envio = $validated['fecha_envio'];
+            }
+
+            // Actualizar IGV toggle
+            if (isset($validated['incluye_igv'])) {
+                $orden->incluye_igv = $validated['incluye_igv'];
             }
 
             // Si se actualizan detalles
@@ -301,10 +328,10 @@ class OrdenProductoController extends Controller
                 $orden->detalles()->delete();
 
                 // Crear nuevos detalles y calcular total
-                $total = 0;
+                $subtotalCalc = 0;
                 foreach ($validated['detalles'] as $detalle) {
                     $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
-                    $total += $subtotal;
+                    $subtotalCalc += $subtotal;
                     
                     DetalleOrdenProducto::create([
                         'id_orden_producto' => $orden->id,
@@ -315,7 +342,17 @@ class OrdenProductoController extends Controller
                     ]);
                 }
 
-                $orden->total = $total;
+                $incluyeIgv = $orden->incluye_igv;
+                $igvCalc = $incluyeIgv ? round($subtotalCalc * 0.18, 2) : 0;
+                $orden->subtotal = $subtotalCalc;
+                $orden->igv = $igvCalc;
+                $orden->total = $subtotalCalc + $igvCalc;
+            } elseif (isset($validated['incluye_igv'])) {
+                // Solo cambió IGV, recalcular desde subtotal existente
+                $subtotalCalc = (float) $orden->subtotal;
+                $igvCalc = $orden->incluye_igv ? round($subtotalCalc * 0.18, 2) : 0;
+                $orden->igv = $igvCalc;
+                $orden->total = $subtotalCalc + $igvCalc;
             }
 
             $orden->save();
@@ -392,11 +429,47 @@ class OrdenProductoController extends Controller
             'valor_mes_actual' => OrdenProducto::whereMonth('fecha_envio', date('m'))
                                               ->whereYear('fecha_envio', date('Y'))
                                               ->sum('total'),
+            'siguiente_numero' => OrdenProducto::generarNumero(),
         ];
 
         return response()->json([
             'success' => true,
             'data' => $stats
         ]);
+    }
+
+    /**
+     * Generar PDF de orden de producto
+     */
+    public function generarPDF($id, Request $request)
+    {
+        $orden = OrdenProducto::with(['cliente', 'cotizacion', 'emisor', 'detalles.producto'])
+                              ->find($id);
+
+        if (!$orden) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Orden de producto no encontrada'
+            ], 404);
+        }
+
+        // Siempre Multitasking (id:2) para productos
+        $multicim = Multicim::find(2);
+
+        if (!$multicim) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontró la información de pago (Multicim)'
+            ], 500);
+        }
+
+        $pdf = Pdf::loadView('OrdenProductoPDF', compact('orden', 'multicim'))
+                  ->setPaper('a4', 'portrait');
+
+        if ($request->get('descargar') === 'true') {
+            return $pdf->download('orden-producto-' . $orden->numero_orden . '.pdf');
+        }
+
+        return $pdf->stream('orden-producto-' . $orden->numero_orden . '.pdf');
     }
 }

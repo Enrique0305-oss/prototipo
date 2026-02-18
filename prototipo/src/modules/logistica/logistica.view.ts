@@ -1,9 +1,20 @@
 // Logística View
 import { clienteService } from '../../services/clienteService';
-import type { Cliente } from '../../core/api/types';
+import { servicioService } from '../../services/servicioService';
+import { catalogoCapAudService } from '../../services/catalogoCapAudService';
+import type { CatalogoCapAud } from '../../services/catalogoCapAudService';
+import { mostrarToast } from '../../shared/toast';
+import type { Cliente, Servicio } from '../../core/api/types';
 
 let clientesLogisticaData: Cliente[] = [];
 let filtroSearchLogistica = '';
+let serviciosData: Servicio[] = [];
+let filtroSearchServicios = '';
+let filtroEstadoServicios = 'activo';
+let catalogoCapAudData: CatalogoCapAud[] = [];
+let filtroSearchCatalogo = '';
+let filtroEstadoCatalogo = 'activo';
+let filtroTipoCatalogo = '';
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
@@ -186,177 +197,819 @@ export function renderServiciosDisponiblesTab() {
     <div class="search-filter-bar">
       <div class="search-input-wrapper">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-        <input type="text" placeholder="Buscar servicio..." class="search-input">
+        <input type="text" id="servicios-search" placeholder="Buscar servicio..." class="search-input">
       </div>
-      <select class="filter-select">
-        <option>Todos los servicios</option>
-        <option>Fumigación</option>
-        <option>Desratización</option>
-        <option>Desinsectación</option>
-        <option>Sanitización</option>
+      <select class="filter-select" id="servicios-filter-estado">
+        <option value="activo">Activos</option>
+        <option value="all">Todos los servicios</option>
+        <option value="inactivo">Inactivos</option>
       </select>
-      <button class="btn-filter">
+      <button class="btn-filter" id="servicios-btn-filtrar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
         Filtrar
       </button>
+      <button class="btn-primary" id="servicios-btn-nuevo" style="margin-left:auto;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Nuevo Servicio
+      </button>
     </div>
 
-    <div class="services-grid">
-      <div class="service-card">
-        <div class="service-icon blue">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-        </div>
-        <h3>Fumigación Residencial</h3>
-        <p class="service-description">Control integral de plagas en viviendas y departamentos</p>
-        <div class="service-stats">
-          <div class="service-stat">
-            <span class="stat-label">Duración</span>
-            <span class="stat-value">2-3 hrs</span>
-          </div>
-          <div class="service-stat">
-            <span class="stat-label">Precio Base</span>
-            <span class="stat-value">$180</span>
-          </div>
-        </div>
-        <div class="service-tags">
-          <span class="tag">Cucarachas</span>
-          <span class="tag">Hormigas</span>
-          <span class="tag">Arañas</span>
-        </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
-      </div>
+    <div class="services-grid" id="servicios-grid">
+      <div style="text-align:center;padding:40px;color:#64748b;grid-column:1/-1;">Cargando servicios...</div>
+    </div>
 
-      <div class="service-card">
-        <div class="service-icon green">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-        </div>
-        <h3>Fumigación Comercial</h3>
-        <p class="service-description">Protección profesional para negocios y locales comerciales</p>
-        <div class="service-stats">
-          <div class="service-stat">
-            <span class="stat-label">Duración</span>
-            <span class="stat-value">4-6 hrs</span>
-          </div>
-          <div class="service-stat">
-            <span class="stat-label">Precio Base</span>
-            <span class="stat-value">$350</span>
-          </div>
-        </div>
-        <div class="service-tags">
-          <span class="tag">Roedores</span>
-          <span class="tag">Insectos</span>
-          <span class="tag">Certificado</span>
-        </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
-      </div>
+    <div class="pagination" id="servicios-pagination">
+      <span class="pagination-info"></span>
+    </div>
 
-      <div class="service-card">
-        <div class="service-icon orange">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+    <!-- Modal Crear/Editar Servicio -->
+    <div class="modal-overlay" id="modal-servicio" style="display:none;">
+      <div class="modal-container" style="max-width:560px;">
+        <div class="modal-header">
+          <h2 id="modal-servicio-titulo">Nuevo Servicio</h2>
+          <button class="modal-close" id="modal-servicio-cerrar">&times;</button>
         </div>
-        <h3>Desratización</h3>
-        <p class="service-description">Eliminación y control especializado de roedores</p>
-        <div class="service-stats">
-          <div class="service-stat">
-            <span class="stat-label">Duración</span>
-            <span class="stat-value">3-4 hrs</span>
+        <div class="modal-body">
+          <input type="hidden" id="servicio-id">
+          <div class="form-group">
+            <label class="form-label">Nombre <span style="color:#ef4444">*</span></label>
+            <input type="text" id="servicio-nombre" class="form-input" maxlength="100" placeholder="Ej: Fumigación Residencial">
           </div>
-          <div class="service-stat">
-            <span class="stat-label">Precio Base</span>
-            <span class="stat-value">$250</span>
+          <div class="form-group">
+            <label class="form-label">Descripción <span style="color:#ef4444">*</span></label>
+            <input type="text" id="servicio-descripcion" class="form-input" maxlength="100" placeholder="Breve descripción del servicio">
           </div>
-        </div>
-        <div class="service-tags">
-          <span class="tag">Ratas</span>
-          <span class="tag">Ratones</span>
-          <span class="tag">Prevención</span>
-        </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
-      </div>
-
-      <div class="service-card">
-        <div class="service-icon blue">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
-        </div>
-        <h3>Sanitización COVID-19</h3>
-        <p class="service-description">Desinfección profunda con productos certificados</p>
-        <div class="service-stats">
-          <div class="service-stat">
-            <span class="stat-label">Duración</span>
-            <span class="stat-value">2-3 hrs</span>
+          <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+              <label class="form-label">Duración Estimada (min)</label>
+              <input type="number" id="servicio-duracion" class="form-input" min="1" value="60" placeholder="60">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estado</label>
+              <select id="servicio-estado" class="form-input">
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
           </div>
-          <div class="service-stat">
-            <span class="stat-label">Precio Base</span>
-            <span class="stat-value">$200</span>
+          <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group" style="display:flex;align-items:center;gap:8px;padding-top:24px;">
+              <input type="checkbox" id="servicio-movilidad" style="width:18px;height:18px;">
+              <label for="servicio-movilidad" class="form-label" style="margin:0;">Requiere Movilidad</label>
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:8px;padding-top:24px;">
+              <input type="checkbox" id="servicio-certificado" style="width:18px;height:18px;">
+              <label for="servicio-certificado" class="form-label" style="margin:0;">Requiere Certificado</label>
+            </div>
           </div>
-        </div>
-        <div class="service-tags">
-          <span class="tag">Virus</span>
-          <span class="tag">Bacterias</span>
-          <span class="tag">Certificado</span>
-        </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
-      </div>
-
-      <div class="service-card">
-        <div class="service-icon green">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-        </div>
-        <h3>Fumigación Industrial</h3>
-        <p class="service-description">Soluciones integrales para plantas y almacenes</p>
-        <div class="service-stats">
-          <div class="service-stat">
-            <span class="stat-label">Duración</span>
-            <span class="stat-value">8+ hrs</span>
-          </div>
-          <div class="service-stat">
-            <span class="stat-label">Precio Base</span>
-            <span class="stat-value">$800</span>
+          <div class="form-group" id="servicio-plantilla-group" style="display:none;">
+            <label class="form-label">Plantilla Certificado</label>
+            <input type="text" id="servicio-plantilla" class="form-input" maxlength="255" placeholder="Nombre de la plantilla">
           </div>
         </div>
-        <div class="service-tags">
-          <span class="tag">Gran Escala</span>
-          <span class="tag">Preventivo</span>
-          <span class="tag">BPM</span>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-servicio-cancelar">Cancelar</button>
+          <button class="btn-primary" id="modal-servicio-guardar">Guardar</button>
         </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
-      </div>
-
-      <div class="service-card">
-        <div class="service-icon orange">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-        </div>
-        <h3>Desinsectación</h3>
-        <p class="service-description">Control especializado de insectos voladores y rastreros</p>
-        <div class="service-stats">
-          <div class="service-stat">
-            <span class="stat-label">Duración</span>
-            <span class="stat-value">2-4 hrs</span>
-          </div>
-          <div class="service-stat">
-            <span class="stat-label">Precio Base</span>
-            <span class="stat-value">$220</span>
-          </div>
-        </div>
-        <div class="service-tags">
-          <span class="tag">Moscas</span>
-          <span class="tag">Mosquitos</span>
-          <span class="tag">Pulgas</span>
-        </div>
-        <button class="btn-secondary fullwidth">Ver Detalles</button>
       </div>
     </div>
 
-    <div class="pagination">
-      <span class="pagination-info">Mostrando 1-6 de 12 servicios disponibles</span>
-      <div class="pagination-controls">
-        <button class="pagination-btn" disabled>Anterior</button>
-        <button class="pagination-btn active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">Siguiente</button>
+    <!-- Modal Confirmar Eliminación -->
+    <div class="modal-overlay" id="modal-servicio-eliminar" style="display:none;">
+      <div class="modal-container" style="max-width:420px;">
+        <div class="modal-header">
+          <h2>Confirmar Desactivación</h2>
+          <button class="modal-close" id="modal-servicio-eliminar-cerrar">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>¿Estás seguro de que deseas desactivar el servicio <strong id="servicio-eliminar-nombre"></strong>?</p>
+          <p style="color:#64748b;font-size:0.9em;">El servicio pasará a estado inactivo y no aparecerá en los listados.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-servicio-eliminar-cancelar">Cancelar</button>
+          <button class="btn-primary" id="modal-servicio-eliminar-confirmar" style="background:#ef4444;">Desactivar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- CATÁLOGO DE CAPACITACIONES Y AUDITORÍAS -->
+    <!-- ============================================ -->
+    <div style="margin-top:40px;padding-top:32px;border-top:2px solid #e2e8f0;">
+      <h2 style="font-size:20px;font-weight:700;color:#1a2332;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+        Catálogo de Capacitaciones y Auditorías
+      </h2>
+
+      <div class="search-filter-bar">
+        <div class="search-input-wrapper">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+          <input type="text" id="catalogo-search" placeholder="Buscar capacitación o auditoría..." class="search-input">
+        </div>
+        <select class="filter-select" id="catalogo-filter-tipo">
+          <option value="">Todos los tipos</option>
+          <option value="Capacitación">Capacitaciones</option>
+          <option value="Auditoría">Auditorías</option>
+        </select>
+        <select class="filter-select" id="catalogo-filter-estado">
+          <option value="activo">Activos</option>
+          <option value="all">Todos</option>
+          <option value="inactivo">Inactivos</option>
+        </select>
+        <button class="btn-filter" id="catalogo-btn-filtrar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+          Filtrar
+        </button>
+        <button class="btn-primary" id="catalogo-btn-nuevo" style="margin-left:auto;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Nuevo
+        </button>
+      </div>
+
+      <div class="services-grid" id="catalogo-grid">
+        <div style="text-align:center;padding:40px;color:#64748b;grid-column:1/-1;">Cargando catálogo...</div>
+      </div>
+
+      <div class="pagination" id="catalogo-pagination">
+        <span class="pagination-info"></span>
+      </div>
+    </div>
+
+    <!-- Modal Crear/Editar Catálogo -->
+    <div class="modal-overlay" id="modal-catalogo" style="display:none;">
+      <div class="modal-container" style="max-width:560px;">
+        <div class="modal-header">
+          <h2 id="modal-catalogo-titulo">Nuevo Registro</h2>
+          <button class="modal-close" id="modal-catalogo-cerrar">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="catalogo-id">
+          <div class="form-group">
+            <label class="form-label">Tipo <span style="color:#ef4444">*</span></label>
+            <select id="catalogo-tipo" class="form-input">
+              <option value="Capacitación">Capacitación</option>
+              <option value="Auditoría">Auditoría</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre <span style="color:#ef4444">*</span></label>
+            <input type="text" id="catalogo-nombre" class="form-input" maxlength="200" placeholder="Ej: Manejo Integrado de Plagas">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descripción</label>
+            <textarea id="catalogo-descripcion" class="form-input" rows="3" placeholder="Descripción detallada..."></textarea>
+          </div>
+          <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+            <div class="form-group">
+              <label class="form-label">Precio Ref. (S/)</label>
+              <input type="number" id="catalogo-precio" class="form-input" min="0" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Duración (hrs)</label>
+              <input type="number" id="catalogo-duracion" class="form-input" min="1" placeholder="2">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estado</label>
+              <select id="catalogo-estado" class="form-input">
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-catalogo-cancelar">Cancelar</button>
+          <button class="btn-primary" id="modal-catalogo-guardar">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Confirmar Desactivación Catálogo -->
+    <div class="modal-overlay" id="modal-catalogo-eliminar" style="display:none;">
+      <div class="modal-container" style="max-width:420px;">
+        <div class="modal-header">
+          <h2>Confirmar Desactivación</h2>
+          <button class="modal-close" id="modal-catalogo-eliminar-cerrar">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>¿Deseas desactivar <strong id="catalogo-eliminar-nombre"></strong>?</p>
+          <p style="color:#64748b;font-size:0.9em;">No aparecerá en los listados de selección.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-catalogo-eliminar-cancelar">Cancelar</button>
+          <button class="btn-primary" id="modal-catalogo-eliminar-confirmar" style="background:#ef4444;">Desactivar</button>
+        </div>
       </div>
     </div>
   `;
+}
+
+function getServiceIcon(nombre: string): { svg: string; color: string } {
+  const n = nombre.toLowerCase();
+  if (n.includes('fumigación') || n.includes('fumigacion')) {
+    return {
+      svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>',
+      color: n.includes('industrial') ? 'green' : n.includes('comercial') ? 'green' : 'blue'
+    };
+  }
+  if (n.includes('desratización') || n.includes('desratizacion')) {
+    return {
+      svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+      color: 'orange'
+    };
+  }
+  if (n.includes('desinsectación') || n.includes('desinsectacion')) {
+    return {
+      svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>',
+      color: 'orange'
+    };
+  }
+  if (n.includes('capacitación') || n.includes('capacitacion')) {
+    return {
+      svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
+      color: 'blue'
+    };
+  }
+  // Icono por defecto
+  return {
+    svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>',
+    color: 'blue'
+  };
+}
+
+function formatDuracion(minutos: number): string {
+  if (minutos < 60) return `${minutos} min`;
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h} hrs`;
+}
+
+function renderServicioCard(s: Servicio): string {
+  const icon = getServiceIcon(s.nombre);
+  const tags: string[] = [];
+  if (s.requiere_movilidad) tags.push('Movilidad');
+  if (s.requiere_certificado) tags.push('Certificado');
+  if (s.estado === 'inactivo') tags.push('Inactivo');
+
+  return `
+    <div class="service-card" data-id="${s.id}">
+      <div class="service-icon ${icon.color}">
+        ${icon.svg}
+      </div>
+      <h3>${s.nombre}</h3>
+      <p class="service-description">${s.descripcion}</p>
+      <div class="service-stats">
+        <div class="service-stat">
+          <span class="stat-label">DURACIÓN</span>
+          <span class="stat-value">${formatDuracion(s.duracion_estimada)}</span>
+        </div>
+        <div class="service-stat">
+          <span class="stat-label">ESTADO</span>
+          <span class="stat-value"><span class="badge ${s.estado === 'activo' ? 'green' : ''}">${s.estado === 'activo' ? 'Activo' : 'Inactivo'}</span></span>
+        </div>
+      </div>
+      ${tags.length > 0 ? `<div class="service-tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn-secondary fullwidth btn-editar-servicio" data-id="${s.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          Editar
+        </button>
+        ${s.estado === 'activo' ? `
+          <button class="btn-secondary btn-desactivar-servicio" data-id="${s.id}" data-nombre="${s.nombre}" style="color:#ef4444;border-color:#ef4444;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          </button>
+        ` : `
+          <button class="btn-secondary btn-reactivar-servicio" data-id="${s.id}" style="color:#16a34a;border-color:#16a34a;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          </button>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+async function cargarServicios() {
+  const grid = document.getElementById('servicios-grid');
+  if (!grid) return;
+
+  try {
+    const params: any = { per_page: 50 };
+    if (filtroSearchServicios) params.search = filtroSearchServicios;
+    if (filtroEstadoServicios && filtroEstadoServicios !== 'all') {
+      params.estado = filtroEstadoServicios;
+    } else if (filtroEstadoServicios === 'all') {
+      params.estado = 'all';
+    }
+
+    const response = await servicioService.getAll(params);
+    const data = response.data || response;
+    serviciosData = Array.isArray(data) ? data : (data as any).data || [];
+
+    if (serviciosData.length === 0) {
+      grid.innerHTML = `
+        <div style="text-align:center;padding:60px;color:#64748b;grid-column:1/-1;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px;display:block;">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+          </svg>
+          <p>No se encontraron servicios</p>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = serviciosData.map(s => renderServicioCard(s)).join('');
+    bindAccionesServicios();
+
+    const pagination = document.getElementById('servicios-pagination');
+    if (pagination) {
+      pagination.innerHTML = `<span class="pagination-info">Mostrando ${serviciosData.length} servicio(s)</span>`;
+    }
+  } catch (error) {
+    console.error('Error cargando servicios:', error);
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;grid-column:1/-1;">Error al cargar servicios</div>';
+  }
+}
+
+function bindAccionesServicios() {
+  // Editar
+  document.querySelectorAll('.btn-editar-servicio').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      await abrirModalEditarServicio(id);
+    });
+  });
+
+  // Desactivar
+  document.querySelectorAll('.btn-desactivar-servicio').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      const nombre = (btn as HTMLElement).dataset.nombre || '';
+      abrirModalEliminarServicio(id, nombre);
+    });
+  });
+
+  // Reactivar
+  document.querySelectorAll('.btn-reactivar-servicio').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      try {
+        await servicioService.reactivar(id);
+        mostrarToast('success', 'Servicio Reactivado', 'El servicio se reactivó correctamente');
+        await cargarServicios();
+      } catch (error) {
+        mostrarToast('error', 'Error', 'No se pudo reactivar el servicio');
+      }
+    });
+  });
+}
+
+function limpiarFormServicio() {
+  (document.getElementById('servicio-id') as HTMLInputElement).value = '';
+  (document.getElementById('servicio-nombre') as HTMLInputElement).value = '';
+  (document.getElementById('servicio-descripcion') as HTMLInputElement).value = '';
+  (document.getElementById('servicio-duracion') as HTMLInputElement).value = '60';
+  (document.getElementById('servicio-estado') as HTMLSelectElement).value = 'activo';
+  (document.getElementById('servicio-movilidad') as HTMLInputElement).checked = false;
+  (document.getElementById('servicio-certificado') as HTMLInputElement).checked = false;
+  (document.getElementById('servicio-plantilla') as HTMLInputElement).value = '';
+  (document.getElementById('servicio-plantilla-group') as HTMLElement).style.display = 'none';
+}
+
+function abrirModalNuevoServicio() {
+  limpiarFormServicio();
+  (document.getElementById('modal-servicio-titulo') as HTMLElement).textContent = 'Nuevo Servicio';
+  (document.getElementById('modal-servicio') as HTMLElement).style.display = 'flex';
+}
+
+async function abrirModalEditarServicio(id: number) {
+  try {
+    const response = await servicioService.getById(id);
+    const data = response.data || response;
+    const s: Servicio = (data as any).data || data;
+
+    limpiarFormServicio();
+    (document.getElementById('modal-servicio-titulo') as HTMLElement).textContent = 'Editar Servicio';
+    (document.getElementById('servicio-id') as HTMLInputElement).value = String(s.id);
+    (document.getElementById('servicio-nombre') as HTMLInputElement).value = s.nombre;
+    (document.getElementById('servicio-descripcion') as HTMLInputElement).value = s.descripcion;
+    (document.getElementById('servicio-duracion') as HTMLInputElement).value = String(s.duracion_estimada);
+    (document.getElementById('servicio-estado') as HTMLSelectElement).value = s.estado;
+    (document.getElementById('servicio-movilidad') as HTMLInputElement).checked = !!s.requiere_movilidad;
+    (document.getElementById('servicio-certificado') as HTMLInputElement).checked = !!s.requiere_certificado;
+
+    const plantillaGroup = document.getElementById('servicio-plantilla-group') as HTMLElement;
+    if (s.requiere_certificado) {
+      plantillaGroup.style.display = 'block';
+      (document.getElementById('servicio-plantilla') as HTMLInputElement).value = s.plantilla_certificado || '';
+    }
+
+    (document.getElementById('modal-servicio') as HTMLElement).style.display = 'flex';
+  } catch (error) {
+    mostrarToast('error', 'Error', 'No se pudo cargar el servicio');
+  }
+}
+
+let servicioEliminarId = 0;
+
+function abrirModalEliminarServicio(id: number, nombre: string) {
+  servicioEliminarId = id;
+  (document.getElementById('servicio-eliminar-nombre') as HTMLElement).textContent = nombre;
+  (document.getElementById('modal-servicio-eliminar') as HTMLElement).style.display = 'flex';
+}
+
+async function guardarServicio() {
+  const id = (document.getElementById('servicio-id') as HTMLInputElement).value;
+  const nombre = (document.getElementById('servicio-nombre') as HTMLInputElement).value.trim();
+  const descripcion = (document.getElementById('servicio-descripcion') as HTMLInputElement).value.trim();
+  const duracion = Number((document.getElementById('servicio-duracion') as HTMLInputElement).value) || 60;
+  const estado = (document.getElementById('servicio-estado') as HTMLSelectElement).value as 'activo' | 'inactivo';
+  const requiere_movilidad = (document.getElementById('servicio-movilidad') as HTMLInputElement).checked;
+  const requiere_certificado = (document.getElementById('servicio-certificado') as HTMLInputElement).checked;
+  const plantilla_certificado = (document.getElementById('servicio-plantilla') as HTMLInputElement).value.trim() || null;
+
+  if (!nombre || !descripcion) {
+    mostrarToast('error', 'Campos requeridos', 'Nombre y descripción son obligatorios');
+    return;
+  }
+
+  const payload: any = {
+    nombre,
+    descripcion,
+    duracion_estimada: duracion,
+    estado,
+    requiere_movilidad,
+    requiere_certificado,
+    plantilla_certificado: requiere_certificado ? plantilla_certificado : null,
+  };
+
+  try {
+    if (id) {
+      await servicioService.update(Number(id), payload);
+      mostrarToast('success', 'Servicio Actualizado', 'El servicio se actualizó correctamente');
+    } else {
+      await servicioService.create(payload);
+      mostrarToast('success', 'Servicio Creado', 'El servicio se creó correctamente');
+    }
+    (document.getElementById('modal-servicio') as HTMLElement).style.display = 'none';
+    await cargarServicios();
+  } catch (error) {
+    console.error('Error guardando servicio:', error);
+    mostrarToast('error', 'Error', 'No se pudo guardar el servicio');
+  }
+}
+
+async function eliminarServicio() {
+  if (!servicioEliminarId) return;
+  try {
+    await servicioService.delete(servicioEliminarId);
+    mostrarToast('success', 'Servicio Desactivado', 'El servicio fue desactivado correctamente');
+    (document.getElementById('modal-servicio-eliminar') as HTMLElement).style.display = 'none';
+    servicioEliminarId = 0;
+    await cargarServicios();
+  } catch (error) {
+    mostrarToast('error', 'Error', 'No se pudo desactivar el servicio');
+  }
+}
+
+export function initServiciosTabEvents() {
+  // === SERVICIOS ===
+  // Búsqueda
+  const searchInput = document.getElementById('servicios-search') as HTMLInputElement;
+  if (searchInput) {
+    let timeout: any;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        filtroSearchServicios = searchInput.value.trim();
+        cargarServicios();
+      }, 400);
+    });
+  }
+
+  // Filtro estado
+  const filtroEstado = document.getElementById('servicios-filter-estado') as HTMLSelectElement;
+  if (filtroEstado) {
+    filtroEstado.value = filtroEstadoServicios;
+  }
+
+  // Botón filtrar
+  const btnFiltrar = document.getElementById('servicios-btn-filtrar');
+  if (btnFiltrar) {
+    btnFiltrar.addEventListener('click', () => {
+      const select = document.getElementById('servicios-filter-estado') as HTMLSelectElement;
+      filtroEstadoServicios = select?.value || 'activo';
+      cargarServicios();
+    });
+  }
+
+  // Botón nuevo
+  const btnNuevo = document.getElementById('servicios-btn-nuevo');
+  if (btnNuevo) btnNuevo.addEventListener('click', abrirModalNuevoServicio);
+
+  // Modal servicio — cerrar / cancelar
+  const modalCerrar = document.getElementById('modal-servicio-cerrar');
+  const modalCancelar = document.getElementById('modal-servicio-cancelar');
+  const modal = document.getElementById('modal-servicio') as HTMLElement;
+  if (modalCerrar) modalCerrar.addEventListener('click', () => modal.style.display = 'none');
+  if (modalCancelar) modalCancelar.addEventListener('click', () => modal.style.display = 'none');
+
+  // Guardar
+  const btnGuardar = document.getElementById('modal-servicio-guardar');
+  if (btnGuardar) btnGuardar.addEventListener('click', guardarServicio);
+
+  // Toggle plantilla al marcar certificado
+  const checkCertificado = document.getElementById('servicio-certificado') as HTMLInputElement;
+  if (checkCertificado) {
+    checkCertificado.addEventListener('change', () => {
+      const group = document.getElementById('servicio-plantilla-group') as HTMLElement;
+      group.style.display = checkCertificado.checked ? 'block' : 'none';
+    });
+  }
+
+  // Modal eliminar — cerrar / cancelar / confirmar
+  const elimCerrar = document.getElementById('modal-servicio-eliminar-cerrar');
+  const elimCancelar = document.getElementById('modal-servicio-eliminar-cancelar');
+  const elimConfirmar = document.getElementById('modal-servicio-eliminar-confirmar');
+  const modalElim = document.getElementById('modal-servicio-eliminar') as HTMLElement;
+  if (elimCerrar) elimCerrar.addEventListener('click', () => modalElim.style.display = 'none');
+  if (elimCancelar) elimCancelar.addEventListener('click', () => modalElim.style.display = 'none');
+  if (elimConfirmar) elimConfirmar.addEventListener('click', eliminarServicio);
+
+  // Cargar servicios
+  cargarServicios();
+
+  // === CATÁLOGO CAPACITACIONES/AUDITORÍAS ===
+  initCatalogoCapAudEvents();
+  cargarCatalogo();
+}
+
+// ========================================
+// CATÁLOGO CAPACITACIONES / AUDITORÍAS
+// ========================================
+
+function getCatalogoIcon(tipo: string): { svg: string; color: string } {
+  if (tipo === 'Capacitación') {
+    return {
+      svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
+      color: 'blue'
+    };
+  }
+  return {
+    svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+    color: 'green'
+  };
+}
+
+function renderCatalogoCard(item: CatalogoCapAud): string {
+  const icon = getCatalogoIcon(item.tipo);
+  const tags: string[] = [item.tipo];
+  if (item.estado === 'inactivo') tags.push('Inactivo');
+
+  return `
+    <div class="service-card" data-catalogo-id="${item.id}">
+      <div class="service-icon ${icon.color}">
+        ${icon.svg}
+      </div>
+      <h3>${item.nombre}</h3>
+      <p class="service-description">${item.descripcion || 'Sin descripción'}</p>
+      <div class="service-stats">
+        <div class="service-stat">
+          <span class="stat-label">PRECIO REF.</span>
+          <span class="stat-value">${item.precio_referencial ? 'S/ ' + Number(item.precio_referencial).toFixed(2) : '—'}</span>
+        </div>
+        <div class="service-stat">
+          <span class="stat-label">DURACIÓN</span>
+          <span class="stat-value">${item.duracion_horas ? item.duracion_horas + ' hrs' : '—'}</span>
+        </div>
+      </div>
+      <div class="service-tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn-secondary fullwidth btn-editar-catalogo" data-id="${item.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          Editar
+        </button>
+        ${item.estado === 'activo' ? `
+          <button class="btn-secondary btn-desactivar-catalogo" data-id="${item.id}" data-nombre="${item.nombre}" style="color:#ef4444;border-color:#ef4444;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          </button>
+        ` : `
+          <button class="btn-secondary btn-reactivar-catalogo" data-id="${item.id}" style="color:#16a34a;border-color:#16a34a;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          </button>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+async function cargarCatalogo() {
+  const grid = document.getElementById('catalogo-grid');
+  if (!grid) return;
+
+  try {
+    const params: any = { per_page: 50 };
+    if (filtroSearchCatalogo) params.search = filtroSearchCatalogo;
+    if (filtroTipoCatalogo) params.tipo = filtroTipoCatalogo;
+    if (filtroEstadoCatalogo && filtroEstadoCatalogo !== 'all') {
+      params.estado = filtroEstadoCatalogo;
+    } else if (filtroEstadoCatalogo === 'all') {
+      params.estado = 'all';
+    }
+
+    const response = await catalogoCapAudService.getAll(params);
+    const data = response.data || response;
+    catalogoCapAudData = Array.isArray(data) ? data : (data as any).data || [];
+
+    if (catalogoCapAudData.length === 0) {
+      grid.innerHTML = `
+        <div style="text-align:center;padding:60px;color:#64748b;grid-column:1/-1;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px;display:block;">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+          </svg>
+          <p>No se encontraron capacitaciones ni auditorías</p>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = catalogoCapAudData.map(item => renderCatalogoCard(item)).join('');
+    bindAccionesCatalogo();
+
+    const pagination = document.getElementById('catalogo-pagination');
+    if (pagination) {
+      pagination.innerHTML = `<span class="pagination-info">Mostrando ${catalogoCapAudData.length} registro(s)</span>`;
+    }
+  } catch (error) {
+    console.error('Error cargando catálogo:', error);
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;grid-column:1/-1;">Error al cargar catálogo</div>';
+  }
+}
+
+function bindAccionesCatalogo() {
+  document.querySelectorAll('.btn-editar-catalogo').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      await abrirModalEditarCatalogo(id);
+    });
+  });
+
+  document.querySelectorAll('.btn-desactivar-catalogo').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      const nombre = (btn as HTMLElement).dataset.nombre || '';
+      abrirModalEliminarCatalogo(id, nombre);
+    });
+  });
+
+  document.querySelectorAll('.btn-reactivar-catalogo').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      try {
+        await catalogoCapAudService.reactivar(id);
+        mostrarToast('success', 'Reactivado', 'Registro reactivado correctamente');
+        await cargarCatalogo();
+      } catch (error) {
+        mostrarToast('error', 'Error', 'No se pudo reactivar');
+      }
+    });
+  });
+}
+
+function limpiarFormCatalogo() {
+  (document.getElementById('catalogo-id') as HTMLInputElement).value = '';
+  (document.getElementById('catalogo-tipo') as HTMLSelectElement).value = 'Capacitación';
+  (document.getElementById('catalogo-nombre') as HTMLInputElement).value = '';
+  (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value = '';
+  (document.getElementById('catalogo-precio') as HTMLInputElement).value = '';
+  (document.getElementById('catalogo-duracion') as HTMLInputElement).value = '';
+  (document.getElementById('catalogo-estado') as HTMLSelectElement).value = 'activo';
+}
+
+function abrirModalNuevoCatalogo() {
+  limpiarFormCatalogo();
+  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitación / Auditoría';
+  (document.getElementById('modal-catalogo') as HTMLElement).style.display = 'flex';
+}
+
+async function abrirModalEditarCatalogo(id: number) {
+  try {
+    const response = await catalogoCapAudService.getById(id);
+    const data = response.data || response;
+    const item: CatalogoCapAud = (data as any).data || data;
+
+    limpiarFormCatalogo();
+    (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Editar Registro';
+    (document.getElementById('catalogo-id') as HTMLInputElement).value = String(item.id);
+    (document.getElementById('catalogo-tipo') as HTMLSelectElement).value = item.tipo;
+    (document.getElementById('catalogo-nombre') as HTMLInputElement).value = item.nombre;
+    (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value = item.descripcion || '';
+    (document.getElementById('catalogo-precio') as HTMLInputElement).value = item.precio_referencial ? String(item.precio_referencial) : '';
+    (document.getElementById('catalogo-duracion') as HTMLInputElement).value = item.duracion_horas ? String(item.duracion_horas) : '';
+    (document.getElementById('catalogo-estado') as HTMLSelectElement).value = item.estado;
+
+    (document.getElementById('modal-catalogo') as HTMLElement).style.display = 'flex';
+  } catch (error) {
+    mostrarToast('error', 'Error', 'No se pudo cargar el registro');
+  }
+}
+
+let catalogoEliminarId = 0;
+
+function abrirModalEliminarCatalogo(id: number, nombre: string) {
+  catalogoEliminarId = id;
+  (document.getElementById('catalogo-eliminar-nombre') as HTMLElement).textContent = nombre;
+  (document.getElementById('modal-catalogo-eliminar') as HTMLElement).style.display = 'flex';
+}
+
+async function guardarCatalogo() {
+  const id = (document.getElementById('catalogo-id') as HTMLInputElement).value;
+  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitación' | 'Auditoría';
+  const nombre = (document.getElementById('catalogo-nombre') as HTMLInputElement).value.trim();
+  const descripcion = (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value.trim() || undefined;
+  const precio = (document.getElementById('catalogo-precio') as HTMLInputElement).value;
+  const duracion = (document.getElementById('catalogo-duracion') as HTMLInputElement).value;
+  const estado = (document.getElementById('catalogo-estado') as HTMLSelectElement).value as 'activo' | 'inactivo';
+
+  if (!nombre) {
+    mostrarToast('error', 'Campo requerido', 'El nombre es obligatorio');
+    return;
+  }
+
+  const payload: any = {
+    tipo,
+    nombre,
+    descripcion,
+    precio_referencial: precio ? Number(precio) : null,
+    duracion_horas: duracion ? Number(duracion) : null,
+    estado,
+  };
+
+  try {
+    if (id) {
+      await catalogoCapAudService.update(Number(id), payload);
+      mostrarToast('success', 'Actualizado', 'Registro actualizado correctamente');
+    } else {
+      await catalogoCapAudService.create(payload);
+      mostrarToast('success', 'Creado', 'Registro creado correctamente');
+    }
+    (document.getElementById('modal-catalogo') as HTMLElement).style.display = 'none';
+    await cargarCatalogo();
+  } catch (error) {
+    console.error('Error guardando catálogo:', error);
+    mostrarToast('error', 'Error', 'No se pudo guardar');
+  }
+}
+
+async function eliminarCatalogo() {
+  if (!catalogoEliminarId) return;
+  try {
+    await catalogoCapAudService.delete(catalogoEliminarId);
+    mostrarToast('success', 'Desactivado', 'Registro desactivado correctamente');
+    (document.getElementById('modal-catalogo-eliminar') as HTMLElement).style.display = 'none';
+    catalogoEliminarId = 0;
+    await cargarCatalogo();
+  } catch (error) {
+    mostrarToast('error', 'Error', 'No se pudo desactivar');
+  }
+}
+
+function initCatalogoCapAudEvents() {
+  // Búsqueda
+  const searchCat = document.getElementById('catalogo-search') as HTMLInputElement;
+  if (searchCat) {
+    let timeout: any;
+    searchCat.addEventListener('input', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        filtroSearchCatalogo = searchCat.value.trim();
+        cargarCatalogo();
+      }, 400);
+    });
+  }
+
+  // Botón filtrar
+  const btnFiltrarCat = document.getElementById('catalogo-btn-filtrar');
+  if (btnFiltrarCat) {
+    btnFiltrarCat.addEventListener('click', () => {
+      filtroTipoCatalogo = (document.getElementById('catalogo-filter-tipo') as HTMLSelectElement)?.value || '';
+      filtroEstadoCatalogo = (document.getElementById('catalogo-filter-estado') as HTMLSelectElement)?.value || 'activo';
+      cargarCatalogo();
+    });
+  }
+
+  // Botón nuevo
+  const btnNuevoCat = document.getElementById('catalogo-btn-nuevo');
+  if (btnNuevoCat) btnNuevoCat.addEventListener('click', abrirModalNuevoCatalogo);
+
+  // Modal catálogo — cerrar / cancelar / guardar
+  const modalCat = document.getElementById('modal-catalogo') as HTMLElement;
+  document.getElementById('modal-catalogo-cerrar')?.addEventListener('click', () => modalCat.style.display = 'none');
+  document.getElementById('modal-catalogo-cancelar')?.addEventListener('click', () => modalCat.style.display = 'none');
+  document.getElementById('modal-catalogo-guardar')?.addEventListener('click', guardarCatalogo);
+
+  // Modal eliminar catálogo
+  const modalCatElim = document.getElementById('modal-catalogo-eliminar') as HTMLElement;
+  document.getElementById('modal-catalogo-eliminar-cerrar')?.addEventListener('click', () => modalCatElim.style.display = 'none');
+  document.getElementById('modal-catalogo-eliminar-cancelar')?.addEventListener('click', () => modalCatElim.style.display = 'none');
+  document.getElementById('modal-catalogo-eliminar-confirmar')?.addEventListener('click', eliminarCatalogo);
 }
 
 // Tab: Rutas

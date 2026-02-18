@@ -16,12 +16,32 @@ export const ordenServicioService = {
     return apiClient.get<ApiResponse<OrdenServicio[]>>('/ordenes-servicio', filters);
   },
 
+  getCotizacionesDisponibles: async () => {
+    return apiClient.get<ApiResponse<any[]>>('/ordenes-servicio/cotizaciones-disponibles');
+  },
+
+  getDesdeCotizacion: async (cotizacionId: number) => {
+    return apiClient.get<ApiResponse<any>>(`/ordenes-servicio/desde-cotizacion/${cotizacionId}`);
+  },
+
+  getPersonal: async () => {
+    return apiClient.get<ApiResponse<any[]>>('/personal');
+  },
+
   create: async (data: {
     id_cotizacion: number;
-    fecha_orden: string;
-    fecha_ejecucion?: string;
-    id_programacion?: number;
-    observaciones?: string;
+    fecha_aceptacion: string;
+    fecha_tentativa?: string;
+    emitido_por: number;
+    codigo_doc?: string;
+    version?: string;
+    incluye_igv?: boolean;
+    detalles: {
+      id_servicio: number;
+      local?: string;
+      frecuencia?: string;
+      precio: number;
+    }[];
   }) => {
     return apiClient.post<ApiResponse<OrdenServicio>>('/ordenes-servicio', data);
   },
@@ -30,30 +50,14 @@ export const ordenServicioService = {
     return apiClient.get<ApiResponse<OrdenServicio>>(`/ordenes-servicio/${id}`);
   },
 
-  update: async (id: number, data: Partial<OrdenServicio>) => {
+  update: async (id: number, data: any) => {
     return apiClient.post<ApiResponse<OrdenServicio>>(`/ordenes-servicio/${id}`, {
       ...data,
       _method: 'PUT',
     });
   },
 
-  cambiarEstado: async (
-    id: number,
-    estado: 'Pendiente' | 'En Proceso' | 'Completado' | 'Cancelado'
-  ) => {
-    return apiClient.patch<ApiResponse<OrdenServicio>>(`/ordenes-servicio/${id}/estado`, {
-      estado,
-    });
-  },
-
   delete: async (id: number) => {
     return apiClient.delete<ApiResponse<null>>(`/ordenes-servicio/${id}`);
-  },
-
-  vincularProgramacion: async (id: number, id_programacion: number) => {
-    return apiClient.patch<ApiResponse<OrdenServicio>>(
-      `/ordenes-servicio/${id}/vincular-programacion`,
-      { id_programacion }
-    );
   },
 };

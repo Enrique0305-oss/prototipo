@@ -484,7 +484,7 @@
 }
 
 .op-input:disabled,
-.op-input:read-only {
+.op-input[readonly] {
   background: #f1f5f9;
   color: #64748b;
   cursor: not-allowed;

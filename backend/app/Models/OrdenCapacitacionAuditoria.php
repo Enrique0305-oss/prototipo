@@ -22,7 +22,7 @@ class OrdenCapacitacionAuditoria extends Model
         'num_participantes',
         'num_certificados',
         'costo',
-        'aprobacion',
+        'estado',
         'observaciones'
     ];
 

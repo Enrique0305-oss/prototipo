@@ -14,6 +14,7 @@ class CotizacionDetalle extends Model
         'id_cotizacion',
         'id_servicio',
         'id_producto',
+        'id_catalogo_cap_aud',
         'descripcion_manual',
         'cantidad',
         'precio_unitario',
@@ -40,6 +41,11 @@ class CotizacionDetalle extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function catalogoCapAud()
+    {
+        return $this->belongsTo(CatalogoCapacitacionAuditoria::class, 'id_catalogo_cap_aud');
     }
 
     // Accessor para calcular subtotal

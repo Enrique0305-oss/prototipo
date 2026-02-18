@@ -32,18 +32,15 @@ export function initAuthGuard(): void {
 }
 
 function setupTokenRefresh(): void {
-  // Intentar refrescar el token 5 minutos antes de que expire
-  const REFRESH_BEFORE_MS = 5 * 60 * 1000; // 5 minutos
-  
-  setInterval(async () => {
-    try {
-      if (authService.isAuthenticated()) {
-        await authService.refreshToken();
-      }
-    } catch (error) {
-      console.error('Error al refrescar token:', error);
-      // Si falla el refresh, hacer logout
-      authService.logout();
+  // TODO: Habilitar cuando se implemente login real con backend
+  // Por ahora con loginMock no hay endpoint de refresh, así que solo
+  // renovamos el token mock localmente cada 30 minutos
+  const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
+
+  setInterval(() => {
+    if (authService.isAuthenticated()) {
+      // Renovar expiración del token mock sin llamar al backend
+      authService.extendMockSession();
     }
-  }, REFRESH_BEFORE_MS);
+  }, REFRESH_INTERVAL_MS);
 }

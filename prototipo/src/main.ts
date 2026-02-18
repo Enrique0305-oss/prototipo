@@ -9,18 +9,18 @@ import { renderDashboard } from './modules/dashboard/dashboard.view'
 import { renderProgramaciones, initProgramacionesEvents } from './modules/programaciones/programaciones.view'
 import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './modules/recursos-humanos/recursos-humanos.view'
 // Almacén
-import { renderAlmacenMantenimiento } from './modules/almacen/mantenimiento/mantenimiento.view'
+import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
 import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents } from './modules/almacen/inventario/inventario.view'
 import { renderAlmacenProveedores } from './modules/almacen/proveedores/proveedores.view'
 import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './modules/almacen/entradas-salidas/entradas-salidas.view'
 // Logística
-import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab, initClientesLogisticaEvents } from './modules/logistica/logistica.view'
+import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab, initClientesLogisticaEvents, initServiciosTabEvents } from './modules/logistica/logistica.view'
 // Comercial
 import { renderComercialProspectos, initProspectosEvents } from './modules/comercial/prospectos/prospectos.view'
 import { renderComercialCotizaciones, initCotizacionesEvents } from './modules/comercial/cotizaciones/cotizaciones.view'
-import { renderComercialOrdenesServicio } from './modules/comercial/ordenes-servicio/ordenes-servicio.view'
-import { renderComercialOrdenesProducto } from './modules/comercial/ordenes-producto/ordenes-producto.view'
-import { renderComercialOrdenesCapacitacion } from './modules/comercial/ordenes-capacitacion/ordenes-capacitacion.view'
+import { renderComercialOrdenesServicio, initOrdenesServicioEvents } from './modules/comercial/ordenes-servicio/ordenes-servicio.view'
+import { renderComercialOrdenesProducto, initOrdenesProductoEvents } from './modules/comercial/ordenes-producto/ordenes-producto.view'
+import { renderComercialOrdenesCapacitacion, initOrdenesCapacitacionEvents } from './modules/comercial/ordenes-capacitacion/ordenes-capacitacion.view'
 import { renderComercialConversiones } from './modules/comercial/conversiones/conversiones.view'
 // Finanzas
 import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
@@ -62,7 +62,7 @@ function getMainContent() {
     if (activeSubMenu === 'Inventario') return renderAlmacenInventario();
     if (activeSubMenu === 'Proveedores') return renderAlmacenProveedores();
     if (activeSubMenu === 'Entradas y Salidas') return renderAlmacenEntradasSalidas();
-    return renderAlmacenMantenimiento(); // Mantenimiento por defecto
+    return renderAlmacenMantenimiento(); // Mantenimiento por defecto (con tabs)
   } else if (activeMenu === 'Logística') {
     const html = renderLogistica();
     setTimeout(() => initClientesLogisticaEvents(), 0);
@@ -80,9 +80,21 @@ function getMainContent() {
       setTimeout(() => initCotizacionesEvents(), 0);
       return html;
     }
-    if (activeSubMenu === 'Órdenes de Servicio') return renderComercialOrdenesServicio();
-    if (activeSubMenu === 'Órdenes de Producto') return renderComercialOrdenesProducto();
-    if (activeSubMenu === 'Órdenes de Capacitación') return renderComercialOrdenesCapacitacion();
+    if (activeSubMenu === 'Órdenes de Servicio') {
+      const html = renderComercialOrdenesServicio();
+      setTimeout(() => initOrdenesServicioEvents(), 0);
+      return html;
+    }
+    if (activeSubMenu === 'Órdenes de Producto') {
+      const html = renderComercialOrdenesProducto();
+      setTimeout(() => initOrdenesProductoEvents(), 0);
+      return html;
+    }
+    if (activeSubMenu === 'Órdenes de Capacitación') {
+      const html = renderComercialOrdenesCapacitacion();
+      setTimeout(() => initOrdenesCapacitacionEvents(), 0);
+      return html;
+    }
     if (activeSubMenu === 'Conversiones') return renderComercialConversiones();
     const html = renderComercialProspectos(); // Prospectos por defecto
     setTimeout(() => initProspectosEvents(), 0);
@@ -296,6 +308,11 @@ if (activeMenu === 'Facturación') {
   if (activeMenu === 'Almacén' && activeSubMenu === 'Inventario' && activeInventoryTab === 'productos') {
     setTimeout(() => initProductosEvents(), 0);
   }
+
+  // Inicializar eventos del módulo de Mantenimiento (tabs)
+  if (activeMenu === 'Almacén' && (!activeSubMenu || activeSubMenu === 'Mantenimiento')) {
+    setTimeout(() => initMantenimientoEvents(), 0);
+  }
 }
 
 
@@ -380,6 +397,7 @@ function updateLogisticaTabContent() {
   switch (activeLogisticaTab) {
     case 'servicios':
       tabContent.innerHTML = renderServiciosDisponiblesTab();
+      setTimeout(() => initServiciosTabEvents(), 0);
       break;
     case 'rutas':
       tabContent.innerHTML = renderRutasTab();

@@ -1,5 +1,6 @@
 // Comercial - Prospectos 
 import { clienteService } from '../../../services/clienteService';
+import { mostrarToast } from '../../../shared/toast';
 import type { Cliente } from '../../../core/api/types';
 
 // Estado del módulo
@@ -287,39 +288,7 @@ function renderizarTablaProspectos() {
   });
 }
 
-// ===== TOAST =====
-function mostrarToast(tipo: 'success' | 'error' | 'warning', titulo: string, mensaje: string) {
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.className = 'toast-container';
-    document.body.appendChild(container);
-  }
-
-  const colors = { success: '#16a34a', error: '#dc2626', warning: '#f59e0b' };
-  const icons = {
-    success: '<polyline points="20 6 9 17 4 12"></polyline>',
-    error: '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>',
-    warning: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>'
-  };
-
-  const toastId = 'toast-' + Date.now();
-  const html = `
-    <div id="${toastId}" class="toast toast-${tipo}" style="animation: slideIn 0.3s ease;">
-      <div class="toast-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${colors[tipo]}" stroke-width="2">${icons[tipo]}</svg>
-      </div>
-      <div class="toast-content">
-        <div class="toast-title">${titulo}</div>
-        <div class="toast-message">${mensaje}</div>
-      </div>
-      <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
-    </div>`;
-
-  container.insertAdjacentHTML('beforeend', html);
-  setTimeout(() => document.getElementById(toastId)?.remove(), 4000);
-}
+// Toast: usa componente compartido importado arriba
 
 // ===== MODAL NUEVO PROSPECTO =====
 

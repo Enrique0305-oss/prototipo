@@ -13,11 +13,14 @@ export const equipoService = {
   },
 
   create: async (data: {
-    codigo_equipo?: string;
-    nombre: string;
-    descripcion?: string;
+    descripcion: string;
+    marca: string;
+    modelo: string;
+    serie: number;
+    encargado: string;
+    responsable: string;
+    contacto: number;
     estado?: 'Activo' | 'Inactivo';
-    fecha_adquisicion?: string;
   }) => {
     return apiClient.post<ApiResponse<Equipo>>('/equipos', data);
   },

@@ -187,8 +187,8 @@ export interface Producto {
   categoria?: Categoria;
   inventario?: {
     cantidad_disponible: number;
-    cantidad_minima: number;
-    cantidad_maxima: number;
+    stock_seguridad: number;
+    cantidad_total: number;
   };
 }
 
@@ -204,6 +204,7 @@ export interface EstadisticasProductos {
   productos_inactivos: number;
   con_stock: number;
   sin_stock: number;
+  stock_bajo: number;
   proximos_vencer_30dias: number;
   vencidos: number;
   por_categoria: Array<{
@@ -232,19 +233,20 @@ export interface CategoriaFilters extends FilterParams {
 // Equipos
 
 export interface Equipo {
-  id_equipo: number;
-  codigo_equipo?: string;
-  nombre: string;
-  descripcion?: string;
+  id: number;
+  descripcion: string;
+  marca: string;
+  modelo: string;
+  serie: number;
+  encargado: string;
+  responsable: string;
+  contacto: number;
   estado: 'Activo' | 'Inactivo';
-  fecha_adquisicion?: string;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface EquipoFilters extends FilterParams {
-  fecha_desde?: string;
-  fecha_hasta?: string;
+  estado?: string;
+  encargado?: string;
 }
 
 // Vehículos
@@ -345,7 +347,7 @@ export interface AreaFilters extends FilterParams {
 // Mantenimientos
 
 export interface Mantenimiento {
-  id_manten: number;
+  id: number;
   id_equipo: number;
   id_actmanten: number;
   fecha: string;
@@ -366,27 +368,24 @@ export interface MantenimientoFilters extends FilterParams {
 }
 
 export interface EstadisticasMantenimientos {
-  total_mantenimientos: number;
+  total: number;
   por_equipo: Array<{
-    id_equipo: number;
-    nombre_equipo: string;
-    total_mantenimientos: number;
+    equipo_id: number;
+    equipo: string;
+    total: number;
   }>;
   por_actividad: Array<{
-    id_actmanten: number;
+    actividad_id: number;
     categoria: string;
-    total_mantenimientos: number;
+    total: number;
   }>;
-  por_mes: Array<{
-    mes: string;
-    cantidad: number;
+  por_mes_actual: Array<{
+    mes: number;
+    anio: number;
+    total: number;
   }>;
-  proximos_programados: Array<{
-    id_equipo: number;
-    nombre_equipo: string;
-    ultimo_mantenimiento: string;
-    dias_desde_ultimo: number;
-  }>;
+  ultimo_mantenimiento: any;
+  proximos_programados: Mantenimiento[];
 }
 
 export interface HistorialEquipo {
@@ -397,16 +396,33 @@ export interface HistorialEquipo {
 // Actividades de Mantenimiento
 
 export interface ActividadMantenimiento {
-  id_actmanten: number;
+  id: number;
   categoria: 'Programado' | 'Entregado' | 'Garantia';
   estado: 'Activo' | 'Desactivo';
-  created_at?: string;
-  updated_at?: string;
-  deleted_at?: string;
+  mantenimientos_count?: number;
 }
 
 export interface ActividadMantenimientoFilters extends FilterParams {
   categoria?: 'Programado' | 'Entregado' | 'Garantia';
+}
+
+// Servicios
+
+export interface Servicio {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  estado: 'activo' | 'inactivo';
+  duracion_estimada: number;
+  requiere_movilidad: boolean;
+  requiere_certificado: boolean;
+  plantilla_certificado?: string | null;
+}
+
+export interface ServicioFilters extends FilterParams {
+  estado?: string;
+  requiere_movilidad?: boolean;
+  requiere_certificado?: boolean;
 }
 
 // Multicim
