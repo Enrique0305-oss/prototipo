@@ -14,14 +14,14 @@ let filtros = {
 export function renderComercialProspectos() {
   return `
     <div class="page-header">
-      <h1>Prospectos</h1>
+      <h1>Clientes Potenciales</h1>
       <div class="header-actions">
         <button class="btn-primary" id="btn-nuevo-prospecto">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          Nuevo Prospecto
+          Nuevo Cliente Potencial
         </button>
       </div>
     </div>
@@ -37,7 +37,7 @@ export function renderComercialProspectos() {
           </svg>
         </div>
         <div class="stat-box-content">
-          <div class="stat-box-label">Prospectos Totales</div>
+          <div class="stat-box-label">Clientes Potenciales Totales</div>
           <div class="stat-box-value"><span class="loading-text">Cargando...</span></div>
         </div>
       </div>
@@ -84,7 +84,7 @@ export function renderComercialProspectos() {
           <circle cx="11" cy="11" r="8"></circle>
           <path d="m21 21-4.35-4.35"></path>
         </svg>
-        <input type="text" placeholder="Buscar prospecto..." class="search-input" id="prospecto-search">
+        <input type="text" placeholder="Buscar cliente potencial..." class="search-input" id="prospecto-search">
       </div>
       <select class="filter-select" id="prospecto-estado-filter">
         <option value="">Todos los estados</option>
@@ -98,7 +98,7 @@ export function renderComercialProspectos() {
       <table class="data-table">
         <thead>
           <tr>
-            <th>PROSPECTO</th>
+            <th>CLIENTE POTENCIAL</th>
             <th>CONTACTO</th>
             <th>SECTOR</th>
             <th>FECHA</th>
@@ -110,7 +110,7 @@ export function renderComercialProspectos() {
         <tbody id="prospectos-table-body">
           <tr>
             <td colspan="7" style="text-align: center; padding: 40px; color: #64748b;">
-              <span class="loading-text">Cargando prospectos...</span>
+              <span class="loading-text">Cargando clientes potenciales...</span>
             </td>
           </tr>
         </tbody>
@@ -164,7 +164,7 @@ async function cargarProspectos() {
     console.error('Error cargando prospectos:', error);
     const tbody = document.getElementById('prospectos-table-body');
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: #e74c3c;">Error al cargar los prospectos.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: #e74c3c;">Error al cargar los clientes potenciales.</td></tr>`;
     }
   }
 }
@@ -215,8 +215,8 @@ function renderizarTablaProspectos() {
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
             <circle cx="9" cy="7" r="4"></circle>
           </svg>
-          <p style="font-size: 15px; margin-bottom: 8px;">No se encontraron prospectos</p>
-          <p style="font-size: 13px; color: #94a3b8;">Intenta con otros filtros o agrega un nuevo prospecto</p>
+          <p style="font-size: 15px; margin-bottom: 8px;">No se encontraron clientes potenciales</p>
+          <p style="font-size: 13px; color: #94a3b8;">Intenta con otros filtros o agrega un nuevo cliente potencial</p>
         </td>
       </tr>`;
     return;
@@ -300,7 +300,7 @@ function abrirModalNuevoProspecto() {
     <div id="modal-nuevo-prospecto" class="modal-overlay" style="display: flex;">
       <div class="modal-container" style="max-width: 600px;">
         <div class="modal-header">
-          <h2>Nuevo Prospecto</h2>
+          <h2>Nuevo Cliente Potencial</h2>
           <button class="modal-close" id="btn-cerrar-nuevo-prosp">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>

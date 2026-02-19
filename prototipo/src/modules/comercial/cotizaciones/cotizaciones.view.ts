@@ -10,7 +10,7 @@ import type { Cotizacion, EstadisticasCotizaciones } from '../../../core/api/typ
 //  STATE 
 let cotizacionesData: Cotizacion[] = [];
 let estadisticasData: EstadisticasCotizaciones | null = null;
-let filtros = { search: '', estado: '', tipo: '' };
+let filtros = { search: '', tipo: '' };
 let contadorLineas = 0;
 let incluyeIgv = true;
 
@@ -69,12 +69,6 @@ export function renderComercialCotizaciones(): string {
           <input type="text" placeholder="Buscar cotización o cliente..." class="op-search-input" id="cotiz-search">
         </div>
         <div class="op-filter-group">
-          <select class="op-filter-select" id="cotiz-filter-estado">
-            <option value="">Todos los estados</option>
-            <option value="Pendiente">Pendiente</option>
-            <option value="Aceptada">Aceptada</option>
-            <option value="Rechazada">Rechazada</option>
-          </select>
           <select class="op-filter-select" id="cotiz-filter-tipo">
             <option value="">Todos los tipos</option>
             <option value="Servicio">Servicio</option>
@@ -94,12 +88,11 @@ export function renderComercialCotizaciones(): string {
               <th>TIPO</th>
               <th>IGV</th>
               <th>TOTAL</th>
-              <th>ESTADO</th>
               <th>ACCIONES</th>
             </tr>
           </thead>
           <tbody id="cotizaciones-tbody">
-            <tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b;">Cargando cotizaciones...</td></tr>
+            <tr><td colspan="7" style="text-align:center;padding:40px;color:#64748b;">Cargando cotizaciones...</td></tr>
           </tbody>
         </table>
       </div>
@@ -137,9 +130,8 @@ function renderizarEstadisticas() {
 
 async function cargarCotizaciones() {
   try {
-    const params: any = {};
+    const params: any = { estado: 'Aceptada' };
     if (filtros.search) params.search = filtros.search;
-    if (filtros.estado) params.estado = filtros.estado;
     if (filtros.tipo) params.tipo = filtros.tipo;
 
     const response = await cotizacionService.getAll(params);
@@ -149,7 +141,7 @@ async function cargarCotizaciones() {
   } catch (error) {
     console.error('Error cargando cotizaciones:', error);
     const tbody = document.getElementById('cotizaciones-tbody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar cotizaciones</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar cotizaciones</td></tr>';
   }
 }
 
@@ -158,7 +150,7 @@ function renderizarTabla() {
   if (!tbody) return;
 
   if (cotizacionesData.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b;">No se encontraron cotizaciones</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#64748b;">No se encontraron cotizaciones</td></tr>';
     return;
   }
 
@@ -175,11 +167,6 @@ function renderizarTabla() {
       'Producto': 'badge-purple',
       'Capacitacion': 'badge-orange'
     };
-    const estadoBadge: Record<string, string> = {
-      'Pendiente': 'badge-warning',
-      'Aceptada': 'badge-success',
-      'Rechazada': 'badge-danger'
-    };
 
     return `
       <tr>
@@ -189,25 +176,11 @@ function renderizarTabla() {
         <td><span class="badge ${tipoBadge[tipo] || 'badge-blue'}">${tipo}</span></td>
         <td>${tieneIgv ? '<span style="color:#16a34a;font-weight:600;">Sí</span>' : '<span style="color:#94a3b8;">No</span>'}</td>
         <td><strong>${total}</strong></td>
-        <td><span class="badge ${estadoBadge[cot.estado] || ''}">${cot.estado}</span></td>
         <td>
           <div class="action-buttons">
-            ${cot.estado === 'Pendiente' ? `
-              <button class="action-btn-icon edit" data-action="aceptar-cotiz" data-id="${cot.id}" title="Aceptar" style="color:#16a34a;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              </button>
-              <button class="action-btn-icon delete" data-action="rechazar-cotiz" data-id="${cot.id}" title="Rechazar" style="color:#f59e0b;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-              </button>
-            ` : ''}
             <button class="action-btn-icon edit" data-action="pdf-cotiz" data-id="${cot.id}" title="Descargar PDF">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
             </button>
-            ${cot.estado === 'Pendiente' ? `
-              <button class="action-btn-icon delete" data-action="delete-cotiz" data-id="${cot.id}" title="Eliminar">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              </button>
-            ` : ''}
           </div>
         </td>
       </tr>
@@ -215,7 +188,7 @@ function renderizarTabla() {
   }).join('');
 
   const pag = document.querySelector('#cotizaciones-pagination .pagination-info');
-  if (pag) pag.textContent = `Mostrando ${cotizacionesData.length} cotizaciones`;
+  if (pag) pag.textContent = `Mostrando ${cotizacionesData.length} cotizaciones aceptadas`;
 }
 
 //  FORMULARIO NUEVA COTIZACIÓN 
@@ -750,89 +723,7 @@ async function guardarCotizacion() {
   }
 }
 
-//  ACCIONES: CAMBIAR ESTADO, ELIMINAR, PDF 
-async function cambiarEstadoCotizacion(id: number, estado: 'Aceptada' | 'Rechazada') {
-  const accion = estado === 'Aceptada' ? 'aceptar' : 'rechazar';
-
-  const modalHtml = `
-    <div id="modal-estado-cotiz" class="modal-overlay" style="display: flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-      <div class="modal-container" style="background:#fff; border-radius:12px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid #e2e8f0;">
-          <h2 style="font-size:18px; font-weight:700; color:#1e293b; margin:0;">${estado === 'Aceptada' ? 'Aceptar' : 'Rechazar'} Cotización</h2>
-          <button id="btn-cerrar-estado-cotiz" style="background:none;border:none;cursor:pointer;color:#94a3b8;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        </div>
-        <div style="padding: 24px;">
-          <p style="color:#475569;">¿Está seguro de ${accion} esta cotización?</p>
-        </div>
-        <div style="display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px; border-top: 1px solid #e2e8f0;">
-          <button id="btn-cancelar-estado" style="padding:8px 20px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:600;color:#475569;">Cancelar</button>
-          <button id="btn-confirmar-estado" style="padding:8px 20px;background:${estado === 'Aceptada' ? '#16a34a' : '#dc2626'};color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Confirmar</button>
-        </div>
-      </div>
-    </div>`;
-
-  document.body.insertAdjacentHTML('beforeend', modalHtml);
-  const modal = document.getElementById('modal-estado-cotiz')!;
-
-  document.getElementById('btn-cerrar-estado-cotiz')?.addEventListener('click', () => modal.remove());
-  document.getElementById('btn-cancelar-estado')?.addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-
-  document.getElementById('btn-confirmar-estado')?.addEventListener('click', async () => {
-    try {
-      await cotizacionService.cambiarEstado(id, estado);
-      modal.remove();
-      mostrarToast('success', 'Estado actualizado', `Cotización marcada como ${estado}`);
-      await cargarCotizaciones();
-      await cargarEstadisticas();
-    } catch (error: any) {
-      mostrarToast('error', 'Error', error.data?.message || 'Error al cambiar estado');
-    }
-  });
-}
-
-async function eliminarCotizacion(id: number) {
-  const modalHtml = `
-    <div id="modal-eliminar-cotiz" class="modal-overlay" style="display: flex; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-      <div class="modal-container" style="background:#fff; border-radius:12px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid #e2e8f0;">
-          <h2 style="font-size:18px; font-weight:700; color:#1e293b; margin:0;">Eliminar Cotización</h2>
-          <button id="btn-cerrar-del-cotiz" style="background:none;border:none;cursor:pointer;color:#94a3b8;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        </div>
-        <div style="padding: 24px;">
-          <p style="color: #dc2626;">⚠️ Esta acción no se puede deshacer. ¿Desea eliminar esta cotización?</p>
-        </div>
-        <div style="display: flex; gap: 12px; justify-content: flex-end; padding: 16px 24px; border-top: 1px solid #e2e8f0;">
-          <button id="btn-cancelar-del-cotiz" style="padding:8px 20px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:600;color:#475569;">Cancelar</button>
-          <button id="btn-confirmar-del-cotiz" style="padding:8px 20px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Eliminar</button>
-        </div>
-      </div>
-    </div>`;
-
-  document.body.insertAdjacentHTML('beforeend', modalHtml);
-  const modal = document.getElementById('modal-eliminar-cotiz')!;
-
-  document.getElementById('btn-cerrar-del-cotiz')?.addEventListener('click', () => modal.remove());
-  document.getElementById('btn-cancelar-del-cotiz')?.addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-
-  document.getElementById('btn-confirmar-del-cotiz')?.addEventListener('click', async () => {
-    try {
-      await cotizacionService.delete(id);
-      modal.remove();
-      mostrarToast('success', 'Eliminada', 'Cotización eliminada correctamente');
-      await cargarCotizaciones();
-      await cargarEstadisticas();
-    } catch (error: any) {
-      mostrarToast('error', 'Error', error.data?.message || 'Error al eliminar cotización');
-    }
-  });
-}
-
+//  ACCIONES: PDF 
 async function descargarPDF(id: number) {
   try {
     mostrarToast('success', 'Descargando', 'Generando PDF...');
@@ -866,12 +757,7 @@ export function initCotizacionesEvents() {
     });
   }
 
-  // Filtros de estado y tipo
-  document.getElementById('cotiz-filter-estado')?.addEventListener('change', (e) => {
-    filtros.estado = (e.target as HTMLSelectElement).value;
-    cargarCotizaciones();
-  });
-
+  // Filtro de tipo
   document.getElementById('cotiz-filter-tipo')?.addEventListener('change', (e) => {
     filtros.tipo = (e.target as HTMLSelectElement).value;
     cargarCotizaciones();
@@ -887,10 +773,7 @@ export function initCotizacionesEvents() {
     if (!id) return;
 
     switch (action) {
-      case 'aceptar-cotiz': cambiarEstadoCotizacion(id, 'Aceptada'); break;
-      case 'rechazar-cotiz': cambiarEstadoCotizacion(id, 'Rechazada'); break;
       case 'pdf-cotiz': descargarPDF(id); break;
-      case 'delete-cotiz': eliminarCotizacion(id); break;
     }
   });
 }

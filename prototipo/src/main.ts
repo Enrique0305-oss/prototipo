@@ -5,7 +5,7 @@ import { authService } from './modules/auth/auth.service'
 
 // Inicializar guard de autenticación
 initAuthGuard();
-import { renderDashboard } from './modules/dashboard/dashboard.view'
+import { renderDashboard, cargarAlertaStockBajo } from './modules/dashboard/dashboard.view'
 import { renderProgramaciones, initProgramacionesEvents } from './modules/programaciones/programaciones.view'
 import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './modules/recursos-humanos/recursos-humanos.view'
 // Almacén
@@ -22,6 +22,7 @@ import { renderComercialOrdenesServicio, initOrdenesServicioEvents } from './mod
 import { renderComercialOrdenesProducto, initOrdenesProductoEvents } from './modules/comercial/ordenes-producto/ordenes-producto.view'
 import { renderComercialOrdenesCapacitacion, initOrdenesCapacitacionEvents } from './modules/comercial/ordenes-capacitacion/ordenes-capacitacion.view'
 import { renderComercialConversiones } from './modules/comercial/conversiones/conversiones.view'
+import { renderAprobacionCotizaciones, initAprobacionCotizacionesEvents } from './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.view'
 // Finanzas
 import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
 // Facturación
@@ -33,6 +34,7 @@ import { renderReportes } from './modules/reportes/reportes.view'
 
 let activeMenu = 'Dashboard';
 let activeSubMenu = '';
+let expandedMenu = ''; // Controla qué menú con submenús está expandido (sin navegar)
 let activeInventoryTab = 'productos'; // Estado para el tab de inventario
 let activeEntradasTab = 'movimientos'; // Estado para el tab de entradas y salidas
 let activeLogisticaTab = 'clientes'; // Estado para el tab de logística
@@ -47,7 +49,7 @@ const menuItems = [
   { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Mantenimiento', 'Inventario', 'Proveedores', 'Entradas y Salidas'] },
   { name: 'Logística', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>', submenu: [] },
   { name: 'Programaciones', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>', submenu: [] },
-  { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Prospectos', 'Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Conversiones'] },
+  { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Clientes Potenciales', 'Cotizaciones', 'Aprobación Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Conversiones'] },
   { name: 'Finanzas', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>', submenu: [] },
   { name: 'Facturación', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>', submenu: [] },
   { name: 'Recursos Humanos', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>', submenu: [] },
@@ -57,6 +59,8 @@ const menuItems = [
 
 function getMainContent() {
   if (activeMenu === 'Dashboard') {
+    // Cargar alerta de stock bajo después de que el DOM se renderice
+    setTimeout(() => cargarAlertaStockBajo(), 0);
     return renderDashboard();
   } else if (activeMenu === 'Almacén') {
     if (activeSubMenu === 'Inventario') return renderAlmacenInventario();
@@ -70,7 +74,7 @@ function getMainContent() {
   } else if (activeMenu === 'Programaciones') {
     return renderProgramaciones();
   } else if (activeMenu === 'Comercial') {
-    if (activeSubMenu === 'Prospectos') {
+    if (activeSubMenu === 'Clientes Potenciales') {
       const html = renderComercialProspectos();
       setTimeout(() => initProspectosEvents(), 0);
       return html;
@@ -78,6 +82,11 @@ function getMainContent() {
     if (activeSubMenu === 'Cotizaciones') {
       const html = renderComercialCotizaciones();
       setTimeout(() => initCotizacionesEvents(), 0);
+      return html;
+    }
+    if (activeSubMenu === 'Aprobación Cotizaciones') {
+      const html = renderAprobacionCotizaciones();
+      setTimeout(() => initAprobacionCotizacionesEvents(), 0);
       return html;
     }
     if (activeSubMenu === 'Órdenes de Servicio') {
@@ -124,7 +133,7 @@ function renderApp() {
   app.innerHTML = `
     <div class="app-container">
       <!-- Sidebar -->
-      <aside class="sidebar">
+      <aside class="sidebar${expandedMenu ? ' sidebar-expanded' : ''}">
         <div class="sidebar-header">
           <div class="logo">QSCI Group</div>
           <div class="logo-subtitle">ADMIN PANEL</div>
@@ -133,13 +142,13 @@ function renderApp() {
         <nav class="sidebar-nav">
           ${menuItems.map(item => `
             <div>
-              <button class="nav-item ${activeMenu === item.name ? 'active' : ''}" data-menu="${item.name}">
+              <button class="nav-item ${activeMenu === item.name || expandedMenu === item.name ? 'active' : ''}" data-menu="${item.name}" data-has-submenu="${item.submenu.length > 0}">
                 <span class="nav-icon">${item.icon}</span>
                 <span class="nav-text">${item.name}</span>
-                ${item.submenu.length > 0 ? '<span class="nav-arrow">›</span>' : ''}
+                ${item.submenu.length > 0 ? `<span class="nav-arrow" style="transition:transform 0.3s;${expandedMenu === item.name ? 'transform:rotate(90deg);' : ''}">›</span>` : ''}
               </button>
-              ${item.submenu.length > 0 && activeMenu === item.name ? `
-                <div class="submenu">
+              ${item.submenu.length > 0 && expandedMenu === item.name ? `
+                <div class="submenu" style="overflow:hidden;animation:submenuSlideDown 0.25s ease-out;">
                   ${item.submenu.map(sub => `
                     <button class="submenu-item ${activeSubMenu === sub ? 'active' : ''}" data-submenu="${sub}">
                       ${sub}
@@ -195,28 +204,48 @@ if (activeMenu === 'Facturación') {
   initFacturacionEvents(misProyecciones);
 }
 
+  // Sidebar: colapsar submenús al retirar el cursor
+  const sidebarEl = document.querySelector('.sidebar');
+  if (sidebarEl) {
+    sidebarEl.addEventListener('mouseleave', () => {
+      if (expandedMenu) {
+        expandedMenu = '';
+        renderApp();
+      }
+    });
+  }
+
 
   document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', async (e) => {
     const target = e.currentTarget as HTMLButtonElement;
     const menuName = target.dataset.menu || 'Dashboard';
+    const hasSubmenu = target.dataset.hasSubmenu === 'true';
 
-    // 1. Si es el mismo menú, volvemos al inicio
-    if (activeMenu === menuName) {
-      activeMenu = 'Dashboard';
-      activeSubMenu = '';
-    } else {
-      activeMenu = menuName;
-      activeSubMenu = '';
+    // Si tiene submenú, solo expandir/colapsar sin navegar
+    if (hasSubmenu) {
+      if (expandedMenu === menuName) {
+        // Ya está expandido → colapsar
+        expandedMenu = '';
+      } else {
+        // Expandir este menú
+        expandedMenu = menuName;
+      }
+      renderApp();
+      return;
     }
 
-    // 2. SOLO si es Facturación, traemos la data real
+    // Menús sin submenú → navegar directamente
+    activeMenu = menuName;
+    activeSubMenu = '';
+    expandedMenu = '';
+
+    // SOLO si es Facturación, traemos la data real
     if (menuName === 'Facturación') {
       try {
         const respuesta = await fetch('http://localhost:8000/api/v1/proyecciones'); 
         const result = await respuesta.json();
         
-        // El backend de proyecciones debería devolver lo que ya está facturado
         const rawData = result.data || result; 
         misProyecciones = Array.isArray(rawData) ? rawData : [];
         
@@ -227,7 +256,6 @@ if (activeMenu === 'Facturación') {
       }
     }
 
-    // 3. Dibujamos la pantalla UNA SOLA VEZ
     renderApp();
   });
 });
@@ -236,7 +264,11 @@ if (activeMenu === 'Facturación') {
   document.querySelectorAll('.submenu-item').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const target = e.currentTarget as HTMLButtonElement;
-      activeSubMenu = target.dataset.submenu || '';
+      const submenuName = target.dataset.submenu || '';
+
+      // Determinar a qué menú padre pertenece este submenú
+      activeMenu = expandedMenu;
+      activeSubMenu = submenuName;
       activeInventoryTab = 'productos';
       renderApp();
     });

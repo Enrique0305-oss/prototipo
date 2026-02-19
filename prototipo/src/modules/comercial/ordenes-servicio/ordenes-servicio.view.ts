@@ -137,8 +137,8 @@ export function renderComercialOrdenesServicio() {
             <h3 class="os-section-title">Informacion General</h3>
             <div class="os-grid">
               <div class="os-field">
-                <label>N Orden</label>
-                <input type="text" id="ods-numero-orden" class="os-input" readonly placeholder="Auto-generado">
+                <label>N° Orden</label>
+                <input type="text" id="ods-numero-orden" class="os-input" readonly placeholder="Cargando..." style="background:#f1f5f9;font-weight:600;">
               </div>
               <div class="os-field">
                 <label>Cotizacion Referencia <span style="color:#ef4444">*</span></label>
@@ -149,10 +149,6 @@ export function renderComercialOrdenesServicio() {
               <div class="os-field">
                 <label>Version</label>
                 <input type="text" id="ods-version" class="os-input" value="01">
-              </div>
-              <div class="os-field">
-                <label>Codigo Doc</label>
-                <input type="text" id="ods-codigo-doc" class="os-input" value="OS-AC-001">
               </div>
               <div class="os-field">
                 <label>Cliente</label>
@@ -595,7 +591,6 @@ function calcularTotalCosto() {
 function limpiarFormODS() {
   (document.getElementById('ods-edit-id') as HTMLInputElement).value = '';
   (document.getElementById('ods-numero-orden') as HTMLInputElement).value = '';
-  (document.getElementById('ods-codigo-doc') as HTMLInputElement).value = 'OS-AC-001';
   (document.getElementById('ods-version') as HTMLInputElement).value = '01';
   (document.getElementById('ods-cotizacion-ref') as HTMLSelectElement).value = '';
   (document.getElementById('ods-cliente-nombre') as HTMLInputElement).value = '';
@@ -621,6 +616,18 @@ async function abrirModalNuevaODS() {
   (document.getElementById('modal-ods-titulo') as HTMLElement).textContent = 'Nueva Orden de Servicio';
   const cotSelect = document.getElementById('ods-cotizacion-ref') as HTMLSelectElement;
   cotSelect.disabled = false;
+
+  // Cargar siguiente número de orden (correlativo)
+  try {
+    const numRes = await ordenServicioService.getSiguienteNumero();
+    const numRaw = numRes.data || numRes;
+    const numData = (numRaw as any).data || numRaw;
+    (document.getElementById('ods-numero-orden') as HTMLInputElement).value = numData.numero_orden || '';
+  } catch (e) {
+    console.error('Error obteniendo siguiente número:', e);
+    (document.getElementById('ods-numero-orden') as HTMLInputElement).value = 'Error';
+  }
+
   await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal(), cargarServiciosDisponibles()]);
   (document.getElementById('modal-ods') as HTMLElement).style.display = 'flex';
 }
@@ -637,7 +644,6 @@ async function abrirModalEditarODS(id: number) {
     (document.getElementById('modal-ods-titulo') as HTMLElement).textContent = 'Ver / Editar Orden de Servicio';
     (document.getElementById('ods-edit-id') as HTMLInputElement).value = String(orden.id);
     (document.getElementById('ods-numero-orden') as HTMLInputElement).value = orden.numero_orden || '';
-    (document.getElementById('ods-codigo-doc') as HTMLInputElement).value = orden.codigo_doc || 'OS-AC-001';
     (document.getElementById('ods-version') as HTMLInputElement).value = orden.version || '01';
 
     // Cotizacion (readonly en edicion)
@@ -709,7 +715,6 @@ async function guardarODS() {
   const fechaAceptacion = (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).value;
   const fechaTentativa = (document.getElementById('ods-fecha-tentativa') as HTMLInputElement).value;
   const emitidoPor = (document.getElementById('ods-emitido-por') as HTMLSelectElement).value;
-  const codigoDoc = (document.getElementById('ods-codigo-doc') as HTMLInputElement).value;
   const version = (document.getElementById('ods-version') as HTMLInputElement).value;
 
   if (!idCotizacion) {
@@ -760,7 +765,6 @@ async function guardarODS() {
     fecha_aceptacion: fechaAceptacion,
     fecha_tentativa: fechaTentativa || null,
     emitido_por: Number(emitidoPor),
-    codigo_doc: codigoDoc || null,
     version: version || null,
     incluye_igv: incluyeIgv,
     detalles,

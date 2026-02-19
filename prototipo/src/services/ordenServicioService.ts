@@ -12,6 +12,10 @@ export const ordenServicioService = {
     return apiClient.get<ApiResponse<any>>('/ordenes-servicio/estadisticas/resumen');
   },
 
+  getSiguienteNumero: async () => {
+    return apiClient.get<ApiResponse<any>>('/ordenes-servicio/siguiente-numero');
+  },
+
   getAll: async (filters?: OrdenServicioFilters & PaginationParams) => {
     return apiClient.get<ApiResponse<OrdenServicio[]>>('/ordenes-servicio', filters);
   },

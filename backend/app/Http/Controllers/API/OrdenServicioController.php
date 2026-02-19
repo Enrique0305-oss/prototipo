@@ -101,6 +101,19 @@ class OrdenServicioController extends Controller
     }
 
     /**
+     * Obtener el siguiente número de orden (correlativo)
+     */
+    public function siguienteNumero(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'numero_orden' => OrdenServicio::generarNumero()
+            ]
+        ]);
+    }
+
+    /**
      * Obtener datos de una cotización para crear orden de servicio
      */
     public function desdeCotizacion($cotizacionId): JsonResponse

@@ -1,10 +1,14 @@
 import type { DashboardData } from './dashboard.types';
+import { productoService } from '../../services/productoService';
 
 export function renderDashboard(data?: DashboardData) {
   // Si no hay datos, mostrar loading o usar mock
   // En producción, data vendrá de dashboardService.getDashboardData()
   
   return `
+    <!-- Banner de alerta de stock bajo (se llena dinámicamente) -->
+    <div id="stock-bajo-banner"></div>
+
     <div class="page-header">
       <h1>Panel de Control Multidisciplinario</h1>
       <p>Resumen general de operaciones y gestión de QSCI Group.</p>
@@ -154,4 +158,110 @@ export function renderDashboard(data?: DashboardData) {
       </div>
     </div>
   `;
+}
+
+/**
+ * Carga las estadísticas de productos y muestra un banner de alerta
+ * si hay productos con stock por debajo del stock de seguridad.
+ */
+export async function cargarAlertaStockBajo() {
+  try {
+    const res = await productoService.getEstadisticas();
+    const raw = res.data || res;
+    const stats = (raw as any).data || raw;
+    const stockBajo = stats.stock_bajo || 0;
+
+    const banner = document.getElementById('stock-bajo-banner');
+    if (!banner) return;
+
+    if (stockBajo > 0) {
+      banner.innerHTML = `
+        <div style="
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 14px 20px;
+          margin-bottom: 20px;
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border: 1px solid #f59e0b;
+          border-left: 5px solid #d97706;
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(217, 119, 6, 0.15);
+          animation: bannerSlideIn 0.4s ease-out;
+        ">
+          <div style="
+            flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            background: #d97706;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-weight: 700; font-size: 15px; color: #92400e; margin-bottom: 2px;">
+              ⚠ Alerta de Stock Bajo
+            </div>
+            <div style="font-size: 13px; color: #78350f;">
+              Tienes <strong>${stockBajo} producto${stockBajo > 1 ? 's' : ''}</strong> con stock por debajo del nivel de seguridad. Revisa el inventario para reabastecer a tiempo.
+            </div>
+          </div>
+          <button id="btn-ir-inventario" style="
+            flex-shrink: 0;
+            padding: 8px 18px;
+            background: #d97706;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+          " onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
+            Ir a Inventario →
+          </button>
+          <button id="btn-cerrar-banner-stock" style="
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #92400e;
+            font-size: 20px;
+            line-height: 1;
+            padding: 4px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+          " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Cerrar alerta">
+            &times;
+          </button>
+        </div>
+      `;
+
+      // Botón cerrar banner
+      document.getElementById('btn-cerrar-banner-stock')?.addEventListener('click', () => {
+        if (banner) banner.innerHTML = '';
+      });
+
+      // Botón ir a inventario - dispara click en menú Almacén > Inventario
+      document.getElementById('btn-ir-inventario')?.addEventListener('click', () => {
+        // Buscar el botón de Almacén en el sidebar y simular navegación
+        const almacenBtn = document.querySelector('[data-menu="Almacén"]') as HTMLButtonElement;
+        if (almacenBtn) almacenBtn.click();
+        setTimeout(() => {
+          const inventarioBtn = document.querySelector('[data-submenu="Inventario"]') as HTMLButtonElement;
+          if (inventarioBtn) inventarioBtn.click();
+        }, 100);
+      });
+    }
+  } catch (e) {
+    console.error('Error cargando alerta de stock bajo:', e);
+  }
 }

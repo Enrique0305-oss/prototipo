@@ -16,7 +16,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = OrdenCapacitacionAuditoria::with(['cliente', 'ponente', 'cotizacion', 'servicio']);
+        $query = OrdenCapacitacionAuditoria::with(['cliente', 'ponente', 'ponentes', 'cotizacion', 'servicio']);
 
         // Filtro por búsqueda
         if ($request->has('search')) {
@@ -61,6 +61,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
                     'ruc' => $orden->cliente->ruc,
                 ],
                 'ponente' => $orden->ponente ? $orden->ponente->nombre : null,
+                'ponentes' => $orden->ponentes->map(fn($p) => [
+                    'id' => $p->id,
+                    'nombre' => $p->nombre . ' ' . ($p->apellidos ?? ''),
+                ]),
                 'servicio' => $orden->servicio ? $orden->servicio->nombre : null,
                 'cotizacion_numero' => $orden->cotizacion ? $orden->cotizacion->numero_cotizacion : null,
             ];
@@ -200,7 +204,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
         $validated = $request->validate([
             'id_cotizacion' => 'required|exists:cotizacion,id',
             'id_servicio' => 'nullable|exists:servicios,id',
-            'id_ponente' => 'required|exists:personal,id',
+            'id_ponente' => 'nullable|exists:personal,id',
+            'ponentes' => 'required|array|min:1',
+            'ponentes.*' => 'exists:personal,id',
             'fecha_servicio' => 'required|date',
             'hora_servicio' => 'nullable|date_format:H:i',
             'modalidad' => 'required|in:Presencial,Virtual,Híbrido',
@@ -233,12 +239,13 @@ class OrdenCapacitacionAuditoriaController extends Controller
             DB::beginTransaction();
 
             // Crear orden de capacitación/auditoría
+            $ponenteIds = $validated['ponentes'];
             $orden = OrdenCapacitacionAuditoria::create([
                 'numero_orden' => OrdenCapacitacionAuditoria::generarNumero(),
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
                 'id_servicio' => $validated['id_servicio'] ?? null,
-                'id_ponente' => $validated['id_ponente'],
+                'id_ponente' => $ponenteIds[0],
                 'fecha_servicio' => $validated['fecha_servicio'],
                 'hora_servicio' => $validated['hora_servicio'] ?? null,
                 'modalidad' => $validated['modalidad'],
@@ -249,10 +256,13 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'observaciones' => $validated['observaciones'] ?? null,
             ]);
 
+            // Sincronizar ponentes en tabla pivot
+            $orden->ponentes()->sync($ponenteIds);
+
             DB::commit();
 
             // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'ponente', 'servicio', 'cotizacion']);
+            $orden->load(['cliente', 'ponente', 'ponentes', 'servicio', 'cotizacion']);
 
             return response()->json([
                 'success' => true,
@@ -278,7 +288,8 @@ class OrdenCapacitacionAuditoriaController extends Controller
     {
         $orden = OrdenCapacitacionAuditoria::with([
             'cliente', 
-            'ponente', 
+            'ponente',
+            'ponentes',
             'cotizacion',
             'servicio'
         ])->find($id);
@@ -312,7 +323,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
 
         $validated = $request->validate([
             'id_servicio' => 'nullable|exists:servicios,id',
-            'id_ponente' => 'sometimes|exists:personal,id',
+            'id_ponente' => 'nullable|exists:personal,id',
+            'ponentes' => 'sometimes|array|min:1',
+            'ponentes.*' => 'exists:personal,id',
             'fecha_servicio' => 'sometimes|date',
             'hora_servicio' => 'nullable|date_format:H:i',
             'modalidad' => 'sometimes|in:Presencial,Virtual,Híbrido',
@@ -324,8 +337,16 @@ class OrdenCapacitacionAuditoriaController extends Controller
         ]);
 
         try {
+            // Si se envían ponentes, sincronizar pivot y actualizar id_ponente principal
+            if (isset($validated['ponentes'])) {
+                $ponenteIds = $validated['ponentes'];
+                $orden->ponentes()->sync($ponenteIds);
+                $validated['id_ponente'] = $ponenteIds[0];
+                unset($validated['ponentes']);
+            }
+
             $orden->update($validated);
-            $orden->load(['cliente', 'ponente', 'servicio', 'cotizacion']);
+            $orden->load(['cliente', 'ponente', 'ponentes', 'servicio', 'cotizacion']);
 
             return response()->json([
                 'success' => true,

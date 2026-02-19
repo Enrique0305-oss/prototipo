@@ -843,18 +843,22 @@ function renderizarTablaProductos() {
 
     // Semáforo de estado basado en stock vs stock_seguridad
     let estadoBadge = '';
-    const esCritico = stock < stockSeguridad; 
+    const esCritico = stock < stockSeguridad;
+    const esPrecaucion = stock === stockSeguridad;
     if (stock > stockSeguridad) {
       estadoBadge = '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#f0fdf4;color:#16a34a;"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block;"></span>Óptimo</span>';
-    } else if (stock === stockSeguridad) {
+    } else if (esPrecaucion) {
       estadoBadge = '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#fffbeb;color:#d97706;"><span style="width:8px;height:8px;border-radius:50%;background:#d97706;display:inline-block;"></span>Precaución</span>';
     } else {
       estadoBadge = '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#fef2f2;color:#dc2626;"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span>Crítico</span>';
     }
 
+    // Color de fila: rojo para Crítico, amarillo para Precaución
+    const rowBg = esCritico ? 'background-color: #ec6060;' : esPrecaucion ? 'background-color: #fef9c3;' : '';
+
     return `
-      <!-- Si esCritico=true, se añade inline style al <tr> para sombrear la fila -->
-      <tr style="${esCritico ? 'background-color: #ec6060;' : ''}">
+      <!-- Sombreado de fila: rojo si Crítico, amarillo si Precaución -->
+      <tr style="${rowBg}">
         <td>
           <div class="equipment-info">
             <div class="equipment-icon">

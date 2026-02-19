@@ -6,6 +6,7 @@ import { mostrarToast } from '../../../shared/toast';
 let ocListData: any[] = [];
 let cotizacionesDisponibles: any[] = [];
 let personalData: any[] = [];
+let selectedPonentes: { id: number; nombre: string }[] = [];
 
 export function renderComercialOrdenesCapacitacion() {
   return `
@@ -120,6 +121,7 @@ export function renderComercialOrdenesCapacitacion() {
             <th>N° Orden</th>
             <th>Cliente</th>
             <th>Servicio</th>
+            <th>Ponente(s)</th>
             <th>Fecha/Hora</th>
             <th>Modalidad</th>
             <th>Participantes</th>
@@ -129,7 +131,7 @@ export function renderComercialOrdenesCapacitacion() {
           </tr>
         </thead>
         <tbody id="oc-tabla-body">
-          <tr><td colspan="9" style="text-align:center;padding:40px;color:#64748b;">Cargando...</td></tr>
+          <tr><td colspan="10" style="text-align:center;padding:40px;color:#64748b;">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -219,11 +221,14 @@ export function renderComercialOrdenesCapacitacion() {
                 <input type="text" id="oc-servicio-nombre" class="oc-input" readonly placeholder="Se auto-completa desde cotización">
                 <input type="hidden" id="oc-servicio-id">
               </div>
-              <div class="oc-field">
-                <label class="oc-label">Ponente / Expositor <span class="oc-required">*</span></label>
-                <select id="oc-ponente" class="oc-input">
-                  <option value="">Cargando personal...</option>
-                </select>
+              <div class="oc-field" style="grid-column: 1 / -1;">
+                <label class="oc-label">Ponente(s) / Expositor(es) <span class="oc-required">*</span></label>
+                <div id="oc-ponentes-container" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;min-height:44px;background:#fff;">
+                  <div id="oc-ponentes-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+                  <select id="oc-ponente-selector" class="oc-input" style="border:none;padding:4px 0;margin:0;box-shadow:none;">
+                    <option value="">+ Agregar ponente...</option>
+                  </select>
+                </div>
               </div>
               <div class="oc-field">
                 <label class="oc-label">Fecha del Servicio <span class="oc-required">*</span></label>
@@ -320,7 +325,7 @@ async function cargarOrdenesCapacitacion() {
     ocListData = Array.isArray(raw) ? raw : (raw as any).data || [];
 
     if (ocListData.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#64748b;">No se encontraron órdenes de capacitación</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:#64748b;">No se encontraron órdenes de capacitación</td></tr>';
       return;
     }
 
@@ -352,10 +357,14 @@ async function cargarOrdenesCapacitacion() {
       const fecha = formatFecha(o.fecha_servicio);
       const hora = o.hora_servicio || '';
       const costo = Number(o.costo || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
+      const ponentesStr = o.ponentes && o.ponentes.length > 0
+        ? o.ponentes.map((p: any) => p.nombre).join(', ')
+        : (o.ponente || '-');
       return '<tr>' +
         '<td><strong>' + (o.numero_orden || '') + '</strong></td>' +
         '<td>' + (o.cliente?.nombre_empresa || '-') + '</td>' +
         '<td>' + (o.servicio || '-') + '</td>' +
+        '<td style="max-width:180px;"><small>' + ponentesStr + '</small></td>' +
         '<td><div>' + fecha + '</div><small style="color:#64748b;">' + hora + '</small></td>' +
         '<td><span class="oc-badge ' + getModalidadBadge(o.modalidad) + '">' + (o.modalidad || '-') + '</span></td>' +
         '<td style="text-align:center;">' + (o.num_participantes || 0) + '</td>' +
@@ -377,7 +386,7 @@ async function cargarOrdenesCapacitacion() {
     bindAccionesTablaOC();
   } catch (e) {
     console.error('Error cargando órdenes:', e);
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar órdenes</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar órdenes</td></tr>';
   }
 }
 
@@ -409,21 +418,54 @@ async function cargarDropdownCotizaciones() {
 }
 
 async function cargarDropdownPersonal() {
-  const select = document.getElementById('oc-ponente') as HTMLSelectElement;
+  const select = document.getElementById('oc-ponente-selector') as HTMLSelectElement;
   if (!select) return;
   try {
     const res = await ordenCapacitacionService.getPersonal();
     const raw = res.data || res;
     personalData = Array.isArray(raw) ? raw : (raw as any).data || [];
 
-    select.innerHTML = '<option value="">Seleccione ponente...</option>' +
-      personalData.map(p =>
-        '<option value="' + p.id + '">' + p.nombre + ' ' + (p.apellidos || '') + '</option>'
-      ).join('');
+    actualizarSelectorPonentes();
   } catch (e) {
     console.error('Error cargando personal:', e);
-    select.innerHTML = '<option value="">Error al cargar</option>';
+    if (select) select.innerHTML = '<option value="">Error al cargar</option>';
   }
+}
+
+function actualizarSelectorPonentes() {
+  const select = document.getElementById('oc-ponente-selector') as HTMLSelectElement;
+  if (!select) return;
+  const selectedIds = selectedPonentes.map(p => p.id);
+  const disponibles = personalData.filter(p => !selectedIds.includes(p.id));
+  select.innerHTML = '<option value="">+ Agregar ponente...</option>' +
+    disponibles.map(p =>
+      '<option value="' + p.id + '">' + p.nombre + ' ' + (p.apellidos || '') + '</option>'
+    ).join('');
+}
+
+function renderPonenteTags() {
+  const container = document.getElementById('oc-ponentes-tags') as HTMLElement;
+  if (!container) return;
+  if (selectedPonentes.length === 0) {
+    container.innerHTML = '<span style="color:#94a3b8;font-size:13px;">Ningún ponente seleccionado</span>';
+    return;
+  }
+  container.innerHTML = selectedPonentes.map(p =>
+    '<span style="display:inline-flex;align-items:center;gap:4px;background:#e0f2fe;color:#0369a1;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:500;">' +
+      p.nombre +
+      ' <button type="button" class="btn-remove-ponente" data-id="' + p.id + '" style="background:none;border:none;cursor:pointer;color:#0369a1;font-size:16px;line-height:1;padding:0 2px;font-weight:700;">&times;</button>' +
+    '</span>'
+  ).join('');
+
+  // Bind remove buttons
+  container.querySelectorAll('.btn-remove-ponente').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      selectedPonentes = selectedPonentes.filter(p => p.id !== id);
+      renderPonenteTags();
+      actualizarSelectorPonentes();
+    });
+  });
 }
 
 async function cargarDatosCotizacion(cotizacionId: number) {
@@ -515,7 +557,9 @@ function limpiarFormOC() {
   (document.getElementById('oc-detalles-cotizacion') as HTMLElement).style.display = 'none';
   (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = '';
   (document.getElementById('oc-servicio-id') as HTMLInputElement).value = '';
-  (document.getElementById('oc-ponente') as HTMLSelectElement).value = '';
+  selectedPonentes = [];
+  renderPonenteTags();
+  actualizarSelectorPonentes();
   (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
   (document.getElementById('oc-hora-servicio') as HTMLInputElement).value = '';
   (document.getElementById('oc-modalidad') as HTMLSelectElement).value = '';
@@ -587,9 +631,22 @@ async function abrirModalEditarOC(id: number) {
     (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = orden.fecha_servicio?.split('T')[0] || '';
     (document.getElementById('oc-hora-servicio') as HTMLInputElement).value = orden.hora_servicio || '';
 
-    // Ponente
+    // Ponentes (multi-select)
     setTimeout(() => {
-      (document.getElementById('oc-ponente') as HTMLSelectElement).value = String(orden.id_ponente || '');
+      if (orden.ponentes && Array.isArray(orden.ponentes) && orden.ponentes.length > 0) {
+        selectedPonentes = orden.ponentes.map((p: any) => ({
+          id: p.id,
+          nombre: p.nombre || (p.nombre + ' ' + (p.apellidos || ''))
+        }));
+      } else if (orden.id_ponente) {
+        // Fallback: usar id_ponente individual
+        const found = personalData.find(p => p.id === orden.id_ponente);
+        if (found) {
+          selectedPonentes = [{ id: found.id, nombre: found.nombre + ' ' + (found.apellidos || '') }];
+        }
+      }
+      renderPonenteTags();
+      actualizarSelectorPonentes();
     }, 100);
 
     // Modalidad & rest
@@ -610,7 +667,7 @@ async function guardarOC() {
   const editId = (document.getElementById('oc-edit-id') as HTMLInputElement).value;
   const idCotizacion = (document.getElementById('oc-cotizacion-ref') as HTMLSelectElement).value;
   const idServicio = (document.getElementById('oc-servicio-id') as HTMLInputElement).value;
-  const idPonente = (document.getElementById('oc-ponente') as HTMLSelectElement).value;
+  const ponenteIds = selectedPonentes.map(p => p.id);
   const fechaServicio = (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value;
   const horaServicio = (document.getElementById('oc-hora-servicio') as HTMLInputElement).value;
   const modalidad = (document.getElementById('oc-modalidad') as HTMLSelectElement).value;
@@ -627,8 +684,8 @@ async function guardarOC() {
     mostrarToast('error', 'Campo requerido', 'La fecha del servicio es obligatoria');
     return;
   }
-  if (!idPonente) {
-    mostrarToast('error', 'Campo requerido', 'Debe seleccionar un ponente');
+  if (ponenteIds.length === 0) {
+    mostrarToast('error', 'Campo requerido', 'Debe seleccionar al menos un ponente');
     return;
   }
   if (!modalidad) {
@@ -643,7 +700,7 @@ async function guardarOC() {
   const payload: any = {
     id_cotizacion: Number(idCotizacion),
     id_servicio: idServicio ? Number(idServicio) : null,
-    id_ponente: Number(idPonente),
+    ponentes: ponenteIds,
     fecha_servicio: fechaServicio,
     hora_servicio: horaServicio || null,
     modalidad,
@@ -697,6 +754,22 @@ export function initOrdenesCapacitacionEvents() {
 
   // Guardar
   document.getElementById('modal-oc-guardar')?.addEventListener('click', guardarOC);
+
+  // Ponente multi-select: agregar al elegir del dropdown
+  document.getElementById('oc-ponente-selector')?.addEventListener('change', () => {
+    const select = document.getElementById('oc-ponente-selector') as HTMLSelectElement;
+    const val = select.value;
+    if (!val) return;
+    const id = Number(val);
+    if (selectedPonentes.some(p => p.id === id)) return;
+    const persona = personalData.find(p => p.id === id);
+    if (persona) {
+      selectedPonentes.push({ id: persona.id, nombre: persona.nombre + ' ' + (persona.apellidos || '') });
+      renderPonenteTags();
+      actualizarSelectorPonentes();
+    }
+    select.value = '';
+  });
 
   // Cotización change -> auto-fill
   document.getElementById('oc-cotizacion-ref')?.addEventListener('change', async () => {

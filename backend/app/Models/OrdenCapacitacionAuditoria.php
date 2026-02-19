@@ -55,6 +55,14 @@ class OrdenCapacitacionAuditoria extends Model
         return $this->belongsTo(Personal::class, 'id_ponente');
     }
 
+    /**
+     * Relación many-to-many con Personal (múltiples ponentes)
+     */
+    public function ponentes()
+    {
+        return $this->belongsToMany(Personal::class, 'orden_capacitacion_ponentes', 'id_orden_capacitacion', 'id_ponente');
+    }
+
     // Relación con Proyecciones
     public function proyecciones()
     {

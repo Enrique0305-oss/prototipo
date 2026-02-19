@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function () {
     // para las órdenes de servicio :v
     Route::get('/ordenes-servicio/estadisticas/resumen', [OrdenServicioController::class, 'estadisticas']);
     Route::get('/ordenes-servicio/cotizaciones-disponibles', [OrdenServicioController::class, 'cotizacionesDisponibles']);
+    Route::get('/ordenes-servicio/siguiente-numero', [OrdenServicioController::class, 'siguienteNumero']);
     Route::get('/ordenes-servicio/desde-cotizacion/{id}', [OrdenServicioController::class, 'desdeCotizacion']);
     Route::get('/ordenes-servicio', [OrdenServicioController::class, 'index']);
     Route::get('/ordenes-servicio/{id}', [OrdenServicioController::class, 'show']);
