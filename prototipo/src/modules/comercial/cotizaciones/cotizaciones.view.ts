@@ -225,7 +225,8 @@ async function abrirFormularioCotizacion() {
   if (!lista || !formulario) return;
 
   // Cargar clientes aceptados y servicios/productos
-  let clientesOptions = '<option value="">Seleccione un cliente...</option>';
+  let clientesOptions = '';
+  let clientesDivs = '';
   let serviciosData: any[] = [];
   let productosData: any[] = [];
   let catalogoCapAudData: any[] = [];
@@ -242,6 +243,7 @@ async function abrirFormularioCotizacion() {
     const clientes = Array.isArray(clientesRes.data) ? clientesRes.data : (clientesRes as any).data || [];
     clientes.forEach((c: any) => {
       clientesOptions += `<option value="${c.id}">${c.nombre_empresa} - ${c.ruc}</option>`;
+      clientesDivs += `<div class="cliente-option" data-value="${c.id}">${c.nombre_empresa} - ${c.ruc}</div>`;
     });
 
     serviciosData = Array.isArray(serviciosRes.data) ? serviciosRes.data : [];
@@ -290,11 +292,17 @@ async function abrirFormularioCotizacion() {
               <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Fecha de Emisión</label>
               <input type="date" id="cot-fecha" class="form-control" value="${hoy}" readonly style="background: #f1f5f9; width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
             </div>
-            <div class="form-group">
+            <div class="form-group" style="position:relative;">
               <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Cliente *</label>
-              <select id="cot-cliente" class="form-control" required style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
-                ${clientesOptions}
-              </select>
+              <input type="hidden" id="cot-cliente" value="" />
+              <div id="cliente-combo" style="position:relative;">
+                <input type="text" id="cot-cliente-search" class="form-control" placeholder="Buscar cliente por nombre o RUC..." autocomplete="off"
+                  style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; padding-right:36px;" />
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                <div id="cliente-dropdown" style="display:none;position:absolute;z-index:999;top:100%;left:0;right:0;max-height:220px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                  ${clientesDivs}
+                </div>
+              </div>
             </div>
             <div class="form-group">
               <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tipo de Cotización *</label>
@@ -393,6 +401,76 @@ async function abrirFormularioCotizacion() {
     calcularTotales();
   });
 
+  // ===== Inicializar combobox buscable de clientes =====
+  const clienteSearchInput = document.getElementById('cot-cliente-search') as HTMLInputElement;
+  const clienteDropdown = document.getElementById('cliente-dropdown');
+  const clienteHidden = document.getElementById('cot-cliente') as HTMLInputElement;
+
+  if (clienteSearchInput && clienteDropdown) {
+    // Mostrar dropdown al enfocar
+    clienteSearchInput.addEventListener('focus', () => {
+      clienteDropdown.style.display = 'block';
+      filtrarClientes();
+    });
+
+    // Filtrar al escribir
+    clienteSearchInput.addEventListener('input', () => {
+      filtrarClientes();
+    });
+
+    // Cerrar al hacer clic fuera
+    document.addEventListener('click', (e) => {
+      const combo = document.getElementById('cliente-combo');
+      if (combo && !combo.contains(e.target as Node)) {
+        clienteDropdown.style.display = 'none';
+      }
+    });
+
+    function filtrarClientes() {
+      const term = clienteSearchInput.value.toLowerCase();
+      const opciones = clienteDropdown.querySelectorAll('.cliente-option');
+      let visible = 0;
+      opciones.forEach((opt: any) => {
+        const texto = opt.textContent.toLowerCase();
+        if (texto.includes(term)) {
+          opt.style.display = 'block';
+          visible++;
+        } else {
+          opt.style.display = 'none';
+        }
+      });
+      // Mostrar mensaje si no hay resultados
+      let noResult = clienteDropdown.querySelector('.no-result');
+      if (visible === 0) {
+        if (!noResult) {
+          clienteDropdown.insertAdjacentHTML('beforeend', '<div class="no-result" style="padding:10px 12px;color:#94a3b8;font-size:13px;text-align:center;">No se encontraron clientes</div>');
+        }
+      } else if (noResult) {
+        noResult.remove();
+      }
+    }
+
+    // Delegación de eventos para seleccionar cliente
+    clienteDropdown.addEventListener('click', (e) => {
+      const opt = (e.target as HTMLElement).closest('.cliente-option') as HTMLElement;
+      if (opt) {
+        const val = opt.dataset.value || '';
+        const text = opt.textContent?.trim() || '';
+        clienteHidden.value = val;
+        clienteSearchInput.value = text;
+        clienteDropdown.style.display = 'none';
+      }
+    });
+
+    // Estilo hover para opciones (inyectado una vez)
+    if (!document.getElementById('cliente-combo-styles')) {
+      const style = document.createElement('style');
+      style.id = 'cliente-combo-styles';
+      style.textContent = `.cliente-option{padding:10px 12px;cursor:pointer;font-size:14px;color:#334155;border-bottom:1px solid #f1f5f9;transition:background .15s}.cliente-option:hover{background:#f0f7ff;color:#2563eb}.cliente-option:last-child{border-bottom:none}`;
+      document.head.appendChild(style);
+    }
+  }
+
   document.getElementById('cot-tipo')?.addEventListener('change', () => {
     const tbody = document.getElementById('detalle-cotizacion-body');
     if (tbody) tbody.innerHTML = '';
@@ -457,8 +535,13 @@ function agregarLineaDetalle() {
   const inputStyle = 'width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;';
   const selectStyle = inputStyle;
   const esProducto = tipo === 'Producto';
-  const disabledAttr = esProducto ? 'disabled' : '';
-  const disabledStyle = esProducto ? 'background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : '';
+  const esServicio = tipo === 'Servicio';
+  // Frecuencia: se bloquea solo en Producto
+  const disabledFrecuencia = esProducto ? 'disabled' : '';
+  const disabledFrecuenciaStyle = esProducto ? 'background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : '';
+  // Modalidad: se bloquea en Producto y en Servicio (solo aplica para Capacitación)
+  const disabledModalidad = (esProducto || esServicio) ? 'disabled' : '';
+  const disabledModalidadStyle = (esProducto || esServicio) ? 'background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : '';
 
   const nuevaLinea = `
     <tr id="${lineaId}">
@@ -477,7 +560,7 @@ function agregarLineaDetalle() {
         <input type="number" class="precio-input" value="0.00" min="0" step="0.01" style="${inputStyle}">
       </td>
       <td>
-        <select class="frecuencia-input" style="${selectStyle}${disabledStyle}" ${disabledAttr}>
+        <select class="frecuencia-input" style="${selectStyle}${disabledFrecuenciaStyle}" ${disabledFrecuencia}>
           <option value="">—</option>
           <option value="Semanal">Semanal</option>
           <option value="Quincenal">Quincenal</option>
@@ -488,7 +571,7 @@ function agregarLineaDetalle() {
         </select>
       </td>
       <td>
-        <select class="modalidad-input" style="${selectStyle}${disabledStyle}" ${disabledAttr}>
+        <select class="modalidad-input" style="${selectStyle}${disabledModalidadStyle}" ${disabledModalidad}>
           <option value="">—</option>
           <option value="Presencial">Presencial</option>
           <option value="Virtual">Virtual</option>
@@ -571,7 +654,7 @@ function calcularTotales() {
 }
 
 async function guardarCotizacion() {
-  const clienteId = parseInt((document.getElementById('cot-cliente') as HTMLSelectElement)?.value || '0');
+  const clienteId = parseInt((document.getElementById('cot-cliente') as HTMLInputElement)?.value || '0');
   const tipoCotizacion = (document.getElementById('cot-tipo') as HTMLSelectElement)?.value;
   const observaciones = (document.getElementById('cot-observaciones') as HTMLInputElement)?.value?.trim();
 
