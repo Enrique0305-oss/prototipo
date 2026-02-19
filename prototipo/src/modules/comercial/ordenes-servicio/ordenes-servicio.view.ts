@@ -337,21 +337,21 @@ async function cargarOrdenesServicio() {
         '<td><strong>S/ ' + total + '</strong></td>' +
         '<td><span style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;' + (o.estado === 'Aprobado' ? 'background:#dcfce7;color:#166534;' : o.estado === 'Rechazado' ? 'background:#fee2e2;color:#991b1b;' : 'background:#fef3c7;color:#92400e;') + '">' + (o.estado || 'Aprobado') + '</span></td>' +
         '<td>' +
-          '<div style="display:flex;gap:6px;">' +
-            '<button class="btn-icon btn-ver-ods" data-id="' + o.id + '" title="Ver">' +
-              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>' +
-                '<circle cx="12" cy="12" r="3"></circle>' +
-              '</svg>' +
+          '<div style="display:flex; gap:6px;">' +
+            // BOTÓN VER (Solo lectura)
+            '<button class="btn-icon btn-ver-ods" data-id="' + o.id + '" title="Ver Detalle">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' +
             '</button>' +
+            // BOTÓN EDITAR (El que ya tenías)
+            '<button class="btn-icon btn-editar-ods" data-id="' + o.id + '" title="Editar" style="color: #0284c7;">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>' +
+            '</button>' +
+            // BOTÓN ELIMINAR
             '<button class="btn-icon btn-eliminar-ods" data-id="' + o.id + '" data-numero="' + (o.numero_orden || '') + '" title="Eliminar" style="color:#ef4444;">' +
-              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                '<polyline points="3 6 5 6 21 6"></polyline>' +
-                '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>' +
-              '</svg>' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>' +
             '</button>' +
           '</div>' +
-        '</td>' +
+        '</td>'
       '</tr>';
     }).join('');
 
@@ -366,7 +366,14 @@ function bindAccionesTabla() {
   document.querySelectorAll('.btn-ver-ods').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = Number((btn as HTMLElement).dataset.id);
-      await abrirModalEditarODS(id);
+      await abrirModalEditarODS(id, true); // true = Solo lectura
+    });
+  });
+
+  document.querySelectorAll('.btn-editar-ods').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      await abrirModalEditarODS(id, false); // false = Editable
     });
   });
   document.querySelectorAll('.btn-eliminar-ods').forEach(btn => {
@@ -632,21 +639,23 @@ async function abrirModalNuevaODS() {
   (document.getElementById('modal-ods') as HTMLElement).style.display = 'flex';
 }
 
-async function abrirModalEditarODS(id: number) {
+async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
   try {
     const res = await ordenServicioService.getById(id);
     const raw = res.data || res;
     const orden = (raw as any).data || raw;
 
+    // 1. Limpiamos y cargamos catálogos
     limpiarFormODS();
     await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal(), cargarServiciosDisponibles()]);
 
-    (document.getElementById('modal-ods-titulo') as HTMLElement).textContent = 'Ver / Editar Orden de Servicio';
+    // 2. Título y IDs básicos
+    (document.getElementById('modal-ods-titulo') as HTMLElement).textContent = soloLectura ? 'Consultar Orden de Servicio' : 'Editar Orden de Servicio';
     (document.getElementById('ods-edit-id') as HTMLInputElement).value = String(orden.id);
     (document.getElementById('ods-numero-orden') as HTMLInputElement).value = orden.numero_orden || '';
     (document.getElementById('ods-version') as HTMLInputElement).value = orden.version || '01';
 
-    // Cotizacion (readonly en edicion)
+    // 3. Llenado de Cotización y Cliente (Mantenemos tu lógica)
     const cotSelect = document.getElementById('ods-cotizacion-ref') as HTMLSelectElement;
     if (orden.id_cotizacion) {
       const cotNum = orden.cotizacion?.numero_cotizacion || ('COT-' + orden.id_cotizacion);
@@ -655,30 +664,28 @@ async function abrirModalEditarODS(id: number) {
         cotSelect.insertAdjacentHTML('beforeend', '<option value="' + orden.id_cotizacion + '">' + cotNum + '</option>');
       }
       cotSelect.value = String(orden.id_cotizacion);
-      cotSelect.disabled = true;
+      cotSelect.disabled = true; // Siempre readonly en edición/ver
     }
 
-    // Cliente
     (document.getElementById('ods-cliente-nombre') as HTMLInputElement).value = orden.cliente?.nombre_empresa || '';
     (document.getElementById('ods-cliente-id') as HTMLInputElement).value = String(orden.cliente?.id || orden.id_cliente || '');
     (document.getElementById('ods-cliente-ruc') as HTMLInputElement).value = orden.cliente?.ruc || '';
 
-    // Fechas
+    // 4. Fechas y Personal
     (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).value = orden.fecha_aceptacion?.split('T')[0] || '';
     (document.getElementById('ods-fecha-tentativa') as HTMLInputElement).value = orden.fecha_tentativa?.split('T')[0] || '';
 
-    // Emitido por
     setTimeout(() => {
       (document.getElementById('ods-emitido-por') as HTMLSelectElement).value = String(orden.emitido_por || '');
     }, 100);
 
-    // IGV
+    // 5. IGV
     incluyeIgv = orden.incluye_igv !== false;
     (document.getElementById('ods-igv') as HTMLSelectElement).value = incluyeIgv ? '1' : '0';
     const igvRow = document.getElementById('ods-igv-row') as HTMLElement;
     if (igvRow) igvRow.style.display = incluyeIgv ? 'flex' : 'none';
 
-    // Detalles
+    // 6. Detalles (Agregamos las líneas)
     const detalles = orden.detalles || [];
     detalles.forEach((d: any) => {
       agregarLineaConDatos(
@@ -693,8 +700,43 @@ async function abrirModalEditarODS(id: number) {
       }
     });
 
+    // ==========================================
+    // NUEVA LÓGICA DE BLOQUEO (SOLO LECTURA)
+    // ==========================================
+    
+    // Bloquear todos los inputs y selects del modal
+    const inputs = document.querySelectorAll('#modal-ods .os-input, #modal-ods select, #modal-ods input');
+    inputs.forEach(input => {
+      const el = input as HTMLInputElement;
+      // Si es soloLectura, bloqueamos. Si es Editar, habilitamos (excepto cotización que ya es disabled arriba)
+      if (el.id !== 'ods-cotizacion-ref' && el.id !== 'ods-numero-orden' && el.id !== 'ods-cliente-nombre' && el.id !== 'ods-cliente-ruc') {
+          el.disabled = soloLectura;
+      }
+    });
+
+    const btnGuardar = document.getElementById('modal-ods-guardar') as HTMLElement;
+    const btnCancelar = document.getElementById('modal-ods-cancelar') as HTMLElement;
+    const btnAgregarSrv = document.getElementById('btn-agregar-linea-servicio') as HTMLElement;
+
+    if (soloLectura) {
+      btnGuardar.style.display = 'none';           // Quitamos botón Guardar
+      btnCancelar.textContent = 'Salir';           // Cambiamos Cancelar por Salir
+      if (btnAgregarSrv) btnAgregarSrv.style.display = 'none'; // Quitamos botón agregar servicio
+      
+      // Bloquear botones de eliminar líneas de la tabla
+      setTimeout(() => {
+          document.querySelectorAll('.btn-eliminar-linea').forEach(b => (b as HTMLElement).style.display = 'none');
+      }, 150);
+    } else {
+      btnGuardar.style.display = 'flex';           // Mostramos Guardar
+      btnGuardar.textContent = 'Actualizar Orden'; // Texto de edición
+      btnCancelar.textContent = 'Cancelar';
+      if (btnAgregarSrv) btnAgregarSrv.style.display = 'flex';
+    }
+
     calcularTotalCosto();
     (document.getElementById('modal-ods') as HTMLElement).style.display = 'flex';
+
   } catch (e) {
     console.error('Error cargando ODS:', e);
     mostrarToast('error', 'Error', 'No se pudo cargar la orden de servicio');
