@@ -39,7 +39,10 @@ function renderModalFactura() {
                 </div>
                 <div>
                     <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Empresa (Emisor)</label>
-                    <input type="text" id="res-alias" readonly style="width:100%; padding:8px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:6px; color:#475569; font-weight:bold;">
+                    <select id="res-alias" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-weight:bold; color:#1e293b;">
+                        <option value="1">MULTI</option>
+                        <option value="2">CIM</option>
+                    </select>
                 </div>
 
                 <div>
@@ -69,19 +72,32 @@ function renderModalFactura() {
                       </div>
                   </div>
 
+                  <div style="display:flex; justify-content: space-between; gap:20px; margin-bottom:15px; padding:10px 20px; background:#f8fafc; border-radius:8px; border: 1px dashed #cbd5e1;">
+                      <div style="text-align:left;">
+                          <span style="display:block; font-size:10px; color:#64748b; font-weight:700; text-transform:uppercase;">Subtotal OS</span>
+                          <span style="font-size:14px; font-weight:600; color:#334155;">S/ <span id="info-subtotal">0.00</span></span>
+                      </div>
+                      <div style="text-align:left;">
+                          <span style="display:block; font-size:10px; color:#64748b; font-weight:700; text-transform:uppercase;">IGV (18%)</span>
+                          <span style="font-size:14px; font-weight:600; color:#334155;">S/ <span id="info-igv">0.00</span></span>
+                      </div>
+                      <div style="text-align:left;">
+                          <span style="display:block; font-size:10px; color:#64748b; font-weight:700; text-transform:uppercase;">Total OS</span>
+                          <span style="font-size:14px; font-weight:700; color:#1e293b;">S/ <span id="info-total-os">0.00</span></span>
+                      </div>
+                  </div>
+
                   <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; display: flex; justify-content: space-around; align-items: center;">
-                      <div style="text-align:center;">
-                          <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Subtotal</span>
-                          <span style="font-size:16px; font-weight:bold; color:#1e3a8a;">S/ <span id="res-subtotal">0.00</span></span>
-                      </div>
-                      <div style="text-align:center;">
-                          <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Detracción (12%)</span>
-                          <span style="font-size:16px; font-weight:bold; color:#dc2626;">- S/ <span id="res-detrax">0.00</span></span>
-                      </div>
-                      <div style="text-align:center; background: white; padding: 10px 20px; border-radius: 8px; border: 2px solid #1e40af;">
-                          <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Neto a Cobrar</span>
-                          <span style="font-size:20px; font-weight:900; color:#1e40af;">S/ <span id="res-neto">0.00</span></span>
-                      </div>
+                        <div style="text-align:center;">
+                            <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Total OS</span> <span style="font-size:16px; font-weight:bold; color:#1e3a8a;">S/ <span id="res-subtotal">0.00</span></span> </div>
+                        <div style="text-align:center;">
+                            <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Detracción (12%)</span>
+                            <span style="font-size:16px; font-weight:bold; color:#dc2626;">- S/ <span id="res-detrax">0.00</span></span>
+                        </div>
+                        <div style="text-align:center; background: white; padding: 10px 20px; border-radius: 8px; border: 2px solid #1e40af;">
+                            <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Neto a Cobrar</span>
+                            <span style="font-size:20px; font-weight:900; color:#1e40af;">S/ <span id="res-neto">0.00</span></span>
+                        </div>
                   </div>
 
                   <div style="text-align:right; margin-top:30px; padding-top:20px; border-top: 1px solid #e2e8f0;">
@@ -382,10 +398,20 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
         // Ahora sí, los nombres coinciden 1:1 con tu Thunder Client
         (document.getElementById('res-cliente') as HTMLInputElement).value = d.nombre_cliente;
         (document.getElementById('res-servicio') as HTMLInputElement).value = d.servicio;
-        (document.getElementById('res-actividad') as HTMLInputElement).value = d.actividad || '';
+        (document.getElementById('in-actividad') as HTMLInputElement).value = d.actividad || '';
 
-        // Banner de Totales
-        document.getElementById('res-subtotal')!.innerText = Number(d.subtotal).toFixed(2);
+        const comboEmpresa = document.getElementById('res-alias') as HTMLSelectElement;
+        if (comboEmpresa && d.id_multicim) {
+            comboEmpresa.value = String(d.id_multicim);
+        }
+
+        // Datos de la OS para mostrar en el modal
+        document.getElementById('info-subtotal')!.innerText = Number(d.subtotal).toFixed(2);
+        document.getElementById('info-igv')!.innerText      = Number(d.igv).toFixed(2);
+        document.getElementById('info-total-os')!.innerText = Number(d.precio_total_os).toFixed(2);
+
+        // Operacion Detraccion
+        document.getElementById('res-subtotal')!.innerText = Number(d.precio_total_os).toFixed(2);
         document.getElementById('res-detrax')!.innerText = Number(d.monto_detrax).toFixed(2);
         document.getElementById('res-neto')!.innerText = Number(d.total_final).toFixed(2);
 
@@ -411,12 +437,12 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
     const diasCred = Number((document.getElementById('in-dias-credito') as HTMLInputElement).value);
 
     // 2. Datos jalados de los inputs/spans
-    const actividad = (document.getElementById('res-actividad') as HTMLInputElement).value;
+    const actividad = (document.getElementById('in-actividad') as HTMLInputElement).value;
     const montoDetrax = Number(document.getElementById('res-detrax')?.innerText || 0);
     const totalFinal = Number(document.getElementById('res-neto')?.innerText || 0);
 
     // 3. El ID de la empresa que jalamos en el paso anterior
-    const idMulticimReal = Number(form.dataset.idMulticim);
+    const idMulticimReal = Number((document.getElementById('res-alias') as HTMLSelectElement).value);
 
     const payload = {
       actividad: actividad,
