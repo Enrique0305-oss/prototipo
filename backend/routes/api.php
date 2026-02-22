@@ -19,6 +19,7 @@ use App\Http\Controllers\API\MulticimController;
 use App\Http\Controllers\API\ProyeccionesController;
 use App\Http\Controllers\API\ServicioController;
 use App\Http\Controllers\API\CatalogoCapacitacionAuditoriaController;
+use App\Http\Controllers\API\ProgramacionMantenimientoController;
 
 // Rutas sin middleware para pruebas
 Route::prefix('v1')->group(function () {
@@ -131,6 +132,15 @@ Route::prefix('v1')->group(function () {
     Route::post('/mantenimientos', [MantenimientoController::class, 'store']);
     Route::put('/mantenimientos/{id}', [MantenimientoController::class, 'update']);
     Route::delete('/mantenimientos/{id}', [MantenimientoController::class, 'destroy']);
+
+    // para la programacion anual de mantenimientos
+    Route::get('/programacion-mantenimiento', [ProgramacionMantenimientoController::class, 'index']);
+    Route::get('/programacion-mantenimiento/alertas', [ProgramacionMantenimientoController::class, 'alertas']);
+    Route::get('/programacion-mantenimiento/{id}', [ProgramacionMantenimientoController::class, 'show']);
+    Route::post('/programacion-mantenimiento', [ProgramacionMantenimientoController::class, 'store']);
+    Route::post('/programacion-mantenimiento/preview', [ProgramacionMantenimientoController::class, 'preview']);
+    Route::delete('/programacion-mantenimiento/{id}', [ProgramacionMantenimientoController::class, 'destroy']);
+    Route::patch('/mantenimientos/{id}/marcar-realizado', [ProgramacionMantenimientoController::class, 'marcarRealizado']);
 
     // para las actividades de mantenimiento :v
     Route::get('/actividades-mantenimiento', [ActividadMantenimientoController::class, 'index']);

@@ -348,10 +348,12 @@ export interface AreaFilters extends FilterParams {
 
 export interface Mantenimiento {
   id: number;
+  id_programacion?: number | null;
   id_equipo: number;
   id_actmanten: number;
   fecha: string;
   observaciones?: string;
+  estado?: 'Pendiente' | 'Realizado' | 'Vencido';
   created_at?: string;
   updated_at?: string;
   equipo?: Equipo;
@@ -391,6 +393,37 @@ export interface EstadisticasMantenimientos {
 export interface HistorialEquipo {
   equipo: Equipo;
   data: Mantenimiento[];
+}
+
+// Programación Anual de Mantenimiento
+
+export interface ProgramacionMantenimiento {
+  id: number;
+  equipo: { id: number; descripcion: string; marca: string; modelo: string } | null;
+  actividad: { id: number; categoria: string } | null;
+  anio: number;
+  frecuencia_meses: number;
+  fecha_inicio: string;
+  total_programados: number;
+  observaciones?: string;
+  es_prueba: boolean;
+  created_at?: string;
+  realizados: number;
+  pendientes: number;
+  vencidos: number;
+  mantenimientos: Array<{
+    id: number;
+    fecha: string;
+    estado: 'Pendiente' | 'Realizado' | 'Vencido';
+    observaciones?: string;
+    proximidad: 'normal' | 'proximo' | 'vencido';
+  }>;
+}
+
+export interface PreviewFecha {
+  fecha: string;
+  estado: 'Pendiente' | 'Vencido';
+  mes: string;
 }
 
 // Actividades de Mantenimiento

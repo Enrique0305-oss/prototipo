@@ -5,7 +5,7 @@ import { authService } from './modules/auth/auth.service'
 
 // Inicializar guard de autenticación
 initAuthGuard();
-import { renderDashboard, cargarAlertaStockBajo } from './modules/dashboard/dashboard.view'
+import { renderDashboard, cargarAlertaStockBajo, cargarAlertaMantenimiento } from './modules/dashboard/dashboard.view'
 import { renderProgramaciones, initProgramacionesEvents } from './modules/programaciones/programaciones.view'
 import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './modules/recursos-humanos/recursos-humanos.view'
 // Almacén
@@ -60,7 +60,7 @@ const menuItems = [
 function getMainContent() {
   if (activeMenu === 'Dashboard') {
     // Cargar alerta de stock bajo después de que el DOM se renderice
-    setTimeout(() => cargarAlertaStockBajo(), 0);
+    setTimeout(() => { cargarAlertaStockBajo(); cargarAlertaMantenimiento(); }, 0);
     return renderDashboard();
   } else if (activeMenu === 'Almacén') {
     if (activeSubMenu === 'Inventario') return renderAlmacenInventario();

@@ -27,9 +27,14 @@ class Equipo extends Model
         return $this->hasMany(Mantenimiento::class, 'id_equipo');
     }
 
-    public function programaciones()
+    public function programacionesServicio()
     {
         return $this->hasMany(ProgramacionServicio::class, 'id_vehiculo');
+    }
+
+    public function programacionesMantenimiento()
+    {
+        return $this->hasMany(ProgramacionMantenimiento::class, 'id_equipo');
     }
 
     // Scopes

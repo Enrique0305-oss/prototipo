@@ -1,5 +1,6 @@
 import type { DashboardData } from './dashboard.types';
 import { productoService } from '../../services/productoService';
+import { mantenimientoService } from '../../services/mantenimientoService';
 
 export function renderDashboard(data?: DashboardData) {
   // Si no hay datos, mostrar loading o usar mock
@@ -8,6 +9,9 @@ export function renderDashboard(data?: DashboardData) {
   return `
     <!-- Banner de alerta de stock bajo (se llena dinámicamente) -->
     <div id="stock-bajo-banner"></div>
+
+    <!-- Banner de alerta de mantenimientos próximos/vencidos -->
+    <div id="mantenimiento-alerta-banner"></div>
 
     <div class="page-header">
       <h1>Panel de Control Multidisciplinario</h1>
@@ -263,5 +267,175 @@ export async function cargarAlertaStockBajo() {
     }
   } catch (e) {
     console.error('Error cargando alerta de stock bajo:', e);
+  }
+}
+
+/**
+ * Carga alertas de mantenimientos próximos y vencidos y muestra un banner en el dashboard.
+ */
+export async function cargarAlertaMantenimiento() {
+  try {
+    const resp = await mantenimientoService.getAlertasMantenimiento();
+    const data = (resp as any).data || resp;
+
+    const totalAlertas = data.total_alertas || 0;
+    const proximos = data.proximos || 0;
+    const vencidos = data.vencidos || 0;
+    const alertas: Array<{
+      tipo: 'proximo' | 'vencido';
+      equipo: string;
+      fecha: string;
+      tiempo_texto: string;
+      es_prueba: boolean;
+    }> = data.alertas || [];
+
+    const banner = document.getElementById('mantenimiento-alerta-banner');
+    if (!banner) return;
+
+    if (totalAlertas === 0) {
+      banner.innerHTML = '';
+      return;
+    }
+
+    // Separar alertas
+    const listaProximos = alertas.filter(a => a.tipo === 'proximo');
+    const listaVencidos = alertas.filter(a => a.tipo === 'vencido');
+
+    // Color: si hay vencidos → rojo, solo próximos → azul/naranja
+    const hayVencidos = vencidos > 0;
+    const colorPrimario = hayVencidos ? '#dc2626' : '#2563eb';
+    const colorFondo = hayVencidos
+      ? 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)'
+      : 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 100%)';
+    const colorBorde = hayVencidos ? '#dc2626' : '#2563eb';
+    const colorTexto = hayVencidos ? '#991b1b' : '#1e40af';
+    const colorTextoSub = hayVencidos ? '#b91c1c' : '#1d4ed8';
+
+    // Generar items de detalle (máximo 5)
+    const itemsHTML = alertas.slice(0, 5).map(a => {
+      const iconColor = a.tipo === 'vencido' ? '#dc2626' : '#f59e0b';
+      const icon = a.tipo === 'vencido'
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>'
+        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
+      const badgeColor = a.tipo === 'vencido' ? 'background:#fee2e2; color:#991b1b;' : 'background:#fef3c7; color:#92400e;';
+      const pruebaBadge = a.es_prueba ? '<span style="font-size:9px; padding:1px 4px; border-radius:4px; background:#e0e7ff; color:#3730a3; margin-left:4px;">TEST</span>' : '';
+
+      return `
+        <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,0.6); border-radius:6px; font-size:12px;">
+          <span style="color:${iconColor}; flex-shrink:0;">${icon}</span>
+          <strong style="color:#1e293b;">${a.equipo}</strong>${pruebaBadge}
+          <span style="color:#64748b;">—</span>
+          <span style="padding:2px 6px; border-radius:4px; font-size:11px; ${badgeColor}">${a.tipo === 'vencido' ? 'Vencido' : 'Próximo'}</span>
+          <span style="color:#64748b; font-size:11px; margin-left:auto;">${a.tiempo_texto}</span>
+        </div>
+      `;
+    }).join('');
+
+    const masAlertas = totalAlertas > 2 ? `<div style="font-size:11px; color:${colorTextoSub}; text-align:center; margin-top:4px; font-style:italic;">...y ${totalAlertas - alertas.length} más en Programación Anual</div>` : '';
+
+    // Texto resumen
+    const partes: string[] = [];
+    if (proximos > 0) partes.push(`<strong>${proximos}</strong> próximo${proximos > 1 ? 's' : ''}`);
+    if (vencidos > 0) partes.push(`<strong>${vencidos}</strong> vencido${vencidos > 1 ? 's' : ''}`);
+    const resumenTexto = `Tienes ${partes.join(' y ')} mantenimiento${totalAlertas > 1 ? 's' : ''} que requieren atención.`;
+
+    banner.innerHTML = `
+      <div style="
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 14px 20px;
+        margin-bottom: 20px;
+        background: ${colorFondo};
+        border: 1px solid ${colorBorde};
+        border-left: 5px solid ${colorPrimario};
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        animation: bannerSlideIn 0.4s ease-out;
+      ">
+        <div style="
+          flex-shrink: 0;
+          width: 44px;
+          height: 44px;
+          background: ${colorPrimario};
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 2px;
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-weight: 700; font-size: 15px; color: ${colorTexto}; margin-bottom: 4px;">
+            ${hayVencidos ? 'Mantenimientos Vencidos' : 'Mantenimientos Próximos'}
+          </div>
+          <div style="font-size: 13px; color: ${colorTextoSub}; margin-bottom: 8px;">
+            ${resumenTexto}
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            ${itemsHTML}
+            ${masAlertas}
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+          <button id="btn-ir-mantenimiento" style="
+            padding: 8px 18px;
+            background: ${colorPrimario};
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+          " onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+            Ir a Mantenimiento →
+          </button>
+          <button id="btn-cerrar-banner-mant" style="
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: ${colorTexto};
+            font-size: 20px;
+            line-height: 1;
+            padding: 4px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+          " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Cerrar alerta">
+            &times;
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Botón cerrar
+    document.getElementById('btn-cerrar-banner-mant')?.addEventListener('click', () => {
+      if (banner) banner.innerHTML = '';
+    });
+
+    // Botón ir a mantenimiento
+    document.getElementById('btn-ir-mantenimiento')?.addEventListener('click', () => {
+      const almacenBtn = document.querySelector('[data-menu="Almacén"]') as HTMLButtonElement;
+      if (almacenBtn) almacenBtn.click();
+      setTimeout(() => {
+        const mantBtn = document.querySelector('[data-submenu="Mantenimiento"]') as HTMLButtonElement;
+        if (mantBtn) mantBtn.click();
+        // Auto-click en tab programación anual
+        setTimeout(() => {
+          const progTab = document.querySelector('[data-tab="programacion-anual"]') as HTMLButtonElement;
+          if (progTab) progTab.click();
+        }, 200);
+      }, 100);
+    });
+  } catch (e) {
+    console.error('Error cargando alerta de mantenimientos:', e);
   }
 }

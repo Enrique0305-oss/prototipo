@@ -227,9 +227,8 @@ function getBadgeTipo(tipo: string): string {
   }
 }
 
-// ========================================
+
 // LOAD DATA
-// ========================================
 
 async function cargarCotizaciones() {
   try {

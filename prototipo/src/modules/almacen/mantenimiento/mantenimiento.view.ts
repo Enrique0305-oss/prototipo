@@ -3,7 +3,7 @@ import { equipoService } from '../../../services/equipoService';
 import { mantenimientoService } from '../../../services/mantenimientoService';
 import { actividadMantenimientoService } from '../../../services/actividadMantenimientoService';
 import { mostrarToast } from '../../../shared/toast';
-import type { Equipo, Mantenimiento, ActividadMantenimiento } from '../../../core/api/types';
+import type { Equipo, Mantenimiento, ActividadMantenimiento, ProgramacionMantenimiento, PreviewFecha } from '../../../core/api/types';
 
 // ============================================================
 // ESTADO GLOBAL TAB MANTENIMIENTO
@@ -16,6 +16,17 @@ let mntFiltroActividad = '';
 let mntFiltroDesde = '';
 let mntFiltroHasta = '';
 let mntEditId: number | null = null;
+
+// ============================================================
+// ESTADO GLOBAL TAB PROGRAMACIÓN ANUAL
+// ============================================================
+let programaciones: ProgramacionMantenimiento[] = [];
+let progFiltroAnio = new Date().getFullYear();
+let progFiltroEquipo = '';
+let previewFechas: PreviewFecha[] = [];
+let expandedProgramacion: number | null = null;
+let progAutoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let modoPrueba = false;
 
 // ============================================================
 // TAB: MANTENIMIENTO (dinámico, conectado al backend)
@@ -597,6 +608,637 @@ function renderGestionEquiposTab() {
 }
 
 // ============================================================
+// TAB: PROGRAMACIÓN ANUAL DE MANTENIMIENTOS
+// ============================================================
+
+function estadoBadge(estado: string): string {
+  const map: Record<string, string> = {
+    'Pendiente': 'background:#fef3c7; color:#92400e;',
+    'Realizado': 'background:#dcfce7; color:#166534;',
+    'Vencido': 'background:#fee2e2; color:#991b1b;',
+  };
+  return `<span style="padding:3px 10px; border-radius:20px; font-size:12px; font-weight:500; ${map[estado] || 'background:#f1f5f9; color:#475569;'}">${estado}</span>`;
+}
+
+function formatFechaHora(fecha: string): string {
+  if (!fecha) return '--';
+  const d = new Date(fecha);
+  if (isNaN(d.getTime())) return '--';
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
+    + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function frecuenciaLabel(meses: number, esPrueba = false): string {
+  if (esPrueba) return `Cada ${meses} min`;
+  const labels: Record<number, string> = {
+    1: 'Mensual',
+    2: 'Bimestral',
+    3: 'Trimestral',
+    4: 'Cuatrimestral',
+    6: 'Semestral',
+    12: 'Anual',
+  };
+  return labels[meses] || `Cada ${meses} meses`;
+}
+
+function rowHighlightStyle(proximidad: string, estado: string): string {
+  if (estado === 'Realizado') return 'background:#f0fdf4;'; // verde suave
+  if (estado === 'Vencido' || proximidad === 'vencido') return 'background:#fef2f2;'; // rojo suave
+  if (proximidad === 'proximo') return 'background:#fffbeb; animation: pulseRow 2s ease-in-out infinite;'; // amarillo pulsante
+  return '';
+}
+
+function renderProgramacionAnualTab(): string {
+  const anioActual = new Date().getFullYear();
+  return `
+    <!-- CSS para animación de filas próximas -->
+    <style>
+      @keyframes pulseRow {
+        0%, 100% { background-color: #fffbeb; }
+        50% { background-color: #fef08a; }
+      }
+      .prog-row-proximo { animation: pulseRow 2s ease-in-out infinite; }
+      .prog-row-vencido { background: #fef2f2 !important; }
+      .prog-row-realizado { background: #f0fdf4 !important; }
+    </style>
+
+    <!-- Formulario de Programación -->
+    <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:24px; margin-bottom:24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 style="margin:0; font-size:16px; font-weight:600; color:#1e293b; display:flex; align-items:center; gap:8px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          Nueva Programación Anual
+        </h3>
+        <!-- Toggle Modo Prueba -->
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; padding:6px 14px; border:2px dashed #f59e0b; border-radius:8px; background:#fffbeb;">
+          <input type="checkbox" id="toggle-modo-prueba" style="width:16px; height:16px; accent-color:#f59e0b; cursor:pointer;">
+          <span style="font-size:13px; font-weight:600; color:#92400e;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:2px;">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+            </svg>
+            Modo Prueba (minutos)
+          </span>
+        </label>
+      </div>
+      <form id="form-programacion-anual">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;">
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Equipo *</label>
+            <select id="prog-equipo" class="search-input" style="width:100%; padding:10px;" required>
+              <option value="">Seleccione equipo...</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Actividad *</label>
+            <select id="prog-actividad" class="search-input" style="width:100%; padding:10px;" required>
+              <option value="">Seleccione actividad...</option>
+            </select>
+          </div>
+          <div id="frecuencia-container">
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;" id="lbl-frecuencia">Frecuencia *</label>
+            <select id="prog-frecuencia" class="search-input" style="width:100%; padding:10px;" required>
+              <option value="">Seleccione frecuencia...</option>
+              <option value="1">Mensual (cada 1 mes)</option>
+              <option value="2">Bimestral (cada 2 meses)</option>
+              <option value="3">Trimestral (cada 3 meses)</option>
+              <option value="4">Cuatrimestral (cada 4 meses)</option>
+              <option value="6">Semestral (cada 6 meses)</option>
+              <option value="12">Anual (cada 12 meses)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Año *</label>
+            <input type="number" id="prog-anio" class="search-input" style="width:100%; padding:10px;" required min="2024" max="2050" value="${anioActual}">
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;" id="lbl-fecha-inicio">Fecha de Inicio *</label>
+            <input type="date" id="prog-fecha-inicio" class="search-input" style="width:100%; padding:10px;" required>
+            <input type="datetime-local" id="prog-fecha-inicio-dt" class="search-input" style="width:100%; padding:10px; display:none;">
+          </div>
+          <div id="cantidad-container" style="display:none;">
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Cantidad de mantenim. *</label>
+            <input type="number" id="prog-cantidad" class="search-input" style="width:100%; padding:10px;" min="2" max="10" value="5" placeholder="2-10">
+          </div>
+          <div id="observaciones-container">
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Observaciones</label>
+            <input type="text" id="prog-observaciones" class="search-input" style="width:100%; padding:10px;" placeholder="Opcional..." maxlength="255">
+          </div>
+        </div>
+        <div style="display:flex; gap:12px; margin-top:20px; align-items:center;">
+          <button type="button" id="btn-preview-programacion" class="btn-primary" style="padding:10px 20px; background:#6366f1;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:4px;">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            Previsualizar
+          </button>
+          <button type="submit" class="btn-primary" style="padding:10px 20px;" id="btn-confirmar-programacion" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:4px;">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Confirmar y Programar
+          </button>
+          <span id="auto-refresh-indicator" style="display:none; font-size:12px; color:#6366f1; margin-left:auto; display:flex; align-items:center; gap:4px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" style="animation: spin 2s linear infinite;">
+              <polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+            Auto-refresh cada 15s
+          </span>
+        </div>
+      </form>
+
+      <!-- Preview de fechas -->
+      <div id="preview-fechas-container" style="display:none; margin-top:20px; border-top:1px solid #e2e8f0; padding-top:16px;">
+        <h4 style="margin:0 0 12px; font-size:14px; font-weight:600; color:#475569;">Vista previa de mantenimientos a programar:</h4>
+        <div id="preview-fechas-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:8px;"></div>
+      </div>
+    </div>
+
+    <!-- Filtros de programaciones existentes -->
+    <div class="op-filters-bar" style="margin-bottom:16px;">
+      <div class="op-filter-group" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; width:100%;">
+        <div style="font-weight:600; color:#1e293b; font-size:15px;">Programaciones Existentes</div>
+        <select id="prog-filter-anio" class="op-filter-select" style="min-width:120px;">
+          ${[anioActual - 1, anioActual, anioActual + 1].map(a =>
+            `<option value="${a}" ${a === anioActual ? 'selected' : ''}>${a}</option>`
+          ).join('')}
+        </select>
+        <select id="prog-filter-equipo" class="op-filter-select" style="min-width:200px;">
+          <option value="">Todos los equipos</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Lista de programaciones -->
+    <div id="programaciones-lista" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="text-align:center; padding:40px; color:#94a3b8;">Cargando programaciones...</div>
+    </div>
+
+    <!-- Modal Confirmar Eliminar Programación -->
+    <div id="modal-eliminar-prog" class="modal-overlay" style="display:none;">
+      <div class="modal-container" style="max-width:420px; text-align:center; padding:32px;">
+        <div style="width:48px; height:48px; border-radius:50%; background:#fef2f2; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </div>
+        <h3 style="margin:0 0 8px;">¿Eliminar programación?</h3>
+        <p id="eliminar-prog-desc" style="color:#64748b; font-size:14px; margin-bottom:24px;">Se eliminarán todos los mantenimientos asociados. Esta acción no se puede deshacer.</p>
+        <div style="display:flex; gap:12px; justify-content:center;">
+          <button id="btn-cancelar-eliminar-prog" style="padding:10px 20px; border:1px solid #d1d5db; border-radius:8px; background:#fff; cursor:pointer;">Cancelar</button>
+          <button id="btn-confirmar-eliminar-prog" style="padding:10px 20px; border:none; border-radius:8px; background:#dc2626; color:#fff; cursor:pointer; font-weight:600;">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
+  const total = prog.total_programados;
+  const realizados = prog.realizados;
+  const porcentaje = total > 0 ? Math.round((realizados / total) * 100) : 0;
+  const isExpanded = expandedProgramacion === prog.id;
+  const esPrueba = prog.es_prueba;
+
+  let progressColor = '#2563eb';
+  if (porcentaje === 100) progressColor = '#16a34a';
+  else if (prog.vencidos > 0) progressColor = '#dc2626';
+
+  const mantenimientosHTML = isExpanded ? `
+    <div style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">#</th>
+            <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">Fecha${esPrueba ? ' y Hora' : ''}</th>
+            <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">Estado</th>
+            <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">Observaciones</th>
+            <th style="padding:8px 12px; text-align:center; font-weight:600; color:#475569;">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${prog.mantenimientos.map((m, i) => {
+            const rowClass = m.estado === 'Realizado' ? 'prog-row-realizado'
+              : m.proximidad === 'proximo' ? 'prog-row-proximo'
+              : (m.estado === 'Vencido' || m.proximidad === 'vencido') ? 'prog-row-vencido'
+              : '';
+            const fechaDisplay = esPrueba ? formatFechaHora(m.fecha) : formatFecha(m.fecha);
+            return `
+            <tr class="${rowClass}" style="border-bottom:1px solid #f1f5f9; ${rowHighlightStyle(m.proximidad, m.estado)}">
+              <td style="padding:8px 12px; color:#94a3b8;">${i + 1}</td>
+              <td style="padding:8px 12px; font-weight:500;">${fechaDisplay}</td>
+              <td style="padding:8px 12px;">${estadoBadge(m.estado)}</td>
+              <td style="padding:8px 12px; color:#64748b; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${m.observaciones || '--'}</td>
+              <td style="padding:8px 12px; text-align:center;">
+                ${m.estado === 'Pendiente' || m.estado === 'Vencido' ? `
+                  <button class="btn-marcar-realizado" data-id="${m.id}" style="padding:4px 12px; border:none; border-radius:6px; background:#dcfce7; color:#166534; cursor:pointer; font-size:12px; font-weight:500;" title="Marcar como realizado">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Realizado
+                  </button>
+                ` : `<span style="color:#16a34a; font-size:12px;">Completado</span>`}
+              </td>
+            </tr>
+          `}).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : '';
+
+  const pruebaTag = esPrueba ? `<span style="padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; background:#fef3c7; color:#92400e; border:1px dashed #f59e0b;">PRUEBA</span>` : '';
+
+  return `
+    <div class="programacion-card" style="background:#fff; border:1px solid ${esPrueba ? '#f59e0b' : '#e2e8f0'}; border-radius:12px; padding:20px; transition:box-shadow 0.2s;${esPrueba ? ' border-style:dashed;' : ''}" data-prog-id="${prog.id}">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
+        <!-- Info principal -->
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+            <strong style="font-size:15px; color:#1e293b;">${prog.equipo?.descripcion || 'Equipo'}</strong>
+            <span style="font-size:12px; color:#94a3b8;">${prog.equipo?.marca || ''} ${prog.equipo?.modelo || ''}</span>
+            ${categoriaBadge(prog.actividad?.categoria || 'N/A')}
+            ${pruebaTag}
+          </div>
+          <div style="display:flex; gap:16px; font-size:13px; color:#64748b; flex-wrap:wrap;">
+            <span title="Frecuencia">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:2px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              ${frecuenciaLabel(prog.frecuencia_meses, esPrueba)}
+            </span>
+            <span title="Año">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:2px;"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line></svg>
+              ${prog.anio}
+            </span>
+            <span title="Inicio">${esPrueba ? formatFechaHora(prog.fecha_inicio) : formatFecha(prog.fecha_inicio)}</span>
+            ${prog.observaciones ? `<span style="font-style:italic;" title="Observaciones">${prog.observaciones}</span>` : ''}
+          </div>
+        </div>
+
+        <!-- Progreso + acciones -->
+        <div style="display:flex; align-items:center; gap:16px; flex-shrink:0;">
+          <div style="text-align:center; min-width:80px;">
+            <div style="font-size:22px; font-weight:700; color:${progressColor};">${porcentaje}%</div>
+            <div style="font-size:11px; color:#94a3b8;">${realizados}/${total} realizados</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span style="font-size:11px; padding:2px 8px; border-radius:10px; background:#dcfce7; color:#166534; text-align:center;">${prog.realizados} ok</span>
+            <span style="font-size:11px; padding:2px 8px; border-radius:10px; background:#fef3c7; color:#92400e; text-align:center;">${prog.pendientes} pend</span>
+            ${prog.vencidos > 0 ? `<span style="font-size:11px; padding:2px 8px; border-radius:10px; background:#fee2e2; color:#991b1b; text-align:center;">${prog.vencidos} venc</span>` : ''}
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-toggle-prog" data-id="${prog.id}" style="padding:8px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; cursor:pointer;" title="${isExpanded ? 'Contraer' : 'Ver detalle'}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" style="transform:rotate(${isExpanded ? '180' : '0'}deg); transition:transform 0.2s;">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <button class="btn-eliminar-prog" data-id="${prog.id}" style="padding:8px; border:1px solid #fecaca; border-radius:8px; background:#fef2f2; cursor:pointer;" title="Eliminar programación">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de progreso -->
+      <div style="margin-top:12px; background:#f1f5f9; border-radius:99px; height:6px; overflow:hidden;">
+        <div style="height:100%; width:${porcentaje}%; background:${progressColor}; border-radius:99px; transition:width 0.3s;"></div>
+      </div>
+
+      ${mantenimientosHTML}
+    </div>
+  `;
+}
+
+async function cargarDropdownsProg() {
+  try {
+    if (equiposLista.length === 0 || actividadesLista.length === 0) {
+      const [eqResp, actResp] = await Promise.all([
+        equipoService.getAll({ per_page: 200 } as any),
+        actividadMantenimientoService.getAll()
+      ]);
+      equiposLista = eqResp.data || [];
+      actividadesLista = actResp.data || [];
+    }
+
+    const progEq = document.getElementById('prog-equipo') as HTMLSelectElement;
+    if (progEq) {
+      progEq.innerHTML = '<option value="">Seleccione equipo...</option>' +
+        equiposLista.map(e => `<option value="${e.id}">${e.descripcion} - ${e.marca} ${e.modelo}</option>`).join('');
+    }
+
+    const progAct = document.getElementById('prog-actividad') as HTMLSelectElement;
+    if (progAct) {
+      progAct.innerHTML = '<option value="">Seleccione actividad...</option>' +
+        actividadesLista.filter(a => a.estado === 'Activo').map(a => `<option value="${a.id}">${a.categoria}</option>`).join('');
+    }
+
+    const filterEq = document.getElementById('prog-filter-equipo') as HTMLSelectElement;
+    if (filterEq) {
+      filterEq.innerHTML = '<option value="">Todos los equipos</option>' +
+        equiposLista.map(e => `<option value="${e.id}">${e.descripcion} - ${e.marca} ${e.modelo}</option>`).join('');
+    }
+  } catch (error) {
+    console.error('Error cargando dropdowns programación:', error);
+  }
+}
+
+async function cargarProgramaciones() {
+  const container = document.getElementById('programaciones-lista');
+  if (!container) return;
+
+  container.innerHTML = '<div style="text-align:center; padding:40px; color:#94a3b8;">Cargando programaciones...</div>';
+
+  try {
+    const filters: any = {};
+    if (progFiltroAnio) filters.anio = progFiltroAnio;
+    if (progFiltroEquipo) filters.id_equipo = Number(progFiltroEquipo);
+
+    const resp = await mantenimientoService.getProgramaciones(filters);
+    programaciones = resp.data || [];
+
+    if (programaciones.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:60px; color:#94a3b8;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px; display:block; opacity:0.5;">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          No hay programaciones para el año ${progFiltroAnio}.<br>
+          <span style="font-size:13px;">Use el formulario de arriba para crear una nueva programación.</span>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = programaciones.map(p => renderProgramacionCard(p)).join('');
+    bindAccionesProgramaciones();
+
+    // Gestionar auto-refresh para programaciones de prueba
+    gestionarAutoRefresh();
+  } catch (error) {
+    console.error('Error cargando programaciones:', error);
+    container.innerHTML = '<div style="text-align:center; padding:40px; color:#dc2626;">Error al cargar programaciones.</div>';
+  }
+}
+
+let progIdToDelete: number | null = null;
+
+function bindAccionesProgramaciones() {
+  // Toggle expandir/contraer
+  document.querySelectorAll('.btn-toggle-prog').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = Number((btn as HTMLButtonElement).dataset.id);
+      expandedProgramacion = expandedProgramacion === id ? null : id;
+      cargarProgramaciones();
+    });
+  });
+
+  // Eliminar programación
+  document.querySelectorAll('.btn-eliminar-prog').forEach(btn => {
+    btn.addEventListener('click', () => {
+      progIdToDelete = Number((btn as HTMLButtonElement).dataset.id);
+      const modal = document.getElementById('modal-eliminar-prog');
+      if (modal) modal.style.display = 'flex';
+    });
+  });
+
+  // Marcar como realizado
+  document.querySelectorAll('.btn-marcar-realizado').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLButtonElement).dataset.id);
+      try {
+        await mantenimientoService.marcarRealizado(id);
+        mostrarToast('success', 'Actualizado', 'Mantenimiento marcado como realizado');
+        cargarProgramaciones();
+      } catch (error) {
+        mostrarToast('error', 'Error', 'No se pudo actualizar el mantenimiento');
+      }
+    });
+  });
+}
+
+function initProgramacionAnualEvents() {
+  const modalEliminar = document.getElementById('modal-eliminar-prog');
+
+  // Cargar dropdowns y programaciones
+  cargarDropdownsProg();
+  cargarProgramaciones();
+
+  // ── Toggle Modo Prueba ───────────────────────────────────
+  document.getElementById('toggle-modo-prueba')?.addEventListener('change', (e) => {
+    modoPrueba = (e.target as HTMLInputElement).checked;
+
+    const frecContainer = document.getElementById('frecuencia-container');
+    const fechaNormal = document.getElementById('prog-fecha-inicio') as HTMLInputElement;
+    const fechaDT = document.getElementById('prog-fecha-inicio-dt') as HTMLInputElement;
+    const cantidadContainer = document.getElementById('cantidad-container');
+
+    if (frecContainer) {
+      if (modoPrueba) {
+        frecContainer.innerHTML = `
+          <label style="font-size:13px; font-weight:500; color:#475569;">Frecuencia (minutos) *</label>
+          <select id="prog-frecuencia" style="width:100%; padding:10px 12px; border:2px dashed #f59e0b; border-radius:8px; font-size:14px; background:#fffbeb;">
+            <option value="">Seleccionar...</option>
+            <option value="1">Cada 1 minuto</option>
+            <option value="2" selected>Cada 2 minutos</option>
+            <option value="3">Cada 3 minutos</option>
+            <option value="5">Cada 5 minutos</option>
+          </select>
+        `;
+      } else {
+        frecContainer.innerHTML = `
+          <label style="font-size:13px; font-weight:500; color:#475569;">Frecuencia *</label>
+          <select id="prog-frecuencia" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+            <option value="">Seleccionar...</option>
+            <option value="1">Cada mes</option>
+            <option value="2">Cada 2 meses</option>
+            <option value="3">Cada 3 meses (trimestral)</option>
+            <option value="4">Cada 4 meses</option>
+            <option value="6">Cada 6 meses (semestral)</option>
+            <option value="12">Cada 12 meses (anual)</option>
+          </select>
+        `;
+      }
+    }
+
+    // Swap date inputs y toggle required
+    if (fechaNormal && fechaDT) {
+      fechaNormal.style.display = modoPrueba ? 'none' : 'block';
+      fechaNormal.required = !modoPrueba;
+      fechaDT.style.display = modoPrueba ? 'block' : 'none';
+      fechaDT.required = modoPrueba;
+      if (modoPrueba) {
+        // Set datetime-local to now
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        fechaDT.value = now.toISOString().slice(0, 16);
+      }
+    }
+
+    // Show/hide cantidad
+    if (cantidadContainer) {
+      cantidadContainer.style.display = modoPrueba ? 'block' : 'none';
+    }
+
+    // Hide preview if switching modes
+    const previewContainer = document.getElementById('preview-fechas-container');
+    if (previewContainer) previewContainer.style.display = 'none';
+    previewFechas = [];
+    const btnConfirmar = document.getElementById('btn-confirmar-programacion') as HTMLButtonElement;
+    if (btnConfirmar) btnConfirmar.disabled = true;
+  });
+
+  // ── Filtros ──────────────────────────────────────────────
+  document.getElementById('prog-filter-anio')?.addEventListener('change', (e) => {
+    progFiltroAnio = Number((e.target as HTMLSelectElement).value);
+    expandedProgramacion = null;
+    cargarProgramaciones();
+  });
+  document.getElementById('prog-filter-equipo')?.addEventListener('change', (e) => {
+    progFiltroEquipo = (e.target as HTMLSelectElement).value;
+    expandedProgramacion = null;
+    cargarProgramaciones();
+  });
+
+  // ── Preview ──────────────────────────────────────────────
+  document.getElementById('btn-preview-programacion')?.addEventListener('click', async () => {
+    const anio = Number((document.getElementById('prog-anio') as HTMLInputElement).value);
+    const frecuencia = Number((document.getElementById('prog-frecuencia') as HTMLSelectElement).value);
+    const fechaInicio = modoPrueba
+      ? (document.getElementById('prog-fecha-inicio-dt') as HTMLInputElement).value
+      : (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value;
+    const cantidad = modoPrueba ? Number((document.getElementById('prog-cantidad') as HTMLInputElement).value) || 5 : undefined;
+
+    if (!anio || !frecuencia || !fechaInicio) {
+      mostrarToast('error', 'Atención', 'Complete año, frecuencia y fecha de inicio para previsualizar');
+      return;
+    }
+
+    try {
+      const resp = await mantenimientoService.previewFechas({
+        anio, frecuencia_meses: frecuencia, fecha_inicio: fechaInicio,
+        es_prueba: modoPrueba || undefined,
+        cantidad,
+      });
+      previewFechas = resp.data || [];
+
+      const container = document.getElementById('preview-fechas-container');
+      const grid = document.getElementById('preview-fechas-grid');
+      const btnConfirmar = document.getElementById('btn-confirmar-programacion') as HTMLButtonElement;
+
+      if (container && grid) {
+        if (previewFechas.length === 0) {
+          grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#94a3b8; padding:16px;">No se generaron fechas con estos parámetros.</div>';
+          if (btnConfirmar) btnConfirmar.disabled = true;
+        } else {
+          grid.innerHTML = previewFechas.map((f, i) => `
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:${f.estado === 'Vencido' ? '#fef2f2' : '#f0fdf4'}; border-radius:8px; border:1px solid ${f.estado === 'Vencido' ? '#fecaca' : '#bbf7d0'};">
+              <span style="font-weight:600; color:#475569; min-width:24px;">${i + 1}.</span>
+              <span style="font-weight:500; color:#1e293b;">${modoPrueba ? formatFechaHora(f.fecha) : formatFecha(f.fecha)}</span>
+              <span style="font-size:11px; color:#94a3b8;">${f.mes}</span>
+              ${estadoBadge(f.estado)}
+            </div>
+          `).join('');
+          if (btnConfirmar) btnConfirmar.disabled = false;
+        }
+        container.style.display = 'block';
+      }
+    } catch (error) {
+      mostrarToast('error', 'Error', 'No se pudo generar la previsualización');
+    }
+  });
+
+  // ── Submit programación ──────────────────────────────────
+  document.getElementById('form-programacion-anual')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id_equipo = Number((document.getElementById('prog-equipo') as HTMLSelectElement).value);
+    const id_actmanten = Number((document.getElementById('prog-actividad') as HTMLSelectElement).value);
+    const anio = Number((document.getElementById('prog-anio') as HTMLInputElement).value);
+    const frecuencia_meses = Number((document.getElementById('prog-frecuencia') as HTMLSelectElement).value);
+    const fecha_inicio = modoPrueba
+      ? (document.getElementById('prog-fecha-inicio-dt') as HTMLInputElement).value
+      : (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value;
+    const observaciones = (document.getElementById('prog-observaciones') as HTMLInputElement).value.trim();
+    const cantidad = modoPrueba ? Number((document.getElementById('prog-cantidad') as HTMLInputElement).value) || 5 : undefined;
+
+    if (!id_equipo || !id_actmanten || !anio || !frecuencia_meses || !fecha_inicio) {
+      mostrarToast('error', 'Atención', 'Complete todos los campos requeridos');
+      return;
+    }
+
+    try {
+      const resp = await mantenimientoService.programarAnual({
+        id_equipo, id_actmanten, anio, frecuencia_meses, fecha_inicio,
+        observaciones: observaciones || undefined,
+        es_prueba: modoPrueba || undefined,
+        cantidad,
+      });
+
+      mostrarToast('success', 'Programación creada', resp.message || 'Los mantenimientos fueron programados correctamente');
+
+      // Limpiar formulario
+      (document.getElementById('prog-equipo') as HTMLSelectElement).value = '';
+      (document.getElementById('prog-actividad') as HTMLSelectElement).value = '';
+      (document.getElementById('prog-frecuencia') as HTMLSelectElement).value = '';
+      (document.getElementById('prog-observaciones') as HTMLInputElement).value = '';
+      const previewContainer = document.getElementById('preview-fechas-container');
+      if (previewContainer) previewContainer.style.display = 'none';
+      const btnConfirmar = document.getElementById('btn-confirmar-programacion') as HTMLButtonElement;
+      if (btnConfirmar) btnConfirmar.disabled = true;
+      previewFechas = [];
+
+      // Actualizar filtro al año creado y recargar
+      progFiltroAnio = anio;
+      const filterAnio = document.getElementById('prog-filter-anio') as HTMLSelectElement;
+      if (filterAnio) filterAnio.value = String(anio);
+
+      cargarProgramaciones();
+    } catch (error: any) {
+      const msg = error?.message || (error?.errors ? Object.values(error.errors).flat().join(', ') : 'Error al crear la programación');
+      mostrarToast('error', 'Error', String(msg));
+    }
+  });
+
+  // ── Cerrar modal eliminar ────────────────────────────────
+  document.getElementById('btn-cancelar-eliminar-prog')?.addEventListener('click', () => {
+    if (modalEliminar) modalEliminar.style.display = 'none';
+  });
+  modalEliminar?.addEventListener('click', (e) => {
+    if (e.target === modalEliminar) modalEliminar.style.display = 'none';
+  });
+
+  // ── Confirmar eliminar ───────────────────────────────────
+  document.getElementById('btn-confirmar-eliminar-prog')?.addEventListener('click', async () => {
+    if (!progIdToDelete) return;
+
+    try {
+      await mantenimientoService.eliminarProgramacion(progIdToDelete);
+      mostrarToast('success', 'Programación eliminada', 'La programación y sus mantenimientos fueron eliminados');
+      if (modalEliminar) modalEliminar.style.display = 'none';
+      progIdToDelete = null;
+      cargarProgramaciones();
+    } catch (error) {
+      mostrarToast('error', 'Error', 'Error al eliminar la programación');
+    }
+  });
+}
+
+/** Inicia o detiene el auto-refresh cada 15s si hay programaciones de prueba activas */
+function gestionarAutoRefresh() {
+  const hayPrueba = programaciones.some(p => p.es_prueba && p.pendientes > 0);
+  const indicator = document.getElementById('auto-refresh-indicator');
+
+  if (hayPrueba && !progAutoRefreshTimer) {
+    progAutoRefreshTimer = setInterval(() => {
+      cargarProgramaciones();
+    }, 15000) as unknown as number;
+    if (indicator) indicator.style.display = 'inline-flex';
+  } else if (!hayPrueba && progAutoRefreshTimer) {
+    clearInterval(progAutoRefreshTimer);
+    progAutoRefreshTimer = null;
+    if (indicator) indicator.style.display = 'none';
+  }
+}
+
+// ============================================================
 // VISTA PRINCIPAL CON TABS
 // ============================================================
 export function renderAlmacenMantenimiento() {
@@ -635,6 +1277,12 @@ export function renderAlmacenMantenimiento() {
               <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
             </svg>
             Gestión de Equipos
+          </button>
+          <button class="tab-btn" data-tab="programacion-anual" style="padding:12px 24px; border:none; background:none; cursor:pointer; font-size:14px; font-weight:500; color:#64748b; border-bottom:2px solid transparent; margin-bottom:-2px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:6px;">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            Programación Anual
           </button>
         </div>
       </div>
@@ -825,10 +1473,19 @@ export function initMantenimientoEvents() {
 
       if (!tabContent) return;
 
+      // Limpiar auto-refresh al salir de programación anual
+      if (progAutoRefreshTimer) {
+        clearInterval(progAutoRefreshTimer);
+        progAutoRefreshTimer = null;
+      }
+
       if (tab === 'gestion-equipos') {
         tabContent.innerHTML = renderGestionEquiposTab();
         initGestionEquiposEvents();
         cargarEquipos();
+      } else if (tab === 'programacion-anual') {
+        tabContent.innerHTML = renderProgramacionAnualTab();
+        initProgramacionAnualEvents();
       } else {
         tabContent.innerHTML = renderMantenimientoTab();
         initMantenimientoTabEvents();

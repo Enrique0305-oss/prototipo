@@ -4,23 +4,29 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Mantenimiento extends Model
+class ProgramacionMantenimiento extends Model
 {
-    protected $table = 'mantenimiento';
+    protected $table = 'programacion_mantenimiento';
     
     public $timestamps = false;
     
     protected $fillable = [
-        'id_programacion',
         'id_equipo',
         'id_actmanten',
-        'fecha',
+        'anio',
+        'frecuencia_meses',
+        'fecha_inicio',
+        'total_programados',
         'observaciones',
-        'estado',
+        'es_prueba',
     ];
 
     protected $casts = [
-        'fecha' => 'datetime',
+        'fecha_inicio' => 'datetime',
+        'anio' => 'integer',
+        'frecuencia_meses' => 'integer',
+        'total_programados' => 'integer',
+        'es_prueba' => 'boolean',
     ];
 
     // Relaciones
@@ -34,8 +40,8 @@ class Mantenimiento extends Model
         return $this->belongsTo(ActividadMantenimiento::class, 'id_actmanten');
     }
 
-    public function programacion()
+    public function mantenimientos()
     {
-        return $this->belongsTo(ProgramacionMantenimiento::class, 'id_programacion');
+        return $this->hasMany(Mantenimiento::class, 'id_programacion');
     }
 }

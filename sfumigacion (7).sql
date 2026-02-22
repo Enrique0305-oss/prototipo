@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: localhost:3306
--- Tiempo de generación: 17-02-2026 a las 18:55:35
+-- Tiempo de generación: 20-02-2026 a las 05:07:53
 -- Versión del servidor: 8.0.44
 -- Versión de PHP: 8.4.15
 
@@ -191,7 +191,8 @@ INSERT INTO `cliente` (`id`, `nombre_empresa`, `ruc`, `rubro`, `direccion`, `per
 (3, 'Supermercado MegaMax', '20123456789', 'Retail', 'Av. Javier Prado 890, Lima', 'Nose', '987654321', 'Referido', NULL, 'Acepta'),
 (4, 'Clínica San José', '20555666777', 'Salud', 'Jr. Salud 123, Lima', 'Nose', '321654987', 'Referido', NULL, 'Contactado'),
 (5, 'Colegio Santa María', '20999888777', 'Educación', 'Av. Educación 567, Lima', NULL, NULL, NULL, NULL, 'No acepta'),
-(9, 'Grupo Textil Lima', '12345678914', 'Industria Textil', 'Jr. Salud 123, Lima', 'Nose', '987654321', 'Web', '2026-02-12', 'Acepta');
+(9, 'Grupo Textil Lima', '12345678914', 'Industria Textil', 'Jr. Salud 123, Lima', 'Nose', '987654321', 'Web', '2026-02-12', 'Acepta'),
+(10, 'Prueba', '12345678912', 'Industrial Texil', 'Surquillo', 'Luis Martinez', '906391180', 'Llamada', '2026-02-18', 'Acepta');
 
 -- --------------------------------------------------------
 
@@ -229,7 +230,17 @@ INSERT INTO `cotizacion` (`id`, `numero_cotizacion`, `id_cliente`, `fecha_emisio
 (9, 'COT-2026-008', 9, '2026-02-16', 1, 'Aceptada', 'Servicio', 0, 500.00, 0.00, 500.00, 'Esta cotización no incluye IGV.'),
 (10, 'COT-2026-009', 2, '2026-02-16', 1, 'Aceptada', 'Producto', 0, 100.00, 0.00, 100.00, 'Esta cotización no incluye IGV.'),
 (11, 'COT-2026-010', 9, '2026-02-16', 1, 'Aceptada', 'Producto', 0, 50.00, 0.00, 50.00, 'Esta cotización no incluye IGV.'),
-(12, 'COT-2026-011', 2, '2026-02-16', 1, 'Aceptada', 'Capacitacion', 0, 600.00, 0.00, 600.00, 'Esta cotización no incluye IGV.');
+(12, 'COT-2026-011', 2, '2026-02-16', 1, 'Aceptada', 'Capacitacion', 0, 600.00, 0.00, 600.00, 'Esta cotización no incluye IGV.'),
+(13, 'COT-2026-012', 3, '2026-02-18', 1, 'Aceptada', 'Servicio', 1, 385.00, 69.30, 454.30, NULL),
+(14, 'COT-2026-013', 9, '2026-02-18', 1, 'Aceptada', 'Servicio', 0, 450.00, 0.00, 450.00, 'Esta cotización no incluye IGV.'),
+(15, 'COT-2026-014', 9, '2026-02-18', 1, 'Aceptada', 'Producto', 0, 500.00, 0.00, 500.00, 'Esta cotización no incluye IGV.'),
+(16, 'COT-2026-015', 3, '2026-02-18', 1, 'Aceptada', 'Capacitacion', 0, 450.00, 0.00, 450.00, 'Esta cotización no incluye IGV.'),
+(17, 'COT-2026-016', 2, '2026-02-18', 1, 'Aceptada', 'Servicio', 0, 150.00, 0.00, 150.00, 'Esta cotización no incluye IGV.'),
+(18, 'COT-2026-017', 10, '2026-02-18', 1, 'Aceptada', 'Servicio', 0, 270.00, 0.00, 270.00, 'Esta cotización no incluye IGV.'),
+(19, 'COT-2026-018', 10, '2026-02-19', 1, 'Aceptada', 'Capacitacion', 0, 600.00, 0.00, 600.00, 'Esta cotización no incluye IGV.'),
+(20, 'COT-2026-019', 10, '2026-02-19', 1, 'Aceptada', 'Servicio', 0, 100.00, 0.00, 100.00, 'Esta cotización no incluye IGV.'),
+(21, 'COT-2026-020', 3, '2026-02-19', 1, 'Pendiente', 'Producto', 0, 100.00, 0.00, 100.00, 'Esta cotización no incluye IGV.'),
+(22, 'COT-2026-021', 3, '2026-02-19', 1, 'Pendiente', 'Capacitacion', 0, 950.00, 0.00, 950.00, 'Esta cotización no incluye IGV.');
 
 -- --------------------------------------------------------
 
@@ -271,7 +282,18 @@ INSERT INTO `cotizacion_detalle` (`id`, `id_cotizacion`, `id_servicio`, `id_prod
 (16, 9, 4, NULL, NULL, 'Control de insectos rastreros y voladores', 1, 500.00, 'Semanal', 'Presencial'),
 (17, 10, NULL, 7, NULL, NULL, 1, 100.00, NULL, NULL),
 (18, 11, NULL, 8, NULL, NULL, 1, 50.00, NULL, NULL),
-(19, 12, NULL, NULL, 2, 'Normativa SST y buenas prácticas en el trabajo', 1, 600.00, 'Semanal', 'Virtual');
+(19, 12, NULL, NULL, 2, 'Normativa SST y buenas prácticas en el trabajo', 1, 600.00, 'Semanal', 'Virtual'),
+(20, 13, 2, NULL, NULL, 'Servicio de fumigación para negocios', 1, 385.00, 'Semanal', NULL),
+(21, 14, 1, NULL, NULL, 'Servicio de fumigación para hogares', 1, 450.00, NULL, NULL),
+(22, 15, NULL, 8, NULL, NULL, 5, 100.00, NULL, NULL),
+(23, 16, NULL, NULL, 5, 'Equipos de protección personal: selección, uso y mantenimiento', 1, 450.00, NULL, 'Presencial'),
+(24, 17, 4, NULL, NULL, 'Control de insectos rastreros y voladores', 1, 150.00, 'Semanal', NULL),
+(25, 18, 1, NULL, NULL, 'Servicio de fumigación para hogares', 1, 120.00, 'Quincenal', NULL),
+(26, 18, 4, NULL, NULL, 'Control de insectos rastreros y voladores', 1, 150.00, 'Mensual', NULL),
+(27, 19, NULL, NULL, 2, 'Normativa SST y buenas prácticas en el trabajo', 1, 600.00, 'Semanal', 'Virtual'),
+(28, 20, 4, NULL, NULL, 'Control de insectos rastreros y voladores', 1, 100.00, 'Semanal', NULL),
+(29, 21, NULL, 2, NULL, NULL, 1, 100.00, NULL, NULL),
+(30, 22, NULL, NULL, 4, 'Auditoría de buenas prácticas de manufactura', 1, 950.00, 'Quincenal', 'Presencial');
 
 -- --------------------------------------------------------
 
@@ -299,7 +321,8 @@ INSERT INTO `detalle_orden_producto` (`id`, `id_orden_producto`, `id_producto`, 
 (5, 3, 2, 1, 100.00, 100.00),
 (6, 4, 1, 10, 85.50, 855.00),
 (7, 4, 2, 5, 120.00, 600.00),
-(8, 4, 3, 20, 45.00, 900.00);
+(8, 4, 3, 20, 45.00, 900.00),
+(11, 5, 8, 5, 100.00, 500.00);
 
 -- --------------------------------------------------------
 
@@ -328,7 +351,12 @@ INSERT INTO `detalle_orden_servicio` (`id`, `id_orden_servicio`, `id_servicio`, 
 (5, 13, 4, NULL, 'Semanal', 150.00),
 (6, 14, 1, NULL, 'Semanal', 150.00),
 (7, 14, 4, NULL, 'Quincenal', 180.00),
-(8, 15, 4, NULL, 'Semanal', 500.00);
+(8, 15, 4, NULL, 'Semanal', 500.00),
+(9, 16, 1, NULL, 'Semanal', 450.00),
+(10, 17, 1, NULL, 'Quincenal', 120.00),
+(11, 17, 4, NULL, 'Mensual', 150.00),
+(12, 17, 4, NULL, 'Semanal', 170.00),
+(15, 18, 2, NULL, 'Semanal', 385.00);
 
 -- --------------------------------------------------------
 
@@ -354,7 +382,8 @@ CREATE TABLE `equipo` (
 
 INSERT INTO `equipo` (`id`, `descripcion`, `marca`, `modelo`, `serie`, `encargado`, `responsable`, `contacto`, `estado`) VALUES
 (1, 'Fumigadora Industrial', 'Stihl', 'SR 450', 12345, 'Juan Pérez', 'María López', 987654325, 'Activo'),
-(2, 'Fumigadora', 'Stihl', 'SR 470', 1025486, 'Juan Pérez', 'María López', 984677415, 'Inactivo');
+(2, 'Fumigadora', 'Stihl', 'SR 470', 1025486, 'Juan Pérez', 'María López', 984677415, 'Inactivo'),
+(3, 'Fumigadora', 'Stihl', 'SR 480', 10065, 'Juan Pérez', 'María López', 984677415, 'Activo');
 
 -- --------------------------------------------------------
 
@@ -394,7 +423,7 @@ CREATE TABLE `inventario` (
 INSERT INTO `inventario` (`id`, `id_productos`, `cantidad_disponible`, `stock_seguridad`, `Tipo`, `Cantidad_total`) VALUES
 (1, 1, 50, 10, 'Entrada', 50),
 (2, 2, 30, 10, 'Entrada', 30),
-(3, 3, 100, 20, 'Entrada', 100),
+(3, 3, 15, 20, 'Entrada', 100),
 (4, 4, 5, 2, 'Entrada', 5),
 (5, 5, 200, 50, 'Entrada', 200);
 
@@ -455,7 +484,9 @@ INSERT INTO `mantenimiento` (`id`, `id_equipo`, `id_actmanten`, `fecha`, `observ
 (1, 1, 1, '2026-02-09', 'Mantenimiento preventivo completado - equipo en óptimas condiciones'),
 (3, 1, 1, '2026-03-15', 'Próximo mantenimiento programado'),
 (4, 1, 1, '2026-02-20', ''),
-(5, 1, 1, '2026-03-06', '');
+(5, 1, 1, '2026-03-06', ''),
+(6, 3, 1, '2026-02-25', ''),
+(7, 3, 3, '2026-02-25', '');
 
 -- --------------------------------------------------------
 
@@ -487,7 +518,8 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES
 (11, '2026_02_16_211438_add_id_catalogo_cap_aud_to_cotizacion_detalle_table', 8),
 (12, '2026_02_16_220426_make_id_servicio_nullable_on_orden_capacitacion_auditoria_table', 9),
 (13, '2026_02_17_001012_add_aprobacion_to_orden_servicio_and_orden_producto_tables', 10),
-(14, '2026_02_17_002349_rename_aprobacion_to_estado_in_order_tables', 11);
+(15, '2026_02_17_002349_rename_aprobacion_to_estado_in_order_tables', 11),
+(16, '2026_02_19_022215_create_orden_capacitacion_ponentes_table', 12);
 
 -- --------------------------------------------------------
 
@@ -653,8 +685,33 @@ CREATE TABLE `orden_capacitacion_auditoria` (
 --
 
 INSERT INTO `orden_capacitacion_auditoria` (`id`, `numero_orden`, `id_cotizacion`, `id_cliente`, `id_servicio`, `id_ponente`, `fecha_servicio`, `hora_servicio`, `modalidad`, `num_participantes`, `num_certificados`, `costo`, `estado`, `observaciones`) VALUES
-(1, 'OC-2026-001', 4, 5, 5, 1, '2026-02-15', '09:00:00', 'Presencial', 25, 25, 3500.00, 'Aprobado', 'Capacitación HACCP para personal de cocina'),
-(2, 'OC-2026-002', 12, 2, 2, 1, '2026-02-17', '17:00:00', 'Virtual', 10, 10, 600.00, 'Pendiente', NULL);
+(1, 'OC-2026-001', 4, 5, 5, 1, '2026-02-15', '09:00:00', 'Presencial', 20, 20, 3500.00, 'Aprobado', 'Capacitación HACCP para personal de cocina'),
+(2, 'OC-2026-002', 12, 2, 2, 1, '2026-02-17', '17:00:00', 'Virtual', 10, 10, 600.00, 'Pendiente', NULL),
+(3, 'OC-2026-003', 16, 3, 5, 1, '2026-02-19', '17:00:00', 'Virtual', 5, 5, 450.00, 'Aprobado', NULL),
+(4, 'OC-2026-004', 19, 10, 2, 1, '2026-02-19', NULL, 'Virtual', 2, 2, 600.00, 'Aprobado', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `orden_capacitacion_ponentes`
+--
+
+CREATE TABLE `orden_capacitacion_ponentes` (
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_capacitacion` int NOT NULL,
+  `id_ponente` int NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `orden_capacitacion_ponentes`
+--
+
+INSERT INTO `orden_capacitacion_ponentes` (`id`, `id_orden_capacitacion`, `id_ponente`) VALUES
+(1, 1, 1),
+(2, 2, 1),
+(3, 3, 1),
+(4, 4, 1),
+(5, 4, 2);
 
 -- --------------------------------------------------------
 
@@ -683,7 +740,8 @@ CREATE TABLE `orden_producto` (
 INSERT INTO `orden_producto` (`id`, `numero_orden`, `id_cotizacion`, `id_cliente`, `fecha_envio`, `total`, `subtotal`, `igv`, `incluye_igv`, `emitido_por`, `estado`) VALUES
 (2, 'OP-2026-001', 10, 2, '2026-02-16', 100.00, 100.00, 0.00, 0, 1, 'Aprobado'),
 (3, 'OP-2026-002', 11, 9, '2026-02-16', 150.00, 150.00, 0.00, 0, 1, 'Aprobado'),
-(4, 'OP-2026-003', 2, 3, '2026-02-16', 2355.00, 2355.00, 0.00, 0, 1, 'Aprobado');
+(4, 'OP-2026-003', 2, 3, '2026-02-16', 2355.00, 2355.00, 0.00, 0, 1, 'Aprobado'),
+(5, 'OP-2026-004', 15, 9, '2026-02-18', 500.00, 500.00, 0.00, 0, 1, 'Aprobado');
 
 -- --------------------------------------------------------
 
@@ -717,7 +775,10 @@ INSERT INTO `orden_servicio` (`id`, `numero_orden`, `codigo_doc`, `version`, `id
 (12, 'OS-2026-002', 'OS-AC-001', '01', 5, 9, '2026-02-16', NULL, 450.00, 450.00, 0.00, 0, 1, 'Aprobado'),
 (13, 'OS-2026-003', 'OS-AC-001', '01', 6, 9, '2026-02-16', '2026-02-24', 150.00, 150.00, 0.00, 0, 1, 'Aprobado'),
 (14, 'OS-2026-004', 'OS-AC-001', '01', 8, 9, '2026-02-16', '2026-02-26', 330.00, 330.00, 0.00, 0, 1, 'Aprobado'),
-(15, 'OS-2026-005', 'OS-AC-001', '01', 9, 9, '2026-02-16', '2026-02-24', 500.00, 500.00, 0.00, 0, 1, 'Aprobado');
+(15, 'OS-2026-005', 'OS-AC-001', '01', 9, 9, '2026-02-16', '2026-02-24', 500.00, 500.00, 0.00, 0, 1, 'Aprobado'),
+(16, 'OS-2026-006', 'OS-AC-001', '01', 14, 9, '2026-02-18', '2026-02-25', 450.00, 450.00, 0.00, 0, 1, 'Aprobado'),
+(17, 'OS-2026-007', 'OS-AC-001', '01', 18, 10, '2026-02-18', '2026-02-25', 519.20, 440.00, 79.20, 1, 1, 'Aprobado'),
+(18, 'OS-2026-008', 'OS-AC-001', '01', 13, 3, '2026-02-19', NULL, 454.30, 385.00, 69.30, 1, 1, 'Aprobado');
 
 -- --------------------------------------------------------
 
@@ -753,7 +814,8 @@ CREATE TABLE `personal` (
 --
 
 INSERT INTO `personal` (`id`, `nombre`, `apellidos`, `celular`, `correo`, `id_area`, `usuario`, `password`) VALUES
-(1, 'Admin', 'Sistema', '999999999', 'admin@qsci.com', NULL, 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi');
+(1, 'Admin', 'Sistema', '999999999', 'admin@qsci.com', NULL, 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
+(2, 'prueba', 'prueba', '984677415', 'prueba@gmail.com', 1, 'prueba', '123456');
 
 -- --------------------------------------------------------
 
@@ -1333,6 +1395,14 @@ ALTER TABLE `orden_capacitacion_auditoria`
   ADD KEY `fk_oca_pon` (`id_ponente`);
 
 --
+-- Indices de la tabla `orden_capacitacion_ponentes`
+--
+ALTER TABLE `orden_capacitacion_ponentes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `oc_ponentes_orden_ponente_unique` (`id_orden_capacitacion`,`id_ponente`),
+  ADD KEY `orden_capacitacion_ponentes_id_ponente_foreign` (`id_ponente`);
+
+--
 -- Indices de la tabla `orden_producto`
 --
 ALTER TABLE `orden_producto`
@@ -1542,37 +1612,37 @@ ALTER TABLE `categoria`
 -- AUTO_INCREMENT de la tabla `cliente`
 --
 ALTER TABLE `cliente`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `cotizacion`
 --
 ALTER TABLE `cotizacion`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- AUTO_INCREMENT de la tabla `cotizacion_detalle`
 --
 ALTER TABLE `cotizacion_detalle`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=31;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_orden_producto`
 --
 ALTER TABLE `detalle_orden_producto`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_orden_servicio`
 --
 ALTER TABLE `detalle_orden_servicio`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT de la tabla `equipo`
 --
 ALTER TABLE `equipo`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT de la tabla `failed_jobs`
@@ -1596,13 +1666,13 @@ ALTER TABLE `jobs`
 -- AUTO_INCREMENT de la tabla `mantenimiento`
 --
 ALTER TABLE `mantenimiento`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT de la tabla `migrations`
 --
 ALTER TABLE `migrations`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT de la tabla `multicim`
@@ -1638,25 +1708,31 @@ ALTER TABLE `oei_informe_final`
 -- AUTO_INCREMENT de la tabla `orden_capacitacion_auditoria`
 --
 ALTER TABLE `orden_capacitacion_auditoria`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT de la tabla `orden_capacitacion_ponentes`
+--
+ALTER TABLE `orden_capacitacion_ponentes`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_producto`
 --
 ALTER TABLE `orden_producto`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_servicio`
 --
 ALTER TABLE `orden_servicio`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT de la tabla `personal`
 --
 ALTER TABLE `personal`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `personal_access_tokens`
@@ -1842,6 +1918,13 @@ ALTER TABLE `orden_capacitacion_auditoria`
   ADD CONSTRAINT `fk_oca_cot` FOREIGN KEY (`id_cotizacion`) REFERENCES `cotizacion` (`id`),
   ADD CONSTRAINT `fk_oca_pon` FOREIGN KEY (`id_ponente`) REFERENCES `personal` (`id`),
   ADD CONSTRAINT `fk_oca_ser` FOREIGN KEY (`id_servicio`) REFERENCES `servicios` (`id`);
+
+--
+-- Filtros para la tabla `orden_capacitacion_ponentes`
+--
+ALTER TABLE `orden_capacitacion_ponentes`
+  ADD CONSTRAINT `orden_capacitacion_ponentes_id_orden_capacitacion_foreign` FOREIGN KEY (`id_orden_capacitacion`) REFERENCES `orden_capacitacion_auditoria` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `orden_capacitacion_ponentes_id_ponente_foreign` FOREIGN KEY (`id_ponente`) REFERENCES `personal` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `orden_producto`

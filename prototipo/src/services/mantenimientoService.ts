@@ -6,6 +6,8 @@ import type {
   PaginationParams,
   EstadisticasMantenimientos,
   HistorialEquipo,
+  ProgramacionMantenimiento,
+  PreviewFecha,
 } from '../core/api/types';
 
 
@@ -49,5 +51,76 @@ export const mantenimientoService = {
 
   delete: async (id: number) => {
     return apiClient.delete<ApiResponse<null>>(`/mantenimientos/${id}`);
+  },
+
+  // Programación Anual
+  getProgramaciones: async (filters?: { anio?: number; id_equipo?: number }) => {
+    return apiClient.get<ApiResponse<ProgramacionMantenimiento[]>>(
+      '/programacion-mantenimiento',
+      filters
+    );
+  },
+
+  getProgramacionById: async (id: number) => {
+    return apiClient.get<ApiResponse<ProgramacionMantenimiento>>(
+      `/programacion-mantenimiento/${id}`
+    );
+  },
+
+  previewFechas: async (data: {
+    anio: number;
+    frecuencia_meses: number;
+    fecha_inicio: string;
+    es_prueba?: boolean;
+    cantidad?: number;
+  }) => {
+    return apiClient.post<ApiResponse<PreviewFecha[]> & { total: number }>(
+      '/programacion-mantenimiento/preview',
+      data
+    );
+  },
+
+  programarAnual: async (data: {
+    id_equipo: number;
+    id_actmanten: number;
+    anio: number;
+    frecuencia_meses: number;
+    fecha_inicio: string;
+    observaciones?: string;
+    es_prueba?: boolean;
+    cantidad?: number;
+  }) => {
+    return apiClient.post<ApiResponse<ProgramacionMantenimiento>>(
+      '/programacion-mantenimiento',
+      data
+    );
+  },
+
+  eliminarProgramacion: async (id: number) => {
+    return apiClient.delete<ApiResponse<null>>(`/programacion-mantenimiento/${id}`);
+  },
+
+  marcarRealizado: async (id: number, observaciones?: string) => {
+    return apiClient.patch<ApiResponse<Mantenimiento>>(
+      `/mantenimientos/${id}/marcar-realizado`,
+      { observaciones }
+    );
+  },
+
+  getAlertasMantenimiento: async () => {
+    return apiClient.get<{
+      success: boolean;
+      proximos: number;
+      vencidos: number;
+      total_alertas: number;
+      alertas: Array<{
+        tipo: 'proximo' | 'vencido';
+        id: number;
+        equipo: string;
+        fecha: string;
+        tiempo_texto: string;
+        es_prueba: boolean;
+      }>;
+    }>('/programacion-mantenimiento/alertas');
   },
 };
