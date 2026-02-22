@@ -1,5 +1,5 @@
 export interface Credenciales {
-  email: string;
+  email: string;   // Se usa como 'usuario' al enviar al backend
   password: string;
   rememberMe?: boolean;
 }
@@ -9,13 +9,14 @@ export interface Usuario {
   nombre: string;
   apellido: string;
   email: string;
-  rol: 'Admin' | 'Gerente' | 'Supervisor' | 'Técnico' | 'Usuario';
+  rol: string;
   avatar?: string;
   permisos: string[];
   departamento?: string;
   telefono?: string;
   fechaCreacion: string;
   ultimoAcceso?: string;
+  id_area?: number;
 }
 
 export interface AuthResponse {

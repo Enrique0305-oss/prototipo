@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
-class Personal extends Model
+class Personal extends Authenticatable
 {
     use HasApiTokens;
     
@@ -26,6 +26,22 @@ class Personal extends Model
     protected $hidden = [
         'password'
     ];
+
+    /**
+     * Sanctum necesita saber qué campo es el "email" / username
+     */
+    public function getAuthIdentifierName()
+    {
+        return 'id';
+    }
+
+    /**
+     * Retorna el password hasheado para auth
+     */
+    public function getAuthPassword()
+    {
+        return $this->password;
+    }
 
     // Relaciones
     public function area()

@@ -1,13 +1,13 @@
 import './style.css'
 import './additional-styles.css'
-import { initAuthGuard } from './modules/auth/auth.guard'
+import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
 
 // Inicializar guard de autenticación
 initAuthGuard();
 import { renderDashboard, cargarAlertaStockBajo, cargarAlertaMantenimiento } from './modules/dashboard/dashboard.view'
 import { renderProgramaciones, initProgramacionesEvents } from './modules/programaciones/programaciones.view'
-import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, renderEmpleadosTab, renderReportesTab } from './modules/recursos-humanos/recursos-humanos.view'
+import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios } from './modules/recursos-humanos/recursos-humanos.view'
 // Almacén
 import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
 import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents } from './modules/almacen/inventario/inventario.view'
@@ -43,6 +43,32 @@ let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
 let activeRecursosTab = 'asistencia'; // Estado para el tab de recursos humanos
 let activeOperacionesTab = 'servicios'; // Estado para el tab de operaciones
 let misProyecciones: any[] = []; // Lista de proyecciones para facturación
+
+/**
+ * Mapa: nombre de menú → permiso(s) requeridos.
+ * Si al menos uno de los permisos del array coincide, se muestra el menú.
+ * 'dashboard' y 'marcar-asistencia' son accesibles para todos.
+ */
+const MENU_PERMISOS: Record<string, string[]> = {
+  'Dashboard':         ['dashboard'],
+  'Almacén':           ['inventario', 'entradas-salidas'],
+  'Logística':         ['logistica'],
+  'Programaciones':    ['programaciones'],
+  'Comercial':         ['prospectos', 'cotizaciones', 'ods', 'odp', 'servicios'],
+  'Finanzas':          ['cotizaciones'],  // Finanzas ve cotizaciones
+  'Facturación':       ['cotizaciones'],
+  'Recursos Humanos':  ['rrhh-asistencia', 'rrhh-empleados', 'rrhh-reportes', 'marcar-asistencia'],
+  'Operaciones':       ['ods', 'odp', 'servicios'],
+  'Reportes':          ['dashboard'],  // Todos con dashboard ven reportes
+};
+
+function filtrarMenuPorPermisos(items: typeof menuItems): typeof menuItems {
+  return items.filter(item => {
+    const permisosRequeridos = MENU_PERMISOS[item.name];
+    if (!permisosRequeridos) return true; // Si no está en el mapa, mostrar
+    return permisosRequeridos.some(p => tieneAccesoModulo(p));
+  });
+}
 
 const menuItems = [
   { name: 'Dashboard', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>', submenu: [] },
@@ -129,6 +155,11 @@ function getMainContent() {
 
 function renderApp() {
   const app = document.querySelector<HTMLDivElement>('#app')!;
+  const currentUser = authService.getUser();
+  const userName = currentUser?.nombre || 'Usuario';
+  const userRole = currentUser?.rol || 'Sin rol';
+  const userInitials = userName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+  const visibleMenuItems = filtrarMenuPorPermisos(menuItems);
 
   app.innerHTML = `
     <div class="app-container">
@@ -140,7 +171,7 @@ function renderApp() {
         </div>
         
         <nav class="sidebar-nav">
-          ${menuItems.map(item => `
+          ${visibleMenuItems.map(item => `
             <div>
               <button class="nav-item ${activeMenu === item.name || expandedMenu === item.name ? 'active' : ''}" data-menu="${item.name}" data-has-submenu="${item.submenu.length > 0}">
                 <span class="nav-icon">${item.icon}</span>
@@ -162,9 +193,9 @@ function renderApp() {
 
         <div class="sidebar-footer">
           <div class="support-section">
-            <p class="support-title">Soporte Técnico</p>
-            <p class="support-text">¿Necesitas ayuda con el sistema?</p>
-            <button class="contact-btn">Contactar</button>
+            <p class="support-title" style="font-weight: 600;">${userName}</p>
+            <p class="support-text" style="font-size: 11px; opacity: 0.8;">${userRole}</p>
+            <button class="contact-btn">Soporte</button>
           </div>
           <button class="logout-btn" onclick="logout()" style="margin-top: 16px; width: 100%; padding: 10px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;">
@@ -187,8 +218,8 @@ function renderApp() {
             <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></button>
             <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
             <div class="user-profile" style="cursor: pointer;" onclick="logout()">
-              <span>Admin Usuario</span>
-              <div class="avatar">AU</div>
+              <span>${userName}</span>
+              <div class="avatar">${userInitials}</div>
             </div>
           </div>
         </header>
@@ -523,6 +554,9 @@ function updateRecursosTabContent() {
     case 'marcar':
       tabContent.innerHTML = renderMarcarAsistenciaTab();
       break;
+    case 'horarios':
+      tabContent.innerHTML = renderHorariosTab();
+      break;
     case 'empleados':
       tabContent.innerHTML = renderEmpleadosTab();
       break;
@@ -535,31 +569,18 @@ function updateRecursosTabContent() {
   
   // Inicializar event listeners para Marcar Asistencia
   if (activeRecursosTab === 'marcar') {
-    initMarcarAsistenciaEvents();
+    cargarMarcarAsistencia();
+  }
+
+  // Cargar datos de horarios
+  if (activeRecursosTab === 'horarios') {
+    cargarHorarios();
   }
 }
 
 function initMarcarAsistenciaEvents() {
-  const btnEntrada = document.getElementById('btnMarcarEntrada');
-  const btnSalida = document.getElementById('btnMarcarSalida');
-
-  if (btnEntrada) {
-    btnEntrada.addEventListener('click', () => {
-      const horaActual = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-      console.log('Marcando entrada:', horaActual);
-      // TODO: Aquí irá la llamada al backend
-      alert(`Entrada registrada a las ${horaActual}`);
-    });
-  }
-
-  if (btnSalida) {
-    btnSalida.addEventListener('click', () => {
-      const horaActual = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-      console.log('Marcando salida:', horaActual);
-      // TODO: Aquí irá la llamada al backend
-      alert(`Salida registrada a las ${horaActual}`);
-    });
-  }
+  // Los eventos ahora se manejan dentro de cargarMarcarAsistencia()
+  // Esta función queda vacía por compatibilidad
 }
 
 

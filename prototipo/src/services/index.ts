@@ -16,6 +16,7 @@ export { equipoService } from './equipoService';
 export { vehiculoService } from './vehiculoService';
 export { tecnicoService } from './tecnicoService';
 export { areaService } from './areaService';
+export { rrhhService } from './rrhhService';
 
 // Servicios Operaciones
 export { mantenimientoService } from './mantenimientoService';

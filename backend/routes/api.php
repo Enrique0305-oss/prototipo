@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\ClienteController;
 use App\Http\Controllers\API\CotizacionController;
 use App\Http\Controllers\API\OrdenServicioController;
@@ -20,11 +21,20 @@ use App\Http\Controllers\API\ProyeccionesController;
 use App\Http\Controllers\API\ServicioController;
 use App\Http\Controllers\API\CatalogoCapacitacionAuditoriaController;
 use App\Http\Controllers\API\ProgramacionMantenimientoController;
+use App\Http\Controllers\API\AsistenciaController;
+use App\Http\Controllers\API\HorarioController;
 
-// Rutas sin middleware para pruebas
+// Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
-    
-    // para lo que nos va a dar para pagarnos es decir los clientes :v
+    Route::post('/auth/login', [AuthController::class, 'login']);
+});
+
+// Rutas PROTEGIDAS (requieren token Sanctum)
+Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
+
+    // Auth
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::get('/auth/me', [AuthController::class, 'me']);
     Route::get('/clientes', [ClienteController::class, 'index']);
     Route::get('/clientes/{id}', [ClienteController::class, 'show']);
     Route::post('/clientes', [ClienteController::class, 'store']);
@@ -187,4 +197,15 @@ Route::prefix('v1')->group(function () {
             'data' => \App\Models\Personal::select('id', 'nombre', 'apellidos')->get()
         ]);
     });
+
+    // Asistencia RRHH
+    Route::get('/asistencia/mi-estado', [AsistenciaController::class, 'miEstado']);
+    Route::post('/asistencia/marcar-entrada', [AsistenciaController::class, 'marcarEntrada']);
+    Route::post('/asistencia/marcar-salida', [AsistenciaController::class, 'marcarSalida']);
+
+    // Horarios RRHH
+    Route::get('/horarios', [HorarioController::class, 'index']);
+    Route::get('/horarios/{id}', [HorarioController::class, 'show']);
+    Route::post('/horarios/{id}', [HorarioController::class, 'store']);
+    Route::post('/horarios/{id}/copiar-de/{idOrigen}', [HorarioController::class, 'copiarHorario']);
 });

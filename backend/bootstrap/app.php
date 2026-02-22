@@ -15,7 +15,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);
+        
+        // Sanctum: configurar rutas stateful para SPA
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Responder JSON para rutas API cuando no hay autenticación
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autenticado. Inicia sesión para continuar.',
+                ], 401);
+            }
+        });
     })->create();

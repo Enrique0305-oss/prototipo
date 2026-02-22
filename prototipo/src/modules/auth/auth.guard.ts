@@ -27,20 +27,40 @@ export function hasPermission(permission: string): boolean {
 export function initAuthGuard(): void {
   requireAuth();
   
-  // Auto-refresh del token antes de que expire
+  // Auto-refresh de la sesión: extender expiración periódicamente
   setupTokenRefresh();
 }
 
 function setupTokenRefresh(): void {
-  // TODO: Habilitar cuando se implemente login real con backend
-  // Por ahora con loginMock no hay endpoint de refresh, así que solo
-  // renovamos el token mock localmente cada 30 minutos
-  const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
+  // Renovar la sesión mock localmente cada 30 minutos
+  // (El token Sanctum no expira por sí solo a menos que se configure)
+  const REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
   setInterval(() => {
     if (authService.isAuthenticated()) {
-      // Renovar expiración del token mock sin llamar al backend
       authService.extendMockSession();
     }
   }, REFRESH_INTERVAL_MS);
+}
+
+/**
+ * Verifica si el usuario tiene permiso para acceder a un módulo específico.
+ * Gerencia (permisos: ['*']) tiene acceso a todo.
+ */
+export function tieneAccesoModulo(modulo: string): boolean {
+  const user = authService.getUser();
+  if (!user) return false;
+  
+  // '*' = acceso total (Gerencia)
+  if (user.permisos.includes('*')) return true;
+  
+  return user.permisos.includes(modulo);
+}
+
+/**
+ * Retorna la lista de permisos del usuario logueado.
+ */
+export function getPermisos(): string[] {
+  const user = authService.getUser();
+  return user?.permisos || [];
 }

@@ -112,8 +112,8 @@ export function initLoginEvents() {
     loginBtn.textContent = 'Iniciando sesión...';
 
     try {
-      // Usar loginMock mientras no haya backend
-      const response = await authService.loginMock(credenciales);
+      // Login real con backend Sanctum
+      const response = await authService.login(credenciales);
 
       if (response.success) {
         // Login exitoso - redirigir al dashboard

@@ -16,9 +16,10 @@ class AuthService {
 
   async login(credenciales: Credenciales): Promise<AuthResponse> {
     try {
+      // Enviar 'usuario' y 'password' al backend
       const response = await apiClient.post<AuthResponse>(
         API_ENDPOINTS.login,
-        credenciales
+        { usuario: credenciales.email, password: credenciales.password }
       );
       
       if (response.success) {
@@ -209,12 +210,18 @@ class AuthService {
       return error as LoginError;
     }
 
-    if (error.response?.status === 401) {
-      return { field: 'general', message: 'Credenciales incorrectas' };
+    // ApiError del backend (401, 422, etc.)
+    if (error.status === 401 || error.data?.message) {
+      return { field: 'general', message: error.data?.message || 'Credenciales incorrectas' };
     }
 
-    if (error.response?.status === 429) {
+    if (error.status === 429) {
       return { field: 'general', message: 'Demasiados intentos. Intenta más tarde' };
+    }
+
+    if (error.status === 422 && error.data?.errors) {
+      const firstError = Object.values(error.data.errors)[0];
+      return { field: 'general', message: Array.isArray(firstError) ? firstError[0] as string : 'Datos inválidos' };
     }
 
     return { field: 'general', message: 'Error al iniciar sesión. Intenta nuevamente' };

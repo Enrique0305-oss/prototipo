@@ -86,7 +86,8 @@ export class ApiClient {
   private getHeaders(): Record<string, string> {
     const headers = { ...this.defaultHeaders };
     
-    const token = localStorage.getItem('auth_token');
+    // Buscar token en ambos storages (sessionStorage primero, luego localStorage)
+    const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
