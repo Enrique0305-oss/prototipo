@@ -492,7 +492,7 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
 
   const frecOpts = ['', 'Unica', 'Semanal', 'Quincenal', 'Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'];
   const frecSelect = frecOpts.map(f => {
-    const label = f || 'Sin frecuencia';
+    const label = f || 'A SOLICITUD DEL CLIENTE';
     const sel = (f && frecuencia && f.toLowerCase() === frecuencia.toLowerCase()) ? 'selected' : (!f && !frecuencia ? 'selected' : '');
     return '<option value="' + f + '" ' + sel + '>' + label + '</option>';
   }).join('');

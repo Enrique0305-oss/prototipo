@@ -345,13 +345,18 @@ async function cargarOrdenesProducto() {
         '<td><strong>S/ ' + total + '</strong></td>' +
         '<td><span style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;' + (o.estado === 'Aprobado' ? 'background:#dcfce7;color:#166534;' : o.estado === 'Rechazado' ? 'background:#fee2e2;color:#991b1b;' : 'background:#fef3c7;color:#92400e;') + '">' + (o.estado || 'Aprobado') + '</span></td>' +
         '<td>' +
-          '<div class="op-action-buttons">' +
-            '<button class="op-btn-icon btn-ver-op" data-id="' + o.id + '" title="Ver/Editar">' +
-              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>' +
-                '<circle cx="12" cy="12" r="3"></circle>' +
-              '</svg>' +
+          '<div class="op-action-buttons" style="display:flex; gap:8px;">' +
+            // BOTÓN VER (Ojito)
+            '<button class="op-btn-icon btn-ver-op" data-id="' + o.id + '" title="Ver Detalle" style="color: #64748b;">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' +
             '</button>' +
+            
+            // BOTÓN EDITAR (Lápiz Azul) - ¡ESTE ES EL QUE FALTA!
+            '<button class="op-btn-icon btn-editar-op" data-id="' + o.id + '" title="Editar" style="color: #0284c7;">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>' +
+            '</button>' +
+            
+            // BOTÓN PDF
             '<button class="op-btn-icon btn-download-pdf-op" data-id="' + o.id + '" title="Descargar PDF" style="color:#2c4a7c;">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>' +
             '</button>' +
@@ -368,12 +373,23 @@ async function cargarOrdenesProducto() {
 }
 
 function bindAccionesTablaOP() {
+  // VER
   document.querySelectorAll('.btn-ver-op').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = Number((btn as HTMLElement).dataset.id);
-      await abrirModalEditarOP(id);
+      await abrirModalEditarOP(id, true); // <--- TRUE para bloquear
     });
   });
+
+  // EDITAR
+  document.querySelectorAll('.btn-editar-op').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      await abrirModalEditarOP(id, false); // <--- FALSE para editar
+    });
+  });
+
+  //PDF
   document.querySelectorAll('.btn-download-pdf-op').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = Number((btn as HTMLElement).dataset.id);
@@ -652,6 +668,17 @@ function limpiarFormOP() {
   (document.getElementById('op-igv-monto') as HTMLElement).textContent = 'S/ 0.00';
   (document.getElementById('op-total-costo') as HTMLElement).textContent = 'S/ 0.00';
   contadorLineasProd = 0;
+  
+  const inputs = document.querySelectorAll('#modal-op .op-input, #modal-op select, #modal-op input');
+  inputs.forEach(i => (i as HTMLInputElement).disabled = false);
+
+  const btnGuardar = document.getElementById('modal-op-guardar');
+  const btnCancelar = document.getElementById('modal-op-cancelar');
+  const btnAgregarProd = document.getElementById('btn-agregar-linea-producto');
+
+  if (btnGuardar) btnGuardar.style.display = 'flex';
+  if (btnCancelar) btnCancelar.textContent = 'Cancelar';
+  if (btnAgregarProd) btnAgregarProd.style.display = 'flex';
 }
 
 async function abrirModalNuevaOP() {
@@ -677,7 +704,7 @@ async function abrirModalNuevaOP() {
   (document.getElementById('modal-op') as HTMLElement).style.display = 'flex';
 }
 
-async function abrirModalEditarOP(id: number) {
+async function abrirModalEditarOP(id: number, soloLectura: boolean = false) {
   try {
     const res = await ordenProductoService.getById(id);
     const raw = res.data || res;
@@ -686,12 +713,20 @@ async function abrirModalEditarOP(id: number) {
     limpiarFormOP();
     await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal(), cargarProductosDisponibles()]);
 
-    (document.getElementById('modal-op-titulo') as HTMLElement).innerHTML =
-      '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg> Ver / Editar Orden de Producto';
+    // 1. Título dinámico e Icono
+    const tituloEl = document.getElementById('modal-op-titulo') as HTMLElement;
+    tituloEl.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="1" y="3" width="15" height="13"></rect>
+        <path d="M16 8h5l3 3v5h-2m-4 0H2"></path>
+        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+      </svg> ${soloLectura ? 'Consultar Orden de Producto' : 'Editar Orden de Producto'}`;
+
     (document.getElementById('op-edit-id') as HTMLInputElement).value = String(orden.id);
     (document.getElementById('op-numero-orden') as HTMLInputElement).value = orden.numero_orden || '';
 
-    // Cotizacion (readonly en edicion)
+    // 2. Cotización (Readonly siempre en edición/ver)
     const cotSelect = document.getElementById('op-cotizacion-ref') as HTMLSelectElement;
     if (orden.id_cotizacion) {
       const cotNum = orden.cotizacion?.numero_cotizacion || ('COT-' + orden.id_cotizacion);
@@ -700,29 +735,26 @@ async function abrirModalEditarOP(id: number) {
         cotSelect.insertAdjacentHTML('beforeend', '<option value="' + orden.id_cotizacion + '">' + cotNum + '</option>');
       }
       cotSelect.value = String(orden.id_cotizacion);
-      cotSelect.disabled = true;
+      cotSelect.disabled = true; 
     }
 
-    // Cliente
+    // 3. Llenado de Cliente y Datos
     (document.getElementById('op-cliente-nombre') as HTMLInputElement).value = orden.cliente?.nombre_empresa || '';
     (document.getElementById('op-cliente-id') as HTMLInputElement).value = String(orden.cliente?.id || orden.id_cliente || '');
     (document.getElementById('op-cliente-ruc') as HTMLInputElement).value = orden.cliente?.ruc || '';
-
-    // Fecha
     (document.getElementById('op-fecha-envio') as HTMLInputElement).value = orden.fecha_envio?.split('T')[0] || '';
 
-    // Emitido por
     setTimeout(() => {
       (document.getElementById('op-emitido-por') as HTMLSelectElement).value = String(orden.emitido_por || '');
     }, 100);
 
-    // IGV
+    // 4. IGV
     incluyeIgv = orden.incluye_igv !== false;
     (document.getElementById('op-igv') as HTMLSelectElement).value = incluyeIgv ? '1' : '0';
     const igvRow = document.getElementById('op-igv-row') as HTMLElement;
     if (igvRow) igvRow.style.display = incluyeIgv ? 'flex' : 'none';
 
-    // Detalles
+    // 5. Detalles de Productos
     const detalles = orden.detalles || [];
     detalles.forEach((d: any) => {
       agregarLineaConDatos(
@@ -733,6 +765,37 @@ async function abrirModalEditarOP(id: number) {
       );
     });
 
+    // ==========================================
+    // LÓGICA DE BLOQUEO (MODO CONSULTA)
+    // ==========================================
+    const inputs = document.querySelectorAll('#modal-op .op-input, #modal-op select, #modal-op input:not([type="hidden"])');
+    inputs.forEach(input => {
+        const el = input as HTMLInputElement;
+        // Si es solo lectura, bloqueamos todo. Si es editar, habilitamos excepto los que ya eran readonly
+        if (el.id !== 'op-numero-orden' && el.id !== 'op-cliente-nombre' && el.id !== 'op-cliente-ruc' && el.id !== 'op-cotizacion-ref') {
+            el.disabled = soloLectura;
+        }
+    });
+
+    const btnGuardar = document.getElementById('modal-op-guardar') as HTMLElement;
+    const btnCancelar = document.getElementById('modal-op-cancelar') as HTMLElement;
+    const btnAgregarProd = document.getElementById('btn-agregar-linea-producto') as HTMLElement;
+
+    if (soloLectura) {
+      btnGuardar.style.display = 'none';
+      btnCancelar.textContent = 'Salir';
+      if (btnAgregarProd) btnAgregarProd.style.display = 'none';
+      // Escondemos tachitos de basura en las líneas
+      setTimeout(() => {
+        document.querySelectorAll('.btn-eliminar-linea').forEach(b => (b as HTMLElement).style.display = 'none');
+      }, 150);
+    } else {
+      btnGuardar.style.display = 'flex';
+      btnGuardar.textContent = 'Actualizar Orden';
+      btnCancelar.textContent = 'Cancelar';
+      if (btnAgregarProd) btnAgregarProd.style.display = 'flex';
+    }
+
     calcularTotalCosto();
     (document.getElementById('modal-op') as HTMLElement).style.display = 'flex';
   } catch (e) {
@@ -740,7 +803,6 @@ async function abrirModalEditarOP(id: number) {
     mostrarToast('error', 'Error', 'No se pudo cargar la orden de producto');
   }
 }
-
 
 
 async function guardarOP() {
