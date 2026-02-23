@@ -61,4 +61,9 @@ export const ordenProductoService = {
     const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
     return `${base}/ordenes-producto/${id}/pdf${descargar ? '?descargar=true' : ''}`;
   },
+
+  downloadPDF: async (id: number, filename?: string) => {
+    const defaultFilename = filename || `orden_producto_${id}.pdf`;
+    return apiClient.downloadFile(`/ordenes-producto/${id}/pdf?descargar=true`, defaultFilename);
+  },
 };

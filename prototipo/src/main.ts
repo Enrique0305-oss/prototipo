@@ -274,7 +274,13 @@ if (activeMenu === 'Facturación') {
     // SOLO si es Facturación, traemos la data real
     if (menuName === 'Facturación') {
       try {
-        const respuesta = await fetch('http://localhost:8000/api/v1/proyecciones'); 
+        const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
+        const respuesta = await fetch('http://localhost:8000/api/v1/proyecciones', {
+          headers: {
+            'Accept': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
+        }); 
         const result = await respuesta.json();
         
         const rawData = result.data || result; 

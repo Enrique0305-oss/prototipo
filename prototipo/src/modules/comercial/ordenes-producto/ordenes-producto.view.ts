@@ -391,15 +391,13 @@ function bindAccionesTablaOP() {
 
   //PDF
   document.querySelectorAll('.btn-download-pdf-op').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const id = Number((btn as HTMLElement).dataset.id);
-      const url = ordenProductoService.getPDFUrl(id, true);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      try {
+        await ordenProductoService.downloadPDF(id);
+      } catch (e) {
+        console.error('Error descargando PDF:', e);
+      }
     });
   });
 }
@@ -875,13 +873,11 @@ async function guardarOP() {
     await Promise.all([cargarOrdenesProducto(), cargarEstadisticasOP()]);
     // Descargar PDF automaticamente al crear nueva orden
     if (nuevaOrdenId) {
-      const url = ordenProductoService.getPDFUrl(nuevaOrdenId, true);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      try {
+        await ordenProductoService.downloadPDF(nuevaOrdenId);
+      } catch (e) {
+        console.error('Error descargando PDF:', e);
+      }
     }
   } catch (e: any) {
     console.error('Error guardando OP:', e);
