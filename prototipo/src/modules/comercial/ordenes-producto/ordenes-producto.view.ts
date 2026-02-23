@@ -189,8 +189,7 @@ export function renderComercialOrdenesProducto() {
               <div class="op-field">
                 <label class="op-label">Emitido por <span class="op-required">*</span></label>
                 <select id="op-emitido-por" class="op-input">
-                  <option value="">Cargando personal...</option>
-                </select>
+                  </select>
               </div>
               <div class="op-field">
                 <label class="op-label">IGV (18%)</label>
@@ -303,6 +302,14 @@ async function cargarEstadisticasOP() {
   } catch (e) {
     console.error('Error cargando estadisticas OP:', e);
   }
+}
+
+function obtenerUsuarioLogueado() {
+  const sesion = localStorage.getItem('auth') || localStorage.getItem('user');
+  if (sesion) {
+    return JSON.parse(sesion); 
+  }
+  return null;
 }
 
 async function cargarOrdenesProducto() {
@@ -648,6 +655,7 @@ function calcularTotalCosto() {
 }
 
 function limpiarFormOP() {
+  // 1. Limpieza de valores (Inputs y IDs)
   (document.getElementById('op-edit-id') as HTMLInputElement).value = '';
   (document.getElementById('op-numero-orden') as HTMLInputElement).value = '';
   (document.getElementById('op-cotizacion-ref') as HTMLSelectElement).value = '';
@@ -657,19 +665,29 @@ function limpiarFormOP() {
   (document.getElementById('op-fecha-envio') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
   (document.getElementById('op-emitido-por') as HTMLSelectElement).value = '';
   (document.getElementById('op-igv') as HTMLSelectElement).value = '1';
+
+  // 2. Reset de estados lógicos y visuales de totales
   incluyeIgv = true;
-  const igvRow = document.getElementById('op-igv-row') as HTMLElement;
+  const igvRow = document.getElementById('op-igv-row');
   if (igvRow) igvRow.style.display = 'flex';
+  
   (document.getElementById('op-cotizacion-info') as HTMLElement).style.display = 'none';
   (document.getElementById('op-detalle-body') as HTMLElement).innerHTML = '';
   (document.getElementById('op-subtotal') as HTMLElement).textContent = 'S/ 0.00';
   (document.getElementById('op-igv-monto') as HTMLElement).textContent = 'S/ 0.00';
   (document.getElementById('op-total-costo') as HTMLElement).textContent = 'S/ 0.00';
   contadorLineasProd = 0;
-  
-  const inputs = document.querySelectorAll('#modal-op .op-input, #modal-op select, #modal-op input');
-  inputs.forEach(i => (i as HTMLInputElement).disabled = false);
 
+  // 3. DESBLOQUEO GENERAL (Esto habilita todo, incluyendo el "Emitido por")
+  const inputs = document.querySelectorAll('#modal-op .op-input, #modal-op select, #modal-op input');
+  inputs.forEach(i => {
+    const el = i as HTMLInputElement;
+    el.disabled = false;
+    el.style.backgroundColor = ''; // Quitamos el gris de bloqueo
+    el.style.cursor = '';          // Quitamos el cursor de "prohibido"
+  });
+
+  // 4. Restaurar botones de acción
   const btnGuardar = document.getElementById('modal-op-guardar');
   const btnCancelar = document.getElementById('modal-op-cancelar');
   const btnAgregarProd = document.getElementById('btn-agregar-linea-producto');
@@ -681,13 +699,40 @@ function limpiarFormOP() {
 
 async function abrirModalNuevaOP() {
   limpiarFormOP();
+
+  // 1. datos de la session storage
+  const userRaw = sessionStorage.getItem('qsci_user'); 
+  const userSession = JSON.parse(userRaw || '{}');
+  
+  // traer datos
+  const userId = userSession.id;
+  const nombreCompleto = `${userSession.nombre || ''} ${userSession.apellido || ''}`.trim();
+
   (document.getElementById('modal-op-titulo') as HTMLElement).innerHTML =
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg> Nueva Orden de Producto';
+  
   const cotSelect = document.getElementById('op-cotizacion-ref') as HTMLSelectElement;
   cotSelect.disabled = false;
-  await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal(), cargarProductosDisponibles()]);
 
-  // Cargar siguiente número de orden automáticamente
+  await Promise.all([
+    cargarDropdownCotizaciones(), 
+    cargarProductosDisponibles()
+  ]);
+
+  // 3. uaurio logueado en "Emitido por" (con bloqueo)
+  const selectEmitido = document.getElementById('op-emitido-por') as HTMLSelectElement;
+  if (selectEmitido && userId) {
+    
+    selectEmitido.innerHTML = `<option value="${userId}" selected>${nombreCompleto}</option>`;
+    
+    selectEmitido.disabled = true;
+    selectEmitido.style.backgroundColor = '#f1f5f9'; 
+    selectEmitido.style.appearance = 'none';      
+    selectEmitido.style.webkitAppearance = 'none'; // Para Chrome/Edge
+    selectEmitido.style.cursor = 'not-allowed';
+  }
+
+  // 4. CARGAR CORRELATIVO
   try {
     const res = await ordenProductoService.getEstadisticas();
     const raw = res.data || res;
