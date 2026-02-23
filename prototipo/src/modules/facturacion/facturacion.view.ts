@@ -1,3 +1,11 @@
+function getAuthHeaders(): Record<string, string> {
+  const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
+  return {
+    'Accept': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+}
+
 // --- MODAL DE NUEVA FACTURA (Componente Interno) ---
 // --- MODAL DE NUEVA FACTURA ---
 function renderModalFactura() {
@@ -364,7 +372,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
 
     try {
       const endpoint = tipo === 'servicio' ? 'ordenes-servicio' : `ordenes-${tipo}`;
-      const resp = await fetch(`http://localhost:8000/api/v1/${endpoint}`);
+      const resp = await fetch(`http://localhost:8000/api/v1/${endpoint}`, { headers: getAuthHeaders() });
       const result = await resp.json();
 
       selectOrden.disabled = false;
@@ -388,7 +396,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
 
     try {
       // LLAMAMOS A LA RUTA QUE PROBASTE EN THUNDER CLIENT
-      const resp = await fetch(`http://127.0.0.1:8000/api/v1/proyecciones/buscar-orden/${tipo}/${id}`);
+      const resp = await fetch(`http://localhost:8000/api/v1/proyecciones/buscar-orden/${tipo}/${id}`, { headers: getAuthHeaders() });
       const result = await resp.json();
 
       if (result.success) {
@@ -461,7 +469,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
     try {
       const resp = await fetch('http://localhost:8000/api/v1/proyecciones', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(payload)
       });
 
