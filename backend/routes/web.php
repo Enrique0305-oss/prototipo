@@ -41,3 +41,25 @@ Route::get('/orden-servicio/test/{id}', function($id) {
 
     return view('OrdenServicioPDF', compact('orden'));
 });
+
+// Ruta de prueba específica para ORDEN DE PRODUCTO
+Route::get('/orden-producto/test/{id}', function($id) {
+    // 1. Intentamos buscar la orden con todas sus relaciones
+    $orden = \App\Models\OrdenProducto::with([
+        'cliente', 
+        'detalles.producto', 
+        'emisor', 
+        'cotizacion'
+    ])->find($id);
+
+    // 2. Si no la encuentra, lanzamos un mensaje más detallado para investigar
+    if (!$orden) {
+        $existeEnBD = \DB::table('orden_producto')->where('id', $id)->exists();
+        if ($existeEnBD) {
+            return "La orden ID $id existe, pero hay un error en las relaciones del modelo.";
+        }
+        return "La orden con ID $id no existe en la tabla orden_producto.";
+    }
+
+    return view('OrdenProductoPDF', compact('orden'));
+});
