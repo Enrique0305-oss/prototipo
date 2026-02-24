@@ -25,6 +25,12 @@ class Servicio extends Model
         'requiere_certificado' => 'boolean',
     ];
 
+    // Relaciones
+    public function productosReceta()
+    {
+        return $this->hasMany(ServicioProducto::class, 'id_servicio');
+    }
+
     // Scopes
     public function scopeActivos($query)
     {

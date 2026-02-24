@@ -8,6 +8,8 @@ use App\Models\DetalleOrdenProducto;
 use App\Models\Cotizacion;
 use App\Models\CotizacionDetalle;
 use App\Models\Multicim;
+use App\Models\Inventario;
+use App\Models\Kardex;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -201,6 +203,26 @@ class OrdenProductoController extends Controller
         try {
             DB::beginTransaction();
 
+            // Validar stock suficiente para cada producto
+            $erroresStock = [];
+            foreach ($validated['detalles'] as $detalle) {
+                $inventario = Inventario::where('id_productos', $detalle['id_producto'])->first();
+                $disponible = $inventario ? $inventario->cantidad_disponible : 0;
+                if ($disponible < $detalle['cantidad']) {
+                    $producto = \App\Models\Producto::find($detalle['id_producto']);
+                    $erroresStock[] = "{$producto->descripcion}: solicitas {$detalle['cantidad']}, disponible {$disponible}";
+                }
+            }
+
+            if (!empty($erroresStock)) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stock insuficiente',
+                    'errors' => $erroresStock,
+                ], 422);
+            }
+
             // Calcular subtotal, IGV y total
             $subtotalCalc = 0;
             foreach ($validated['detalles'] as $detalle) {
@@ -225,7 +247,8 @@ class OrdenProductoController extends Controller
                 'estado' => 'Aprobado',
             ]);
 
-            // Crear detalles
+            // Crear detalles + descontar inventario + registrar kardex
+            $idUsuario = $request->user()?->id;
             foreach ($validated['detalles'] as $detalle) {
                 $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
                 
@@ -235,6 +258,18 @@ class OrdenProductoController extends Controller
                     'cantidad' => $detalle['cantidad'],
                     'precio_unitario' => $detalle['precio_unitario'],
                     'subtotal' => $subtotal,
+                ]);
+
+                // Registrar salida en kardex y descontar stock
+                Kardex::registrarMovimiento([
+                    'id_producto' => $detalle['id_producto'],
+                    'tipo_movimiento' => 'Salida',
+                    'cantidad' => $detalle['cantidad'],
+                    'motivo' => 'Orden Producto',
+                    'referencia' => $orden->numero_orden,
+                    'id_referencia' => $orden->id,
+                    'id_usuario' => $idUsuario,
+                    'observacion' => "Salida por {$orden->numero_orden}",
                 ]);
             }
 
@@ -325,9 +360,44 @@ class OrdenProductoController extends Controller
 
             // Si se actualizan detalles
             if (isset($validated['detalles'])) {
+                // 1. Revertir stock de los detalles anteriores (devolver al inventario)
+                $idUsuario = $request->user()?->id;
+                foreach ($orden->detalles as $detalleAnterior) {
+                    Kardex::registrarMovimiento([
+                        'id_producto' => $detalleAnterior->id_producto,
+                        'tipo_movimiento' => 'Entrada',
+                        'cantidad' => $detalleAnterior->cantidad,
+                        'motivo' => 'Ajuste Orden Producto',
+                        'referencia' => $orden->numero_orden,
+                        'id_referencia' => $orden->id,
+                        'id_usuario' => $idUsuario,
+                        'observacion' => "Devolución por edición de {$orden->numero_orden}",
+                    ]);
+                }
+
+                // 2. Validar stock para los nuevos detalles
+                $erroresStock = [];
+                foreach ($validated['detalles'] as $detalle) {
+                    $inventario = Inventario::where('id_productos', $detalle['id_producto'])->first();
+                    $disponible = $inventario ? $inventario->cantidad_disponible : 0;
+                    if ($disponible < $detalle['cantidad']) {
+                        $producto = \App\Models\Producto::find($detalle['id_producto']);
+                        $erroresStock[] = "{$producto->descripcion}: solicitas {$detalle['cantidad']}, disponible {$disponible}";
+                    }
+                }
+
+                if (!empty($erroresStock)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Stock insuficiente para los nuevos detalles',
+                        'errors' => $erroresStock,
+                    ], 422);
+                }
+
                 $orden->detalles()->delete();
 
-                // Crear nuevos detalles y calcular total
+                // 3. Crear nuevos detalles + descontar stock
                 $subtotalCalc = 0;
                 foreach ($validated['detalles'] as $detalle) {
                     $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
@@ -339,6 +409,17 @@ class OrdenProductoController extends Controller
                         'cantidad' => $detalle['cantidad'],
                         'precio_unitario' => $detalle['precio_unitario'],
                         'subtotal' => $subtotal,
+                    ]);
+
+                    Kardex::registrarMovimiento([
+                        'id_producto' => $detalle['id_producto'],
+                        'tipo_movimiento' => 'Salida',
+                        'cantidad' => $detalle['cantidad'],
+                        'motivo' => 'Orden Producto',
+                        'referencia' => $orden->numero_orden,
+                        'id_referencia' => $orden->id,
+                        'id_usuario' => $idUsuario,
+                        'observacion' => "Salida por edición de {$orden->numero_orden}",
                     ]);
                 }
 
@@ -392,6 +473,21 @@ class OrdenProductoController extends Controller
 
         try {
             DB::beginTransaction();
+
+            // Restaurar stock por cada detalle antes de eliminar
+            $idUsuario = request()->user()?->id;
+            foreach ($orden->detalles as $detalle) {
+                Kardex::registrarMovimiento([
+                    'id_producto' => $detalle->id_producto,
+                    'tipo_movimiento' => 'Entrada',
+                    'cantidad' => $detalle->cantidad,
+                    'motivo' => 'Anulación Orden Producto',
+                    'referencia' => $orden->numero_orden,
+                    'id_referencia' => $orden->id,
+                    'id_usuario' => $idUsuario,
+                    'observacion' => "Devolución por anulación de {$orden->numero_orden}",
+                ]);
+            }
 
             // Eliminar detalles
             $orden->detalles()->delete();

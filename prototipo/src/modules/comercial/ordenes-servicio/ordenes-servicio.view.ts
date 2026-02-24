@@ -2,14 +2,20 @@
 import './ordenes-servicio.css';
 import { ordenServicioService } from '../../../services/ordenServicioService';
 import { servicioService } from '../../../services/servicioService';
+import { productoService } from '../../../services/productoService';
+import { equipoService } from '../../../services/equipoService';
+import { authService } from '../../auth/auth.service';
 import { mostrarToast } from '../../../shared/toast';
 
 let odsListData: any[] = [];
 let cotizacionesDisponibles: any[] = [];
-let personalData: any[] = [];
 let serviciosDisponibles: any[] = [];
 let incluyeIgv = true;
 let contadorLineasSrv = 0;
+let productosDisponiblesODS: any[] = [];
+let equiposDisponiblesODS: any[] = [];
+let odsProductoRows: { id_producto: number; cantidad: number; observacion: string; stock?: number }[] = [];
+let odsEquipoRows: { id_equipo: number; observacion: string }[] = [];
 
 export function renderComercialOrdenesServicio() {
   return `
@@ -169,9 +175,8 @@ export function renderComercialOrdenesServicio() {
               </div>
               <div class="os-field">
                 <label>Emitido por <span style="color:#ef4444">*</span></label>
-                <select id="ods-emitido-por" class="os-input">
-                  <option value="">Cargando personal...</option>
-                </select>
+                <input type="text" id="ods-emitido-por-nombre" class="os-input" readonly style="background:#f1f5f9;font-weight:600;">
+                <input type="hidden" id="ods-emitido-por">
               </div>
               <div class="os-field">
                 <label>IGV (18%)</label>
@@ -219,6 +224,72 @@ export function renderComercialOrdenesServicio() {
                 </thead>
                 <tbody id="ods-detalle-body"></tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- Productos / Materiales -->
+          <div class="os-section">
+            <div class="os-section-header">
+              <h3 class="os-section-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                Productos / Materiales
+              </h3>
+              <div style="display:flex;gap:8px;">
+                <button type="button" class="btn-secondary" id="btn-cargar-receta-ods" style="font-size:12px;padding:4px 10px;" title="Cargar materiales de la receta de los servicios seleccionados">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                  Cargar Receta
+                </button>
+                <button type="button" class="btn-secondary" id="btn-agregar-producto-ods" style="font-size:12px;padding:4px 10px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Agregar Producto
+                </button>
+              </div>
+            </div>
+            <div class="os-table-wrapper">
+              <table class="os-table">
+                <thead>
+                  <tr>
+                    <th style="width:40%;">Producto</th>
+                    <th style="width:15%;text-align:center;">Cantidad</th>
+                    <th style="width:15%;text-align:center;">Stock Disp.</th>
+                    <th style="width:22%;">Observación</th>
+                    <th style="width:8%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="ods-productos-body"></tbody>
+              </table>
+            </div>
+            <div id="ods-productos-empty" style="text-align:center;padding:12px;color:#94a3b8;font-size:13px;">
+              Sin productos. Use "Cargar Receta" o "Agregar Producto".
+            </div>
+          </div>
+
+          <!-- Equipos -->
+          <div class="os-section">
+            <div class="os-section-header">
+              <h3 class="os-section-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                Equipos
+              </h3>
+              <button type="button" class="btn-secondary" id="btn-agregar-equipo-ods" style="font-size:12px;padding:4px 10px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Agregar Equipo
+              </button>
+            </div>
+            <div class="os-table-wrapper">
+              <table class="os-table">
+                <thead>
+                  <tr>
+                    <th style="width:50%;">Equipo</th>
+                    <th style="width:40%;">Observación</th>
+                    <th style="width:10%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="ods-equipos-body"></tbody>
+              </table>
+            </div>
+            <div id="ods-equipos-empty" style="text-align:center;padding:12px;color:#94a3b8;font-size:13px;">
+              Sin equipos asignados.
             </div>
           </div>
 
@@ -403,24 +474,6 @@ async function cargarDropdownCotizaciones() {
   }
 }
 
-async function cargarDropdownPersonal() {
-  const select = document.getElementById('ods-emitido-por') as HTMLSelectElement;
-  if (!select) return;
-  try {
-    const res = await ordenServicioService.getPersonal();
-    const raw = res.data || res;
-    personalData = Array.isArray(raw) ? raw : (raw as any).data || [];
-
-    select.innerHTML = '<option value="">Seleccione personal...</option>' +
-      personalData.map(p =>
-        '<option value="' + p.id + '">' + p.nombre + ' ' + (p.apellidos || '') + '</option>'
-      ).join('');
-  } catch (e) {
-    console.error('Error cargando personal:', e);
-    select.innerHTML = '<option value="">Error al cargar</option>';
-  }
-}
-
 async function cargarServiciosDisponibles() {
   try {
     const res = await servicioService.getAll({ estado: 'activo', per_page: 100 });
@@ -595,6 +648,231 @@ function calcularTotalCosto() {
   if (elTotal) elTotal.textContent = 'S/ ' + total.toFixed(2);
 }
 
+// ===== PRODUCTOS / MATERIALES ODS =====
+
+async function cargarProductosDisponiblesODS() {
+  if (productosDisponiblesODS.length > 0) return;
+  try {
+    const res = await productoService.getAll({ estado: 'Activo', per_page: 500 });
+    const raw = res.data || res;
+    productosDisponiblesODS = Array.isArray(raw) ? raw : (raw as any).data || [];
+  } catch (e) {
+    console.error('Error cargando productos ODS:', e);
+    productosDisponiblesODS = [];
+  }
+}
+
+async function cargarEquiposDisponiblesODS() {
+  if (equiposDisponiblesODS.length > 0) return;
+  try {
+    const res = await equipoService.getAll({ estado: 'Activo', per_page: 500 });
+    const raw = res.data || res;
+    equiposDisponiblesODS = Array.isArray(raw) ? raw : (raw as any).data || [];
+  } catch (e) {
+    console.error('Error cargando equipos ODS:', e);
+    equiposDisponiblesODS = [];
+  }
+}
+
+function buildProductoSelectOpts(selectedId: number): string {
+  let opts = '<option value="">Seleccione producto...</option>';
+  productosDisponiblesODS.forEach(p => {
+    const sel = p.id === selectedId ? 'selected' : '';
+    opts += `<option value="${p.id}" ${sel}>${p.descripcion}${p.unidad ? ' (' + p.unidad + ')' : ''}</option>`;
+  });
+  return opts;
+}
+
+function getStockProducto(idProducto: number): number {
+  const p = productosDisponiblesODS.find(x => x.id === idProducto);
+  return p?.inventario?.cantidad_disponible ?? p?.cantidad_disponible ?? 0;
+}
+
+function renderProductosODS() {
+  const tbody = document.getElementById('ods-productos-body');
+  const emptyEl = document.getElementById('ods-productos-empty');
+  if (!tbody) return;
+
+  if (odsProductoRows.length === 0) {
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  tbody.innerHTML = odsProductoRows.map((r, idx) => {
+    const stock = getStockProducto(r.id_producto);
+    const stockColor = r.cantidad > stock ? 'color:#ef4444;font-weight:600;' : 'color:#16a34a;';
+    return `<tr data-prod-idx="${idx}">
+      <td><select class="os-input os-input-sm ods-prod-select" data-idx="${idx}">${buildProductoSelectOpts(r.id_producto)}</select></td>
+      <td style="text-align:center;"><input type="number" class="os-input os-input-sm ods-prod-cant" data-idx="${idx}" value="${r.cantidad}" min="0.01" step="0.01" style="width:80px;text-align:center;"></td>
+      <td style="text-align:center;${stockColor}" class="ods-prod-stock" data-idx="${idx}">${stock}</td>
+      <td><input type="text" class="os-input os-input-sm ods-prod-obs" data-idx="${idx}" value="${r.observacion || ''}" placeholder="Opcional" maxlength="200"></td>
+      <td style="text-align:center;"><button type="button" class="btn-icon ods-prod-remove" data-idx="${idx}" style="color:#ef4444;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
+    </tr>`;
+  }).join('');
+
+  bindProductosODSEvents();
+}
+
+function bindProductosODSEvents() {
+  document.querySelectorAll('.ods-prod-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const idx = Number((e.target as HTMLSelectElement).dataset.idx);
+      odsProductoRows[idx].id_producto = Number((e.target as HTMLSelectElement).value);
+      // Actualizar stock display
+      const stockTd = document.querySelector(`.ods-prod-stock[data-idx="${idx}"]`) as HTMLElement;
+      if (stockTd) {
+        const stock = getStockProducto(odsProductoRows[idx].id_producto);
+        stockTd.textContent = String(stock);
+        stockTd.style.color = odsProductoRows[idx].cantidad > stock ? '#ef4444' : '#16a34a';
+        stockTd.style.fontWeight = odsProductoRows[idx].cantidad > stock ? '600' : 'normal';
+      }
+    });
+  });
+  document.querySelectorAll('.ods-prod-cant').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = Number((e.target as HTMLInputElement).dataset.idx);
+      odsProductoRows[idx].cantidad = parseFloat((e.target as HTMLInputElement).value) || 0;
+      // Actualizar color de stock
+      const stockTd = document.querySelector(`.ods-prod-stock[data-idx="${idx}"]`) as HTMLElement;
+      if (stockTd) {
+        const stock = getStockProducto(odsProductoRows[idx].id_producto);
+        stockTd.style.color = odsProductoRows[idx].cantidad > stock ? '#ef4444' : '#16a34a';
+        stockTd.style.fontWeight = odsProductoRows[idx].cantidad > stock ? '600' : 'normal';
+      }
+    });
+  });
+  document.querySelectorAll('.ods-prod-obs').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = Number((e.target as HTMLInputElement).dataset.idx);
+      odsProductoRows[idx].observacion = (e.target as HTMLInputElement).value;
+    });
+  });
+  document.querySelectorAll('.ods-prod-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = Number((e.currentTarget as HTMLElement).dataset.idx);
+      odsProductoRows.splice(idx, 1);
+      renderProductosODS();
+    });
+  });
+}
+
+function agregarProductoODS(idProducto = 0, cantidad = 1, observacion = '') {
+  odsProductoRows.push({ id_producto: idProducto, cantidad, observacion });
+  renderProductosODS();
+}
+
+async function cargarRecetaDesdeServicios() {
+  const lineas = document.querySelectorAll('#ods-detalle-body tr');
+  const servicioIds: number[] = [];
+  lineas.forEach(linea => {
+    const idSrv = Number((linea.querySelector('.servicio-id-hidden') as HTMLInputElement)?.value || 0);
+    if (idSrv > 0) servicioIds.push(idSrv);
+  });
+
+  if (servicioIds.length === 0) {
+    mostrarToast('error', 'Sin servicios', 'Agregue al menos un servicio primero');
+    return;
+  }
+
+  await cargarProductosDisponiblesODS();
+
+  // Limpiar productos actuales
+  odsProductoRows = [];
+
+  for (const srvId of servicioIds) {
+    try {
+      const res = await servicioService.getProductos(srvId);
+      const raw = res.data || res;
+      const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
+      items.forEach((item: any) => {
+        // Verificar si ya existe este producto, si sí sumar cantidad
+        const existing = odsProductoRows.find(r => r.id_producto === item.id_producto);
+        if (existing) {
+          existing.cantidad += Number(item.cantidad_default);
+        } else {
+          odsProductoRows.push({
+            id_producto: item.id_producto,
+            cantidad: Number(item.cantidad_default),
+            observacion: item.observacion || '',
+          });
+        }
+      });
+    } catch (e) {
+      console.error(`Error cargando receta del servicio ${srvId}:`, e);
+    }
+  }
+
+  renderProductosODS();
+  if (odsProductoRows.length > 0) {
+    mostrarToast('success', 'Receta Cargada', `Se cargaron ${odsProductoRows.length} productos desde la receta`);
+  } else {
+    mostrarToast('error', 'Sin receta', 'Los servicios seleccionados no tienen receta de materiales');
+  }
+}
+
+// ===== EQUIPOS ODS =====
+
+function buildEquipoSelectOpts(selectedId: number): string {
+  let opts = '<option value="">Seleccione equipo...</option>';
+  equiposDisponiblesODS.forEach(eq => {
+    const sel = eq.id === selectedId ? 'selected' : '';
+    opts += `<option value="${eq.id}" ${sel}>${eq.descripcion} - ${eq.marca || ''} ${eq.modelo || ''}</option>`;
+  });
+  return opts;
+}
+
+function renderEquiposODS() {
+  const tbody = document.getElementById('ods-equipos-body');
+  const emptyEl = document.getElementById('ods-equipos-empty');
+  if (!tbody) return;
+
+  if (odsEquipoRows.length === 0) {
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  tbody.innerHTML = odsEquipoRows.map((r, idx) => {
+    return `<tr data-equipo-idx="${idx}">
+      <td><select class="os-input os-input-sm ods-equipo-select" data-idx="${idx}">${buildEquipoSelectOpts(r.id_equipo)}</select></td>
+      <td><input type="text" class="os-input os-input-sm ods-equipo-obs" data-idx="${idx}" value="${r.observacion || ''}" placeholder="Opcional" maxlength="200"></td>
+      <td style="text-align:center;"><button type="button" class="btn-icon ods-equipo-remove" data-idx="${idx}" style="color:#ef4444;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
+    </tr>`;
+  }).join('');
+
+  bindEquiposODSEvents();
+}
+
+function bindEquiposODSEvents() {
+  document.querySelectorAll('.ods-equipo-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const idx = Number((e.target as HTMLSelectElement).dataset.idx);
+      odsEquipoRows[idx].id_equipo = Number((e.target as HTMLSelectElement).value);
+    });
+  });
+  document.querySelectorAll('.ods-equipo-obs').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = Number((e.target as HTMLInputElement).dataset.idx);
+      odsEquipoRows[idx].observacion = (e.target as HTMLInputElement).value;
+    });
+  });
+  document.querySelectorAll('.ods-equipo-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = Number((e.currentTarget as HTMLElement).dataset.idx);
+      odsEquipoRows.splice(idx, 1);
+      renderEquiposODS();
+    });
+  });
+}
+
+function agregarEquipoODS(idEquipo = 0, observacion = '') {
+  odsEquipoRows.push({ id_equipo: idEquipo, observacion });
+  renderEquiposODS();
+}
+
 function limpiarFormODS() {
   (document.getElementById('ods-edit-id') as HTMLInputElement).value = '';
   (document.getElementById('ods-numero-orden') as HTMLInputElement).value = '';
@@ -605,7 +883,10 @@ function limpiarFormODS() {
   (document.getElementById('ods-cliente-ruc') as HTMLInputElement).value = '';
   (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
   (document.getElementById('ods-fecha-tentativa') as HTMLInputElement).value = '';
-  (document.getElementById('ods-emitido-por') as HTMLSelectElement).value = '';
+  // Auto-llenar emitido por con usuario logueado
+  const currentUser = authService.getUser();
+  (document.getElementById('ods-emitido-por') as HTMLInputElement).value = currentUser ? String(currentUser.id) : '';
+  (document.getElementById('ods-emitido-por-nombre') as HTMLInputElement).value = currentUser ? currentUser.nombre + (currentUser.apellido ? ' ' + currentUser.apellido : '') : '';
   (document.getElementById('ods-igv') as HTMLSelectElement).value = '1';
   incluyeIgv = true;
   const igvRow = document.getElementById('ods-igv-row') as HTMLElement;
@@ -616,6 +897,11 @@ function limpiarFormODS() {
   (document.getElementById('ods-igv-monto') as HTMLElement).textContent = 'S/ 0.00';
   (document.getElementById('ods-total-costo') as HTMLElement).textContent = 'S/ 0.00';
   contadorLineasSrv = 0;
+  // Limpiar productos y equipos
+  odsProductoRows = [];
+  odsEquipoRows = [];
+  renderProductosODS();
+  renderEquiposODS();
 }
 
 async function abrirModalNuevaODS() {
@@ -635,7 +921,7 @@ async function abrirModalNuevaODS() {
     (document.getElementById('ods-numero-orden') as HTMLInputElement).value = 'Error';
   }
 
-  await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal(), cargarServiciosDisponibles()]);
+  await Promise.all([cargarDropdownCotizaciones(), cargarServiciosDisponibles(), cargarProductosDisponiblesODS(), cargarEquiposDisponiblesODS()]);
   (document.getElementById('modal-ods') as HTMLElement).style.display = 'flex';
 }
 
@@ -647,7 +933,7 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
 
     // 1. Limpiamos y cargamos catálogos
     limpiarFormODS();
-    await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal(), cargarServiciosDisponibles()]);
+    await Promise.all([cargarDropdownCotizaciones(), cargarServiciosDisponibles(), cargarProductosDisponiblesODS(), cargarEquiposDisponiblesODS()]);
 
     // 2. Título y IDs básicos
     (document.getElementById('modal-ods-titulo') as HTMLElement).textContent = soloLectura ? 'Consultar Orden de Servicio' : 'Editar Orden de Servicio';
@@ -675,9 +961,11 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
     (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).value = orden.fecha_aceptacion?.split('T')[0] || '';
     (document.getElementById('ods-fecha-tentativa') as HTMLInputElement).value = orden.fecha_tentativa?.split('T')[0] || '';
 
-    setTimeout(() => {
-      (document.getElementById('ods-emitido-por') as HTMLSelectElement).value = String(orden.emitido_por || '');
-    }, 100);
+    // Emitido por: mostrar nombre del emisor original, pero el ID se mantiene del usuario logueado
+    const currentUserEdit = authService.getUser();
+    const emisorNombre = orden.emisor?.nombre ? (orden.emisor.nombre + ' ' + (orden.emisor.apellidos || '')) : (currentUserEdit ? currentUserEdit.nombre + (currentUserEdit.apellido ? ' ' + currentUserEdit.apellido : '') : '');
+    (document.getElementById('ods-emitido-por-nombre') as HTMLInputElement).value = emisorNombre;
+    (document.getElementById('ods-emitido-por') as HTMLInputElement).value = String(orden.emitido_por || '');
 
     // 5. IGV
     incluyeIgv = orden.incluye_igv !== false;
@@ -700,6 +988,23 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
       }
     });
 
+    // 7. Productos asignados
+    const productos = orden.productos || [];
+    odsProductoRows = productos.map((p: any) => ({
+      id_producto: p.id_producto,
+      cantidad: Number(p.cantidad),
+      observacion: p.observacion || '',
+    }));
+    renderProductosODS();
+
+    // 8. Equipos asignados
+    const equipos = orden.equipos || [];
+    odsEquipoRows = equipos.map((e: any) => ({
+      id_equipo: e.id_equipo,
+      observacion: e.observacion || '',
+    }));
+    renderEquiposODS();
+
     // ==========================================
     // NUEVA LÓGICA DE BLOQUEO (SOLO LECTURA)
     // ==========================================
@@ -717,21 +1022,32 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
     const btnGuardar = document.getElementById('modal-ods-guardar') as HTMLElement;
     const btnCancelar = document.getElementById('modal-ods-cancelar') as HTMLElement;
     const btnAgregarSrv = document.getElementById('btn-agregar-linea-servicio') as HTMLElement;
+    const btnCargarReceta = document.getElementById('btn-cargar-receta-ods') as HTMLElement;
+    const btnAgregarProd = document.getElementById('btn-agregar-producto-ods') as HTMLElement;
+    const btnAgregarEquipo = document.getElementById('btn-agregar-equipo-ods') as HTMLElement;
 
     if (soloLectura) {
       btnGuardar.style.display = 'none';           // Quitamos botón Guardar
       btnCancelar.textContent = 'Salir';           // Cambiamos Cancelar por Salir
       if (btnAgregarSrv) btnAgregarSrv.style.display = 'none'; // Quitamos botón agregar servicio
+      if (btnCargarReceta) btnCargarReceta.style.display = 'none';
+      if (btnAgregarProd) btnAgregarProd.style.display = 'none';
+      if (btnAgregarEquipo) btnAgregarEquipo.style.display = 'none';
       
       // Bloquear botones de eliminar líneas de la tabla
       setTimeout(() => {
           document.querySelectorAll('.btn-eliminar-linea').forEach(b => (b as HTMLElement).style.display = 'none');
+          document.querySelectorAll('.ods-prod-remove').forEach(b => (b as HTMLElement).style.display = 'none');
+          document.querySelectorAll('.ods-equipo-remove').forEach(b => (b as HTMLElement).style.display = 'none');
       }, 150);
     } else {
       btnGuardar.style.display = 'flex';           // Mostramos Guardar
       btnGuardar.textContent = 'Actualizar Orden'; // Texto de edición
       btnCancelar.textContent = 'Cancelar';
       if (btnAgregarSrv) btnAgregarSrv.style.display = 'flex';
+      if (btnCargarReceta) btnCargarReceta.style.display = 'flex';
+      if (btnAgregarProd) btnAgregarProd.style.display = 'flex';
+      if (btnAgregarEquipo) btnAgregarEquipo.style.display = 'flex';
     }
 
     calcularTotalCosto();
@@ -756,7 +1072,7 @@ async function guardarODS() {
   const idCotizacion = (document.getElementById('ods-cotizacion-ref') as HTMLSelectElement).value;
   const fechaAceptacion = (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).value;
   const fechaTentativa = (document.getElementById('ods-fecha-tentativa') as HTMLInputElement).value;
-  const emitidoPor = (document.getElementById('ods-emitido-por') as HTMLSelectElement).value;
+  const emitidoPor = (document.getElementById('ods-emitido-por') as HTMLInputElement).value;
   const version = (document.getElementById('ods-version') as HTMLInputElement).value;
 
   if (!idCotizacion) {
@@ -810,6 +1126,12 @@ async function guardarODS() {
     version: version || null,
     incluye_igv: incluyeIgv,
     detalles,
+    productos: odsProductoRows
+      .filter(r => r.id_producto > 0 && r.cantidad > 0)
+      .map(r => ({ id_producto: r.id_producto, cantidad: r.cantidad, observacion: r.observacion || null })),
+    equipos: odsEquipoRows
+      .filter(r => r.id_equipo > 0)
+      .map(r => ({ id_equipo: r.id_equipo, observacion: r.observacion || null })),
   };
 
   try {
@@ -895,6 +1217,19 @@ export function initOrdenesServicioEvents() {
 
   // Agregar linea servicio manual
   document.getElementById('btn-agregar-linea-servicio')?.addEventListener('click', agregarLineaVacia);
+
+  // Productos ODS
+  document.getElementById('btn-agregar-producto-ods')?.addEventListener('click', async () => {
+    await cargarProductosDisponiblesODS();
+    agregarProductoODS();
+  });
+  document.getElementById('btn-cargar-receta-ods')?.addEventListener('click', cargarRecetaDesdeServicios);
+
+  // Equipos ODS
+  document.getElementById('btn-agregar-equipo-ods')?.addEventListener('click', async () => {
+    await cargarEquiposDisponiblesODS();
+    agregarEquipoODS();
+  });
 
   // Modal eliminar
   const modalElim = document.getElementById('modal-ods-eliminar') as HTMLElement;

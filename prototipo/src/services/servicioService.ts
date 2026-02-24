@@ -52,4 +52,25 @@ export const servicioService = {
       con_certificado: number;
     }>>('/servicios/estadisticas/resumen');
   },
+
+  // Receta de productos por servicio
+  getProductos: async (idServicio: number) => {
+    return apiClient.get<ApiResponse<any[]>>(`/servicios/${idServicio}/productos`);
+  },
+
+  addProducto: async (idServicio: number, data: { id_producto: number; cantidad_default: number; observacion?: string }) => {
+    return apiClient.post<ApiResponse<any>>(`/servicios/${idServicio}/productos`, data);
+  },
+
+  updateProducto: async (idServicio: number, id: number, data: { cantidad_default?: number; observacion?: string }) => {
+    return apiClient.post<ApiResponse<any>>(`/servicios/${idServicio}/productos/${id}`, { ...data, _method: 'PUT' });
+  },
+
+  deleteProducto: async (idServicio: number, id: number) => {
+    return apiClient.delete<ApiResponse<null>>(`/servicios/${idServicio}/productos/${id}`);
+  },
+
+  syncProductos: async (idServicio: number, productos: { id_producto: number; cantidad_default: number; observacion?: string }[]) => {
+    return apiClient.post<ApiResponse<any>>(`/servicios/${idServicio}/productos/sync`, { productos });
+  },
 };

@@ -23,6 +23,8 @@ use App\Http\Controllers\API\CatalogoCapacitacionAuditoriaController;
 use App\Http\Controllers\API\ProgramacionMantenimientoController;
 use App\Http\Controllers\API\AsistenciaController;
 use App\Http\Controllers\API\HorarioController;
+use App\Http\Controllers\API\KardexController;
+use App\Http\Controllers\API\ServicioProductoController;
 
 // Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
@@ -72,6 +74,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/ordenes-servicio', [OrdenServicioController::class, 'store']);
     Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
     Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
+
+    // Receta de productos por servicio
+    Route::get('/servicios/{idServicio}/productos', [ServicioProductoController::class, 'index']);
+    Route::post('/servicios/{idServicio}/productos', [ServicioProductoController::class, 'store']);
+    Route::put('/servicios/{idServicio}/productos/{id}', [ServicioProductoController::class, 'update']);
+    Route::delete('/servicios/{idServicio}/productos/{id}', [ServicioProductoController::class, 'destroy']);
+    Route::post('/servicios/{idServicio}/productos/sync', [ServicioProductoController::class, 'sync']);
 
     // para las órdenes de capacitación/auditoría :v
     Route::get('/ordenes-capacitacion-auditoria/estadisticas/resumen', [OrdenCapacitacionAuditoriaController::class, 'estadisticas']);
@@ -208,4 +217,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/horarios/{id}', [HorarioController::class, 'show']);
     Route::post('/horarios/{id}', [HorarioController::class, 'store']);
     Route::post('/horarios/{id}/copiar-de/{idOrigen}', [HorarioController::class, 'copiarHorario']);
+
+    // Kardex - movimientos de inventario
+    Route::get('/kardex/estadisticas/resumen', [KardexController::class, 'estadisticas']);
+    Route::get('/kardex/producto/{idProducto}', [KardexController::class, 'porProducto']);
+    Route::get('/kardex', [KardexController::class, 'index']);
+    Route::post('/kardex', [KardexController::class, 'store']);
 });

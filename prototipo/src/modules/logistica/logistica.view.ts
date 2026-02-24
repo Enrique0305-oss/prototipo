@@ -1,6 +1,7 @@
 // Logística View
 import { clienteService } from '../../services/clienteService';
 import { servicioService } from '../../services/servicioService';
+import { productoService } from '../../services/productoService';
 import { catalogoCapAudService } from '../../services/catalogoCapAudService';
 import type { CatalogoCapAud } from '../../services/catalogoCapAudService';
 import { mostrarToast } from '../../shared/toast';
@@ -15,6 +16,8 @@ let catalogoCapAudData: CatalogoCapAud[] = [];
 let filtroSearchCatalogo = '';
 let filtroEstadoCatalogo = 'activo';
 let filtroTipoCatalogo = '';
+let productosDisponiblesReceta: any[] = [];
+let recetaRows: { id_producto: number; cantidad_default: number; observacion: string }[] = [];
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
@@ -224,7 +227,7 @@ export function renderServiciosDisponiblesTab() {
 
     <!-- Modal Crear/Editar Servicio -->
     <div class="modal-overlay" id="modal-servicio" style="display:none;">
-      <div class="modal-container" style="max-width:560px;">
+      <div class="modal-container" style="max-width:720px;max-height:90vh;overflow-y:auto;">
         <div class="modal-header">
           <h2 id="modal-servicio-titulo">Nuevo Servicio</h2>
           <button class="modal-close" id="modal-servicio-cerrar">&times;</button>
@@ -265,6 +268,37 @@ export function renderServiciosDisponiblesTab() {
           <div class="form-group" id="servicio-plantilla-group" style="display:none;">
             <label class="form-label">Plantilla Certificado</label>
             <input type="text" id="servicio-plantilla" class="form-input" maxlength="255" placeholder="Nombre de la plantilla">
+          </div>
+
+          <!-- Materiales / Receta (solo visible al editar) -->
+          <div id="servicio-receta-section" style="display:none;margin-top:20px;padding-top:20px;border-top:1px solid #e2e8f0;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <label class="form-label" style="margin:0;font-size:15px;font-weight:600;color:#1a2332;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                Materiales / Receta
+              </label>
+              <button type="button" class="btn-secondary" id="btn-agregar-receta" style="padding:4px 12px;font-size:13px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Agregar
+              </button>
+            </div>
+            <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Productos que se usan por defecto al ejecutar este servicio.</p>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                  <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                    <th style="text-align:left;padding:8px;width:45%;">Producto</th>
+                    <th style="text-align:center;padding:8px;width:18%;">Cantidad</th>
+                    <th style="text-align:left;padding:8px;width:27%;">Observación</th>
+                    <th style="text-align:center;padding:8px;width:10%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="receta-tbody"></tbody>
+              </table>
+            </div>
+            <div id="receta-empty" style="text-align:center;padding:16px;color:#94a3b8;font-size:13px;display:none;">
+              Sin materiales asignados. Haga clic en "Agregar" para añadir.
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -572,11 +606,96 @@ function limpiarFormServicio() {
   (document.getElementById('servicio-certificado') as HTMLInputElement).checked = false;
   (document.getElementById('servicio-plantilla') as HTMLInputElement).value = '';
   (document.getElementById('servicio-plantilla-group') as HTMLElement).style.display = 'none';
+  // Limpiar receta
+  recetaRows = [];
+  const recetaTbody = document.getElementById('receta-tbody');
+  if (recetaTbody) recetaTbody.innerHTML = '';
+  const recetaSection = document.getElementById('servicio-receta-section');
+  if (recetaSection) recetaSection.style.display = 'none';
+  actualizarRecetaUI();
+}
+
+function actualizarRecetaUI() {
+  const tbody = document.getElementById('receta-tbody');
+  const emptyMsg = document.getElementById('receta-empty');
+  if (!tbody) return;
+  if (recetaRows.length === 0) {
+    tbody.innerHTML = '';
+    if (emptyMsg) emptyMsg.style.display = 'block';
+    return;
+  }
+  if (emptyMsg) emptyMsg.style.display = 'none';
+  tbody.innerHTML = recetaRows.map((r, idx) => {
+    const prodOpts = productosDisponiblesReceta.map(p => {
+      const sel = p.id === r.id_producto ? 'selected' : '';
+      return `<option value="${p.id}" ${sel}>${p.descripcion}${p.unidad ? ' (' + p.unidad + ')' : ''}</option>`;
+    }).join('');
+    return `<tr data-receta-idx="${idx}">
+      <td style="padding:6px 8px;"><select class="form-input receta-prod-select" data-idx="${idx}" style="padding:6px 8px;font-size:13px;"><option value="">Seleccione...</option>${prodOpts}</select></td>
+      <td style="padding:6px 8px;text-align:center;"><input type="number" class="form-input receta-cant-input" data-idx="${idx}" value="${r.cantidad_default}" min="0.01" step="0.01" style="width:80px;text-align:center;padding:6px;font-size:13px;"></td>
+      <td style="padding:6px 8px;"><input type="text" class="form-input receta-obs-input" data-idx="${idx}" value="${r.observacion || ''}" maxlength="200" style="padding:6px 8px;font-size:13px;" placeholder="Opcional"></td>
+      <td style="padding:6px 8px;text-align:center;"><button type="button" class="btn-icon receta-remove-btn" data-idx="${idx}" style="color:#ef4444;" title="Eliminar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
+    </tr>`;
+  }).join('');
+  bindRecetaEvents();
+}
+
+function bindRecetaEvents() {
+  document.querySelectorAll('.receta-prod-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const idx = Number((e.target as HTMLSelectElement).dataset.idx);
+      recetaRows[idx].id_producto = Number((e.target as HTMLSelectElement).value);
+    });
+  });
+  document.querySelectorAll('.receta-cant-input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = Number((e.target as HTMLInputElement).dataset.idx);
+      recetaRows[idx].cantidad_default = parseFloat((e.target as HTMLInputElement).value) || 0;
+    });
+  });
+  document.querySelectorAll('.receta-obs-input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = Number((e.target as HTMLInputElement).dataset.idx);
+      recetaRows[idx].observacion = (e.target as HTMLInputElement).value;
+    });
+  });
+  document.querySelectorAll('.receta-remove-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = Number((e.currentTarget as HTMLElement).dataset.idx);
+      recetaRows.splice(idx, 1);
+      actualizarRecetaUI();
+    });
+  });
+}
+
+function agregarFilaReceta() {
+  recetaRows.push({ id_producto: 0, cantidad_default: 1, observacion: '' });
+  actualizarRecetaUI();
+  // Focus the last product select
+  const selects = document.querySelectorAll('.receta-prod-select');
+  if (selects.length > 0) (selects[selects.length - 1] as HTMLSelectElement).focus();
+}
+
+async function cargarProductosParaReceta() {
+  if (productosDisponiblesReceta.length > 0) return;
+  try {
+    const res = await productoService.getAll({ estado: 'Activo', per_page: 500 });
+    const raw = res.data || res;
+    productosDisponiblesReceta = Array.isArray(raw) ? raw : (raw as any).data || [];
+  } catch (e) {
+    console.error('Error cargando productos para receta:', e);
+    productosDisponiblesReceta = [];
+  }
 }
 
 function abrirModalNuevoServicio() {
   limpiarFormServicio();
   (document.getElementById('modal-servicio-titulo') as HTMLElement).textContent = 'Nuevo Servicio';
+  // Mostrar sección receta también al crear
+  const recetaSection = document.getElementById('servicio-receta-section');
+  if (recetaSection) recetaSection.style.display = 'block';
+  recetaRows = [];
+  actualizarRecetaUI();
   (document.getElementById('modal-servicio') as HTMLElement).style.display = 'flex';
 }
 
@@ -601,6 +720,28 @@ async function abrirModalEditarServicio(id: number) {
       plantillaGroup.style.display = 'block';
       (document.getElementById('servicio-plantilla') as HTMLInputElement).value = s.plantilla_certificado || '';
     }
+
+    // Mostrar sección receta y cargar datos
+    const recetaSection = document.getElementById('servicio-receta-section');
+    if (recetaSection) recetaSection.style.display = 'block';
+
+    await cargarProductosParaReceta();
+
+    // Cargar receta existente
+    try {
+      const recetaRes = await servicioService.getProductos(s.id);
+      const recetaRaw = recetaRes.data || recetaRes;
+      const recetaData: any[] = Array.isArray(recetaRaw) ? recetaRaw : (recetaRaw as any).data || [];
+      recetaRows = recetaData.map((r: any) => ({
+        id_producto: r.id_producto,
+        cantidad_default: Number(r.cantidad_default),
+        observacion: r.observacion || '',
+      }));
+    } catch (e) {
+      console.error('Error cargando receta:', e);
+      recetaRows = [];
+    }
+    actualizarRecetaUI();
 
     (document.getElementById('modal-servicio') as HTMLElement).style.display = 'flex';
   } catch (error) {
@@ -644,9 +785,40 @@ async function guardarServicio() {
   try {
     if (id) {
       await servicioService.update(Number(id), payload);
+
+      // Sincronizar receta de materiales
+      const recetaValida = recetaRows.filter(r => r.id_producto > 0 && r.cantidad_default > 0);
+      try {
+        await servicioService.syncProductos(Number(id), recetaValida.map(r => ({
+          id_producto: r.id_producto,
+          cantidad_default: r.cantidad_default,
+          observacion: r.observacion || undefined,
+        })));
+      } catch (recetaError) {
+        console.error('Error sincronizando receta:', recetaError);
+        mostrarToast('error', 'Advertencia', 'Servicio guardado pero hubo error al guardar los materiales');
+      }
+
       mostrarToast('success', 'Servicio Actualizado', 'El servicio se actualizó correctamente');
     } else {
-      await servicioService.create(payload);
+      const createRes = await servicioService.create(payload);
+      const createdRaw = createRes.data || createRes;
+      const created = (createdRaw as any).data || createdRaw;
+
+      // Si hay receta, sincronizarla con el nuevo servicio
+      const recetaValida = recetaRows.filter(r => r.id_producto > 0 && r.cantidad_default > 0);
+      if (created.id && recetaValida.length > 0) {
+        try {
+          await servicioService.syncProductos(created.id, recetaValida.map(r => ({
+            id_producto: r.id_producto,
+            cantidad_default: r.cantidad_default,
+            observacion: r.observacion || undefined,
+          })));
+        } catch (recetaError) {
+          console.error('Error sincronizando receta:', recetaError);
+        }
+      }
+
       mostrarToast('success', 'Servicio Creado', 'El servicio se creó correctamente');
     }
     (document.getElementById('modal-servicio') as HTMLElement).style.display = 'none';
@@ -722,6 +894,15 @@ export function initServiciosTabEvents() {
     checkCertificado.addEventListener('change', () => {
       const group = document.getElementById('servicio-plantilla-group') as HTMLElement;
       group.style.display = checkCertificado.checked ? 'block' : 'none';
+    });
+  }
+
+  // Botón agregar material a receta
+  const btnAgregarReceta = document.getElementById('btn-agregar-receta');
+  if (btnAgregarReceta) {
+    btnAgregarReceta.addEventListener('click', async () => {
+      await cargarProductosParaReceta();
+      agregarFilaReceta();
     });
   }
 

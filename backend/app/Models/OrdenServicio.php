@@ -67,6 +67,16 @@ class OrdenServicio extends Model
         return $this->hasMany(Proyeccion::class, 'id_orden_servicio');
     }
 
+    public function productos()
+    {
+        return $this->hasMany(OrdenServicioProducto::class, 'id_orden_servicio');
+    }
+
+    public function equipos()
+    {
+        return $this->hasMany(OrdenServicioEquipo::class, 'id_orden_servicio');
+    }
+
     // Generar número de orden
     public static function generarNumero()
     {

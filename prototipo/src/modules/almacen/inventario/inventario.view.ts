@@ -1,6 +1,7 @@
 import { productoService } from '../../../services/productoService';
 import { categoriaService } from '../../../services/categoriaService';
 import { mostrarToast } from '../../../shared/toast';
+import { kardexService, type KardexMovimiento } from '../../../services/kardexService';
 import type { Producto, EstadisticasProductos, Categoria } from '../../../core/api/types';
 
 // Estado global para el módulo de inventario
@@ -111,52 +112,69 @@ export function renderProductosTab() {
 // Vista de Kardex (Tab 2)
 export function renderKardexTab() {
   return `
-    <!-- Filters -->
-      <div class="op-filters-bar">
-        <div class="op-search-box">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="m21 21-4.35-4.35"></path>
-          </svg>
-          <input type="text" placeholder="Buscar por nombre o ID..." class="op-search-input">
+    <div class="stats-row" id="kardex-stats" style="margin-bottom: 24px;">
+      <div class="stat-box">
+        <div class="stat-box-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
         </div>
-
-        <div class="op-filter-group">
-          <select class="op-filter-select">
-            <option value="">Todos los estados</option>
-            <option value="al-dia">Al día</option>
-            <option value="proximo">Próximo</option>
-            <option value="vencido">Vencido</option>
-          </select>
-
-          <select class="op-filter-select">
-            <option value="">Todas las garantías</option>
-            <option value="vigente">Vigente</option>
-            <option value="vencer">Por Vencer</option>
-            <option value="expirada">Expirada</option>
-          </select>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Total Movimientos</div>
+          <div class="stat-box-value" id="kardex-total">—</div>
         </div>
       </div>
+      <div class="stat-box">
+        <div class="stat-box-icon green">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Entradas (Mes)</div>
+          <div class="stat-box-value" id="kardex-entradas">—</div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-icon orange">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Salidas (Mes)</div>
+          <div class="stat-box-value" id="kardex-salidas">—</div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-icon blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Movimientos Hoy</div>
+          <div class="stat-box-value" id="kardex-hoy">—</div>
+        </div>
+      </div>
+    </div>
 
-    <div class="kardex-header">
-      <h3>Kardex: Cipermetrina 25% EC</h3>
-      <div class="kardex-summary">
-        <div class="kardex-stat">
-          <span class="kardex-label">Stock Inicial:</span>
-          <span class="kardex-value">50 Litros</span>
-        </div>
-        <div class="kardex-stat">
-          <span class="kardex-label">Total Entradas:</span>
-          <span class="kardex-value positive">+20 Litros</span>
-        </div>
-        <div class="kardex-stat">
-          <span class="kardex-label">Total Salidas:</span>
-          <span class="kardex-value negative">-25 Litros</span>
-        </div>
-        <div class="kardex-stat">
-          <span class="kardex-label">Stock Actual:</span>
-          <span class="kardex-value current">45 Litros</span>
-        </div>
+    <!-- Filters -->
+    <div class="op-filters-bar">
+      <div class="op-search-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        <input type="text" id="kardex-search" placeholder="Buscar por producto o motivo..." class="op-search-input">
+      </div>
+
+      <div class="op-filter-group">
+        <select class="op-filter-select" id="kardex-tipo-filter">
+          <option value="">Todos los tipos</option>
+          <option value="Entrada">Entradas</option>
+          <option value="Salida">Salidas</option>
+        </select>
+
+        <input type="date" id="kardex-fecha-desde" class="op-filter-select" title="Fecha desde">
+        <input type="date" id="kardex-fecha-hasta" class="op-filter-select" title="Fecha hasta">
+
+        <button class="btn-primary" id="btn-buscar-kardex" style="padding: 8px 16px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+          Buscar
+        </button>
       </div>
     </div>
 
@@ -165,81 +183,143 @@ export function renderKardexTab() {
         <thead>
           <tr>
             <th>FECHA</th>
-            <th>DETALLE</th>
+            <th>PRODUCTO</th>
             <th>TIPO</th>
-            <th>ENTRADAS</th>
-            <th>SALIDAS</th>
-            <th>SALDO</th>
-            <th>RESPONSABLE</th>
-            <th>DOCUMENTO</th>
+            <th>CANTIDAD</th>
+            <th>STOCK ANT.</th>
+            <th>STOCK POST.</th>
+            <th>MOTIVO</th>
+            <th>REFERENCIA</th>
+            <th>USUARIO</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="kardex-table-body">
           <tr>
-            <td>01/01/2025</td>
-            <td>Stock inicial del período</td>
-            <td><span class="badge">Inicial</span></td>
-            <td>-</td>
-            <td>-</td>
-            <td class="saldo">50</td>
-            <td>Sistema</td>
-            <td>-</td>
-          </tr>
-          <tr>
-            <td>15/01/2025</td>
-            <td>Compra QuímicaPeru S.A.C.</td>
-            <td><span class="badge green">Entrada</span></td>
-            <td class="entrada">+20</td>
-            <td>-</td>
-            <td class="saldo">70</td>
-            <td>Carlos López</td>
-            <td>FC-001-245</td>
-          </tr>
-          <tr>
-            <td>18/01/2025</td>
-            <td>OS-2025-089 - Logística Transandina</td>
-            <td><span class="badge orange">Salida</span></td>
-            <td>-</td>
-            <td class="salida">-8</td>
-            <td class="saldo">62</td>
-            <td>Juan Ramírez</td>
-            <td>OS-2025-089</td>
-          </tr>
-          <tr>
-            <td>22/01/2025</td>
-            <td>OS-2025-095 - Farmacéutica Central</td>
-            <td><span class="badge orange">Salida</span></td>
-            <td>-</td>
-            <td class="salida">-12</td>
-            <td class="saldo">50</td>
-            <td>María Soto</td>
-            <td>OS-2025-095</td>
-          </tr>
-          <tr>
-            <td>28/01/2025</td>
-            <td>OS-2025-112 - Hotel Plaza</td>
-            <td><span class="badge orange">Salida</span></td>
-            <td>-</td>
-            <td class="salida">-5</td>
-            <td class="saldo">45</td>
-            <td>Pedro López</td>
-            <td>OS-2025-112</td>
+            <td colspan="9" style="text-align: center; padding: 40px;">
+              <div class="loading-text">Cargando movimientos...</div>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div class="pagination">
-      <span class="pagination-info">Mostrando 1-10 de 28 movimientos</span>
-      <div class="pagination-controls">
-        <button class="pagination-btn" disabled>Anterior</button>
-        <button class="pagination-btn active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">3</button>
-        <button class="pagination-btn">Siguiente</button>
-      </div>
+    <div class="pagination" id="kardex-pagination">
+      <span class="pagination-info" id="kardex-pagination-info">—</span>
     </div>
   `;
+}
+
+// Estado local de Kardex
+let kardexData: KardexMovimiento[] = [];
+
+export async function initKardexEvents() {
+  // Cargar estadísticas y movimientos en paralelo
+  await Promise.all([
+    loadKardexEstadisticas(),
+    loadKardexMovimientos(),
+  ]);
+
+  // Event listeners para filtros
+  const btnBuscar = document.getElementById('btn-buscar-kardex');
+  if (btnBuscar) {
+    btnBuscar.addEventListener('click', () => loadKardexMovimientos());
+  }
+
+  // Enter en campo de búsqueda
+  const searchInput = document.getElementById('kardex-search') as HTMLInputElement;
+  if (searchInput) {
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadKardexMovimientos();
+    });
+  }
+}
+
+async function loadKardexEstadisticas() {
+  try {
+    const res = await kardexService.getEstadisticas();
+    if (res.success) {
+      const s = res.data;
+      const setVal = (id: string, val: string | number) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(val);
+      };
+      setVal('kardex-total', s.total_movimientos);
+      setVal('kardex-entradas', s.entradas_mes);
+      setVal('kardex-salidas', s.salidas_mes);
+      setVal('kardex-hoy', s.movimientos_hoy);
+    }
+  } catch (err) {
+    console.error('Error cargando estadísticas kardex:', err);
+  }
+}
+
+async function loadKardexMovimientos() {
+  const tbody = document.getElementById('kardex-table-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;"><div class="loading-text">Cargando movimientos...</div></td></tr>`;
+
+  // Recoger filtros
+  const search = (document.getElementById('kardex-search') as HTMLInputElement)?.value || '';
+  const tipo = (document.getElementById('kardex-tipo-filter') as HTMLSelectElement)?.value || '';
+  const fechaDesde = (document.getElementById('kardex-fecha-desde') as HTMLInputElement)?.value || '';
+  const fechaHasta = (document.getElementById('kardex-fecha-hasta') as HTMLInputElement)?.value || '';
+
+  const filtros: Record<string, string> = {};
+  if (tipo) filtros.tipo_movimiento = tipo;
+  if (fechaDesde) filtros.fecha_desde = fechaDesde;
+  if (fechaHasta) filtros.fecha_hasta = fechaHasta;
+  if (search) filtros.motivo = search;
+
+  try {
+    const res = await kardexService.getAll(filtros as any);
+
+    if (res.success) {
+      kardexData = res.data;
+      renderKardexRows(kardexData);
+    }
+  } catch (err) {
+    console.error('Error cargando kardex:', err);
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar movimientos</td></tr>`;
+  }
+}
+
+function renderKardexRows(movimientos: KardexMovimiento[]) {
+  const tbody = document.getElementById('kardex-table-body');
+  if (!tbody) return;
+
+  if (movimientos.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:#64748b;">No se encontraron movimientos de kardex</td></tr>`;
+    const infoEl = document.getElementById('kardex-pagination-info');
+    if (infoEl) infoEl.textContent = '0 movimientos';
+    return;
+  }
+
+  tbody.innerHTML = movimientos.map(mov => {
+    const fecha = new Date(mov.fecha_movimiento).toLocaleDateString('es-PE', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    const tipoClass = mov.tipo_movimiento === 'Entrada' ? 'green' : 'orange';
+    const cantSign = mov.tipo_movimiento === 'Entrada' ? '+' : '-';
+    const cantClass = mov.tipo_movimiento === 'Entrada' ? 'entrada' : 'salida';
+
+    return `
+      <tr>
+        <td>${fecha}</td>
+        <td>${mov.producto}</td>
+        <td><span class="badge ${tipoClass}">${mov.tipo_movimiento}</span></td>
+        <td class="${cantClass}">${cantSign}${mov.cantidad}</td>
+        <td>${mov.stock_anterior}</td>
+        <td>${mov.stock_posterior}</td>
+        <td>${mov.motivo}</td>
+        <td>${mov.referencia || '—'}</td>
+        <td>${mov.usuario}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const infoEl = document.getElementById('kardex-pagination-info');
+  if (infoEl) infoEl.textContent = `Mostrando ${movimientos.length} movimiento${movimientos.length !== 1 ? 's' : ''}`;
 }
 
 // Vista de Categorías (Tab 3)

@@ -46,6 +46,15 @@ export const ordenServicioService = {
       frecuencia?: string;
       precio: number;
     }[];
+    productos?: {
+      id_producto: number;
+      cantidad: number;
+      observacion?: string;
+    }[];
+    equipos?: {
+      id_equipo: number;
+      observacion?: string;
+    }[];
   }) => {
     return apiClient.post<ApiResponse<OrdenServicio>>('/ordenes-servicio', data);
   },

@@ -35,6 +35,9 @@ export const API_ENDPOINTS = {
     mantenimiento: '/almacen/mantenimiento',
     proveedores: '/almacen/proveedores',
   },
+
+  // Kardex
+  kardex: '/kardex',
   
   // Logística
   logistica: {

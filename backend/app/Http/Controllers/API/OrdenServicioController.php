@@ -5,8 +5,12 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\OrdenServicio;
 use App\Models\DetalleOrdenServicio;
+use App\Models\OrdenServicioProducto;
+use App\Models\OrdenServicioEquipo;
 use App\Models\Cotizacion;
 use App\Models\CotizacionDetalle;
+use App\Models\Inventario;
+use App\Models\Kardex;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -203,6 +207,14 @@ class OrdenServicioController extends Controller
             'detalles.*.frecuencia' => 'nullable|string|max:100',
             'detalles.*.precio' => 'required|numeric|min:0',
             'incluye_igv' => 'sometimes|boolean',
+            // Productos y equipos
+            'productos' => 'sometimes|array',
+            'productos.*.id_producto' => 'required_with:productos|integer|exists:productos,id',
+            'productos.*.cantidad' => 'required_with:productos|numeric|min:0.01',
+            'productos.*.observacion' => 'nullable|string|max:255',
+            'equipos' => 'sometimes|array',
+            'equipos.*.id_equipo' => 'required_with:equipos|integer|exists:equipo,id',
+            'equipos.*.observacion' => 'nullable|string|max:255',
         ]);
 
         // Verificar que la cotización sea tipo Servicio
@@ -225,6 +237,27 @@ class OrdenServicioController extends Controller
 
         try {
             DB::beginTransaction();
+
+            // Validar stock de productos si se envían
+            if (!empty($validated['productos'])) {
+                $erroresStock = [];
+                foreach ($validated['productos'] as $prod) {
+                    $inventario = Inventario::where('id_productos', $prod['id_producto'])->first();
+                    $disponible = $inventario ? $inventario->cantidad_disponible : 0;
+                    if ($disponible < $prod['cantidad']) {
+                        $producto = \App\Models\Producto::find($prod['id_producto']);
+                        $erroresStock[] = "{$producto->descripcion}: solicitas {$prod['cantidad']}, disponible {$disponible}";
+                    }
+                }
+                if (!empty($erroresStock)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Stock insuficiente',
+                        'errors' => $erroresStock,
+                    ], 422);
+                }
+            }
 
             // Calcular total con IGV
             $subtotal = 0;
@@ -252,7 +285,7 @@ class OrdenServicioController extends Controller
                 'estado' => 'Aprobado',
             ]);
 
-            // Crear detalles
+            // Crear detalles de servicios
             foreach ($validated['detalles'] as $detalle) {
                 DetalleOrdenServicio::create([
                     'id_orden_servicio' => $orden->id,
@@ -263,10 +296,45 @@ class OrdenServicioController extends Controller
                 ]);
             }
 
+            // Registrar productos + Kardex Salida
+            $idUsuario = $request->user()?->id;
+            if (!empty($validated['productos'])) {
+                foreach ($validated['productos'] as $prod) {
+                    OrdenServicioProducto::create([
+                        'id_orden_servicio' => $orden->id,
+                        'id_producto' => $prod['id_producto'],
+                        'cantidad' => $prod['cantidad'],
+                        'observacion' => $prod['observacion'] ?? null,
+                    ]);
+
+                    Kardex::registrarMovimiento([
+                        'id_producto' => $prod['id_producto'],
+                        'tipo_movimiento' => 'Salida',
+                        'cantidad' => $prod['cantidad'],
+                        'motivo' => 'Orden Servicio',
+                        'referencia' => $orden->numero_orden,
+                        'id_referencia' => $orden->id,
+                        'id_usuario' => $idUsuario,
+                        'observacion' => "Salida por {$orden->numero_orden}",
+                    ]);
+                }
+            }
+
+            // Registrar equipos asignados
+            if (!empty($validated['equipos'])) {
+                foreach ($validated['equipos'] as $eq) {
+                    OrdenServicioEquipo::create([
+                        'id_orden_servicio' => $orden->id,
+                        'id_equipo' => $eq['id_equipo'],
+                        'observacion' => $eq['observacion'] ?? null,
+                    ]);
+                }
+            }
+
             DB::commit();
 
             // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion', 'productos.producto', 'equipos.equipo']);
 
             return response()->json([
                 'success' => true,
@@ -294,7 +362,9 @@ class OrdenServicioController extends Controller
             'cliente', 
             'emisor', 
             'cotizacion',
-            'detalles.servicio'
+            'detalles.servicio',
+            'productos.producto',
+            'equipos.equipo'
         ])->find($id);
 
         if (!$orden) {
@@ -336,6 +406,14 @@ class OrdenServicioController extends Controller
             'detalles.*.precio' => 'required_with:detalles|numeric|min:0',
             'incluye_igv' => 'sometimes|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
+            // Productos y equipos
+            'productos' => 'sometimes|array',
+            'productos.*.id_producto' => 'required_with:productos|integer|exists:productos,id',
+            'productos.*.cantidad' => 'required_with:productos|numeric|min:0.01',
+            'productos.*.observacion' => 'nullable|string|max:255',
+            'equipos' => 'sometimes|array',
+            'equipos.*.id_equipo' => 'required_with:equipos|integer|exists:equipo,id',
+            'equipos.*.observacion' => 'nullable|string|max:255',
         ]);
 
         try {
@@ -394,11 +472,84 @@ class OrdenServicioController extends Controller
                 $orden->total_costo = $subtotal + $igv;
             }
 
+            // Actualizar productos si se envían
+            $idUsuario = $request->user()?->id;
+            if (isset($validated['productos'])) {
+                // 1. Revertir stock de productos anteriores (Kardex Entrada)
+                foreach ($orden->productos as $prodAnterior) {
+                    Kardex::registrarMovimiento([
+                        'id_producto' => $prodAnterior->id_producto,
+                        'tipo_movimiento' => 'Entrada',
+                        'cantidad' => $prodAnterior->cantidad,
+                        'motivo' => 'Ajuste Orden Servicio',
+                        'referencia' => $orden->numero_orden,
+                        'id_referencia' => $orden->id,
+                        'id_usuario' => $idUsuario,
+                        'observacion' => "Devolución por edición de {$orden->numero_orden}",
+                    ]);
+                }
+
+                // 2. Validar stock para nuevos productos
+                $erroresStock = [];
+                foreach ($validated['productos'] as $prod) {
+                    $inventario = Inventario::where('id_productos', $prod['id_producto'])->first();
+                    $disponible = $inventario ? $inventario->cantidad_disponible : 0;
+                    if ($disponible < $prod['cantidad']) {
+                        $producto = \App\Models\Producto::find($prod['id_producto']);
+                        $erroresStock[] = "{$producto->descripcion}: solicitas {$prod['cantidad']}, disponible {$disponible}";
+                    }
+                }
+                if (!empty($erroresStock)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Stock insuficiente para los nuevos productos',
+                        'errors' => $erroresStock,
+                    ], 422);
+                }
+
+                // 3. Eliminar productos anteriores
+                $orden->productos()->delete();
+
+                // 4. Crear nuevos + Kardex Salida
+                foreach ($validated['productos'] as $prod) {
+                    OrdenServicioProducto::create([
+                        'id_orden_servicio' => $orden->id,
+                        'id_producto' => $prod['id_producto'],
+                        'cantidad' => $prod['cantidad'],
+                        'observacion' => $prod['observacion'] ?? null,
+                    ]);
+
+                    Kardex::registrarMovimiento([
+                        'id_producto' => $prod['id_producto'],
+                        'tipo_movimiento' => 'Salida',
+                        'cantidad' => $prod['cantidad'],
+                        'motivo' => 'Orden Servicio',
+                        'referencia' => $orden->numero_orden,
+                        'id_referencia' => $orden->id,
+                        'id_usuario' => $idUsuario,
+                        'observacion' => "Salida por edición de {$orden->numero_orden}",
+                    ]);
+                }
+            }
+
+            // Actualizar equipos si se envían
+            if (isset($validated['equipos'])) {
+                $orden->equipos()->delete();
+                foreach ($validated['equipos'] as $eq) {
+                    OrdenServicioEquipo::create([
+                        'id_orden_servicio' => $orden->id,
+                        'id_equipo' => $eq['id_equipo'],
+                        'observacion' => $eq['observacion'] ?? null,
+                    ]);
+                }
+            }
+
             $orden->save();
 
             DB::commit();
 
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion', 'productos.producto', 'equipos.equipo']);
 
             return response()->json([
                 'success' => true,
@@ -434,7 +585,24 @@ class OrdenServicioController extends Controller
         try {
             DB::beginTransaction();
 
-            // Eliminar detalles
+            // Restaurar stock por cada producto (Kardex Entrada)
+            $idUsuario = request()->user()?->id;
+            foreach ($orden->productos as $prod) {
+                Kardex::registrarMovimiento([
+                    'id_producto' => $prod->id_producto,
+                    'tipo_movimiento' => 'Entrada',
+                    'cantidad' => $prod->cantidad,
+                    'motivo' => 'Anulación Orden Servicio',
+                    'referencia' => $orden->numero_orden,
+                    'id_referencia' => $orden->id,
+                    'id_usuario' => $idUsuario,
+                    'observacion' => "Devolución por anulación de {$orden->numero_orden}",
+                ]);
+            }
+
+            // Eliminar productos, equipos y detalles
+            $orden->productos()->delete();
+            $orden->equipos()->delete();
             $orden->detalles()->delete();
             
             // Eliminar orden
