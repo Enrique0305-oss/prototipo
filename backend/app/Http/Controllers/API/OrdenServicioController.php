@@ -479,4 +479,19 @@ class OrdenServicioController extends Controller
             'data' => $stats
         ]);
     }
+
+    public function generarPDF($id)
+    {
+        $orden = OrdenServicio::with(['cliente', 'detalles.servicio', 'emisor', 'cotizacion'])->findOrFail($id);
+        
+        $multicim = [
+            'nombre_empresa' => 'CONTROL DE PLAGAS Y SANEAMIENTO AMBIENTAL',
+        ];
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('OrdenServicioPDF', compact('orden', 'multicim'));
+
+        $pdf->setPaper('a4', 'portrait');
+
+        return $pdf->stream('Orden_Servicio_'.$orden->numero_orden.'.pdf');
+    }
 }
