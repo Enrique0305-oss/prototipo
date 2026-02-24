@@ -37,6 +37,11 @@ class Equipo extends Model
         return $this->hasMany(ProgramacionMantenimiento::class, 'id_equipo');
     }
 
+    public function ordenesServicio()
+    {
+        return $this->hasMany(OrdenServicioEquipo::class, 'id_equipo');
+    }
+
     // Scopes
     public function scopeActivos($query)
     {

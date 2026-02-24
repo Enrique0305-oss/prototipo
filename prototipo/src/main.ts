@@ -10,7 +10,7 @@ import { renderProgramaciones, initProgramacionesEvents } from './modules/progra
 import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios } from './modules/recursos-humanos/recursos-humanos.view'
 // Almacén
 import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
-import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents } from './modules/almacen/inventario/inventario.view'
+import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents, initKardexEvents } from './modules/almacen/inventario/inventario.view'
 import { renderAlmacenProveedores } from './modules/almacen/proveedores/proveedores.view'
 import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './modules/almacen/entradas-salidas/entradas-salidas.view'
 // Logística
@@ -404,6 +404,7 @@ function updateInventoryTabContent() {
   switch (activeInventoryTab) {
     case 'kardex':
       tabContent.innerHTML = renderKardexTab();
+      setTimeout(() => initKardexEvents(), 0);
       break;
     case 'categorias':
       tabContent.innerHTML = renderCategoriasTab();
