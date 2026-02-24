@@ -1,0 +1,729 @@
+<?php
+
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Controller;
+use App\Models\ProgramacionServicio;
+use App\Models\ProgramacionInsumo;
+use App\Models\ProgramacionTecnico;
+use App\Models\OrdenServicio;
+use App\Models\DetalleOrdenServicio;
+use App\Models\ServicioProducto;
+use App\Models\Kardex;
+use App\Models\Inventario;
+use App\Models\Tecnico;
+use App\Models\Vehiculo;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
+
+class ProgramacionServicioController extends Controller
+{
+    /**
+     * Listar programaciones con filtros
+     */
+    public function index(Request $request)
+    {
+        $query = ProgramacionServicio::with([
+            'ordenServicio.cliente',
+            'servicio',
+            'tecnico',
+            'tecnicos',
+            'supervisor',
+            'vehiculo',
+            'insumos.producto',
+        ]);
+
+        // Filtro por fecha exacta
+        if ($request->filled('fecha')) {
+            $query->whereDate('fecha_programada', $request->fecha);
+        }
+
+        // Filtro por rango de fechas
+        if ($request->filled('fecha_inicio') && $request->filled('fecha_fin')) {
+            $query->whereBetween('fecha_programada', [$request->fecha_inicio, $request->fecha_fin]);
+        }
+
+        // Filtro por mes/año
+        if ($request->filled('mes') && $request->filled('anio')) {
+            $query->whereMonth('fecha_programada', $request->mes)
+                  ->whereYear('fecha_programada', $request->anio);
+        } elseif ($request->filled('anio')) {
+            $query->whereYear('fecha_programada', $request->anio);
+        }
+
+        // Filtro por técnico (busca en principal o en la tabla pivot)
+        if ($request->filled('id_tecnico')) {
+            $idTec = $request->id_tecnico;
+            $query->where(function ($q) use ($idTec) {
+                $q->where('id_tecnico_asignado', $idTec)
+                  ->orWhereHas('tecnicos', fn($q2) => $q2->where('tecnicos.id', $idTec));
+            });
+        }
+
+        // Filtro por estado
+        if ($request->filled('estado')) {
+            $query->where('estado_ejecucion', $request->estado);
+        }
+
+        // Filtro por orden de servicio
+        if ($request->filled('id_orden_servicio')) {
+            $query->where('id_orden_servicio', $request->id_orden_servicio);
+        }
+
+        // Filtro por servicio
+        if ($request->filled('id_servicio')) {
+            $query->where('id_servicio', $request->id_servicio);
+        }
+
+        $programaciones = $query->orderBy('fecha_programada', 'asc')
+                                ->orderBy('hora_inicio', 'asc')
+                                ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $programaciones,
+        ]);
+    }
+
+    /**
+     * Ver detalle de una programación
+     */
+    public function show($id)
+    {
+        $prog = ProgramacionServicio::with([
+            'ordenServicio.cliente',
+            'ordenServicio.detalles.servicio',
+            'servicio',
+            'tecnico',
+            'tecnicos',
+            'supervisor',
+            'vehiculo',
+            'insumos.producto',
+            'creador',
+        ])->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $prog,
+        ]);
+    }
+
+    /**
+     * Crear programación individual
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'id_orden_servicio' => 'required|integer|exists:orden_servicio,id',
+            'id_servicio'       => 'required|integer|exists:servicios,id',
+            'id_tecnico_asignado' => 'required|integer|exists:tecnicos,id',
+            'tecnicos_ids'      => 'nullable|array',
+            'tecnicos_ids.*'    => 'integer|exists:tecnicos,id',
+            'id_supervisor'     => 'nullable|integer',
+            'id_vehiculo'       => 'nullable|integer|exists:vehiculos,id',
+            'fecha_programada'  => 'required|date',
+            'hora_inicio'       => 'required',
+            'hora_fin'          => 'nullable',
+            'local_sede'        => 'nullable|string|max:150',
+            'direccion_completa'=> 'nullable|string|max:255',
+            'coordenadas'       => 'nullable|string|max:50',
+            'observaciones'     => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $idUsuario = $request->user()?->id;
+
+            // Crear la programación
+            $prog = ProgramacionServicio::create([
+                'id_orden_servicio'  => $validated['id_orden_servicio'],
+                'id_servicio'        => $validated['id_servicio'],
+                'id_tecnico_asignado'=> $validated['id_tecnico_asignado'],
+                'id_supervisor'      => $validated['id_supervisor'] ?? null,
+                'id_vehiculo'        => $validated['id_vehiculo'] ?? null,
+                'fecha_programada'   => $validated['fecha_programada'],
+                'hora_inicio'        => $validated['hora_inicio'],
+                'hora_fin'           => $validated['hora_fin'] ?? null,
+                'local_sede'         => $validated['local_sede'] ?? null,
+                'direccion_completa' => $validated['direccion_completa'] ?? null,
+                'coordenadas'        => $validated['coordenadas'] ?? null,
+                'estado_ejecucion'   => 'Programado',
+                'observaciones'      => $validated['observaciones'] ?? null,
+                'creado_por'         => $idUsuario,
+            ]);
+
+            // Sincronizar técnicos en la tabla pivot
+            $this->syncTecnicos($prog, $validated['id_tecnico_asignado'], $validated['tecnicos_ids'] ?? []);
+
+            // Asignar insumos desde la receta del servicio
+            $this->asignarInsumosDesdeReceta($prog, $idUsuario);
+
+            // Cambiar estado de la ODS a "Programado" si estaba "Aprobado"
+            $orden = OrdenServicio::find($validated['id_orden_servicio']);
+            if ($orden && $orden->estado === 'Aprobado') {
+                $orden->estado = 'Programado';
+                $orden->save();
+            }
+
+            DB::commit();
+
+            $prog->load([
+                'ordenServicio.cliente',
+                'servicio',
+                'tecnico',
+                'tecnicos',
+                'supervisor',
+                'vehiculo',
+                'insumos.producto',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Programación creada exitosamente',
+                'data' => $prog,
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear programación: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Programación anual — crear N programaciones según frecuencia
+     */
+    public function storeAnual(Request $request)
+    {
+        $validated = $request->validate([
+            'id_orden_servicio'   => 'required|integer|exists:orden_servicio,id',
+            'id_servicio'         => 'required|integer|exists:servicios,id',
+            'frecuencia'          => 'required|string',
+            'id_tecnico_asignado' => 'required|integer|exists:tecnicos,id',
+            'tecnicos_ids'        => 'nullable|array',
+            'tecnicos_ids.*'      => 'integer|exists:tecnicos,id',
+            'id_supervisor'       => 'nullable|integer',
+            'id_vehiculo'         => 'nullable|integer|exists:vehiculos,id',
+            'fecha_inicio'        => 'required|date',
+            'hora_inicio'         => 'required',
+            'hora_fin'            => 'nullable',
+            'local_sede'          => 'nullable|string|max:150',
+            'direccion_completa'  => 'nullable|string|max:255',
+            'coordenadas'         => 'nullable|string|max:50',
+            'observaciones'       => 'nullable|string',
+        ]);
+
+        // Calcular fechas
+        $fechas = $this->calcularFechasPorFrecuencia(
+            $validated['frecuencia'],
+            $validated['fecha_inicio']
+        );
+
+        if (empty($fechas)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudieron calcular fechas para la frecuencia indicada.',
+            ], 422);
+        }
+
+        // Validar stock total necesario
+        $receta = ServicioProducto::where('id_servicio', $validated['id_servicio'])->get();
+        $alertasStock = [];
+        foreach ($receta as $item) {
+            $necesario = $item->cantidad_default * count($fechas);
+            $inv = Inventario::where('id_productos', $item->id_producto)->first();
+            $disponible = $inv ? $inv->cantidad_disponible : 0;
+            if ($necesario > $disponible) {
+                $alertasStock[] = [
+                    'id_producto' => $item->id_producto,
+                    'producto' => $item->producto->descripcion ?? "Producto #{$item->id_producto}",
+                    'necesario' => $necesario,
+                    'disponible' => $disponible,
+                    'deficit' => $necesario - $disponible,
+                ];
+            }
+        }
+
+        if (!empty($alertasStock) && !$request->boolean('forzar')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Stock insuficiente para cubrir todas las programaciones.',
+                'alertas_stock' => $alertasStock,
+                'total_programaciones' => count($fechas),
+                'fechas' => $fechas,
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $idUsuario = $request->user()?->id;
+            $creadas = [];
+
+            foreach ($fechas as $fecha) {
+                $prog = ProgramacionServicio::create([
+                    'id_orden_servicio'  => $validated['id_orden_servicio'],
+                    'id_servicio'        => $validated['id_servicio'],
+                    'id_tecnico_asignado'=> $validated['id_tecnico_asignado'],
+                    'id_supervisor'      => $validated['id_supervisor'] ?? null,
+                    'id_vehiculo'        => $validated['id_vehiculo'] ?? null,
+                    'fecha_programada'   => $fecha,
+                    'hora_inicio'        => $validated['hora_inicio'],
+                    'hora_fin'           => $validated['hora_fin'] ?? null,
+                    'local_sede'         => $validated['local_sede'] ?? null,
+                    'direccion_completa' => $validated['direccion_completa'] ?? null,
+                    'coordenadas'        => $validated['coordenadas'] ?? null,
+                    'estado_ejecucion'   => 'Programado',
+                    'observaciones'      => $validated['observaciones'] ?? null,
+                    'creado_por'         => $idUsuario,
+                ]);
+
+                $this->syncTecnicos($prog, $validated['id_tecnico_asignado'], $validated['tecnicos_ids'] ?? []);
+                $this->asignarInsumosDesdeReceta($prog, $idUsuario);
+                $creadas[] = $prog;
+            }
+
+            // Cambiar estado de la ODS
+            $orden = OrdenServicio::find($validated['id_orden_servicio']);
+            if ($orden && $orden->estado === 'Aprobado') {
+                $orden->estado = 'Programado';
+                $orden->save();
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => count($creadas) . ' programaciones creadas exitosamente',
+                'data' => $creadas,
+                'total' => count($creadas),
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear programaciones: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Preview de fechas para programación anual (sin persistir)
+     */
+    public function previewAnual(Request $request)
+    {
+        $validated = $request->validate([
+            'id_servicio' => 'required|integer|exists:servicios,id',
+            'frecuencia'  => 'required|string',
+            'fecha_inicio'=> 'required|date',
+        ]);
+
+        $fechas = $this->calcularFechasPorFrecuencia(
+            $validated['frecuencia'],
+            $validated['fecha_inicio']
+        );
+
+        // Calcular necesidad de stock
+        $receta = ServicioProducto::with('producto.inventario')
+            ->where('id_servicio', $validated['id_servicio'])->get();
+
+        $detalleStock = $receta->map(function ($item) use ($fechas) {
+            $disponible = $item->producto->inventario->cantidad_disponible ?? 0;
+            $porVez = $item->cantidad_default;
+            $total = $porVez * count($fechas);
+            return [
+                'id_producto' => $item->id_producto,
+                'producto' => $item->producto->descripcion ?? "#{$item->id_producto}",
+                'cantidad_por_vez' => $porVez,
+                'total_necesario' => $total,
+                'stock_disponible' => $disponible,
+                'suficiente' => $disponible >= $total,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'fechas' => $fechas,
+                'total_programaciones' => count($fechas),
+                'stock' => $detalleStock,
+            ],
+        ]);
+    }
+
+    /**
+     * Actualizar una programación (reprogramar, cambiar técnico, etc.)
+     */
+    public function update(Request $request, $id)
+    {
+        $prog = ProgramacionServicio::findOrFail($id);
+
+        $validated = $request->validate([
+            'id_tecnico_asignado' => 'sometimes|integer|exists:tecnicos,id',
+            'tecnicos_ids'        => 'nullable|array',
+            'tecnicos_ids.*'      => 'integer|exists:tecnicos,id',
+            'id_supervisor'       => 'nullable|integer',
+            'id_vehiculo'         => 'nullable|integer',
+            'fecha_programada'    => 'sometimes|date',
+            'hora_inicio'         => 'sometimes',
+            'hora_fin'            => 'nullable',
+            'local_sede'          => 'nullable|string|max:150',
+            'direccion_completa'  => 'nullable|string|max:255',
+            'coordenadas'         => 'nullable|string|max:50',
+            'estado_ejecucion'    => 'sometimes|in:Programado,Confirmado,En Camino,En Ejecución,Realizado,Reprogramado,Cancelado',
+            'observaciones'       => 'nullable|string',
+        ]);
+
+        // Extraer tecnicos_ids antes del update masivo
+        $tecnicosIds = $validated['tecnicos_ids'] ?? null;
+        unset($validated['tecnicos_ids']);
+
+        $validated['modificado_por'] = $request->user()?->id;
+        $prog->update($validated);
+
+        // Sincronizar técnicos si se envió tecnicos_ids
+        if ($tecnicosIds !== null) {
+            $principal = $validated['id_tecnico_asignado'] ?? $prog->id_tecnico_asignado;
+            $this->syncTecnicos($prog, $principal, $tecnicosIds);
+        }
+
+        $prog->load([
+            'ordenServicio.cliente',
+            'servicio',
+            'tecnico',
+            'tecnicos',
+            'supervisor',
+            'vehiculo',
+            'insumos.producto',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Programación actualizada',
+            'data' => $prog,
+        ]);
+    }
+
+    /**
+     * Marcar una programación como "Realizado" y sugerir siguiente
+     */
+    public function completar(Request $request, $id)
+    {
+        $prog = ProgramacionServicio::with(['ordenServicio.detalles', 'insumos', 'tecnicos'])
+            ->findOrFail($id);
+
+        DB::beginTransaction();
+        try {
+            $prog->update([
+                'estado_ejecucion' => 'Realizado',
+                'fecha_ejecucion_real' => now(),
+                'duracion_real' => $request->input('duracion_real'),
+                'observaciones' => $request->input('observaciones', $prog->observaciones),
+                'modificado_por' => $request->user()?->id,
+            ]);
+
+            // Actualizar insumos a "Utilizado"
+            $prog->insumos()->update(['estado' => 'Utilizado']);
+
+            // Verificar si TODAS las programaciones de la ODS están Realizadas
+            $orden = $prog->ordenServicio;
+            if ($orden) {
+                $pendientes = ProgramacionServicio::where('id_orden_servicio', $orden->id)
+                    ->whereNotIn('estado_ejecucion', ['Realizado', 'Cancelado'])
+                    ->count();
+
+                if ($pendientes === 0) {
+                    $orden->estado = 'Completado';
+                    $orden->save();
+                }
+            }
+
+            // Buscar frecuencia del detalle para sugerir siguiente
+            $sugerencia = null;
+            if ($orden) {
+                $detalle = DetalleOrdenServicio::where('id_orden_servicio', $orden->id)
+                    ->where('id_servicio', $prog->id_servicio)
+                    ->first();
+
+                if ($detalle && $detalle->frecuencia && $detalle->frecuencia !== 'Única') {
+                    $siguienteFecha = $this->calcularSiguienteFecha(
+                        $prog->fecha_programada,
+                        $detalle->frecuencia
+                    );
+
+                    $sugerencia = [
+                        'frecuencia' => $detalle->frecuencia,
+                        'fecha_sugerida' => $siguienteFecha,
+                        'id_orden_servicio' => $orden->id,
+                        'id_servicio' => $prog->id_servicio,
+                        'id_tecnico_asignado' => $prog->id_tecnico_asignado,
+                        'tecnicos_ids' => $prog->tecnicos->pluck('id')->toArray(),
+                        'id_supervisor' => $prog->id_supervisor,
+                        'id_vehiculo' => $prog->id_vehiculo,
+                        'hora_inicio' => $prog->hora_inicio ? Carbon::parse($prog->hora_inicio)->format('H:i') : null,
+                        'hora_fin' => $prog->hora_fin ? Carbon::parse($prog->hora_fin)->format('H:i') : null,
+                        'local_sede' => $prog->local_sede,
+                        'direccion_completa' => $prog->direccion_completa,
+                    ];
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Programación marcada como Realizado',
+                'data' => $prog->fresh()->load('ordenServicio.cliente', 'servicio', 'tecnico', 'tecnicos'),
+                'sugerencia_siguiente' => $sugerencia,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al completar: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Eliminar programación (y devolver insumos al inventario)
+     */
+    public function destroy(Request $request, $id)
+    {
+        $prog = ProgramacionServicio::with('insumos')->findOrFail($id);
+
+        DB::beginTransaction();
+        try {
+            $idUsuario = $request->user()?->id;
+
+            // Devolver insumos al inventario
+            foreach ($prog->insumos as $insumo) {
+                if ($insumo->estado !== 'Utilizado') {
+                    Kardex::registrarMovimiento([
+                        'id_producto' => $insumo->id_producto,
+                        'tipo_movimiento' => 'Entrada',
+                        'cantidad' => $insumo->cantidad_asignada,
+                        'motivo' => 'Devolución Programación',
+                        'referencia' => "PROG-{$prog->id}",
+                        'id_referencia' => $prog->id,
+                        'id_usuario' => $idUsuario,
+                        'observacion' => "Devolución por eliminación de programación #{$prog->id}",
+                    ]);
+                }
+            }
+
+            // Eliminar insumos y luego la programación
+            $prog->insumos()->delete();
+            $prog->delete();
+
+            // Si la ODS ya no tiene programaciones activas, volver a Aprobado
+            if ($prog->id_orden_servicio) {
+                $restantes = ProgramacionServicio::where('id_orden_servicio', $prog->id_orden_servicio)
+                    ->whereNotIn('estado_ejecucion', ['Cancelado'])
+                    ->count();
+
+                if ($restantes === 0) {
+                    OrdenServicio::where('id', $prog->id_orden_servicio)
+                        ->update(['estado' => 'Aprobado']);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Programación eliminada e insumos devueltos al inventario',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Listar ODS disponibles para programar (estado = Aprobado o Programado)
+     */
+    public function getODSDisponibles()
+    {
+        $ordenes = OrdenServicio::with(['cliente', 'detalles.servicio'])
+            ->whereIn('estado', ['Aprobado', 'Programado'])
+            ->orderBy('id', 'desc')
+            ->get()
+            ->map(function ($orden) {
+                return [
+                    'id' => $orden->id,
+                    'numero_orden' => $orden->numero_orden,
+                    'cliente' => $orden->cliente->nombre_empresa ?? $orden->cliente->persona_contacto ?? 'Sin cliente',
+                    'estado' => $orden->estado,
+                    'fecha_tentativa' => $orden->fecha_tentativa,
+                    'detalles' => $orden->detalles->map(function ($det) {
+                        return [
+                            'id' => $det->id,
+                            'id_servicio' => $det->id_servicio,
+                            'servicio_nombre' => $det->servicio->nombre ?? '',
+                            'local' => $det->local,
+                            'frecuencia' => $det->frecuencia,
+                            'precio' => $det->precio,
+                        ];
+                    }),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $ordenes,
+        ]);
+    }
+
+    /**
+     * Estadísticas del módulo
+     */
+    public function estadisticas(Request $request)
+    {
+        $mes = $request->input('mes', now()->month);
+        $anio = $request->input('anio', now()->year);
+
+        $base = ProgramacionServicio::whereMonth('fecha_programada', $mes)
+            ->whereYear('fecha_programada', $anio);
+
+        $stats = [
+            'programados' => (clone $base)->where('estado_ejecucion', 'Programado')->count(),
+            'confirmados' => (clone $base)->where('estado_ejecucion', 'Confirmado')->count(),
+            'en_ejecucion' => (clone $base)->whereIn('estado_ejecucion', ['En Camino', 'En Ejecución'])->count(),
+            'completados' => (clone $base)->where('estado_ejecucion', 'Realizado')->count(),
+            'reprogramados' => (clone $base)->where('estado_ejecucion', 'Reprogramado')->count(),
+            'cancelados' => (clone $base)->where('estado_ejecucion', 'Cancelado')->count(),
+            'total' => (clone $base)->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats,
+        ]);
+    }
+
+    // ─── Helpers privados ────────────────────────────────────
+
+    /**
+     * Asignar insumos desde la receta del servicio + Kardex Salida
+     */
+    private function asignarInsumosDesdeReceta(ProgramacionServicio $prog, ?int $idUsuario): void
+    {
+        $receta = ServicioProducto::where('id_servicio', $prog->id_servicio)->get();
+
+        foreach ($receta as $item) {
+            ProgramacionInsumo::create([
+                'id_programacion' => $prog->id,
+                'id_producto' => $item->id_producto,
+                'cantidad_asignada' => $item->cantidad_default,
+                'estado' => 'Asignado',
+            ]);
+
+            Kardex::registrarMovimiento([
+                'id_producto' => $item->id_producto,
+                'tipo_movimiento' => 'Salida',
+                'cantidad' => $item->cantidad_default,
+                'motivo' => 'Programación Servicio',
+                'referencia' => "PROG-{$prog->id}",
+                'id_referencia' => $prog->id,
+                'id_usuario' => $idUsuario,
+                'observacion' => "Salida por programación #{$prog->id} - Servicio",
+            ]);
+        }
+    }
+
+    /**
+     * Calcular fechas por frecuencia desde fecha_inicio hasta fin de año
+     */
+    private function calcularFechasPorFrecuencia(string $frecuencia, string $fechaInicio): array
+    {
+        $inicio = Carbon::parse($fechaInicio);
+        $finAnio = Carbon::create($inicio->year, 12, 31);
+        $fechas = [];
+        $current = $inicio->copy();
+
+        while ($current->lte($finAnio)) {
+            $fechas[] = $current->format('Y-m-d');
+
+            switch (strtolower($frecuencia)) {
+                case 'semanal':
+                    $current->addWeek();
+                    break;
+                case 'quincenal':
+                    $current->addDays(15);
+                    break;
+                case 'mensual':
+                    $current->addMonth();
+                    break;
+                case 'bimestral':
+                    $current->addMonths(2);
+                    break;
+                case 'trimestral':
+                    $current->addMonths(3);
+                    break;
+                case 'semestral':
+                    $current->addMonths(6);
+                    break;
+                case 'anual':
+                    $current->addYear();
+                    break;
+                case 'única':
+                case 'unica':
+                    // Solo una vez
+                    return $fechas;
+                default:
+                    return $fechas;
+            }
+        }
+
+        return $fechas;
+    }
+
+    /**
+     * Calcular siguiente fecha según frecuencia
+     */
+    private function calcularSiguienteFecha($fechaBase, string $frecuencia): string
+    {
+        $fecha = Carbon::parse($fechaBase);
+
+        switch (strtolower($frecuencia)) {
+            case 'semanal':
+                return $fecha->addWeek()->format('Y-m-d');
+            case 'quincenal':
+                return $fecha->addDays(15)->format('Y-m-d');
+            case 'mensual':
+                return $fecha->addMonth()->format('Y-m-d');
+            case 'bimestral':
+                return $fecha->addMonths(2)->format('Y-m-d');
+            case 'trimestral':
+                return $fecha->addMonths(3)->format('Y-m-d');
+            case 'semestral':
+                return $fecha->addMonths(6)->format('Y-m-d');
+            case 'anual':
+                return $fecha->addYear()->format('Y-m-d');
+            default:
+                return $fecha->addMonth()->format('Y-m-d');
+        }
+    }
+
+    /**
+     * Sincronizar técnicos en la tabla pivot.
+     * El principal se marca con rol "Principal", los demás como "Apoyo".
+     */
+    private function syncTecnicos(ProgramacionServicio $prog, int $principalId, array $tecnicosIds): void
+    {
+        // Asegurar que el principal esté incluido
+        $allIds = collect($tecnicosIds)->push($principalId)->unique()->values();
+
+        $syncData = [];
+        foreach ($allIds as $tecId) {
+            $syncData[$tecId] = ['rol' => $tecId == $principalId ? 'Principal' : 'Apoyo'];
+        }
+
+        $prog->tecnicos()->sync($syncData);
+    }
+}

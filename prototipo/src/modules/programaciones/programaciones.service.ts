@@ -1,103 +1,89 @@
-import type { Programacion, Tecnico, FiltroProgramacion, EstadisticasProgramacion } from './programaciones.types';
+import { apiClient } from '../../core/api/api.client';
+import type {
+  Programacion,
+  Tecnico,
+  Vehiculo,
+  ODSDisponible,
+  FiltroProgramacion,
+  EstadisticasProgramacion,
+  PreviewAnual,
+  SugerenciaSiguiente,
+} from './programaciones.types';
 
-export class ProgramacionesService {
-  private baseURL = 'http://localhost:3000/api';
-
-  /**
-   * Obtiene todas las programaciones con filtros opcionales
-   */
-  async getProgramaciones(filtros?: FiltroProgramacion): Promise<Programacion[]> {
-    // TODO: Implementar cuando el backend esté listo
-    return this.getMockProgramaciones();
-  }
-  async getProgramacionesPorFecha(fecha: Date): Promise<Programacion[]> {
-    // TODO: Implementar
-    return this.getMockProgramaciones();
-  }
-
-  async getTecnicos(): Promise<Tecnico[]> {
-    // TODO: Implementar
-    return this.getMockTecnicos();
-  }
-
-  async crearProgramacion(data: Partial<Programacion>): Promise<Programacion> {
-    // TODO: Implementar
-    console.log('Creando programación:', data);
-    return data as Programacion;
-  }
-  async actualizarProgramacion(id: number, data: Partial<Programacion>): Promise<Programacion> {
-    // TODO: Implementar
-    console.log(`Actualizando programación ${id}:`, data);
-    return data as Programacion;
-  }
-  async getEstadisticas(): Promise<EstadisticasProgramacion> {
-    // TODO: Implementar
-    return {
-      programados: 15,
-      confirmados: 8,
-      en_ejecucion: 3,
-      completados: 42,
-      reprogramados: 2,
-      cancelados: 1
-    };
-  }
-
-  async exportarAgenda(fecha_inicio: Date, fecha_fin: Date): Promise<Blob> {
-    // TODO: Implementar
-    console.log('Exportando agenda del', fecha_inicio, 'al', fecha_fin);
-    return new Blob(['PDF pendiente'], { type: 'application/pdf' });
-  }
-
-
-  private getMockProgramaciones(): Programacion[] {
-    return [
-      {
-        id: 1,
-        id_servicio: 1,
-        servicio_nombre: 'Fumigación Industrial',
-        id_cliente: 1,
-        cliente_nombre: 'Industrias ABC S.A.C.',
-        id_tecnico_asignado: 1,
-        tecnico_nombre: 'Juan Ramírez',
-        fecha_programada: '2025-01-06',
-        hora_inicio: '09:00',
-        hora_fin: '13:00',
-        local_sede: 'Planta Principal - Lima',
-        direccion_completa: 'Av. Industrial 123, Callao',
-        estado_ejecucion: 'Programado',
-        requiere_movilidad: true,
-        id_vehiculo: 1,
-        vehiculo_placa: 'ABC-123',
-        observaciones: 'Cliente requiere certificado ISO',
-      },
-      {
-        id: 2,
-        id_servicio: 2,
-        servicio_nombre: 'Mantenimiento',
-        id_cliente: 2,
-        cliente_nombre: 'Restaurant El Sabor',
-        id_tecnico_asignado: 2,
-        tecnico_nombre: 'María Soto',
-        fecha_programada: '2025-01-07',
-        hora_inicio: '14:00',
-        hora_fin: '16:00',
-        local_sede: 'Local Miraflores',
-        direccion_completa: 'Av. Larco 456, Miraflores',
-        estado_ejecucion: 'Confirmado',
-        requiere_movilidad: false,
-        observaciones: '',
-      },
-    ];
-  }
-
-  private getMockTecnicos(): Tecnico[] {
-    return [
-      { id: 1, nombre: 'Juan Ramírez', estado: 'Activo', servicios_hoy: 2, autorizado_conducir: true },
-      { id: 2, nombre: 'María Soto', estado: 'Activo', servicios_hoy: 3, autorizado_conducir: false },
-      { id: 3, nombre: 'Pedro López', estado: 'Activo', servicios_hoy: 0, autorizado_conducir: true },
-    ];
-  }
+interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data: T;
+  alertas_stock?: any[];
+  total_programaciones?: number;
+  fechas?: string[];
+  sugerencia_siguiente?: SugerenciaSiguiente | null;
+  total?: number;
 }
 
-// Exportar instancia singleton
-export const programacionesService = new ProgramacionesService();
+export const programacionService = {
+
+  // ─── Programaciones CRUD ─────────────────────
+
+  getAll: async (filtros?: FiltroProgramacion) => {
+    return apiClient.get<ApiResponse<Programacion[]>>('/programacion-servicio', filtros as any);
+  },
+
+  getById: async (id: number) => {
+    return apiClient.get<ApiResponse<Programacion>>(`/programacion-servicio/${id}`);
+  },
+
+  create: async (data: Record<string, any>) => {
+    return apiClient.post<ApiResponse<Programacion>>('/programacion-servicio', data);
+  },
+
+  update: async (id: number, data: Record<string, any>) => {
+    return apiClient.post<ApiResponse<Programacion>>(`/programacion-servicio/${id}`, { ...data, _method: 'PUT' });
+  },
+
+  completar: async (id: number, data?: Record<string, any>) => {
+    return apiClient.post<ApiResponse<Programacion> & { sugerencia_siguiente?: SugerenciaSiguiente }>(
+      `/programacion-servicio/${id}/completar`,
+      { ...data, _method: 'PATCH' }
+    );
+  },
+
+  delete: async (id: number) => {
+    return apiClient.delete<ApiResponse<null>>(`/programacion-servicio/${id}`);
+  },
+
+  // ─── Programación Anual ──────────────────────
+
+  previewAnual: async (data: { id_servicio: number; frecuencia: string; fecha_inicio: string }) => {
+    return apiClient.post<ApiResponse<PreviewAnual>>('/programacion-servicio/preview-anual', data);
+  },
+
+  createAnual: async (data: Record<string, any>) => {
+    return apiClient.post<ApiResponse<Programacion[]>>('/programacion-servicio/anual', data);
+  },
+
+  // ─── Auxiliares ──────────────────────────────
+
+  getODSDisponibles: async () => {
+    return apiClient.get<ApiResponse<ODSDisponible[]>>('/programacion-servicio/ods-disponibles');
+  },
+
+  getEstadisticas: async (mes?: number, anio?: number) => {
+    const params: any = {};
+    if (mes) params.mes = mes;
+    if (anio) params.anio = anio;
+    return apiClient.get<ApiResponse<EstadisticasProgramacion>>('/programacion-servicio/estadisticas/resumen', params);
+  },
+
+  getTecnicos: async () => {
+    return apiClient.get<{ success: boolean; data: Tecnico[] }>('/tecnicos');
+  },
+
+  getVehiculos: async () => {
+    return apiClient.get<{ success: boolean; data: Vehiculo[] }>('/vehiculos');
+  },
+
+  getPersonal: async () => {
+    return apiClient.get<{ success: boolean; data: { id: number; nombre: string; apellidos: string }[] }>('/personal');
+  },
+};

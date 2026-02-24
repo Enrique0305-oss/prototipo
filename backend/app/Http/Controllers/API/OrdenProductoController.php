@@ -175,6 +175,7 @@ class OrdenProductoController extends Controller
         $validated = $request->validate([
             'id_cotizacion' => 'required|exists:cotizacion,id',
             'fecha_envio' => 'required|date',
+            'fecha_aceptacion' => 'nullable|date',
             'emitido_por' => 'required|exists:personal,id',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_producto' => 'required|exists:productos,id',
@@ -239,6 +240,7 @@ class OrdenProductoController extends Controller
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
                 'fecha_envio' => $validated['fecha_envio'],
+                'fecha_aceptacion' => $validated['fecha_aceptacion'] ?? null,
                 'subtotal' => $subtotalCalc,
                 'igv' => $igvCalc,
                 'incluye_igv' => $incluyeIgv,
@@ -332,6 +334,7 @@ class OrdenProductoController extends Controller
 
         $validated = $request->validate([
             'fecha_envio' => 'sometimes|date',
+            'fecha_aceptacion' => 'nullable|date',
             'incluye_igv' => 'sometimes|boolean',
             'detalles' => 'sometimes|array|min:1',
             'detalles.*.id_producto' => 'required_with:detalles|exists:productos,id',
@@ -351,6 +354,11 @@ class OrdenProductoController extends Controller
             // Actualizar fecha si viene
             if (isset($validated['fecha_envio'])) {
                 $orden->fecha_envio = $validated['fecha_envio'];
+            }
+
+            // Actualizar fecha de aceptación
+            if (array_key_exists('fecha_aceptacion', $validated)) {
+                $orden->fecha_aceptacion = $validated['fecha_aceptacion'];
             }
 
             // Actualizar IGV toggle

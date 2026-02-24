@@ -187,6 +187,10 @@ export function renderComercialOrdenesProducto() {
                 <input type="date" id="op-fecha-envio" class="op-input">
               </div>
               <div class="op-field">
+                <label class="op-label">Aceptación</label>
+                <input type="date" id="op-fecha-aceptacion" class="op-input">
+              </div>
+              <div class="op-field">
                 <label class="op-label">Emitido por <span class="op-required">*</span></label>
                 <select id="op-emitido-por" class="op-input">
                   </select>
@@ -663,6 +667,7 @@ function limpiarFormOP() {
   (document.getElementById('op-cliente-id') as HTMLInputElement).value = '';
   (document.getElementById('op-cliente-ruc') as HTMLInputElement).value = '';
   (document.getElementById('op-fecha-envio') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
+  (document.getElementById('op-fecha-aceptacion') as HTMLInputElement).value = '';
   (document.getElementById('op-emitido-por') as HTMLSelectElement).value = '';
   (document.getElementById('op-igv') as HTMLSelectElement).value = '1';
 
@@ -786,6 +791,7 @@ async function abrirModalEditarOP(id: number, soloLectura: boolean = false) {
     (document.getElementById('op-cliente-id') as HTMLInputElement).value = String(orden.cliente?.id || orden.id_cliente || '');
     (document.getElementById('op-cliente-ruc') as HTMLInputElement).value = orden.cliente?.ruc || '';
     (document.getElementById('op-fecha-envio') as HTMLInputElement).value = orden.fecha_envio?.split('T')[0] || '';
+    (document.getElementById('op-fecha-aceptacion') as HTMLInputElement).value = orden.fecha_aceptacion?.split('T')[0] || '';
 
     setTimeout(() => {
       (document.getElementById('op-emitido-por') as HTMLSelectElement).value = String(orden.emitido_por || '');
@@ -852,6 +858,7 @@ async function guardarOP() {
   const editId = (document.getElementById('op-edit-id') as HTMLInputElement).value;
   const idCotizacion = (document.getElementById('op-cotizacion-ref') as HTMLSelectElement).value;
   const fechaEnvio = (document.getElementById('op-fecha-envio') as HTMLInputElement).value;
+  const fechaAceptacion = (document.getElementById('op-fecha-aceptacion') as HTMLInputElement).value;
   const emitidoPor = (document.getElementById('op-emitido-por') as HTMLSelectElement).value;
 
   if (!idCotizacion) {
@@ -898,6 +905,7 @@ async function guardarOP() {
   const payload: any = {
     id_cotizacion: Number(idCotizacion),
     fecha_envio: fechaEnvio,
+    fecha_aceptacion: fechaAceptacion || null,
     emitido_por: Number(emitidoPor),
     incluye_igv: incluyeIgv,
     detalles,

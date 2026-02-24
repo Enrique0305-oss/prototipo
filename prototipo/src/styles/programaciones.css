@@ -368,16 +368,28 @@
 }
 
 .prog-calendar-day:hover {
-  background: #F9FAFB;
+  background: #F0F4FF;
 }
 
 .prog-calendar-day.other-month {
   background: #F9FAFB;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .prog-calendar-day.highlighted {
-  background: #FEF3C7;
+  background: #FFFBEB;
+  border-bottom: 3px solid #F59E0B;
+}
+
+.prog-calendar-day.highlighted .prog-day-number {
+  background: #F59E0B;
+  color: white;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .prog-day-number {
@@ -390,61 +402,77 @@
 
 /* Eventos en el calendario */
 .prog-event {
-  background: var(--primary-color);
   color: white;
-  padding: 6px 8px;
-  border-radius: 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
   margin-bottom: 4px;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
+  border-left: 3px solid rgba(255,255,255,0.4);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
 }
 
 .prog-event:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  filter: brightness(1.08);
 }
 
 .prog-event.blue {
-  background: #3B82F6;
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
 }
 
 .prog-event.green {
-  background: #10B981;
+  background: linear-gradient(135deg, #10B981, #059669);
 }
 
 .prog-event.orange {
-  background: #F59E0B;
+  background: linear-gradient(135deg, #F59E0B, #D97706);
 }
 
 .prog-event.purple {
-  background: #8B5CF6;
+  background: linear-gradient(135deg, #8B5CF6, #7C3AED);
 }
 
 .prog-event.cyan {
-  background: #06B6D4;
+  background: linear-gradient(135deg, #06B6D4, #0891B2);
 }
 
 .prog-event.yellow {
-  background: #EAB308;
+  background: linear-gradient(135deg, #EAB308, #CA8A04);
 }
 
 .prog-event.gray {
-  background: #6B7280;
+  background: linear-gradient(135deg, #6B7280, #4B5563);
 }
 
 .prog-event-title {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
 
 .prog-event-time {
   font-size: 10px;
-  opacity: 0.9;
+  opacity: 0.92;
+  font-weight: 500;
+}
+
+.prog-event-more {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary-color);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.prog-event-more:hover {
+  text-decoration: underline;
 }
 
 .prog-event-icon {
@@ -454,20 +482,30 @@
   font-size: 12px;
 }
 
+/* Indicador de que un día tiene eventos (punto) */
+.prog-calendar-day.has-events .prog-day-number {
+  position: relative;
+}
+
+.prog-calendar-day.has-events .prog-day-number::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary-color);
+}
+
 /* ========================================
    VISTA SEMANAL
    ======================================== */
 
-.prog-week-view {
-  display: flex;
-  gap: 16px;
-}
+.prog-week-view {\n  width: 100%;\n  overflow-x: auto;\n}
 
-.prog-week-timeline {
-  display: grid;
-  grid-template-columns: 60px 1fr;
-  gap: 0;
-}
+.prog-week-timeline {\n  width: 100%;\n}
 
 .prog-week-hours {
   border-right: 1px solid var(--border-color);
@@ -490,19 +528,105 @@
 
 .prog-week-day-column {
   background: white;
+  transition: background 0.2s;
+}
+
+.prog-week-day-column.today {
+  background: #FFFBEB;
+}
+
+.prog-week-day-column.today .prog-week-day-header {
+  background: #F59E0B;
+  color: white;
+  border-bottom-color: #D97706;
 }
 
 .prog-week-day-header {
-  padding: 12px;
+  padding: 12px 8px;
   text-align: center;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 13px;
   border-bottom: 2px solid var(--border-color);
   background: #F9FAFB;
+  color: var(--text-dark);
 }
 
 .prog-week-day-slots {
   position: relative;
-  min-height: 780px; /* 13 horas * 60px */
+  min-height: 200px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Tarjetas semanales compactas */
+.prog-week-card {
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 4px solid;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.prog-week-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.prog-week-card-blue   { border-left-color: #3B82F6; background: #EFF6FF; }
+.prog-week-card-green  { border-left-color: #10B981; background: #ECFDF5; }
+.prog-week-card-orange { border-left-color: #F59E0B; background: #FFFBEB; }
+.prog-week-card-purple { border-left-color: #8B5CF6; background: #F5F3FF; }
+.prog-week-card-cyan   { border-left-color: #06B6D4; background: #ECFEFF; }
+.prog-week-card-yellow { border-left-color: #EAB308; background: #FEFCE8; }
+.prog-week-card-gray   { border-left-color: #6B7280; background: #F9FAFB; }
+
+.prog-week-card-title {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-dark);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prog-week-card-time,
+.prog-week-card-tech {
+  font-size: 11px;
+  color: #6B7280;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.prog-week-card-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 4px;
+}
+
+.prog-week-card-blue .prog-week-card-badge   { background: #DBEAFE; color: #1E40AF; }
+.prog-week-card-green .prog-week-card-badge  { background: #D1FAE5; color: #065F46; }
+.prog-week-card-orange .prog-week-card-badge { background: #FEF3C7; color: #92400E; }
+.prog-week-card-purple .prog-week-card-badge { background: #EDE9FE; color: #5B21B6; }
+.prog-week-card-cyan .prog-week-card-badge   { background: #CFFAFE; color: #155E75; }
+.prog-week-card-yellow .prog-week-card-badge { background: #FEF9C3; color: #854D0E; }
+.prog-week-card-gray .prog-week-card-badge   { background: #F3F4F6; color: #374151; }
+
+.prog-week-empty {
+  padding: 20px 8px;
+  color: #D1D5DB;
+  font-size: 12px;
+  text-align: center;
+  font-style: italic;
 }
 
 /* ========================================
@@ -533,12 +657,14 @@
   border-radius: 12px;
   background: white;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s;
+  border-left: 4px solid var(--primary-color);
 }
 
 .prog-day-service-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   border-color: var(--primary-color);
+  transform: translateY(-2px);
 }
 
 .prog-day-service-time {

@@ -54,3 +54,60 @@ export function mostrarToast(tipo: ToastTipo, titulo: string, mensaje: string) {
   // Auto-cerrar después de 4 segundos
   setTimeout(() => cerrarToast(toast), 4000);
 }
+
+// ============================================================
+// COMPONENTE CONFIRM — Diálogo de confirmación reutilizable
+// Uso: const ok = await confirmarAccion({ titulo, mensaje, tipo });
+// ============================================================
+
+interface ConfirmOpciones {
+  titulo: string;
+  mensaje: string;
+  tipo?: ToastTipo;
+  textoConfirmar?: string;
+  textoCancelar?: string;
+}
+
+export function confirmarAccion(opciones: ConfirmOpciones): Promise<boolean> {
+  const { titulo, mensaje, tipo = 'warning', textoConfirmar = 'Confirmar', textoCancelar = 'Cancelar' } = opciones;
+
+  return new Promise((resolve) => {
+    // Remover overlay anterior si existe
+    document.getElementById('confirm-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'confirm-overlay';
+    overlay.className = 'confirm-overlay';
+
+    overlay.innerHTML = `
+      <div class="confirm-dialog confirm-${tipo}">
+        <div class="confirm-header">
+          <div class="confirm-icon-wrap confirm-icon-${tipo}">${iconos[tipo]}</div>
+          <div class="confirm-titulo">${titulo}</div>
+        </div>
+        <div class="confirm-mensaje">${mensaje}</div>
+        <div class="confirm-acciones">
+          <button class="confirm-btn confirm-btn-cancelar">${textoCancelar}</button>
+          <button class="confirm-btn confirm-btn-aceptar confirm-btn-${tipo}">${textoConfirmar}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const btnAceptar = overlay.querySelector('.confirm-btn-aceptar') as HTMLButtonElement;
+    const btnCancelar = overlay.querySelector('.confirm-btn-cancelar') as HTMLButtonElement;
+
+    function cerrar(resultado: boolean) {
+      overlay.classList.add('confirm-exit');
+      setTimeout(() => { overlay.remove(); resolve(resultado); }, 200);
+    }
+
+    btnAceptar.addEventListener('click', () => cerrar(true));
+    btnCancelar.addEventListener('click', () => cerrar(false));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(false); });
+
+    // Focus en el botón confirmar
+    setTimeout(() => btnAceptar.focus(), 50);
+  });
+}

@@ -71,6 +71,24 @@ class ProgramacionServicio extends Model
         return $this->belongsTo(Tecnico::class, 'id_tecnico_asignado');
     }
 
+    /**
+     * Relación muchos a muchos con técnicos (tabla pivot programacion_tecnicos)
+     */
+    public function tecnicos()
+    {
+        return $this->belongsToMany(Tecnico::class, 'programacion_tecnicos', 'id_programacion', 'id_tecnico')
+                    ->withPivot('rol')
+                    ->withTimestamps('created_at', 'updated_at');
+    }
+
+    /**
+     * Relación directa a registros de la tabla pivot
+     */
+    public function tecnicosAsignados()
+    {
+        return $this->hasMany(ProgramacionTecnico::class, 'id_programacion');
+    }
+
     public function supervisor()
     {
         return $this->belongsTo(Personal::class, 'id_supervisor');
@@ -84,6 +102,11 @@ class ProgramacionServicio extends Model
     public function creador()
     {
         return $this->belongsTo(Personal::class, 'creado_por');
+    }
+
+    public function insumos()
+    {
+        return $this->hasMany(ProgramacionInsumo::class, 'id_programacion');
     }
 
     // Scopes

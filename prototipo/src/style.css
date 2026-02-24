@@ -1352,3 +1352,154 @@ body {
     transform: translateX(100px);
   }
 }
+
+/* Confirm Dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: confirmFadeIn 0.2s ease-out;
+}
+
+.confirm-overlay.confirm-exit {
+  animation: confirmFadeOut 0.2s ease-in forwards;
+}
+
+.confirm-dialog {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  max-width: 420px;
+  width: 90%;
+  padding: 28px;
+  animation: confirmScaleIn 0.25s ease-out;
+}
+
+.confirm-exit .confirm-dialog {
+  animation: confirmScaleOut 0.2s ease-in forwards;
+}
+
+.confirm-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.confirm-icon-wrap {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-icon-success {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.confirm-icon-error {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.confirm-icon-warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.confirm-titulo {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.confirm-mensaje {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.6;
+  margin-bottom: 24px;
+  padding-left: 56px;
+}
+
+.confirm-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.confirm-btn {
+  padding: 9px 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.confirm-btn-cancelar {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.confirm-btn-cancelar:hover {
+  background: #e2e8f0;
+}
+
+.confirm-btn-aceptar {
+  color: #fff;
+}
+
+.confirm-btn-aceptar.confirm-btn-warning {
+  background: #f59e0b;
+}
+
+.confirm-btn-aceptar.confirm-btn-warning:hover {
+  background: #d97706;
+}
+
+.confirm-btn-aceptar.confirm-btn-error {
+  background: #ef4444;
+}
+
+.confirm-btn-aceptar.confirm-btn-error:hover {
+  background: #dc2626;
+}
+
+.confirm-btn-aceptar.confirm-btn-success {
+  background: #22c55e;
+}
+
+.confirm-btn-aceptar.confirm-btn-success:hover {
+  background: #16a34a;
+}
+
+@keyframes confirmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes confirmFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes confirmScaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes confirmScaleOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.9); }
+}

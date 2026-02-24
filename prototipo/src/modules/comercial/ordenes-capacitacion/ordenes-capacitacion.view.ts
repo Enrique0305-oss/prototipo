@@ -7,6 +7,7 @@ let ocListData: any[] = [];
 let cotizacionesDisponibles: any[] = [];
 let personalData: any[] = [];
 let selectedPonentes: { id: number; nombre: string }[] = [];
+let ocIncluyeIgv = true;
 
 export function renderComercialOrdenesCapacitacion() {
   return `
@@ -256,8 +257,30 @@ export function renderComercialOrdenesCapacitacion() {
                 <input type="number" id="oc-num-certificados" class="oc-input" min="0" value="0">
               </div>
               <div class="oc-field">
-                <label class="oc-label">Costo Total <span class="oc-required">*</span></label>
+                <label class="oc-label">IGV (18%)</label>
+                <select id="oc-igv" class="oc-input">
+                  <option value="1" selected>Sí - Con IGV (18%)</option>
+                  <option value="0">No - Sin IGV</option>
+                </select>
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Subtotal <span class="oc-required">*</span></label>
                 <input type="number" id="oc-costo" class="oc-input" min="0" step="0.01" value="0.00">
+              </div>
+            </div>
+            <!-- Desglose de costos -->
+            <div id="oc-desglose-costos" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin-top:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="color:#64748b;font-size:13px;">Subtotal:</span>
+                <span style="font-weight:500;color:#1e293b;" id="oc-display-subtotal">S/ 0.00</span>
+              </div>
+              <div id="oc-igv-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="color:#64748b;font-size:13px;">IGV (18%):</span>
+                <span style="font-weight:500;color:#1e293b;" id="oc-display-igv">S/ 0.00</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding-top:8px;">
+                <span style="font-weight:600;color:#0f172a;font-size:14px;">Total:</span>
+                <span style="font-weight:700;color:#0f172a;font-size:16px;" id="oc-display-total">S/ 0.00</span>
               </div>
               <div class="oc-field" style="grid-column: 1 / -1;">
                 <label class="oc-label">Observaciones</label>
@@ -356,7 +379,13 @@ async function cargarOrdenesCapacitacion() {
     tbody.innerHTML = ocListData.map(o => {
       const fecha = formatFecha(o.fecha_servicio);
       const hora = o.hora_servicio || '';
-      const costo = Number(o.costo || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
+      const costoTotal = Number(o.costo || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
+      const tieneIgv = o.incluye_igv !== undefined ? o.incluye_igv : true;
+      const subtotalStr = Number(o.subtotal || o.costo || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
+      const igvStr = Number(o.igv || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
+      const costoTooltip = tieneIgv
+        ? 'Subtotal: S/ ' + subtotalStr + '\nIGV: S/ ' + igvStr + '\nTotal: S/ ' + costoTotal
+        : 'Sin IGV';
       const ponentesStr = o.ponentes && o.ponentes.length > 0
         ? o.ponentes.map((p: any) => p.nombre).join(', ')
         : (o.ponente || '-');
@@ -368,7 +397,7 @@ async function cargarOrdenesCapacitacion() {
         '<td><div>' + fecha + '</div><small style="color:#64748b;">' + hora + '</small></td>' +
         '<td><span class="oc-badge ' + getModalidadBadge(o.modalidad) + '">' + (o.modalidad || '-') + '</span></td>' +
         '<td style="text-align:center;">' + (o.num_participantes || 0) + '</td>' +
-        '<td><strong>S/ ' + costo + '</strong></td>' +
+        '<td title="' + costoTooltip + '"><strong>S/ ' + costoTotal + '</strong>' + (tieneIgv ? '<br><small style="color:#64748b;">inc. IGV</small>' : '<br><small style="color:#94a3b8;">sin IGV</small>') + '</td>' +
         '<td><span class="oc-badge ' + getBadgeClass(o.estado) + '">' + (o.estado || 'Aprobado') + '</span></td>' +
         '<td>' +
           '<div class="oc-action-buttons">' +
@@ -538,6 +567,7 @@ async function cargarDatosCotizacion(cotizacionId: number) {
 
     // Auto-llenar costo
     (document.getElementById('oc-costo') as HTMLInputElement).value = Number(data.costo_total || 0).toFixed(2);
+    calcularDesgloseOC();
 
   } catch (e: any) {
     console.error('Error cargando datos de cotización:', e);
@@ -565,7 +595,10 @@ function limpiarFormOC() {
   (document.getElementById('oc-modalidad') as HTMLSelectElement).value = '';
   (document.getElementById('oc-num-participantes') as HTMLInputElement).value = '1';
   (document.getElementById('oc-num-certificados') as HTMLInputElement).value = '0';
+  (document.getElementById('oc-igv') as HTMLSelectElement).value = '1';
+  ocIncluyeIgv = true;
   (document.getElementById('oc-costo') as HTMLInputElement).value = '0.00';
+  calcularDesgloseOC();
   (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = '';
 }
 
@@ -653,7 +686,12 @@ async function abrirModalEditarOC(id: number) {
     (document.getElementById('oc-modalidad') as HTMLSelectElement).value = orden.modalidad || '';
     (document.getElementById('oc-num-participantes') as HTMLInputElement).value = String(orden.num_participantes || 1);
     (document.getElementById('oc-num-certificados') as HTMLInputElement).value = String(orden.num_certificados || 0);
-    (document.getElementById('oc-costo') as HTMLInputElement).value = Number(orden.costo || 0).toFixed(2);
+    // IGV
+    const igvVal = orden.incluye_igv !== undefined ? orden.incluye_igv : true;
+    (document.getElementById('oc-igv') as HTMLSelectElement).value = igvVal ? '1' : '0';
+    ocIncluyeIgv = !!igvVal;
+    (document.getElementById('oc-costo') as HTMLInputElement).value = Number(orden.subtotal || orden.costo || 0).toFixed(2);
+    calcularDesgloseOC();
     (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = orden.observaciones || '';
 
     (document.getElementById('modal-oc') as HTMLElement).style.display = 'flex';
@@ -707,6 +745,7 @@ async function guardarOC() {
     num_participantes: parseInt(numParticipantes),
     num_certificados: parseInt(numCertificados) || 0,
     costo: parseFloat(costo) || 0,
+    incluye_igv: ocIncluyeIgv,
     observaciones: observaciones || null,
   };
 
@@ -725,6 +764,27 @@ async function guardarOC() {
     const msg = e?.data?.message || e?.message || 'No se pudo guardar la orden';
     mostrarToast('error', 'Error', msg);
   }
+}
+
+// =============================
+// CALCULO IGV
+// =============================
+function calcularDesgloseOC() {
+  const costoInput = document.getElementById('oc-costo') as HTMLInputElement;
+  const subtotal = parseFloat(costoInput?.value || '0');
+  const igv = ocIncluyeIgv ? Math.round(subtotal * 0.18 * 100) / 100 : 0;
+  const total = subtotal + igv;
+
+  const fmt = (n: number) => n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const elSub = document.getElementById('oc-display-subtotal');
+  const elIgv = document.getElementById('oc-display-igv');
+  const elTotal = document.getElementById('oc-display-total');
+  const igvRow = document.getElementById('oc-igv-row');
+
+  if (elSub) elSub.textContent = 'S/ ' + fmt(subtotal);
+  if (elIgv) elIgv.textContent = 'S/ ' + fmt(igv);
+  if (elTotal) elTotal.textContent = 'S/ ' + fmt(total);
+  if (igvRow) igvRow.style.display = ocIncluyeIgv ? 'flex' : 'none';
 }
 
 // =============================
@@ -754,6 +814,15 @@ export function initOrdenesCapacitacionEvents() {
 
   // Guardar
   document.getElementById('modal-oc-guardar')?.addEventListener('click', guardarOC);
+
+  // Toggle IGV
+  document.getElementById('oc-igv')?.addEventListener('change', (e) => {
+    ocIncluyeIgv = (e.target as HTMLSelectElement).value === '1';
+    calcularDesgloseOC();
+  });
+
+  // Recalcular al cambiar costo
+  document.getElementById('oc-costo')?.addEventListener('input', () => calcularDesgloseOC());
 
   // Ponente multi-select: agregar al elegir del dropdown
   document.getElementById('oc-ponente-selector')?.addEventListener('change', () => {
@@ -785,6 +854,7 @@ export function initOrdenesCapacitacionEvents() {
       (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = '';
       (document.getElementById('oc-servicio-id') as HTMLInputElement).value = '';
       (document.getElementById('oc-costo') as HTMLInputElement).value = '0.00';
+      calcularDesgloseOC();
     }
   });
 

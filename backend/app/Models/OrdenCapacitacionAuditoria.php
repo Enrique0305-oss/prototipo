@@ -22,6 +22,9 @@ class OrdenCapacitacionAuditoria extends Model
         'num_participantes',
         'num_certificados',
         'costo',
+        'subtotal',
+        'igv',
+        'incluye_igv',
         'estado',
         'observaciones'
     ];
@@ -32,6 +35,9 @@ class OrdenCapacitacionAuditoria extends Model
         'num_participantes' => 'integer',
         'num_certificados' => 'integer',
         'costo' => 'decimal:2',
+        'subtotal' => 'decimal:2',
+        'igv' => 'decimal:2',
+        'incluye_igv' => 'boolean',
     ];
 
     // Relaciones

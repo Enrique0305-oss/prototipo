@@ -15,6 +15,7 @@ class OrdenProducto extends Model
         'id_cotizacion',
         'id_cliente',
         'fecha_envio',
+        'fecha_aceptacion',
         'total',
         'subtotal',
         'igv',
@@ -25,6 +26,7 @@ class OrdenProducto extends Model
 
     protected $casts = [
         'fecha_envio' => 'date',
+        'fecha_aceptacion' => 'date',
         'total' => 'decimal:2',
         'subtotal' => 'decimal:2',
         'igv' => 'decimal:2',

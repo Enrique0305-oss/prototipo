@@ -54,6 +54,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'num_participantes' => $orden->num_participantes,
                 'num_certificados' => $orden->num_certificados,
                 'costo' => $orden->costo,
+                'subtotal' => $orden->subtotal,
+                'igv' => $orden->igv,
+                'incluye_igv' => (bool) $orden->incluye_igv,
                 'estado' => $orden->estado,
                 'cliente' => [
                     'id' => $orden->cliente->id,
@@ -213,9 +216,23 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'num_participantes' => 'required|integer|min:1',
             'num_certificados' => 'nullable|integer|min:0',
             'costo' => 'required|numeric|min:0',
+            'incluye_igv' => 'nullable|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
             'observaciones' => 'nullable|string',
         ]);
+
+        // Calcular subtotal e IGV
+        $costoIngresado = $validated['costo'];
+        $incluyeIgv = $validated['incluye_igv'] ?? true;
+        if ($incluyeIgv) {
+            $subtotal = $costoIngresado;
+            $igv = round($subtotal * 0.18, 2);
+            $total = $subtotal + $igv;
+        } else {
+            $subtotal = $costoIngresado;
+            $igv = 0;
+            $total = $subtotal;
+        }
 
         // Verificar que la cotización sea tipo Capacitacion
         $cotizacion = Cotizacion::find($validated['id_cotizacion']);
@@ -251,7 +268,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'modalidad' => $validated['modalidad'],
                 'num_participantes' => $validated['num_participantes'],
                 'num_certificados' => $validated['num_certificados'] ?? 0,
-                'costo' => $validated['costo'],
+                'subtotal' => $subtotal,
+                'igv' => $igv,
+                'incluye_igv' => $incluyeIgv,
+                'costo' => $total,
                 'estado' => 'Aprobado',
                 'observaciones' => $validated['observaciones'] ?? null,
             ]);
@@ -332,9 +352,26 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'num_participantes' => 'sometimes|integer|min:1',
             'num_certificados' => 'nullable|integer|min:0',
             'costo' => 'sometimes|numeric|min:0',
+            'incluye_igv' => 'nullable|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
             'observaciones' => 'nullable|string',
         ]);
+
+        // Recalcular IGV si se envía costo o incluye_igv
+        if (isset($validated['costo']) || isset($validated['incluye_igv'])) {
+            $costoIngresado = $validated['costo'] ?? $orden->subtotal;
+            $incluyeIgv = $validated['incluye_igv'] ?? $orden->incluye_igv;
+            if ($incluyeIgv) {
+                $validated['subtotal'] = $costoIngresado;
+                $validated['igv'] = round($costoIngresado * 0.18, 2);
+                $validated['costo'] = $costoIngresado + $validated['igv'];
+            } else {
+                $validated['subtotal'] = $costoIngresado;
+                $validated['igv'] = 0;
+                $validated['costo'] = $costoIngresado;
+            }
+            $validated['incluye_igv'] = $incluyeIgv;
+        }
 
         try {
             // Si se envían ponentes, sincronizar pivot y actualizar id_ponente principal

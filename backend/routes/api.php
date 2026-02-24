@@ -25,6 +25,7 @@ use App\Http\Controllers\API\AsistenciaController;
 use App\Http\Controllers\API\HorarioController;
 use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
+use App\Http\Controllers\API\ProgramacionServicioController;
 
 // Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
@@ -223,4 +224,16 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/kardex/producto/{idProducto}', [KardexController::class, 'porProducto']);
     Route::get('/kardex', [KardexController::class, 'index']);
     Route::post('/kardex', [KardexController::class, 'store']);
+
+    // Programación de Servicios
+    Route::get('/programacion-servicio/estadisticas/resumen', [ProgramacionServicioController::class, 'estadisticas']);
+    Route::get('/programacion-servicio/ods-disponibles', [ProgramacionServicioController::class, 'getODSDisponibles']);
+    Route::post('/programacion-servicio/preview-anual', [ProgramacionServicioController::class, 'previewAnual']);
+    Route::post('/programacion-servicio/anual', [ProgramacionServicioController::class, 'storeAnual']);
+    Route::get('/programacion-servicio', [ProgramacionServicioController::class, 'index']);
+    Route::get('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'show']);
+    Route::post('/programacion-servicio', [ProgramacionServicioController::class, 'store']);
+    Route::put('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'update']);
+    Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
+    Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
 });
