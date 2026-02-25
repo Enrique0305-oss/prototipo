@@ -236,6 +236,10 @@ export function renderComercialOrdenesCapacitacion() {
                 <input type="date" id="oc-fecha-servicio" class="oc-input">
               </div>
               <div class="oc-field">
+                <label class="oc-label">Aceptación</label>
+                <input type="date" id="oc-fecha-aceptacion" class="oc-input">
+              </div>
+              <div class="oc-field">
                 <label class="oc-label">Hora del Servicio</label>
                 <input type="time" id="oc-hora-servicio" class="oc-input">
               </div>
@@ -591,6 +595,7 @@ function limpiarFormOC() {
   renderPonenteTags();
   actualizarSelectorPonentes();
   (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
+  (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value = '';
   (document.getElementById('oc-hora-servicio') as HTMLInputElement).value = '';
   (document.getElementById('oc-modalidad') as HTMLSelectElement).value = '';
   (document.getElementById('oc-num-participantes') as HTMLInputElement).value = '1';
@@ -662,6 +667,7 @@ async function abrirModalEditarOC(id: number) {
 
     // Datos del servicio
     (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = orden.fecha_servicio?.split('T')[0] || '';
+    (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value = orden.fecha_aceptacion?.split('T')[0] || '';
     (document.getElementById('oc-hora-servicio') as HTMLInputElement).value = orden.hora_servicio || '';
 
     // Ponentes (multi-select)
@@ -707,6 +713,7 @@ async function guardarOC() {
   const idServicio = (document.getElementById('oc-servicio-id') as HTMLInputElement).value;
   const ponenteIds = selectedPonentes.map(p => p.id);
   const fechaServicio = (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value;
+  const fechaAceptacion = (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value;
   const horaServicio = (document.getElementById('oc-hora-servicio') as HTMLInputElement).value;
   const modalidad = (document.getElementById('oc-modalidad') as HTMLSelectElement).value;
   const numParticipantes = (document.getElementById('oc-num-participantes') as HTMLInputElement).value;
@@ -740,6 +747,7 @@ async function guardarOC() {
     id_servicio: idServicio ? Number(idServicio) : null,
     ponentes: ponenteIds,
     fecha_servicio: fechaServicio,
+    fecha_aceptacion: fechaAceptacion || null,
     hora_servicio: horaServicio || null,
     modalidad,
     num_participantes: parseInt(numParticipantes),

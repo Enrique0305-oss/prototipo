@@ -17,6 +17,7 @@ class OrdenCapacitacionAuditoria extends Model
         'id_servicio',
         'id_ponente',
         'fecha_servicio',
+        'fecha_aceptacion',
         'hora_servicio',
         'modalidad',
         'num_participantes',
@@ -31,6 +32,7 @@ class OrdenCapacitacionAuditoria extends Model
 
     protected $casts = [
         'fecha_servicio' => 'date',
+        'fecha_aceptacion' => 'date',
         'hora_servicio' => 'datetime:H:i',
         'num_participantes' => 'integer',
         'num_certificados' => 'integer',
