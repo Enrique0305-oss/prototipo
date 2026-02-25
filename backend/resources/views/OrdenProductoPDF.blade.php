@@ -50,17 +50,17 @@
                 <td class="label" style="width: 20%;">N° COTIZACIÓN</td>
                 <td class="text-center" style="width: 30%;">{{ $orden->cotizacion->numero_cotizacion ?? '---' }}</td>
                 <td class="label" style="width: 20%;">COSTO:</td>
-                <td class="text-right" style="width: 30%; font-weight: bold;">S/. {{ number_format($orden->total_costo, 2) }}</td>
+                <td class="text-right" style="width: 30%; font-weight: bold;">S/. {{ number_format($orden->total, 2) }}</td>
             </tr>
         </table>
 
         <table>
             <tr>
-                <td class="label" style="width: 20%;">ACEPTACIÓN</td>
+                <td class="label" style="width: 20%;">FECHA ACEPTACIÓN</td>
                 <td class="text-center" style="width: 30%;">
                     {{ isset($orden->fecha_aceptacion) && $orden->fecha_aceptacion ? \Carbon\Carbon::parse($orden->fecha_aceptacion)->format('d/m/Y') : '---' }}
                 </td>
-                <td class="label" style="width: 20%;">ENVÍO</td>
+                <td class="label" style="width: 20%;">FECHA ENVÍO</td>
                 <td class="text-center">{{ $orden->fecha_envio ? \Carbon\Carbon::parse($orden->fecha_envio)->format('d/m/Y') : '---' }}</td>
             </tr>
         </table>
