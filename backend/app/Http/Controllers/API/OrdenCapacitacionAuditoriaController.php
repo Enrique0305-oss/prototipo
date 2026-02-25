@@ -8,6 +8,7 @@ use App\Models\Cotizacion;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class OrdenCapacitacionAuditoriaController extends Controller
 {
@@ -460,5 +461,26 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'success' => true,
             'data' => $stats
         ]);
+    }
+
+    // FUncion para generar pdf de la orden de capacitación/auditoría
+
+    public function descargarPdf($id)
+    {
+        $orden = OrdenCapacitacionAuditoria::with([
+            'cliente', 
+            'ponente', 
+            'ponentes', 
+            'cotizacion', 
+            'servicio'
+        ])->findOrFail($id);
+
+        $orden->servicio_nombre = $orden->servicio ? $orden->servicio->nombre : 'SERVICIO NO ESPECIFICADO';
+
+        $pdf = Pdf::loadView('OrdenCapacitacionAudiPDF', compact('orden'));
+        
+        $pdf->setPaper('a4', 'portrait');
+
+        return $pdf->stream("Orden_Capacitacion_{$orden->numero_orden}.pdf");
     }
 }
