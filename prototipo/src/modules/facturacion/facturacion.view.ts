@@ -371,7 +371,17 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
     if (!tipo) return;
 
     try {
-      const endpoint = tipo === 'servicio' ? 'ordenes-servicio' : `ordenes-${tipo}`;
+      let endpoint = '';
+
+      if (tipo === 'servicio') {
+        endpoint = 'ordenes-servicio';
+      }
+      else if (tipo === 'producto') {
+        endpoint = 'ordenes-producto';
+      }
+      else if (tipo === 'capacitacion') {
+        endpoint = 'ordenes-capacitacion-auditoria';
+      }
       const resp = await fetch(`http://localhost:8000/api/v1/${endpoint}`, { headers: getAuthHeaders() });
       const result = await resp.json();
 
