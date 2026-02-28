@@ -67,16 +67,32 @@ function renderModalFactura() {
                   
                   <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px; padding:15px; border: 1px solid #10b981; border-radius:8px;">
                       <div>
-                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">N° de Factura *</label>
-                          <input type="text" id="in-num-factura" placeholder="F001-000000" required style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px; outline-color:#10b981;">
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Ejecución *</label>
+                          <input type="date" id="in-fecha-ejecucion"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                       <div>
-                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Emisión *</label>
-                          <input type="date" id="in-fecha-emision" required style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">N° de Factura *</label>
+                          <input type="text" id="in-num-factura" placeholder="F001-000000"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px; outline-color:#10b981;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Factura   *</label>
+                          <input type="date" id="in-fecha-factura"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                       <div>
                           <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Días Crédito</label>
                           <input type="number" id="in-dias-credito" value="30" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Vcto Factura *</label>
+                          <input type="date" id="in-fecha-vcto"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Días Vencer</label>
+                          <input type="number" id="in-dias-vencer" value="30" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Pago *</label>
+                          <input type="date" id="in-fecha-pago"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                   </div>
 
@@ -123,56 +139,96 @@ function renderModalFactura() {
 // --- TAB: ÓRDENES PROYECTADAS (Tabla principal) ---
 export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
   if (proyecciones.length === 0) {
-    return `<div style="text-align:center; padding:50px;">No hay registros de proyecciones.</div>`;
+    return `<div style="text-align:center; padding:50px; color: #64748b;">No hay registros.</div>`;
   }
+
+  // Limpiador de fechas para quitar la "Z" y la hora fea
+  const fDate = (d: string | null) => d ? d.split('T')[0] : '---';
 
   return `
     <div class="table-container" style="overflow-x: auto;">
-      <table class="data-table" style="min-width: 1200px;">
+      <table class="data-table" style="min-width: 1400px; width: 100%; border-collapse: collapse;">
         <thead>
-          <tr>
-            <th>N° ORDEN / CLIENTE</th>
-            <th>SERVICIO / ACTIVIDAD</th>
-            <th>SUBTOTAL</th>
-            <th>IGV</th>
-            <th>TOTAL OS</th>
-            <th>DETRACCIÓN (12%)</th>
-            <th>NETO A PAGAR</th>
-            <th>N° FACTURA</th>
-            <th>VENCIMIENTO</th>
-            <th>ESTADO</th>
+          <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+            <th style="padding: 12px; text-align: left;">ACTIVIDAD</th>
+            <th style="padding: 12px; text-align: left;">EMPRESA</th>
+            <th style="padding: 12px; text-align: left;">CLIENTE</th>
+            <th style="padding: 12px; text-align: left;">SERVICIO</th>
+            <th style="padding: 12px; text-align: left;">FECHA EJECUCION</th>
+            <th style="padding: 12px; text-align: left;">IMPORTES (S/)</th>
+            <th style="padding: 12px; text-align: left;">N° FACTURA</th>
+            <th style="padding: 12px; text-align: left;">DETRACCION</th>
+            <th style="padding: 12px; text-align: left;">MONTO TOTAL</th>
+            <th style="padding: 12px; text-align: left;">FECHA FACTURA</th>
+            <th style="padding: 12px; text-align: left;">DIAS CREDITO</th>
+            <th style="padding: 12px; text-align: left;">FECHA VCTO FACTURA</th>
+            <th style="padding: 12px; text-align: left;">DIAS VENCER</th>
+            <th style="padding: 12px; text-align: left;">FECHA PAGO</th>
           </tr>
         </thead>
-              <tbody>
-        ${proyecciones.map(p => `
-          <tr>
-            <td>
-              <div style="font-weight: bold; color: #2563eb;">${p.numero_orden || 'S/N'}</div>
-              <div style="font-size: 11px; color: #64748b;">${p.nombre_cliente || 'Sin cliente'} (${p.alias_empresa || '---'})</div>
+        <tbody>
+        ${proyecciones.map(p => {
+        const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || {};
+        const clienteNombre = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : 'Sin cliente';
+        const servicioNombre = ref.detalles 
+        ? ref.detalles.map((d: any) => {
+            const nombre = d.servicio ? d.servicio.nombre : 'Servicio';
+            return `<div style="font-size: 12px; line-height: 1.2; margin-bottom: 2px;">• ${nombre}</div>`;
+        }).join('')
+        : `<div style="font-size: 10px;">${ref.servicio || '---'}</div>`;
+        // Datos de la Orden
+        const totalOS = ref.precio_total_os || ref.total_costo || ref.total || 0;
+        const subtotal = ref.subtotal || (totalOS / 1.18);
+        const igv = ref.igv || (totalOS - subtotal);
+
+        // Limpiador de fechas para evitar el formato ISO largo
+        const fDate = (d: string | null) => d ? d.split('T')[0] : '---';
+
+        return `
+        <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+            <td style="padding: 10px;">${p.actividad || '---'}</td>
+
+            <td style="padding: 10px; font-weight: bold; color: #475569;">
+                ${p.multicim_emisora ? p.multicim_emisora.alias_empresa : '---'}
             </td>
-            <td>
-              <div style="font-size: 13px;">${p.servicio || 'Servicio General'}</div>
-              <div style="font-size: 11px; color: #94a3b8;">${p.actividad || 'Sin actividad'}</div>
+
+            <td style="padding: 10px; font-weight: 600;">${clienteNombre}</td>
+
+            <td style="padding: 10px; color: #2563eb;">${servicioNombre}</td>
+
+            <td style="padding: 10px; text-align: center;">${fDate(p.fecha_ejecucion)}</td>
+
+            <td style="padding: 10px; white-space: nowrap;">
+                <div style="font-size: 12px; color: #94a3b8;">SubTotal: ${Number(subtotal).toFixed(2)}</div>
+                <div style="font-size: 12px; color: #94a3b8;">Igv: ${Number(igv).toFixed(2)}</div>
+                <div style="font-weight: 500;">Total: ${Number(totalOS).toFixed(2)}</div>
             </td>
-            <td>S/ ${p.subtotal ? Number(p.subtotal).toFixed(2) : '0.00'}</td>
-            <td>S/ ${p.igv ? Number(p.igv).toFixed(2) : '0.00'}</td>
-            <td><strong style="color: #1e293b;">S/ ${p.precio_total_os ? Number(p.precio_total_os).toFixed(2) : '0.00'}</strong></td>
-            <td style="color: #dc2626;">S/ ${p.monto_detrax ? Number(p.monto_detrax).toFixed(2) : '0.00'}</td>
-            <td><strong style="color: #16a34a;">S/ ${p.total_final ? Number(p.total_final).toFixed(2) : '0.00'}</strong></td>
-            <td>
-              <span style="font-family: monospace; font-weight: 600;">${p.n_factura || '---'}</span>
+
+            <td style="padding: 10px; font-family: monospace; font-weight: bold;">${p.n_factura || '---'}</td>
+
+            <td style="padding: 10px; color: #dc2626; font-weight: bold;">S/ ${Number(p.monto_detrax || 0).toFixed(2)}</td>
+
+            <td style="padding: 10px;">
+                <div style="background: #f0fdf4; color: #16a34a; font-weight: 800; padding: 4px 8px; border-radius: 4px; border: 1px solid #bbf7d0; text-align: center;">
+                    S/ ${Number(p.total_final || 0).toFixed(2)}
+                </div>
             </td>
-            <td>
-              <div style="font-size: 12px;">${p.fecha_vcto || '---'}</div>
-              <div style="font-size: 10px; color: #ef4444;">${p.dia_vencer ? p.dia_vencer + ' días' : ''}</div>
+
+            <td style="padding: 10px;">${fDate(p.fecha_factura)}</td>
+
+            <td style="padding: 10px; text-align: center;">${p.dias_credito || 0}</td>
+
+            <td style="padding: 10px; font-weight: 600;">${fDate(p.fecha_vcto)}</td>
+
+            <td style="padding: 10px; text-align: center;">
+                <span style="color: ${p.dia_vencer <= 5 ? '#ef4444' : '#1e293b'}; font-weight: bold;">
+                    ${p.dia_vencer || 0}
+                </span>
             </td>
-            <td>
-              <span class="status-indicator ${p.n_factura ? 'success' : 'warning'}">
-                ${p.n_factura ? 'Facturado' : 'Por Facturar'}
-              </span>
-            </td>
-          </tr>
-        `).join('')}
+
+            <td style="padding: 10px; color: #6366f1; font-weight: 600;">${fDate(p.fecha_pago)}</td>
+        </tr>`;
+    }).join('')}
       </tbody>
       </table>
     </div>
@@ -442,59 +498,81 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
     }
   });
 
-  // --- 5. SUBMIT DEL FORMULARIO ---
-  form?.addEventListener('submit', async (e) => {
+ // --- 5. SUBMIT DEL FORMULARIO ---
+form?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const idRef = Number(selectOrden.value);
     const tipo = modalTipo.value;
 
-    // 1. Datos manuales
+    // CAPTURA DE VALORES NUEVOS (Obligatorios para tu nuevo store)
+    const clienteNombre = (document.getElementById('res-cliente') as HTMLInputElement).value;
+    const servicioNombre = (document.getElementById('res-servicio') as HTMLInputElement).value;
+    const actividadManual = (document.getElementById('in-actividad') as HTMLInputElement).value;
+
+    // Captura de importes desglosados (limpiando posibles espacios o S/)
+    const subtotal = parseFloat(document.getElementById('info-subtotal')?.innerText || '0');
+    const igv = parseFloat(document.getElementById('info-igv')?.innerText || '0');
+    const totalOS = parseFloat(document.getElementById('info-total-os')?.innerText || '0');
+
     const numFactura = (document.getElementById('in-num-factura') as HTMLInputElement).value;
-    const fechaEmi = (document.getElementById('in-fecha-emision') as HTMLInputElement).value;
-    const diasCred = Number((document.getElementById('in-dias-credito') as HTMLInputElement).value);
+    const fechaFactura = (document.getElementById('in-fecha-factura') as HTMLInputElement).value;
+    const diasCredito = Number((document.getElementById('in-dias-credito') as HTMLInputElement).value);
+    
+    // Fechas adicionales
+    const fechaPago = (document.getElementById('in-fecha-pago') as HTMLInputElement).value;
+    const fechaEjecucion = (document.getElementById('in-fecha-ejecucion') as HTMLInputElement).value;
 
-    // 2. Datos jalados de los inputs/spans
-    const actividad = (document.getElementById('in-actividad') as HTMLInputElement).value;
-    const montoDetrax = Number(document.getElementById('res-detrax')?.innerText || 0);
-    const totalFinal = Number(document.getElementById('res-neto')?.innerText || 0);
+    const montoDetrax = parseFloat(document.getElementById('res-detrax')?.innerText || '0');
+    const totalFinal = parseFloat(document.getElementById('res-neto')?.innerText || '0');
 
-    // 3. El ID de la empresa que jalamos en el paso anterior
     const idMulticimReal = Number((document.getElementById('res-alias') as HTMLSelectElement).value);
 
+    // EL PAYLOAD COMPLETO QUE ESPERA LARAVEL
     const payload = {
-      actividad: actividad,
-      id_multicim: idMulticimReal,
-      n_factura: numFactura,
-      monto_detrax: montoDetrax,
-      total_final: totalFinal,
-      fecha_factura: fechaEmi,
-      dias_credito: diasCred,
-      // Mapeo según tu controlador de Laravel
-      id_orden_servicio: tipo === 'servicio' ? idRef : null,
-      id_orden_producto: tipo === 'producto' ? idRef : null,
-      id_orden_capacitacion_auditoria: tipo === 'capacitacion' ? idRef : null
+        id_multicim: idMulticimReal,
+        tipo_orden: tipo,
+        id_referencia: idRef,
+        actividad: actividadManual,
+        cliente: clienteNombre,      // <--- ESTO SOLUCIONA TU ERROR
+        servicio: servicioNombre,    // <--- NUEVO
+        subtotal: subtotal,          // <--- NUEVO
+        igv: igv,                    // <--- NUEVO
+        precio_total_os: totalOS,    // <--- NUEVO
+        monto_detrax: montoDetrax,
+        total_final: totalFinal,
+        n_factura: numFactura,
+        fecha_factura: fechaFactura || null,
+        dias_credito: diasCredito,
+        fecha_pago: fechaPago || null,
+        fecha_ejecucion: fechaEjecucion || null
     };
 
+    console.log("Enviando al controlador:", payload);
+
     try {
-      const resp = await fetch('http://localhost:8000/api/v1/proyecciones', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(payload)
-      });
+        const resp = await fetch('http://localhost:8000/api/v1/proyecciones', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                ...getAuthHeaders() 
+            },
+            body: JSON.stringify(payload)
+        });
 
-      const result = await resp.json();
+        const result = await resp.json();
 
-      if (resp.ok && result.success) {
-        alert('Proyección registrada con éxito');
-        if (modal) modal.style.display = 'none';
-        window.location.reload();
-      } else {
-        alert('Error: ' + (result.message || 'No se pudo registrar'));
-      }
+        if (resp.ok && result.success) {
+            alert('¡Proyección registrada con éxito!');
+            if (modal) modal.style.display = 'none';
+            window.location.reload();
+        } else {
+            const msg = result.errors ? JSON.stringify(result.errors) : (result.message || 'Error desconocido');
+            alert('Error de validación: ' + msg);
+        }
     } catch (error) {
-      console.error("Error en submit:", error);
-      alert('Error de conexión con el servidor');
+        console.error("Error en submit:", error);
+        alert('Error de conexión con el servidor');
     }
-  });
+});
 }

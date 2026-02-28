@@ -26,49 +26,43 @@ class ProyeccionesController extends Controller
 
         switch ($tipo) {
             case 'servicio':
-                // Cargamos la orden con cliente, detalles y la cotización con sus detalles
-                $orden = OrdenServicio::with(['cliente', 'detalles', 'cotizacion.detalles'])->find($id);
+                // Cargamos la orden con sus detalles y la relación servicio de cada detalle
+                $orden = OrdenServicio::with(['cliente', 'detalles.servicio', 'cotizacion'])->find($id);
                 
                 if ($orden) {
                     $montoOriginal = $orden->total_costo;
                     $montoDetrax = ($montoOriginal > 700) ? ($montoOriginal * 0.12) : 0;
                     $totalFinal = $montoOriginal - $montoDetrax;
 
-                    // 1. Obtener el primer detalle de la Orden para la FRECUENCIA
-                    $primerDetalleOrden = $orden->detalles->first();
-                    $frecuencia = $primerDetalleOrden->frecuencia ?? 'S/N';
+                    // --- SOLUCIÓN PARA MÚLTIPLES SERVICIOS ---
+                    // Extraemos los nombres de todos los servicios vinculados y los unimos con una coma
+                    $serviciosArray = $orden->detalles->map(function($det) {
+                        return $det->servicio ? $det->servicio->nombre : 'Servicio';
+                    })->unique()->toArray(); // unique() para no repetir si es el mismo servicio en varios locales
 
-                    // 2. Obtener el servicio (intentamos buscar el nombre o descripción)
-                    // Si tienes una tabla 'servicios', Laravel debería jalar el nombre. 
-                    // Si no, podemos intentar jalar 'descripcion_manual' de la cotización.
-                    $primerDetalleCoti = $orden->cotizacion->detalles->first() ?? null;
-                    $servicioNombre = $primerDetalleCoti->descripcion_manual ?? 'Servicio de Inspección'; 
+                    $servicioNombre = implode(', ', $serviciosArray);
+
+                    // Si por alguna razón no hay servicios en detalles, intentamos con la descripción de la cotización
+                    if (empty($servicioNombre)) {
+                        $servicioNombre = $orden->cotizacion->detalles->first()->descripcion_manual ?? 'Servicio de Inspección';
+                    }
+                    // -----------------------------------------
 
                     $empresa = Multicim::find($orden->emitido_por);
 
                     $dataRespuesta = [
                         'id_referencia'   => $orden->id,
                         'numero_orden'    => $orden->numero_orden,
-                        'actividad'       => '',
+                        'actividad'       => "Servicio: " . $servicioNombre,
                         'alias_empresa'   => $empresa->alias_empresa ?? 'MULTI',
                         'nombre_cliente'  => $orden->cliente->nombre_empresa ?? 'S/N',
-                        'servicio'        => $servicioNombre,
-                        'frecuencia'      => $frecuencia,
-                        'fecha_factura'   => null, 
+                        'servicio'        => $servicioNombre, // Esto llenará tu input de "Servicio"
+                        'frecuencia'      => 'pendiente',
                         'subtotal'        => round($montoOriginal / 1.18, 2),
                         'igv'             => round($montoOriginal - ($montoOriginal / 1.18), 2),
                         'precio_total_os' => round($montoOriginal, 2),
-                        
-                        // Campo para el Modal
-                        // --- PARA COMPLETAR 
-                        'n_factura'       => '', 
                         'monto_detrax'    => round($montoDetrax, 2),
                         'total_final'     => round($totalFinal, 2),
-                        'dias_credito'    => null, 
-                        'fecha_vcto'      => null, 
-                        'fecha_pago'      => null, 
-                        'dia_vencer'      => null, 
-        
                     ];
                 }
                 break;
@@ -117,41 +111,54 @@ class ProyeccionesController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'actividad'     => 'required|string',
             'id_multicim'   => 'required|exists:multicim,id',
             'tipo_orden'    => 'required|in:servicio,producto,capacitacion',
             'id_referencia' => 'required|integer',
-            'n_factura'     => 'required|string',
+            'actividad'     => 'required|string',
             'monto_detrax'  => 'required|numeric',
             'total_final'   => 'required|numeric',
-            'fecha_factura' => 'required|date',
-            'dias_credito'  => 'required|integer'
+            'n_factura'     => 'nullable|string',
+            'fecha_factura' => 'nullable|date',
+            'dias_credito'  => 'nullable|integer',
+            'fecha_pago'    => 'nullable|date',
+            'fecha_ejecucion' => 'nullable|date', 
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Lógica automática de fechas
-        $fechaFactura = Carbon::parse($request->fecha_factura);
-        $fechaVcto = $fechaFactura->copy()->addDays($request->dias_credito);
-        $diaVencer = Carbon::now()->startOfDay()->diffInDays($fechaVcto, false);
+        // Lógica de fechas (igual que la tienes)...
+        $fechaVcto = null;
+        $diaVencer = null;
+        if ($request->filled('fecha_factura')) {
+            $fechaFactura = Carbon::parse($request->fecha_factura);
+            $dias = $request->dias_credito ?? 0;
+            $fechaVcto = $fechaFactura->copy()->addDays($dias);
+            $diaVencer = (int) Carbon::now()->startOfDay()->diffInDays($fechaVcto, false);
+        }
 
-        $data = $request->only(['actividad', 'id_multicim', 'n_factura', 'monto_detrax', 'total_final', 'fecha_factura', 'dias_credito']);
-        $data['fecha_vcto'] = $fechaVcto->format('Y-m-d');
-        $data['dia_vencer'] = (int)$diaVencer;
+        // SOLO CAMPOS QUE EXISTEN EN TU IMAGEN DE BD
+        $data = [
+            'actividad'     => $request->actividad,
+            'id_multicim'   => $request->id_multicim,
+            'n_factura'     => $request->n_factura,
+            'monto_detrax'  => $request->monto_detrax,
+            'total_final'   => $request->total_final,
+            'fecha_factura' => $request->fecha_factura,
+            'dias_credito'  => $request->dias_credito,
+            'fecha_pago'    => $request->fecha_pago,
+            'fecha_vcto'    => $fechaVcto ? $fechaVcto->format('Y-m-d') : null,
+            'dia_vencer'    => $diaVencer,
+        ];
 
-        // Asignar ID según el tipo
+        // Asignación de ID según tipo
         if ($request->tipo_orden === 'servicio') $data['id_orden_servicio'] = $request->id_referencia;
         if ($request->tipo_orden === 'producto') $data['id_orden_producto'] = $request->id_referencia;
         if ($request->tipo_orden === 'capacitacion') $data['id_orden_capacitacion_auditoria'] = $request->id_referencia;
 
-        try {
-            $proyeccion = Proyeccion::create($data);
-            return response()->json(['success' => true, 'message' => 'Proyección guardada', 'data' => $proyeccion], 201);
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
+        $proyeccion = Proyeccion::create($data);
+        return response()->json(['success' => true, 'data' => $proyeccion]);
     }
 
     /**
@@ -159,9 +166,16 @@ class ProyeccionesController extends Controller
      */
     public function index(): JsonResponse
     {
-        $proyecciones = Proyeccion::with(['multicimEmisora', 'ordenServicio.cliente'])
-                        ->orderBy('fecha_vcto', 'asc')
-                        ->get();
+        $proyecciones = Proyeccion::with([
+            'multicimEmisora', 
+            'ordenServicio.cliente', 
+            'ordenServicio.detalles.servicio',
+            'ordenProducto.cliente', 
+            'ordenCapacitacion.cliente'
+        ])
+        ->orderBy('fecha_vcto', 'asc')
+        ->get();
+        
         return response()->json(['success' => true, 'data' => $proyecciones]);
     }
 }
