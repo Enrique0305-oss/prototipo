@@ -1,6 +1,7 @@
 import type { DashboardData } from './dashboard.types';
 import { productoService } from '../../services/productoService';
 import { mantenimientoService } from '../../services/mantenimientoService';
+import { apiClient } from '../../core/api/api.client';
 
 export function renderDashboard(data?: DashboardData) {
   // Si no hay datos, mostrar loading o usar mock
@@ -12,6 +13,9 @@ export function renderDashboard(data?: DashboardData) {
 
     <!-- Banner de alerta de mantenimientos próximos/vencidos -->
     <div id="mantenimiento-alerta-banner"></div>
+
+    <!-- Banner de alerta de cotizaciones aceptadas sin orden -->
+    <div id="cotizaciones-sin-orden-banner"></div>
 
     <div class="page-header">
       <h1>Panel de Control Multidisciplinario</h1>
@@ -437,5 +441,124 @@ export async function cargarAlertaMantenimiento() {
     });
   } catch (e) {
     console.error('Error cargando alerta de mantenimientos:', e);
+  }
+}
+
+/**
+ * Carga alerta de cotizaciones aceptadas que aún no tienen orden generada.
+ */
+export async function cargarAlertaCotizacionesSinOrden() {
+  try {
+    const res = await apiClient.get<{ success: boolean; data: { total: number; producto: number; servicio: number; capacitacion: number } }>('/cotizaciones/alerta-sin-orden');
+    const raw = (res as any).data || res;
+    const data = raw.data || raw;
+
+    const total: number = data.total || 0;
+    const producto: number = data.producto || 0;
+    const servicio: number = data.servicio || 0;
+    const capacitacion: number = data.capacitacion || 0;
+
+    const banner = document.getElementById('cotizaciones-sin-orden-banner');
+    if (!banner) return;
+
+    if (total === 0) {
+      banner.innerHTML = '';
+      return;
+    }
+
+    // Generar detalle por tipo
+    const detalles: string[] = [];
+    if (producto > 0) detalles.push(`<strong>${producto}</strong> de Producto`);
+    if (servicio > 0) detalles.push(`<strong>${servicio}</strong> de Servicio`);
+    if (capacitacion > 0) detalles.push(`<strong>${capacitacion}</strong> de Capacitación`);
+    const detalleTexto = detalles.join(', ');
+
+    banner.innerHTML = `
+      <div style="
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 20px;
+        margin-bottom: 20px;
+        background: linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 100%);
+        border: 1px solid #10b981;
+        border-left: 5px solid #059669;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(5, 150, 105, 0.15);
+        animation: bannerSlideIn 0.4s ease-out;
+      ">
+        <div style="
+          flex-shrink: 0;
+          width: 44px;
+          height: 44px;
+          background: #059669;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+            <line x1="12" y1="12" x2="12" y2="18"></line>
+          </svg>
+        </div>
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 15px; color: #065f46; margin-bottom: 2px;">
+             Cotizaciones Aceptadas Pendientes
+          </div>
+          <div style="font-size: 13px; color: #047857;">
+            Tienes <strong>${total}</strong> cotización${total > 1 ? 'es' : ''} aceptada${total > 1 ? 's' : ''} sin orden generada: ${detalleTexto}.
+          </div>
+        </div>
+        <button id="btn-ir-cotizaciones" style="
+          flex-shrink: 0;
+          padding: 8px 18px;
+          background: #059669;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          transition: background 0.2s;
+          white-space: nowrap;
+        " onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
+          Ir a Cotizaciones →
+        </button>
+        <button id="btn-cerrar-banner-cotizaciones" style="
+          flex-shrink: 0;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #065f46;
+          font-size: 20px;
+          line-height: 1;
+          padding: 4px;
+          opacity: 0.6;
+          transition: opacity 0.2s;
+        " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Cerrar alerta">
+          &times;
+        </button>
+      </div>
+    `;
+
+    // Botón cerrar banner
+    document.getElementById('btn-cerrar-banner-cotizaciones')?.addEventListener('click', () => {
+      if (banner) banner.innerHTML = '';
+    });
+
+    // Botón ir a cotizaciones
+    document.getElementById('btn-ir-cotizaciones')?.addEventListener('click', () => {
+      const comercialBtn = document.querySelector('[data-menu="Comercial"]') as HTMLButtonElement;
+      if (comercialBtn) comercialBtn.click();
+      setTimeout(() => {
+        const cotBtn = document.querySelector('[data-submenu="Cotizaciones"]') as HTMLButtonElement;
+        if (cotBtn) cotBtn.click();
+      }, 100);
+    });
+  } catch (e) {
+    console.error('Error cargando alerta de cotizaciones sin orden:', e);
   }
 }

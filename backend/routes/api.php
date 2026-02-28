@@ -26,6 +26,7 @@ use App\Http\Controllers\API\HorarioController;
 use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
+use App\Http\Controllers\API\EntregaEppController;
 
 // Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
@@ -48,6 +49,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // para las cotizaciones :v
     Route::get('/cotizaciones', [CotizacionController::class, 'index']);
     Route::get('/cotizaciones/estadisticas/resumen', [CotizacionController::class, 'estadisticas']);
+    Route::get('/cotizaciones/alerta-sin-orden', [CotizacionController::class, 'alertaCotizacionesSinOrden']);
     Route::get('/cotizaciones/{id}', [CotizacionController::class, 'show']);
     Route::post('/cotizaciones', [CotizacionController::class, 'store']);
     Route::patch('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado']);
@@ -236,4 +238,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'update']);
     Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
     Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
+
+    // Entrega EPP - equipos de protección personal
+    Route::get('/entrega-epp/estadisticas/resumen', [EntregaEppController::class, 'estadisticas']);
+    Route::get('/entrega-epp/productos-epp', [EntregaEppController::class, 'productosEpp']);
+    Route::get('/entrega-epp', [EntregaEppController::class, 'index']);
+    Route::post('/entrega-epp', [EntregaEppController::class, 'store']);
+    Route::get('/entrega-epp/{id}', [EntregaEppController::class, 'show']);
+    Route::patch('/entrega-epp/{id}/devolver', [EntregaEppController::class, 'devolver']);
+    Route::get('/entrega-epp/{id}/pdf', [EntregaEppController::class, 'generarPDF']);
 });
