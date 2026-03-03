@@ -27,13 +27,15 @@ class Proyeccion extends Model
         'dias_credito',
         'fecha_vcto',
         'dia_vencer',
-        'fecha_pago'
+        'fecha_pago',
+        'fecha_ejecucion'
     ];
 
     // Casts para asegurar que los números y fechas se manejen correctamente
     protected $casts = [
         'monto_detrax' => 'decimal:2',
         'total_final' => 'decimal:2',
+        'fecha_ejecucion' => 'date',
         'fecha_factura' => 'date',
         'fecha_vcto' => 'date',
         'fecha_pago' => 'date',
