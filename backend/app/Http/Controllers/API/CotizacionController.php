@@ -269,6 +269,39 @@ class CotizacionController extends Controller
     }
 
     /**
+     * Alerta de cotizaciones aceptadas sin orden generada
+     */
+    public function alertaCotizacionesSinOrden(): JsonResponse
+    {
+        $producto = Cotizacion::where('estado', 'Aceptada')
+            ->where('tipo_cotizacion', 'Producto')
+            ->whereDoesntHave('ordenProducto')
+            ->count();
+
+        $servicio = Cotizacion::where('estado', 'Aceptada')
+            ->where('tipo_cotizacion', 'Servicio')
+            ->whereDoesntHave('ordenServicio')
+            ->count();
+
+        $capacitacion = Cotizacion::where('estado', 'Aceptada')
+            ->where('tipo_cotizacion', 'Capacitacion')
+            ->whereDoesntHave('ordenCapacitacionAuditoria')
+            ->count();
+
+        $total = $producto + $servicio + $capacitacion;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total' => $total,
+                'producto' => $producto,
+                'servicio' => $servicio,
+                'capacitacion' => $capacitacion,
+            ]
+        ]);
+    }
+
+    /**
      * Generar PDF de cotización
      */
     public function generarPDF($id, Request $request)

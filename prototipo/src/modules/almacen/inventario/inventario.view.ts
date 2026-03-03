@@ -1095,6 +1095,8 @@ function renderModalNuevoProducto(): string {
                 <option value="Litros">Litros</option>
                 <option value="Kilogramos">Kilogramos</option>
                 <option value="Unidades">Unidades</option>
+                <option value="Unidad">Unidad</option>
+                <option value="Par">Par</option>
                 <option value="Cajas">Cajas</option>
                 <option value="Galones">Galones</option>
                 <option value="Gramos">Gramos</option>
