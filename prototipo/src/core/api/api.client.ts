@@ -41,6 +41,23 @@ export class ApiClient {
     return this.handleResponse<T>(response);
   }
 
+  async postFormData<T>(endpoint: string, formData: FormData): Promise<T> {
+    const url = this.buildURL(endpoint);
+    const headers: Record<string, string> = {};
+    const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    // No incluir Content-Type — el navegador lo agrega automáticamente con boundary
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    return this.handleResponse<T>(response);
+  }
+
   async patch<T>(endpoint: string, data?: any): Promise<T> {
     const url = this.buildURL(endpoint);
     const response = await fetch(url, {

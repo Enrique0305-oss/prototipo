@@ -19,7 +19,8 @@ class Producto extends Model
         'n_lote',
         'unidad',
         'precio_unitario',
-        'estado'
+        'estado',
+        'imagen'
     ];
 
     protected $casts = [

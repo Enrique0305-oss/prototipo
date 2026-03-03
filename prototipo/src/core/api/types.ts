@@ -184,6 +184,8 @@ export interface Producto {
   unidad?: string; // Ej: "Litros", "Unidades", "Kg"
   precio_unitario?: number;
   estado: 'Activo' | 'Inactivo';
+  imagen?: string | null;
+  imagen_url?: string | null;
   categoria?: Categoria;
   inventario?: {
     cantidad_disponible: number;

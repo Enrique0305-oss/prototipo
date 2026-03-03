@@ -110,6 +110,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/productos/{id}', [ProductoController::class, 'update']);
     Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
     Route::patch('/productos/{id}/reactivar', [ProductoController::class, 'reactivar']);
+    Route::post('/productos/{id}/imagen', [ProductoController::class, 'subirImagen']);
+    Route::delete('/productos/{id}/imagen', [ProductoController::class, 'eliminarImagen']);
 
     // para las categorías :v
     Route::get('/categorias/estadisticas/resumen', [CategoriaController::class, 'estadisticas']);

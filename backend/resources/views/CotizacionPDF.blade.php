@@ -343,6 +343,11 @@
                         @elseif($detalle->id_producto)
                             <strong>{{ $detalle->producto->descripcion ?? 'N/A' }}</strong><br>
                             <small style="color: #666;">{{ $detalle->descripcion_manual }}</small>
+                            @if($detalle->producto && $detalle->producto->imagen)
+                                <div style="margin-top: 8px; text-align: center;">
+                                    <img src="{{ storage_path('app/public/' . $detalle->producto->imagen) }}" alt="{{ $detalle->producto->descripcion }}" style="max-width: 180px; max-height: 130px;">
+                                </div>
+                            @endif
                         @else
                             {{ $detalle->descripcion_manual }}
                         @endif

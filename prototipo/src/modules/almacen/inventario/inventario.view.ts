@@ -1123,6 +1123,20 @@ function renderModalNuevoProducto(): string {
             </div>
           </div>
 
+          <!-- Campo de imagen -->
+          <div style="margin-top: 16px; padding: 16px; border: 2px dashed #cbd5e1; border-radius: 8px; text-align: center; cursor: pointer; transition: border-color 0.2s;" id="zona-imagen-nuevo">
+            <input type="file" id="producto-imagen" name="imagen" accept="image/jpeg,image/png,image/webp" style="display: none;">
+            <div id="preview-imagen-nuevo">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom: 8px;">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              <div style="font-size: 13px; color: #64748b;">Haz clic para subir una imagen del producto</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+            </div>
+          </div>
+
           <div class="modal-footer" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
             <button type="button" class="btn-secondary" onclick="cerrarModalNuevoProducto()">
               Cancelar
@@ -1188,6 +1202,42 @@ function abrirModalNuevoProducto() {
       const form = document.getElementById('form-nuevo-producto') as HTMLFormElement;
       if (form) {
         form.addEventListener('submit', handleSubmitNuevoProducto);
+      }
+
+      // Zona de imagen: click y preview
+      const zonaImagen = document.getElementById('zona-imagen-nuevo');
+      const inputImagen = document.getElementById('producto-imagen') as HTMLInputElement;
+      if (zonaImagen && inputImagen) {
+        zonaImagen.addEventListener('click', (ev) => {
+          if ((ev.target as HTMLElement).id === 'btn-quitar-imagen-nuevo') return;
+          inputImagen.click();
+        });
+        inputImagen.addEventListener('change', () => {
+          const file = inputImagen.files?.[0];
+          const preview = document.getElementById('preview-imagen-nuevo');
+          if (file && preview) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              preview.innerHTML = `
+                <div style="position: relative; display: inline-block;">
+                  <img src="${ev.target?.result}" alt="Preview" style="max-width: 200px; max-height: 150px; border-radius: 6px; object-fit: cover;">
+                  <button type="button" id="btn-quitar-imagen-nuevo" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Quitar imagen">&times;</button>
+                </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Haz clic para cambiar la imagen</div>
+              `;
+              document.getElementById('btn-quitar-imagen-nuevo')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                inputImagen.value = '';
+                preview.innerHTML = `
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom: 8px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                  <div style="font-size: 13px; color: #64748b;">Haz clic para subir una imagen del producto</div>
+                  <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+                `;
+              });
+            };
+            reader.readAsDataURL(file);
+          }
+        });
       }
 
       // Cerrar al hacer clic fuera del modal
@@ -1268,6 +1318,18 @@ async function handleSubmitNuevoProducto(e: Event) {
     const response = await productoService.create(data);
     
     if (response.success) {
+      // Subir imagen si se seleccionó una
+      const inputImagen = document.getElementById('producto-imagen') as HTMLInputElement;
+      const archivoImagen = inputImagen?.files?.[0];
+      if (archivoImagen && response.data?.id) {
+        try {
+          await productoService.subirImagen(response.data.id, archivoImagen);
+        } catch (imgError) {
+          console.error('Error subiendo imagen:', imgError);
+          mostrarToast('warning', 'Producto creado', 'El producto se creó pero hubo un error al subir la imagen');
+        }
+      }
+
       // Cerrar modal
       cerrarModalNuevoProducto();
       
@@ -1401,6 +1463,28 @@ function renderModalEditarProducto(producto: Producto): string {
             </div>
           </div>
 
+          <!-- Campo de imagen -->
+          <div style="margin-top: 16px; padding: 16px; border: 2px dashed #cbd5e1; border-radius: 8px; text-align: center; cursor: pointer; transition: border-color 0.2s;" id="zona-imagen-editar">
+            <input type="file" id="edit-imagen" name="imagen" accept="image/jpeg,image/png,image/webp" style="display: none;">
+            <div id="preview-imagen-editar">
+              ${producto.imagen_url ? `
+                <div style="position: relative; display: inline-block;">
+                  <img src="${producto.imagen_url}" alt="${producto.descripcion}" style="max-width: 200px; max-height: 150px; border-radius: 6px; object-fit: cover;">
+                  <button type="button" id="btn-eliminar-imagen" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Eliminar imagen">&times;</button>
+                </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Haz clic para cambiar la imagen</div>
+              ` : `
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom: 8px;">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                <div style="font-size: 13px; color: #64748b;">Haz clic para subir una imagen del producto</div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+              `}
+            </div>
+          </div>
+
           <div class="modal-footer" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
             <button type="button" class="btn-secondary" id="btn-cancelar-editar">
               Cancelar
@@ -1457,6 +1541,63 @@ async function abrirModalEditarProducto(id: number) {
   document.getElementById('btn-cancelar-editar')?.addEventListener('click', () => modal.remove());
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
 
+  // Zona de imagen: click, preview y eliminar
+  const zonaImagenEdit = document.getElementById('zona-imagen-editar');
+  const inputImagenEdit = document.getElementById('edit-imagen') as HTMLInputElement;
+  if (zonaImagenEdit && inputImagenEdit) {
+    zonaImagenEdit.addEventListener('click', (ev) => {
+      const target = ev.target as HTMLElement;
+      if (target.id === 'btn-eliminar-imagen' || target.id === 'btn-quitar-imagen-editar') return;
+      inputImagenEdit.click();
+    });
+    inputImagenEdit.addEventListener('change', () => {
+      const file = inputImagenEdit.files?.[0];
+      const preview = document.getElementById('preview-imagen-editar');
+      if (file && preview) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          preview.innerHTML = `
+            <div style="position: relative; display: inline-block;">
+              <img src="${ev.target?.result}" alt="Preview" style="max-width: 200px; max-height: 150px; border-radius: 6px; object-fit: cover;">
+              <button type="button" id="btn-quitar-imagen-editar" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Quitar imagen">&times;</button>
+            </div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Haz clic para cambiar la imagen</div>
+          `;
+          document.getElementById('btn-quitar-imagen-editar')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            inputImagenEdit.value = '';
+            preview.innerHTML = `
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom: 8px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              <div style="font-size: 13px; color: #64748b;">Haz clic para subir una imagen del producto</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+            `;
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+    // Botón eliminar imagen existente
+    document.getElementById('btn-eliminar-imagen')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const productoId = parseInt(form.dataset.productoId || '0');
+      if (!productoId) return;
+      try {
+        await productoService.eliminarImagen(productoId);
+        const preview = document.getElementById('preview-imagen-editar');
+        if (preview) {
+          preview.innerHTML = `
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom: 8px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            <div style="font-size: 13px; color: #64748b;">Haz clic para subir una imagen del producto</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+          `;
+        }
+        mostrarToast('success', 'Imagen eliminada', 'La imagen del producto fue eliminada');
+      } catch (err) {
+        mostrarToast('error', 'Error', 'No se pudo eliminar la imagen');
+      }
+    });
+  }
+
   // Submit
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1497,6 +1638,18 @@ async function abrirModalEditarProducto(id: number) {
     try {
       const response = await productoService.update(productoId, data);
       if (response.success) {
+        // Subir imagen si se seleccionó una nueva
+        const imgInput = document.getElementById('edit-imagen') as HTMLInputElement;
+        const archivoImg = imgInput?.files?.[0];
+        if (archivoImg) {
+          try {
+            await productoService.subirImagen(productoId, archivoImg);
+          } catch (imgError) {
+            console.error('Error subiendo imagen:', imgError);
+            mostrarToast('warning', 'Producto actualizado', 'Se actualizó pero hubo un error al subir la imagen');
+          }
+        }
+
         modal.remove();
         mostrarToast('success', 'Producto actualizado', `${data.descripcion || 'Producto'} se actualizó correctamente`);
         await cargarProductos();

@@ -8,6 +8,8 @@ use App\Models\Categoria;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ProductoController extends Controller
 {
@@ -68,6 +70,8 @@ class ProductoController extends Controller
                 'unidad' => $producto->unidad,
                 'precio_unitario' => $producto->precio_unitario,
                 'estado' => $producto->estado,
+                'imagen' => $producto->imagen,
+                'imagen_url' => $producto->imagen ? asset('storage/' . $producto->imagen) : null,
                 'categoria' => $producto->categoria ? [
                     'id' => $producto->categoria->id,
                     'nombre' => $producto->categoria->nombre,
@@ -202,6 +206,8 @@ class ProductoController extends Controller
             'unidad' => $producto->unidad,
             'precio_unitario' => $producto->precio_unitario,
             'estado' => $producto->estado,
+            'imagen' => $producto->imagen,
+            'imagen_url' => $producto->imagen ? asset('storage/' . $producto->imagen) : null,
             'categoria' => $producto->categoria ? [
                 'id' => $producto->categoria->id,
                 'nombre' => $producto->categoria->nombre,
@@ -400,6 +406,95 @@ class ProductoController extends Controller
                 'vencidos' => $vencidos,
                 'por_categoria' => $porCategoria
             ]
+        ]);
+    }
+
+    /**
+     * Subir o actualizar imagen de un producto
+     */
+    public function subirImagen(Request $request, $id): JsonResponse
+    {
+        $producto = Producto::with('categoria')->find($id);
+
+        if (!$producto) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Producto no encontrado'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'imagen' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
+        ], [
+            'imagen.required' => 'La imagen es requerida',
+            'imagen.image' => 'El archivo debe ser una imagen',
+            'imagen.mimes' => 'Solo se aceptan formatos: jpeg, jpg, png, webp',
+            'imagen.max' => 'La imagen no debe superar los 5MB',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Eliminar imagen anterior si existe
+        if ($producto->imagen && Storage::disk('public')->exists($producto->imagen)) {
+            Storage::disk('public')->delete($producto->imagen);
+        }
+
+        // Determinar carpeta según categoría
+        $categoriaNombre = $producto->categoria
+            ? Str::slug($producto->categoria->nombre, '-')
+            : 'sin-categoria';
+
+        $carpeta = "productos/{$categoriaNombre}";
+
+        // Generar nombre de archivo único
+        $extension = $request->file('imagen')->getClientOriginalExtension();
+        $nombreArchivo = Str::slug($producto->descripcion) . '-' . $producto->id . '.' . $extension;
+
+        // Guardar archivo
+        $ruta = $request->file('imagen')->storeAs($carpeta, $nombreArchivo, 'public');
+
+        // Actualizar BD
+        $producto->update(['imagen' => $ruta]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Imagen subida exitosamente',
+            'data' => [
+                'imagen' => $ruta,
+                'imagen_url' => asset('storage/' . $ruta),
+            ]
+        ]);
+    }
+
+    /**
+     * Eliminar imagen de un producto
+     */
+    public function eliminarImagen($id): JsonResponse
+    {
+        $producto = Producto::find($id);
+
+        if (!$producto) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Producto no encontrado'
+            ], 404);
+        }
+
+        if ($producto->imagen && Storage::disk('public')->exists($producto->imagen)) {
+            Storage::disk('public')->delete($producto->imagen);
+        }
+
+        $producto->update(['imagen' => null]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Imagen eliminada exitosamente'
         ]);
     }
 }

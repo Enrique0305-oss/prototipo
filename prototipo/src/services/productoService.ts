@@ -48,4 +48,14 @@ export const productoService = {
   reactivar: async (id: number) => {
     return apiClient.patch<ApiResponse<Producto>>(`/productos/${id}/reactivar`);
   },
+
+  subirImagen: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('imagen', file);
+    return apiClient.postFormData<ApiResponse<{ imagen: string; imagen_url: string }>>(`/productos/${id}/imagen`, formData);
+  },
+
+  eliminarImagen: async (id: number) => {
+    return apiClient.delete<ApiResponse<null>>(`/productos/${id}/imagen`);
+  },
 };
