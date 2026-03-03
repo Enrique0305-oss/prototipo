@@ -34,13 +34,17 @@ class ProyeccionesController extends Controller
                     $montoDetrax = ($montoOriginal > 700) ? ($montoOriginal * 0.12) : 0;
                     $totalFinal = $montoOriginal - $montoDetrax;
 
-                    // --- SOLUCIÓN PARA MÚLTIPLES SERVICIOS ---
-                    // Extraemos los nombres de todos los servicios vinculados y los unimos con una coma
+                    // --- PARA MÚLTIPLES SERVICIOS ---
                     $serviciosArray = $orden->detalles->map(function($det) {
                         return $det->servicio ? $det->servicio->nombre : 'Servicio';
                     })->unique()->toArray(); // unique() para no repetir si es el mismo servicio en varios locales
-
                     $servicioNombre = implode(', ', $serviciosArray);
+
+                    // --- PARA MÚLTIPLES FRECUENCIAS ---
+                    $frecuenciasArray = $orden->detalles->map(function($det) {
+                        return $det->frecuencia ?? 'S/N';
+                    })->unique()->toArray();
+                    $frecuenciaTexto = implode(', ', $frecuenciasArray);
 
                     // Si por alguna razón no hay servicios en detalles, intentamos con la descripción de la cotización
                     if (empty($servicioNombre)) {
@@ -53,11 +57,11 @@ class ProyeccionesController extends Controller
                     $dataRespuesta = [
                         'id_referencia'   => $orden->id,
                         'numero_orden'    => $orden->numero_orden,
-                        'actividad'       => "Servicio: " . $servicioNombre,
+                        'actividad'       => '',
                         'alias_empresa'   => $empresa->alias_empresa ?? 'MULTI',
                         'nombre_cliente'  => $orden->cliente->nombre_empresa ?? 'S/N',
                         'servicio'        => $servicioNombre, // Esto llenará tu input de "Servicio"
-                        'frecuencia'      => 'pendiente',
+                        'frecuencia'      => $frecuenciaTexto, // Esto llenará tu input de "Frecuencia"
                         'subtotal'        => round($montoOriginal / 1.18, 2),
                         'igv'             => round($montoOriginal - ($montoOriginal / 1.18), 2),
                         'precio_total_os' => round($montoOriginal, 2),
@@ -149,7 +153,8 @@ class ProyeccionesController extends Controller
             'dias_credito'  => $request->dias_credito,
             'fecha_pago'    => $request->fecha_pago,
             'fecha_vcto'    => $fechaVcto ? $fechaVcto->format('Y-m-d') : null,
-            'dia_vencer'    => $diaVencer,
+            'dia_vencer' => $request->has('dia_vencer') ? $request->dia_vencer : $diaVencer,
+            'fecha_ejecucion' => $request->fecha_ejecucion
         ];
 
         // Asignación de ID según tipo
@@ -174,7 +179,24 @@ class ProyeccionesController extends Controller
             'ordenCapacitacion.cliente'
         ])
         ->orderBy('fecha_vcto', 'asc')
-        ->get();
+        ->get()
+        ->map(function($p) {
+            $detallesRelacionados = [];
+
+            if ($p->ordenServicio && $p->ordenServicio->detalles) {
+                foreach ($p->ordenServicio->detalles as $det) {
+                    $detallesRelacionados[] = [
+                        'nombre' => $det->servicio ? $det->servicio->nombre : 'Servicio',
+                        'frecuencia' => $det->frecuencia ?? 'S/N'
+                    ];
+                }
+            }
+
+            // Enviamos el array de objetos directamente
+            $p->servicios_detallados = $detallesRelacionados;
+            
+            return $p;
+        });
         
         return response()->json(['success' => true, 'data' => $proyecciones]);
     }
