@@ -251,9 +251,60 @@
             color: #6CB52D;
             font-style: italic;
         }
+        /* Estilos para la nueva tabla de pagos */
+        .payment-section {
+            margin-top: 25px;
+            page-break-inside: avoid;
+        }
+        .payment-header-text {
+            font-weight: bold;
+            text-decoration: underline;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+        .payment-table {
+            width: 90%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            margin-left: 5%;
+        }
+        .payment-table td {
+            border: 1px solid #000; 
+            padding: 6px 10px;
+            font-size: 11px;
+        }
+        .payment-table .label-cell {
+            width: 45%;
+            background-color: #ffffff;
+        }
     </style>
 </head>
 <body>
+    @php
+    // Datos de CIM
+    $empresaCim = [
+        'nombre' => 'CIM CONSULTORES PARA LA INDUSTRIA ALIMENTARIA SAC',
+        'ruc' => '20604910090',
+        'bcp' => '191-2656778-0-39',
+        'cci_bcp' => '00219100265677803955',
+        'banco_nacion' => '00-004-156900',
+        'cci_nacion' => '1800400000415690000'
+    ];
+
+    // Datos de Multitasking
+    $empresaMulti = [
+        'nombre' => 'Multitasking servicios generales SAC',
+        'ruc' => '20607499234',
+        'bcp' => '191-9289661-0-57',
+        'cci_bcp' => '00219100928966105750',
+        'banco_nacion' => '00-054-127251',
+        'cci_nacion' => '01805400005412725174'
+    ];
+
+    // Si es tipo 'capacitacion' usa CIM, sino usa Multi
+    $tipo = strtolower($cotizacion->tipo_cotizacion);
+    $datos = ($tipo == 'capacitacion' || $tipo == 'capacitación') ? $empresaCim : $empresaMulti;
+    @endphp
     <div class="container">
         
         <!-- LOGO -->
@@ -263,7 +314,7 @@
         
         <!-- TÍTULO PRINCIPAL -->
         <div class="main-title">COTIZACIÓN</div>
-        <div class="sub-title">Servicios Multidisciplinarios</div>
+        <!-- <div class="sub-title">Servicios Multidisciplinarios</div> -->
         
         <div class="separator"></div>
         
@@ -279,14 +330,10 @@
                 <td>Empresa:</td>
                 <td>{{ $cotizacion->cliente->nombre_empresa }}</td>
             </tr>
-            <tr>
+            <!-- <tr>
                 <td>Fecha:</td>
                 <td>{{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->format('d/m/Y') }}</td>
-            </tr>
-            <tr>
-                <td>Proveedor:</td>
-                <td>QSCI Group - Servicios Multidisciplinarios</td>
-            </tr>
+            </tr> -->
             <tr>
                 <td>RUC:</td>
                 <td>{{ $cotizacion->cliente->ruc }}</td>
@@ -399,6 +446,38 @@
                     <strong>Observaciones:</strong> {{ $cotizacion->observaciones }}
                 </p>
             @endif
+        </div>
+
+        <!-- SECCIÓN DE PAGOS -->
+         <div class="payment-section">
+            <p class="payment-header-text">Condiciones de pago:</p>
+            <p style="font-size: 12px; margin-bottom: 5px;"> -  Información de pago: Cuenta BCP</p>
+            <table class="payment-table">
+                <tr>
+                    <td class="label-cell">Cuenta BCP ahorro en soles</td>
+                    <td>{{ $datos['bcp'] }}</td>
+                </tr>
+                <tr>
+                    <td class="label-cell">Código de cuenta interbancario</td>
+                    <td>{{ $datos['cci_bcp'] }}</td>
+                </tr>
+                <tr>
+                    <td class="label-cell">A nombre de</td>
+                    <td><strong>{{ $datos['nombre'] }}</strong></td>
+                </tr>
+                <tr>
+                    <td class="label-cell">RUC</td>
+                    <td>{{ $datos['ruc'] }}</td>
+                </tr>
+                <tr>
+                    <td class="label-cell">Banco de la Nación Cuenta de Detracción</td>
+                    <td>{{ $datos['banco_nacion'] }}</td>
+                </tr>
+                <tr>
+                    <td class="label-cell">Código de Cuenta Interbancario</td>
+                    <td>{{ $datos['cci_nacion'] }}</td>
+                </tr>
+            </table>
         </div>
         
         <!-- CONDICIONES COMERCIALES -->
