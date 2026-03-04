@@ -15,6 +15,7 @@ use App\Models\Tecnico;
 use App\Models\Vehiculo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 
 class ProgramacionServicioController extends Controller
@@ -708,6 +709,90 @@ class ProgramacionServicioController extends Controller
             default:
                 return $fecha->addMonth()->format('Y-m-d');
         }
+    }
+
+    /**
+     * Generar PDF de programaciones (mensual / semanal / diaria)
+     */
+    public function generarPDF(Request $request)
+    {
+        $vista = $request->input('vista', 'mensual'); // mensual | semanal | diaria
+
+        $query = ProgramacionServicio::with([
+            'ordenServicio.cliente',
+            'servicio',
+            'tecnico',
+            'tecnicos',
+            'supervisor',
+            'vehiculo',
+            'insumos.producto',
+        ]);
+
+        $orientation = 'landscape';
+        $titulo = '';
+        $fechaInicio = null;
+        $mes = null;
+        $anio = null;
+
+        $monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+        if ($vista === 'mensual') {
+            $mes = $request->input('mes', now()->month);
+            $anio = $request->input('anio', now()->year);
+            $query->whereMonth('fecha_programada', $mes)
+                  ->whereYear('fecha_programada', $anio);
+            $titulo = $monthNames[$mes - 1] . ' ' . $anio;
+        } elseif ($vista === 'semanal') {
+            // Se pasa fecha_inicio (lunes de la semana)
+            $fechaInicio = $request->input('fecha_inicio', now()->startOfWeek()->format('Y-m-d'));
+            $fechaFin = Carbon::parse($fechaInicio)->addDays(6)->format('Y-m-d');
+            $query->whereBetween('fecha_programada', [$fechaInicio, $fechaFin]);
+            $titulo = 'Semana del ' . Carbon::parse($fechaInicio)->format('d/m/Y') . ' al ' . Carbon::parse($fechaFin)->format('d/m/Y');
+        } elseif ($vista === 'diaria') {
+            $fecha = $request->input('fecha', now()->format('Y-m-d'));
+            $query->whereDate('fecha_programada', $fecha);
+            $titulo = Carbon::parse($fecha)->locale('es')->isoFormat('dddd D [de] MMMM [de] YYYY');
+            $orientation = 'landscape';
+        }
+
+        // Filtro opcional: técnico
+        if ($request->filled('id_tecnico')) {
+            $idTec = $request->id_tecnico;
+            $query->where(function ($q) use ($idTec) {
+                $q->where('id_tecnico_asignado', $idTec)
+                  ->orWhereHas('tecnicos', fn($q2) => $q2->where('tecnicos.id', $idTec));
+            });
+        }
+
+        // Filtro opcional: estado
+        if ($request->filled('estado')) {
+            $estados = explode(',', $request->estado);
+            $query->whereIn('estado_ejecucion', $estados);
+        }
+
+        $programaciones = $query->orderBy('fecha_programada', 'asc')
+                                ->orderBy('hora_inicio', 'asc')
+                                ->get();
+
+        // Contadores por estado
+        $contadores = $programaciones->groupBy('estado_ejecucion')->map->count()->toArray();
+        $total = $programaciones->count();
+
+        $pdf = Pdf::loadView('ProgramacionPDF', [
+            'programaciones' => $programaciones,
+            'vista'          => $vista,
+            'titulo'         => $titulo,
+            'contadores'     => $contadores,
+            'total'          => $total,
+            'mes'            => $mes,
+            'anio'           => $anio,
+            'fechaInicio'    => $fechaInicio,
+        ])->setPaper('A4', $orientation);
+
+        $filename = 'Programacion_' . ucfirst($vista) . '_' . now()->format('Ymd_His') . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     /**
