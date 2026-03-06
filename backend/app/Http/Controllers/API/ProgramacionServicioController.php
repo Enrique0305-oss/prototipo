@@ -628,19 +628,13 @@ class ProgramacionServicioController extends Controller
                 'id_programacion' => $prog->id,
                 'id_producto' => $item->id_producto,
                 'cantidad_asignada' => $item->cantidad_default,
-                'estado' => 'Asignado',
+                'estado' => 'Asignado', // Asignado teóricamente, pendiente de entrega por almacén
             ]);
 
-            Kardex::registrarMovimiento([
-                'id_producto' => $item->id_producto,
-                'tipo_movimiento' => 'Salida',
-                'cantidad' => $item->cantidad_default,
-                'motivo' => 'Programación Servicio',
-                'referencia' => "PROG-{$prog->id}",
-                'id_referencia' => $prog->id,
-                'id_usuario' => $idUsuario,
-                'observacion' => "Salida por programación #{$prog->id} - Servicio",
-            ]);
+            // NOTA: El stock NO se descuenta aquí automáticamente.
+            // Almacén debe confirmar la salida física de materiales,
+            // y en ese momento se registrará en Kardex y descontará del stock.
+            // Ver función de confirmación de salida en módulo de almacén.
         }
     }
 

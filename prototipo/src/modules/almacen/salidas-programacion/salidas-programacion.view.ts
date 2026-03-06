@@ -1,0 +1,583 @@
+import { salidasProgramacionService, type ProgramacionPendiente, type InsumoProgamacion } from './salidas-programacion.service';
+import { mostrarToast, confirmarAccion } from '../../../shared/toast';
+import './salidas-programacion.css';
+
+let programacionesPendientes: ProgramacionPendiente[] = [];
+let historialData: ProgramacionPendiente[] = [];
+let filtroFechaDesde = '';
+let filtroFechaHasta = '';
+let vistaSeccActual: 'pendientes' | 'historial' = 'pendientes';
+let paginaActual = 1;
+const ITEMS_POR_PAGINA = 20;
+
+// ═══════════ Render principal ═══════════
+
+export function renderSalidasProgramacion(): string {
+  return `
+    <div style="padding:24px">
+      <div class="prov-page-header">
+        <div>
+          <div class="prov-breadcrumb">Salidas por Programación</div>
+          <div class="sp-subtitle">Confirma la entrega de materiales para los servicios programados</div>
+        </div>
+      </div>
+
+      <div class="sp-tabs">
+        <button class="sp-tab active" data-tab="pendientes">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+          Pendientes de Entrega
+        </button>
+        <button class="sp-tab" data-tab="historial">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Historial
+        </button>
+      </div>
+
+      <div class="prov-filters-bar">
+        <div class="prov-search-box" style="max-width:180px;flex:unset;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <input type="date" id="filtroFechaDesde" class="prov-search-input" value="${filtroFechaDesde}">
+        </div>
+        <div class="prov-search-box" style="max-width:180px;flex:unset;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <input type="date" id="filtroFechaHasta" class="prov-search-input" value="${filtroFechaHasta}">
+        </div>
+        <button class="prov-btn-primary" id="btnFiltrar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          Buscar
+        </button>
+        <button class="prov-btn-secondary" id="btnLimpiarFiltros">Limpiar</button>
+      </div>
+
+      <div id="contenidoSalidasProg">
+        <div class="sp-loading">Cargando...</div>
+      </div>
+
+      <div id="spPaginacion" class="sp-pagination" style="display:none;">
+        <span class="sp-pagination-info" id="spPagInfo"></span>
+        <div class="sp-pagination-controls" id="spPagControls"></div>
+      </div>
+
+      <!-- Modal Confirmar Salida -->
+      <div class="prov-modal" id="modalConfirmarSalida" style="display:none;">
+        <div class="prov-modal-overlay" id="spModalOverlay"></div>
+        <div class="prov-modal-content prov-modal-lg">
+          <div class="prov-modal-header">
+            <h2>Confirmar Salida de Materiales</h2>
+            <button class="prov-modal-close" id="btnCerrarModalSalida">&times;</button>
+          </div>
+          <div class="prov-modal-body" id="modalConfirmarSalidaBody">
+            <!-- Contenido dinámico -->
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export async function initSalidasProgramacion() {
+  const hoy = new Date();
+  filtroFechaDesde = hoy.toISOString().split('T')[0];
+  const dentroSiete = new Date();
+  dentroSiete.setDate(dentroSiete.getDate() + 7);
+  filtroFechaHasta = dentroSiete.toISOString().split('T')[0];
+
+  const inputDesde = document.getElementById('filtroFechaDesde') as HTMLInputElement;
+  const inputHasta = document.getElementById('filtroFechaHasta') as HTMLInputElement;
+  if (inputDesde) inputDesde.value = filtroFechaDesde;
+  if (inputHasta) inputHasta.value = filtroFechaHasta;
+
+  await cargarPendientes();
+  enlazarEventos();
+}
+
+function enlazarEventos() {
+  // Tabs
+  document.querySelectorAll('.sp-tab').forEach(tab => {
+    tab.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+      const btn = target.closest('.sp-tab') as HTMLElement;
+      const tabName = btn?.dataset.tab as 'pendientes' | 'historial';
+      if (!tabName) return;
+
+      document.querySelectorAll('.sp-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      vistaSeccActual = tabName;
+
+      if (tabName === 'pendientes') await cargarPendientes();
+      else await cargarHistorial();
+    });
+  });
+
+  // Filtros
+  document.getElementById('btnFiltrar')?.addEventListener('click', async () => {
+    const inputDesde = document.getElementById('filtroFechaDesde') as HTMLInputElement;
+    const inputHasta = document.getElementById('filtroFechaHasta') as HTMLInputElement;
+    filtroFechaDesde = inputDesde?.value || '';
+    filtroFechaHasta = inputHasta?.value || '';
+
+    if (vistaSeccActual === 'pendientes') await cargarPendientes();
+    else await cargarHistorial();
+  });
+
+  document.getElementById('btnLimpiarFiltros')?.addEventListener('click', async () => {
+    filtroFechaDesde = '';
+    filtroFechaHasta = '';
+    const inputDesde = document.getElementById('filtroFechaDesde') as HTMLInputElement;
+    const inputHasta = document.getElementById('filtroFechaHasta') as HTMLInputElement;
+    if (inputDesde) inputDesde.value = '';
+    if (inputHasta) inputHasta.value = '';
+
+    if (vistaSeccActual === 'pendientes') await cargarPendientes();
+    else await cargarHistorial();
+  });
+}
+
+// ═══════════ Cargar datos ═══════════
+
+async function cargarPendientes() {
+  const contenedor = document.getElementById('contenidoSalidasProg');
+  if (!contenedor) return;
+
+  contenedor.innerHTML = '<div class="sp-loading">Cargando programaciones...</div>';
+
+  try {
+    const params: any = {};
+    if (filtroFechaDesde) params.fecha_desde = filtroFechaDesde;
+    if (filtroFechaHasta) params.fecha_hasta = filtroFechaHasta;
+
+    const res = await salidasProgramacionService.getPendientes(params);
+    programacionesPendientes = res.data || [];
+    paginaActual = 1;
+
+    if (programacionesPendientes.length === 0) {
+      contenedor.innerHTML = `
+        <div class="sp-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            <polyline points="9 14 12 17 16 11"></polyline>
+          </svg>
+          No hay programaciones pendientes de entrega de materiales
+        </div>`;
+      ocultarPaginacion();
+      return;
+    }
+
+    contenedor.innerHTML = renderTablaPendientes();
+    renderPaginacion(programacionesPendientes.length);
+    enlazarEventosPendientes();
+  } catch (error) {
+    console.error('Error cargando pendientes:', error);
+    contenedor.innerHTML = '<div class="sp-error">Error al cargar datos</div>';
+    ocultarPaginacion();
+  }
+}
+
+async function cargarHistorial() {
+  const contenedor = document.getElementById('contenidoSalidasProg');
+  if (!contenedor) return;
+
+  contenedor.innerHTML = '<div class="sp-loading">Cargando historial...</div>';
+
+  try {
+    const params: any = {};
+    if (filtroFechaDesde) params.fecha_desde = filtroFechaDesde;
+    if (filtroFechaHasta) params.fecha_hasta = filtroFechaHasta;
+
+    const res = await salidasProgramacionService.getHistorial(params);
+    historialData = res.data || [];
+    paginaActual = 1;
+
+    if (historialData.length === 0) {
+      contenedor.innerHTML = `
+        <div class="sp-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          No hay salidas confirmadas en el rango seleccionado
+        </div>`;
+      ocultarPaginacion();
+      return;
+    }
+
+    contenedor.innerHTML = renderTablaHistorial();
+    renderPaginacion(historialData.length);
+  } catch (error) {
+    console.error('Error cargando historial:', error);
+    contenedor.innerHTML = '<div class="sp-error">Error al cargar historial</div>';
+    ocultarPaginacion();
+  }
+}
+
+// ═══════════ Render tablas ═══════════
+
+function renderTablaPendientes(): string {
+  const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA;
+  const fin = inicio + ITEMS_POR_PAGINA;
+  const pagina = programacionesPendientes.slice(inicio, fin);
+
+  return `
+    <div class="table-container">
+      <table class="op-table">
+        <thead>
+          <tr>
+            <th>FECHA PROGRAMADA</th>
+            <th>CLIENTE</th>
+            <th>SERVICIO</th>
+            <th>TÉCNICO</th>
+            <th>MATERIALES</th>
+            <th>ESTADO STOCK</th>
+            <th>ACCIONES</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pagina.map(p => {
+            const cliente = p.orden_servicio?.cliente?.nombre_empresa || p.orden_servicio?.cliente?.persona_contacto || '—';
+            const servicio = p.servicio?.nombre || 'Servicio';
+            const tecnico = p.tecnico ? `${p.tecnico.nombre} ${p.tecnico.apellidos}` : '—';
+            const materialesCount = p.insumos?.length || 0;
+            const stockCompleto = verificarStockCompleto(p.insumos || []);
+
+            return `
+              <tr>
+                <td>${formatFecha(p.fecha_programada)}${p.hora_inicio ? ' ' + p.hora_inicio.substring(0, 5) : ''}</td>
+                <td><strong>${cliente}</strong></td>
+                <td>${servicio}</td>
+                <td>${tecnico}</td>
+                <td>${materialesCount} producto(s)</td>
+                <td>
+                  <span class="prov-badge ${stockCompleto ? 'prov-badge-activo' : 'prov-badge-pendiente'}">
+                    ${stockCompleto ? 'Stock OK' : 'Insuficiente'}
+                  </span>
+                </td>
+                <td>
+                  <div class="sp-actions-cell">
+                    <button class="prov-btn-icon-sm" data-prog-id="${p.id}" title="Confirmar Entrega" style="color:#16a34a;border-color:#bbf7d0;">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderTablaHistorial(): string {
+  const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA;
+  const fin = inicio + ITEMS_POR_PAGINA;
+  const pagina = historialData.slice(inicio, fin);
+
+  return `
+    <div class="table-container">
+      <table class="op-table">
+        <thead>
+          <tr>
+            <th>FECHA PROGRAMADA</th>
+            <th>CLIENTE</th>
+            <th>SERVICIO</th>
+            <th>TÉCNICO</th>
+            <th>MATERIALES</th>
+            <th>ESTADO</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pagina.map(p => {
+            const cliente = p.orden_servicio?.cliente?.nombre_empresa || p.orden_servicio?.cliente?.persona_contacto || '—';
+            const servicio = p.servicio?.nombre || 'Servicio';
+            const tecnico = p.tecnico ? `${p.tecnico.nombre} ${p.tecnico.apellidos}` : '—';
+            const materialesCount = p.insumos?.length || 0;
+
+            return `
+              <tr>
+                <td>${formatFecha(p.fecha_programada)}${p.hora_inicio ? ' ' + p.hora_inicio.substring(0, 5) : ''}</td>
+                <td><strong>${cliente}</strong></td>
+                <td>${servicio}</td>
+                <td>${tecnico}</td>
+                <td>${materialesCount} producto(s)</td>
+                <td><span class="prov-badge prov-badge-recibido">Entregado</span></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ═══════════ Paginación ═══════════
+
+function renderPaginacion(totalItems: number) {
+  const contenedor = document.getElementById('spPaginacion');
+  const info = document.getElementById('spPagInfo');
+  const controls = document.getElementById('spPagControls');
+  if (!contenedor || !info || !controls) return;
+
+  const totalPaginas = Math.ceil(totalItems / ITEMS_POR_PAGINA);
+
+  if (totalItems <= ITEMS_POR_PAGINA) {
+    contenedor.style.display = 'none';
+    return;
+  }
+
+  contenedor.style.display = 'flex';
+
+  const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA + 1;
+  const fin = Math.min(inicio + ITEMS_POR_PAGINA - 1, totalItems);
+  info.textContent = `Mostrando ${inicio}-${fin} de ${totalItems}`;
+
+  let html = `
+    <button class="sp-pag-btn" id="spPagPrev" ${paginaActual === 1 ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+    </button>
+  `;
+
+  const rango = 2;
+  let inicioPag = Math.max(1, paginaActual - rango);
+  let finPag = Math.min(totalPaginas, paginaActual + rango);
+
+  if (inicioPag > 1) {
+    html += `<button class="sp-pag-btn" data-page="1">1</button>`;
+    if (inicioPag > 2) html += `<span class="sp-pag-dots">...</span>`;
+  }
+
+  for (let i = inicioPag; i <= finPag; i++) {
+    html += `<button class="sp-pag-btn ${i === paginaActual ? 'active' : ''}" data-page="${i}">${i}</button>`;
+  }
+
+  if (finPag < totalPaginas) {
+    if (finPag < totalPaginas - 1) html += `<span class="sp-pag-dots">...</span>`;
+    html += `<button class="sp-pag-btn" data-page="${totalPaginas}">${totalPaginas}</button>`;
+  }
+
+  html += `
+    <button class="sp-pag-btn" id="spPagNext" ${paginaActual === totalPaginas ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+  `;
+
+  controls.innerHTML = html;
+
+  // Event listeners
+  document.getElementById('spPagPrev')?.addEventListener('click', () => {
+    if (paginaActual > 1) { paginaActual--; rerenderTablaActual(); }
+  });
+  document.getElementById('spPagNext')?.addEventListener('click', () => {
+    if (paginaActual < totalPaginas) { paginaActual++; rerenderTablaActual(); }
+  });
+  controls.querySelectorAll('[data-page]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      paginaActual = parseInt((e.target as HTMLElement).dataset.page || '1');
+      rerenderTablaActual();
+    });
+  });
+}
+
+function rerenderTablaActual() {
+  const contenedor = document.getElementById('contenidoSalidasProg');
+  if (!contenedor) return;
+
+  if (vistaSeccActual === 'pendientes') {
+    contenedor.innerHTML = renderTablaPendientes();
+    renderPaginacion(programacionesPendientes.length);
+    enlazarEventosPendientes();
+  } else {
+    contenedor.innerHTML = renderTablaHistorial();
+    renderPaginacion(historialData.length);
+  }
+}
+
+function ocultarPaginacion() {
+  const el = document.getElementById('spPaginacion');
+  if (el) el.style.display = 'none';
+}
+
+// ═══════════ Modal Confirmar Salida ═══════════
+
+function enlazarEventosPendientes() {
+  document.querySelectorAll('[data-prog-id]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const id = parseInt((e.currentTarget as HTMLElement).dataset.progId || '0');
+      if (id) await abrirModalConfirmar(id);
+    });
+  });
+}
+
+async function abrirModalConfirmar(idProgramacion: number) {
+  const modal = document.getElementById('modalConfirmarSalida');
+  const body = document.getElementById('modalConfirmarSalidaBody');
+  if (!modal || !body) return;
+
+  body.innerHTML = '<div class="sp-loading">Cargando detalles...</div>';
+  modal.style.display = 'flex';
+
+  try {
+    const res = await salidasProgramacionService.getDetalle(idProgramacion);
+    const prog = res.data;
+    if (!prog) {
+      body.innerHTML = '<div class="sp-error">No se encontró la programación</div>';
+      return;
+    }
+
+    const cliente = prog.orden_servicio?.cliente?.nombre_empresa || prog.orden_servicio?.cliente?.persona_contacto || '—';
+    const servicio = prog.servicio?.nombre || 'Servicio';
+    const tecnico = prog.tecnico ? `${prog.tecnico.nombre} ${prog.tecnico.apellidos}` : '—';
+
+    body.innerHTML = `
+      <div class="sp-info-grid">
+        <div class="sp-info-item"><strong>Cliente: </strong><span>${cliente}</span></div>
+        <div class="sp-info-item"><strong>Servicio: </strong><span>${servicio}</span></div>
+        <div class="sp-info-item"><strong>Fecha: </strong><span>${formatFecha(prog.fecha_programada)}${prog.hora_inicio ? ' ' + prog.hora_inicio.substring(0, 5) : ''}</span></div>
+        <div class="sp-info-item"><strong>Técnico: </strong><span>${tecnico}</span></div>
+      </div>
+
+      <div class="sp-materiales-title">Materiales a Entregar</div>
+      <div class="sp-materiales-table">
+        <table class="prov-detail-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Asignado</th>
+              <th>Disponible</th>
+              <th>Entregar</th>
+            </tr>
+          </thead>
+          <tbody id="insumosConfirmarBody">
+            ${(prog.insumos || []).map((ins: InsumoProgamacion, idx: number) => {
+              const disponible = ins.producto?.inventario?.cantidad_disponible || 0;
+              const asignado = ins.cantidad_asignada;
+              const suficiente = disponible >= asignado;
+
+              return `
+                <tr>
+                  <td>
+                    ${ins.producto?.descripcion || 'Producto'}
+                    ${!suficiente ? '<div class="sp-stock-warn">⚠ Stock insuficiente</div>' : ''}
+                  </td>
+                  <td>${asignado} ${ins.producto?.unidad_medida || ''}</td>
+                  <td style="color:${suficiente ? '#16a34a' : '#ef4444'};font-weight:600;">${disponible}</td>
+                  <td>
+                    <input 
+                      type="number" 
+                      class="prov-input-sm cantidad-entregar" 
+                      data-idx="${idx}"
+                      data-id-producto="${ins.id_producto}"
+                      value="${Math.min(asignado, disponible)}" 
+                      min="0" 
+                      max="${disponible}"
+                      style="width:80px;"
+                    >
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sp-obs-group">
+        <label>Observación (Opcional)</label>
+        <textarea id="observacionSalida" class="prov-input" rows="2" placeholder="Observaciones sobre la entrega..."></textarea>
+      </div>
+
+      <div class="prov-modal-footer">
+        <button class="prov-btn-secondary" id="btnCancelarConfirmacion">Cancelar</button>
+        <button class="prov-btn-success" id="btnConfirmarEntrega" data-prog-id="${prog.id}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Confirmar Entrega
+        </button>
+      </div>
+    `;
+
+    document.getElementById('btnCancelarConfirmacion')?.addEventListener('click', cerrarModalConfirmar);
+    document.getElementById('btnCerrarModalSalida')?.addEventListener('click', cerrarModalConfirmar);
+    document.getElementById('spModalOverlay')?.addEventListener('click', cerrarModalConfirmar);
+    document.getElementById('btnConfirmarEntrega')?.addEventListener('click', confirmarEntrega);
+
+  } catch (error) {
+    console.error('Error cargando detalle:', error);
+    body.innerHTML = '<div class="sp-error">Error al cargar detalles</div>';
+  }
+}
+
+function cerrarModalConfirmar() {
+  const modal = document.getElementById('modalConfirmarSalida');
+  if (modal) modal.style.display = 'none';
+}
+
+async function confirmarEntrega(e: Event) {
+  const btn = e.currentTarget as HTMLButtonElement;
+  const idProg = parseInt(btn.dataset.progId || '0');
+  if (!idProg) return;
+
+  const inputsCantidad = document.querySelectorAll('.cantidad-entregar') as NodeListOf<HTMLInputElement>;
+  const insumos = Array.from(inputsCantidad).map(input => ({
+    id_producto: parseInt(input.dataset.idProducto || '0'),
+    cantidad_entregada: parseInt(input.value || '0'),
+  }));
+
+  const observacion = (document.getElementById('observacionSalida') as HTMLTextAreaElement)?.value || '';
+
+  if (insumos.every(i => i.cantidad_entregada === 0)) {
+    mostrarToast('warning', 'Advertencia', 'Debe entregar al menos un producto');
+    return;
+  }
+
+  const ok = await confirmarAccion({
+    titulo: 'Confirmar Entrega',
+    mensaje: '¿Confirmar la salida de estos materiales? Se descontará del stock y se registrará en Kardex.',
+    tipo: 'warning',
+    textoConfirmar: 'Sí, Confirmar',
+  });
+
+  if (!ok) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Procesando...';
+
+  try {
+    await salidasProgramacionService.confirmarSalida({
+      id_programacion: idProg,
+      insumos,
+      observacion,
+    });
+
+    mostrarToast('success', 'Entrega Confirmada', 'Los materiales se han entregado y registrado en Kardex');
+    cerrarModalConfirmar();
+    await cargarPendientes();
+  } catch (error: any) {
+    console.error('Error confirmando salida:', error);
+    mostrarToast('error', 'Error', error.response?.data?.message || 'No se pudo confirmar la salida');
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Confirmar Entrega';
+  }
+}
+
+// ═══════════ Utilidades ═══════════
+
+function verificarStockCompleto(insumos: InsumoProgamacion[]): boolean {
+  return insumos.every(i => {
+    const disponible = i.producto?.inventario?.cantidad_disponible || 0;
+    return disponible >= i.cantidad_asignada;
+  });
+}
+
+function formatFecha(fecha: string): string {
+  if (!fecha) return '—';
+  const parts = fecha.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const mesIdx = parseInt(m, 10) - 1;
+    return `${parseInt(d, 10)} ${meses[mesIdx] || m} ${y}`;
+  }
+  return fecha;
+}

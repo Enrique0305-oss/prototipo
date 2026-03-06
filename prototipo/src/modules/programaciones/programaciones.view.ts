@@ -29,6 +29,7 @@ let vistaActual: VistaProgramacion = 'mensual';
 let fechaActual = new Date();
 let filtroEstados: EstadoEjecucion[] = ['Programado', 'Confirmado', 'En Camino', 'En Ejecución'];
 let filtroTecnico: number | null = null;
+let filtroCliente: number | null = null;
 
 // ═══════════ Render principal ═══════════
 
@@ -200,6 +201,13 @@ function renderSidebar() {
           ${tecnicosData.map(t => `<option value="${t.id}" ${filtroTecnico === t.id ? 'selected' : ''}>${t.nombre} ${t.apellidos}</option>`).join('')}
         </select>
       </div>
+      <div class="prog-filter-group">
+        <label class="prog-filter-label">Cliente</label>
+        <select class="prog-filter-select" id="filtroClienteSelect">
+          <option value="">Todos</option>
+          ${getClientesUnicos().map(c => `<option value="${c.id}" ${filtroCliente === c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
+        </select>
+      </div>
     </div>
 
     <div class="prog-stats">
@@ -239,6 +247,11 @@ function renderSidebar() {
     filtroTecnico = val ? parseInt(val) : null;
     renderCalendario();
   });
+  sidebar.querySelector('#filtroClienteSelect')?.addEventListener('change', (e) => {
+    const val = (e.target as HTMLSelectElement).value;
+    filtroCliente = val ? parseInt(val) : null;
+    renderCalendario();
+  });
 }
 
 // ═══════════ Calendario ═══════════
@@ -258,6 +271,7 @@ function getProgramacionesFiltradas(): Programacion[] {
   let lista = programacionesData;
   if (filtroEstados.length > 0) lista = lista.filter(p => filtroEstados.includes(p.estado_ejecucion));
   if (filtroTecnico) lista = lista.filter(p => p.id_tecnico_asignado === filtroTecnico);
+  if (filtroCliente) lista = lista.filter(p => p.orden_servicio?.cliente?.id === filtroCliente);
   return lista;
 }
 
@@ -287,7 +301,8 @@ function renderVistaMensual(): string {
         <span class="prog-day-number">${d}</span>
         ${servicios.slice(0, 3).map(s => `
           <div class="prog-event ${getColorByState(s.estado_ejecucion)}" data-prog-id="${s.id}">
-            <div class="prog-event-title">${s.servicio?.nombre || 'Servicio'}</div>
+            <div class="prog-event-title">${clienteNombre(s)}</div>
+            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${s.servicio?.nombre || 'Servicio'}</div>
             <div class="prog-event-time">${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
           </div>
         `).join('')}
@@ -354,7 +369,8 @@ function renderVistaSemanal(): string {
                   const color = getColorByState(s.estado_ejecucion);
                   return `
                   <div class="prog-week-card prog-week-card-${color}" data-prog-id="${s.id}">
-                    <div class="prog-week-card-title">${s.servicio?.nombre || 'Servicio'}</div>
+                    <div class="prog-week-card-title">${clienteNombre(s)}</div>
+                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${s.servicio?.nombre || 'Servicio'}</div>
                     <div class="prog-week-card-time"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
                     <div class="prog-week-card-tech"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre).join(', ') : (s.tecnico ? s.tecnico.nombre : '—')}</div>
                     <span class="prog-week-card-badge">${s.estado_ejecucion}</span>
@@ -395,11 +411,11 @@ function renderVistaDiaria(): string {
               </div>
               <div class="prog-day-service-content">
                 <div class="prog-day-service-header">
-                  <h3>${s.servicio?.nombre || 'Servicio'}</h3>
+                  <h3>${clienteNombre(s)}</h3>
                   <span class="prog-status-badge ${s.estado_ejecucion}">${s.estado_ejecucion}</span>
                 </div>
                 <div class="prog-day-service-details">
-                  <div><strong>Cliente:</strong> ${clienteNombre(s)}</div>
+                  <div><strong>Servicio:</strong> ${s.servicio?.nombre || 'Servicio'}</div>
                   <div><strong>Técnico:</strong> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre + ' ' + t.apellidos).join(', ') : (s.tecnico ? s.tecnico.nombre + ' ' + s.tecnico.apellidos : 'Sin asignar')}</div>
                   <div><strong>Local:</strong> ${s.local_sede || '—'}</div>
                   ${s.vehiculo ? `<div><strong>Vehículo:</strong> ${s.vehiculo.placa} - ${s.vehiculo.marca} ${s.vehiculo.modelo}</div>` : ''}
@@ -1122,6 +1138,20 @@ async function exportarPDF() {
 function clienteNombre(p: Programacion): string {
   const c = p.orden_servicio?.cliente;
   return c ? (c.nombre_empresa || c.persona_contacto || '—') : '—';
+}
+
+function getClientesUnicos(): { id: number; nombre: string }[] {
+  const clientesMap = new Map<number, string>();
+  programacionesData.forEach(p => {
+    const cliente = p.orden_servicio?.cliente;
+    if (cliente && cliente.id) {
+      const nombre = cliente.nombre_empresa || cliente.persona_contacto || '—';
+      clientesMap.set(cliente.id, nombre);
+    }
+  });
+  return Array.from(clientesMap.entries())
+    .map(([id, nombre]) => ({ id, nombre }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
 function fmtH(h: string): string { return h ? h.substring(0, 5) : ''; }

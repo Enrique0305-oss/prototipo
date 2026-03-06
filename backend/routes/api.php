@@ -28,6 +28,7 @@ use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
 use App\Http\Controllers\API\EntregaEppController;
 use App\Http\Controllers\API\ProveedorController;
+use App\Http\Controllers\API\SalidaProgramacionController;
 use App\Http\Controllers\API\OrdenCompraController;
 
 // Rutas PÚBLICAS (sin autenticación)
@@ -243,6 +244,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'update']);
     Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
     Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
+
+    // Almacén - Salidas por Programación
+    Route::get('/almacen/salidas-programacion/pendientes', [SalidaProgramacionController::class, 'getPendientes']);
+    Route::get('/almacen/salidas-programacion/historial', [SalidaProgramacionController::class, 'getHistorial']);
+    Route::get('/almacen/salidas-programacion/{id}', [SalidaProgramacionController::class, 'getDetalle']);
+    Route::post('/almacen/salidas-programacion/confirmar', [SalidaProgramacionController::class, 'confirmarSalida']);
 
     // Proveedores
     Route::get('/proveedores', [ProveedorController::class, 'index']);

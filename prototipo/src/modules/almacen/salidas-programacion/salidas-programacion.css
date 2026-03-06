@@ -1,0 +1,113 @@
+/* ═══ Salidas por Programación CSS ═══ */
+/* Reutiliza base prov-* + estilos propios sp-* */
+@import '../proveedores/proveedores.css';
+
+/* Tabs */
+.sp-tabs {
+  display: flex; gap: 0; margin-bottom: 20px;
+  border-bottom: 2px solid #e2e8f0;
+}
+.sp-tab {
+  padding: 10px 20px; font-size: 13px; font-weight: 600;
+  color: #64748b; background: none; border: none;
+  cursor: pointer; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: all .2s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.sp-tab:hover { color: #1e3a5f; }
+.sp-tab.active {
+  color: #1e3a5f; border-bottom-color: #1e3a5f;
+}
+
+/* Info cards del modal */
+.sp-info-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; padding: 16px; background: #f8fafc;
+  border-radius: 8px; margin-bottom: 20px; font-size: 13px;
+}
+.sp-info-item strong { color: #475569; }
+.sp-info-item span { color: #1e293b; }
+
+/* Sección de materiales en modal */
+.sp-materiales-title {
+  font-size: 13px; font-weight: 700; color: #1e293b;
+  margin-bottom: 12px; text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.sp-materiales-table {
+  max-height: 300px; overflow-y: auto;
+}
+
+/* Stock insuficiente inline */
+.sp-stock-warn {
+  color: #ef4444; font-size: 11px; margin-top: 2px;
+}
+
+/* Observación */
+.sp-obs-group {
+  margin-top: 16px;
+}
+.sp-obs-group label {
+  display: block; margin-bottom: 6px;
+  font-size: 12px; font-weight: 600; color: #374151;
+}
+
+/* Empty state */
+.sp-empty {
+  text-align: center; padding: 60px 20px; color: #94a3b8;
+  font-size: 14px;
+}
+.sp-empty svg {
+  display: block; margin: 0 auto 12px; opacity: .4;
+}
+
+/* Loading state */
+.sp-loading {
+  text-align: center; padding: 40px; color: #94a3b8; font-size: 14px;
+}
+
+/* Error state */
+.sp-error {
+  text-align: center; padding: 40px; color: #ef4444; font-size: 14px;
+}
+
+/* Subtítulo bajo breadcrumb */
+.sp-subtitle {
+  font-size: 13px; color: #64748b; margin-top: 3px;
+}
+
+/* Acciones en tabla */
+.sp-actions-cell {
+  display: flex; gap: 5px;
+}
+
+/* Paginación */
+.sp-pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0; margin-top: 8px;
+}
+.sp-pagination-info {
+  font-size: 13px; color: #64748b;
+}
+.sp-pagination-controls {
+  display: flex; gap: 6px; align-items: center;
+}
+.sp-pag-btn {
+  padding: 6px 12px; border: 1px solid #e2e8f0;
+  background: #fff; border-radius: 6px; cursor: pointer;
+  font-size: 13px; color: #1e293b; transition: all .2s;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.sp-pag-btn:hover:not(:disabled):not(.active) {
+  background: #f1f5f9; border-color: #94a3b8;
+}
+.sp-pag-btn.active {
+  background: #1e3a5f; color: #fff; border-color: #1e3a5f;
+  font-weight: 600;
+}
+.sp-pag-btn:disabled {
+  opacity: .4; cursor: not-allowed;
+}
+.sp-pag-dots {
+  padding: 0 4px; color: #94a3b8; font-size: 13px;
+}
