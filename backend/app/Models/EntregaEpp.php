@@ -18,6 +18,7 @@ class EntregaEpp extends Model
         'devuelto_por',
         'observaciones',
         'motivo_devolucion',
+        'motivo_entrega',
     ];
 
     protected $casts = [

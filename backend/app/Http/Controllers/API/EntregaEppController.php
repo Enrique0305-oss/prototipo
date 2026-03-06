@@ -74,6 +74,7 @@ class EntregaEppController extends Controller
                     'apellidos' => $entrega->devolvedor->apellidos ?? '',
                 ] : null,
                 'observaciones' => $entrega->observaciones,
+                'motivo_entrega' => $entrega->motivo_entrega,
                 'motivo_devolucion' => $entrega->motivo_devolucion,
                 'detalles' => $entrega->detalles->map(fn($d) => [
                     'id' => $d->id,
@@ -83,6 +84,10 @@ class EntregaEppController extends Controller
                     ],
                     'cantidad' => $d->cantidad,
                     'observacion' => $d->observacion,
+                    'condicion_devolucion' => $d->condicion_devolucion,
+                    'observacion_devolucion' => $d->observacion_devolucion,
+                    'estado_item' => $d->estado_item ?? 'Activo',
+                    'id_entrega_reemplazo' => $d->id_entrega_reemplazo,
                 ]),
                 'total_items' => $entrega->detalles->sum('cantidad'),
             ];
@@ -128,6 +133,7 @@ class EntregaEppController extends Controller
             'id_tecnico' => 'required|exists:tecnicos,id',
             'fecha_entrega' => 'required|date',
             'observaciones' => 'nullable|string',
+            'motivo_entrega' => 'nullable|in:Primera Asignación,Reemplazo por Daño,Reemplazo por Desgaste,Reemplazo por Pérdida,Reposición Periódica,Solicitud del Técnico',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_producto' => 'required|exists:productos,id',
             'detalles.*.cantidad' => 'required|integer|min:1',
@@ -174,6 +180,7 @@ class EntregaEppController extends Controller
                 'id_tecnico' => $validated['id_tecnico'],
                 'fecha_entrega' => $validated['fecha_entrega'],
                 'estado' => 'Entregado',
+                'motivo_entrega' => $validated['motivo_entrega'] ?? 'Primera Asignación',
                 'registrado_por' => $idUsuario,
                 'observaciones' => $validated['observaciones'] ?? null,
             ]);
@@ -184,6 +191,7 @@ class EntregaEppController extends Controller
                     'id_producto' => $detalle['id_producto'],
                     'cantidad' => $detalle['cantidad'],
                     'observacion' => $detalle['observacion'] ?? null,
+                    'estado_item' => 'Activo',
                 ]);
 
                 // Registrar salida en Kardex
@@ -197,6 +205,27 @@ class EntregaEppController extends Controller
                     'id_usuario' => $idUsuario,
                     'observacion' => "Entrega EPP {$entrega->numero_entrega} a técnico",
                 ]);
+            }
+
+            // Auto-marcar ítems previos como Reemplazado si el motivo es de reemplazo
+            $motivosReemplazo = ['Reemplazo por Daño', 'Reemplazo por Desgaste', 'Reemplazo por Pérdida', 'Reposición Periódica'];
+            $motivoEntrega = $validated['motivo_entrega'] ?? 'Primera Asignación';
+            if (in_array($motivoEntrega, $motivosReemplazo)) {
+                foreach ($validated['detalles'] as $detalle) {
+                    $previos = DetalleEntregaEpp::where('id_producto', $detalle['id_producto'])
+                        ->where('estado_item', 'Activo')
+                        ->whereHas('entregaEpp', function ($q) use ($validated) {
+                            $q->where('id_tecnico', $validated['id_tecnico'])
+                              ->where('estado', 'Entregado');
+                        })
+                        ->get();
+                    foreach ($previos as $prev) {
+                        $prev->update([
+                            'estado_item' => 'Reemplazado',
+                            'id_entrega_reemplazo' => $entrega->id,
+                        ]);
+                    }
+                }
             }
 
             DB::commit();
@@ -281,26 +310,40 @@ class EntregaEppController extends Controller
                 'devuelto_por' => $idUsuario,
             ]);
 
-            // Actualizar condición y observación de cada detalle
+            // Actualizar condición, observación y estado_item
             if (!empty($validated['detalles'])) {
                 foreach ($validated['detalles'] as $det) {
                     $detalle = DetalleEntregaEpp::find($det['id']);
                     if ($detalle && $detalle->id_entrega_epp === $entrega->id) {
+                        $condicion = $det['condicion_devolucion'] ?? 'Bueno';
                         $detalle->update([
-                            'condicion_devolucion' => $det['condicion_devolucion'] ?? 'Bueno',
+                            'condicion_devolucion' => $condicion,
                             'observacion_devolucion' => $det['observacion_devolucion'] ?? null,
+                            // Solo marcar como Devuelto si realmente regresó físicamente
+                            'estado_item' => $condicion === 'No devuelto' ? $detalle->estado_item : 'Devuelto',
                         ]);
                     }
                 }
             } else {
-                // Si no envían detalles, marcar todos como Bueno
+                // Si no envían detalles, marcar todos como Bueno y Devuelto
                 foreach ($entrega->detalles as $detalle) {
-                    $detalle->update(['condicion_devolucion' => 'Bueno']);
+                    $detalle->update([
+                        'condicion_devolucion' => 'Bueno',
+                        'estado_item' => 'Devuelto',
+                    ]);
                 }
             }
 
-            // Registrar entrada en Kardex por cada detalle
+            // Registrar entrada en Kardex solo de ítems que regresaron físicamente
+            // (estado_item = 'Devuelto', no los que quedaron como Activo/Reemplazado por ser 'No devuelto')
             foreach ($entrega->detalles as $detalle) {
+                // Refrescar el modelo para obtener el estado actualizado
+                $detalle->refresh();
+                
+                if ($detalle->estado_item !== 'Devuelto') {
+                    continue; // No devuelto físicamente, no vuelve al stock
+                }
+                
                 Kardex::registrarMovimiento([
                     'id_producto' => $detalle->id_producto,
                     'tipo_movimiento' => 'Entrada',
@@ -357,6 +400,52 @@ class EntregaEppController extends Controller
         return response()->json([
             'success' => true,
             'data' => $stats,
+        ]);
+    }
+
+    /**
+     * Estado actual de EPP por técnico (ítems activos)
+     */
+    public function estadoTecnicos(): JsonResponse
+    {
+        $detalles = DetalleEntregaEpp::with(['entregaEpp.tecnico', 'producto'])
+            ->where('estado_item', 'Activo')
+            ->whereHas('entregaEpp', fn($q) => $q->where('estado', 'Entregado'))
+            ->get();
+
+        // Agrupar por técnico
+        $porTecnico = [];
+        foreach ($detalles as $d) {
+            $tecnico = $d->entregaEpp->tecnico;
+            $tid = $tecnico->id;
+            if (!isset($porTecnico[$tid])) {
+                $porTecnico[$tid] = [
+                    'tecnico' => [
+                        'id' => $tecnico->id,
+                        'nombre' => $tecnico->nombre,
+                        'apellidos' => $tecnico->apellidos,
+                        'dni' => $tecnico->dni,
+                    ],
+                    'items' => [],
+                ];
+            }
+            $porTecnico[$tid]['items'][] = [
+                'id_detalle' => $d->id,
+                'producto' => [
+                    'id' => $d->producto->id,
+                    'descripcion' => $d->producto->descripcion,
+                ],
+                'cantidad' => $d->cantidad,
+                'numero_entrega' => $d->entregaEpp->numero_entrega,
+                'id_entrega' => $d->entregaEpp->id,
+                'fecha_entrega' => $d->entregaEpp->fecha_entrega->format('Y-m-d'),
+                'motivo_entrega' => $d->entregaEpp->motivo_entrega,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => array_values($porTecnico),
         ]);
     }
 

@@ -70,6 +70,10 @@ export function renderProductosTab() {
             <option value="con_stock">Con Stock</option>
             <option value="proximos_vencer">Próximos a Vencer</option>
           </select>
+
+          <select class="op-filter-select" id="productos-categoria-filter">
+            <option value="">Todas las categorías</option>
+          </select>
         </div>
       </div>
 
@@ -996,6 +1000,9 @@ function renderizarTablaProductos() {
 export function initProductosEvents() {
   // Cargar datos iniciales
   cargarEstadisticas();
+  cargarCategorias().then(() => {
+    renderizarFiltroCategorias();
+  });
   cargarProductos();
 
   // Búsqueda
@@ -1026,6 +1033,16 @@ export function initProductosEvents() {
     stockFilter.addEventListener('change', (e) => {
       const value = (e.target as HTMLSelectElement).value;
       // Estos filtros se pasan como parámetros adicionales
+      cargarProductos();
+    });
+  }
+
+  // Filtro de categoría
+  const categoriaFilter = document.getElementById('productos-categoria-filter') as HTMLSelectElement;
+  if (categoriaFilter) {
+    categoriaFilter.addEventListener('change', (e) => {
+      const value = (e.target as HTMLSelectElement).value;
+      currentFilters.id_categoria = value ? parseInt(value) : null;
       cargarProductos();
     });
   }
@@ -1165,6 +1182,18 @@ async function cargarCategorias() {
     console.error('Error cargando categorías:', error);
     categoriasData = [];
   }
+}
+
+function renderizarFiltroCategorias() {
+  const select = document.getElementById('productos-categoria-filter') as HTMLSelectElement;
+  if (!select) return;
+
+  const optionsHTML = categoriasData.map(cat => {
+    const catId = cat.id_categoria || (cat as any).id;
+    return `<option value="${catId}">${cat.nombre}</option>`;
+  }).join('');
+
+  select.innerHTML = `<option value="">Todas las categorías</option>${optionsHTML}`;
 }
 
 function abrirModalNuevoProducto() {

@@ -1,4 +1,4 @@
-import { entregaEppService, type EntregaEpp, type EntregaEppEstadisticas, type ProductoEpp, type EntregaEppFiltros } from '../../../services/entregaEppService';
+import { entregaEppService, type EntregaEpp, type EntregaEppEstadisticas, type ProductoEpp, type EntregaEppFiltros, type EstadoTecnicoEpp } from '../../../services/entregaEppService';
 import { tecnicoService } from '../../../services/tecnicoService';
 import { mostrarToast } from '../../../shared/toast';
 import { apiClient } from '../../../core/api/api.client';
@@ -10,6 +10,7 @@ let productosEppData: ProductoEpp[] = [];
 let tecnicosData: any[] = [];
 let currentFilters: EntregaEppFiltros = {};
 let detallesTemp: { id_producto: number; cantidad: number; observacion: string; descripcion: string; stock: number }[] = [];
+let activeEppTab: 'entregas' | 'estado' = 'entregas';
 
 // ─── RENDER PRINCIPAL ───
 export function renderEntregaEpp() {
@@ -64,6 +65,21 @@ export function renderEntregaEpp() {
       </div>
     </div>
 
+    <!-- Tabs -->
+    <div class="module-tabs" style="margin-bottom:20px;border-bottom:2px solid #e2e8f0;">
+      <button class="module-tab active" data-epp-tab="entregas" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-weight:600;color:#2563eb;border-bottom:2px solid #2563eb;margin-bottom:-2px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+        Historial de Entregas
+      </button>
+      <button class="module-tab" data-epp-tab="estado" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-weight:600;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-2px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        EPP por Técnico
+      </button>
+    </div>
+
+    <!-- Contenido Tab: Historial de Entregas -->
+    <div id="epp-tab-entregas">
+
     <!-- Filtros -->
     <div class="op-filters-bar">
       <div class="op-search-box">
@@ -101,19 +117,53 @@ export function renderEntregaEpp() {
             <th>FECHA ENTREGA</th>
             <th>EQUIPOS</th>
             <th>ESTADO</th>
+            <th>MOTIVO</th>
             <th>REGISTRADO POR</th>
             <th>ACCIONES</th>
           </tr>
         </thead>
         <tbody id="epp-table-body">
           <tr>
-            <td colspan="7" style="text-align: center; padding: 40px;">
+            <td colspan="8" style="text-align: center; padding: 40px;">
               <div class="loading-text">Cargando entregas EPP...</div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    </div>
+    <!-- / Contenido Tab: Historial de Entregas -->
+
+    <!-- Contenido Tab: EPP por Técnico -->
+    <div id="epp-tab-estado" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <p style="color:#64748b;font-size:14px;">Equipos de Protección Personal actualmente asignados a cada técnico.</p>
+        <button class="btn-primary" id="btn-refresh-estado-epp" style="padding:8px 16px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          Actualizar
+        </button>
+      </div>
+      <div class="table-container">
+        <table class="op-table">
+          <thead>
+            <tr>
+              <th>TÉCNICO</th>
+              <th>DNI</th>
+              <th>EPP</th>
+              <th>CANT.</th>
+              <th>N° ENTREGA</th>
+              <th>DESDE</th>
+              <th>MOTIVO ENTREGA</th>
+            </tr>
+          </thead>
+          <tbody id="epp-estado-tbody">
+            <tr><td colspan="7" style="text-align:center;padding:40px;color:#888;">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- / Contenido Tab: EPP por Técnico -->
 
     <!-- Modal nueva entrega -->
     <div class="op-form-overlay" id="modal-entrega-epp" style="display:none;">
@@ -213,7 +263,7 @@ function renderTabla() {
   if (!tbody) return;
 
   if (entregasData.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#888;">No se encontraron entregas EPP</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#888;">No se encontraron entregas EPP</td></tr>';
     return;
   }
 
@@ -238,6 +288,7 @@ function renderTabla() {
         <td>${fechaEntrega}</td>
         <td style="text-align:center;">${numEquipos} item(s)</td>
         <td><span class="badge ${badgeClass}">${e.estado}</span></td>
+        <td style="font-size:12px;color:#475569;max-width:140px;">${e.motivo_entrega || '—'}</td>
         <td>${registrador}</td>
         <td>
           <div style="display:flex;gap:4px;">
@@ -294,6 +345,63 @@ function bindTableEvents() {
   });
 }
 
+// ─── TAB: EPP POR TÉCNICO ───
+let estadoTecnicosData: EstadoTecnicoEpp[] = [];
+
+async function cargarEstadoTecnicos() {
+  const tbody = document.getElementById('epp-estado-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;"><div class="loading-text">Cargando...</div></td></tr>';
+  try {
+    const response = await entregaEppService.getEstadoTecnicos();
+    if (response.success) {
+      estadoTecnicosData = response.data;
+      renderEstadoTecnicos();
+    }
+  } catch (error) {
+    console.error('Error cargando estado EPP por técnico:', error);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:#c00;">Error al cargar datos</td></tr>';
+  }
+}
+
+function renderEstadoTecnicos() {
+  const tbody = document.getElementById('epp-estado-tbody');
+  if (!tbody) return;
+
+  if (estadoTecnicosData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#888;">No hay técnicos con EPP activo</td></tr>';
+    return;
+  }
+
+  const rows: string[] = [];
+  for (const entry of estadoTecnicosData) {
+    const tecNombre = `${entry.tecnico.nombre} ${entry.tecnico.apellidos}`;
+    entry.items.forEach((item, idx) => {
+      const fechaFormato = item.fecha_entrega ? new Date(item.fecha_entrega).toLocaleDateString('es-PE') : '—';
+      rows.push(`
+        <tr>
+          ${idx === 0 ? `<td rowspan="${entry.items.length}" style="vertical-align:middle;font-weight:600;">${tecNombre}</td><td rowspan="${entry.items.length}" style="vertical-align:middle;color:#64748b;">${entry.tecnico.dni}</td>` : ''}
+          <td style="font-weight:500;">${item.producto.descripcion}</td>
+          <td style="text-align:center;">${item.cantidad}</td>
+          <td><a href="#" class="epp-link-entrega" data-id="${item.id_entrega}" style="color:#2563eb;text-decoration:underline;cursor:pointer;">${item.numero_entrega}</a></td>
+          <td>${fechaFormato}</td>
+          <td style="font-size:12px;color:#475569;">${item.motivo_entrega || '—'}</td>
+        </tr>
+      `);
+    });
+  }
+
+  tbody.innerHTML = rows.join('');
+
+  // Click en número de entrega para abrir detalle
+  tbody.querySelectorAll('.epp-link-entrega').forEach(link => {
+    link.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const id = parseInt((ev.currentTarget as HTMLElement).dataset.id || '0');
+      if (id) await abrirDetalle(id);
+    });
+  });
+}
+
 // ─── MODAL NUEVA ENTREGA ───
 async function abrirModalNuevaEntrega() {
   detallesTemp = [];
@@ -344,6 +452,17 @@ async function abrirModalNuevaEntrega() {
           <div class="op-field">
             <label class="op-label">Fecha de Entrega <span class="op-required">*</span></label>
             <input type="date" class="op-input" id="epp-fecha" value="${new Date().toISOString().split('T')[0]}" required>
+          </div>
+          <div class="op-field">
+            <label class="op-label">Motivo de Entrega <span class="op-required">*</span></label>
+            <select class="op-input" id="epp-motivo" required>
+              <option value="Primera Asignación">Primera Asignación</option>
+              <option value="Reemplazo por Daño">Reemplazo por Daño</option>
+              <option value="Reemplazo por Desgaste">Reemplazo por Desgaste</option>
+              <option value="Reemplazo por Pérdida">Reemplazo por Pérdida</option>
+              <option value="Reposición Periódica">Reposición Periódica</option>
+              <option value="Solicitud del Técnico">Solicitud del Técnico</option>
+            </select>
           </div>
           <div class="op-field" style="grid-column: 1 / -1;">
             <label class="op-label">Observaciones <span class="op-optional">(opcional)</span></label>
@@ -508,6 +627,7 @@ function renderItemsEpp() {
 async function guardarEntrega() {
   const tecnicoId = parseInt((document.getElementById('epp-tecnico') as HTMLSelectElement).value);
   const fecha = (document.getElementById('epp-fecha') as HTMLInputElement).value;
+  const motivo = (document.getElementById('epp-motivo') as HTMLSelectElement).value;
   const observaciones = (document.getElementById('epp-observaciones') as HTMLTextAreaElement).value.trim();
 
   if (!tecnicoId) { mostrarToast('error', 'Validación', 'Seleccione un técnico'); return; }
@@ -521,6 +641,7 @@ async function guardarEntrega() {
     const response = await entregaEppService.create({
       id_tecnico: tecnicoId,
       fecha_entrega: fecha,
+      motivo_entrega: motivo,
       observaciones: observaciones || undefined,
       detalles: detallesTemp.map(d => ({
         id_producto: d.id_producto,
@@ -597,6 +718,10 @@ async function abrirDetalle(id: number) {
             <input class="op-input" readonly value="${fechaEntrega}">
           </div>
           <div class="op-field">
+            <label class="op-label">Motivo de Entrega</label>
+            <input class="op-input" readonly value="${e.motivo_entrega || '—'}">
+          </div>
+          <div class="op-field">
             <label class="op-label">Registrado por</label>
             <input class="op-input" readonly value="${registrador}">
           </div>
@@ -637,12 +762,13 @@ async function abrirDetalle(id: number) {
             <thead>
               <tr>
                 <th style="width:5%;">#</th>
-                <th style="width:${e.estado === 'Devuelto' ? '28%' : '47%'};">Equipo</th>
+                <th style="width:${e.estado === 'Devuelto' ? '25%' : '40%'};">Equipo</th>
                 <th style="width:8%;">Cant.</th>
-                <th style="width:${e.estado === 'Devuelto' ? '17%' : '30%'};">Observación</th>
+                <th style="width:10%;">Estado</th>
+                <th style="width:${e.estado === 'Devuelto' ? '15%' : '27%'};">Observación</th>
                 ${e.estado === 'Devuelto' ? `
                   <th style="width:14%;">Condición</th>
-                  <th style="width:28%;">Obs. Devolución</th>
+                  <th style="width:23%;">Obs. Devolución</th>
                 ` : ''}
               </tr>
             </thead>
@@ -881,6 +1007,35 @@ function cerrarModales() {
 export function initEntregaEppEvents() {
   cargarEstadisticas();
   cargarEntregas();
+
+  // Tabs
+  document.querySelectorAll('.module-tab[data-epp-tab]').forEach(tab => {
+    tab.addEventListener('click', (ev) => {
+      const target = (ev.currentTarget as HTMLElement).dataset.eppTab as 'entregas' | 'estado';
+      activeEppTab = target;
+
+      // Actualizar estilos de tabs
+      document.querySelectorAll('.module-tab[data-epp-tab]').forEach(t => {
+        const el = t as HTMLElement;
+        const isActive = el.dataset.eppTab === target;
+        el.style.color = isActive ? '#2563eb' : '#64748b';
+        el.style.borderBottomColor = isActive ? '#2563eb' : 'transparent';
+        el.style.fontWeight = isActive ? '600' : '600';
+      });
+
+      // Mostrar/ocultar contenido
+      const tabEntregas = document.getElementById('epp-tab-entregas');
+      const tabEstado = document.getElementById('epp-tab-estado');
+      if (tabEntregas) tabEntregas.style.display = target === 'entregas' ? '' : 'none';
+      if (tabEstado) tabEstado.style.display = target === 'estado' ? '' : 'none';
+
+      // Cargar datos del tab EPP por Técnico si se selecciona
+      if (target === 'estado') cargarEstadoTecnicos();
+    });
+  });
+
+  // Botón refrescar estado
+  document.getElementById('btn-refresh-estado-epp')?.addEventListener('click', cargarEstadoTecnicos);
 
   // Botón nueva entrega
   document.getElementById('btn-nueva-entrega-epp')?.addEventListener('click', abrirModalNuevaEntrega);

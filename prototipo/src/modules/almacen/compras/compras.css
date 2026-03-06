@@ -1,0 +1,2 @@
+/* compras.css → reutiliza prov-* via import compartido */
+@import '../proveedores/proveedores.css';

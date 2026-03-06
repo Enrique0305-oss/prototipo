@@ -11,7 +11,8 @@ import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, 
 // Almacén
 import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
 import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents, initKardexEvents } from './modules/almacen/inventario/inventario.view'
-import { renderAlmacenProveedores } from './modules/almacen/proveedores/proveedores.view'
+import { renderAlmacenProveedores, initProveedoresEvents } from './modules/almacen/proveedores/proveedores.view'
+import { renderAlmacenCompras, initComprasEvents } from './modules/almacen/compras/compras.view'
 import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './modules/almacen/entradas-salidas/entradas-salidas.view'
 import { renderEntregaEpp, initEntregaEppEvents } from './modules/almacen/entrega-epp/entrega-epp.view'
 // Logística
@@ -73,7 +74,7 @@ function filtrarMenuPorPermisos(items: typeof menuItems): typeof menuItems {
 
 const menuItems = [
   { name: 'Dashboard', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>', submenu: [] },
-  { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Mantenimiento', 'Inventario', 'Proveedores', 'Entradas y Salidas', 'Entrega EPP'] },
+  { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Mantenimiento', 'Inventario', 'Proveedores', 'Órdenes de Compra', 'Entradas y Salidas', 'Entrega EPP'] },
   { name: 'Logística', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>', submenu: [] },
   { name: 'Programaciones', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>', submenu: [] },
   { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Clientes Potenciales', 'Cotizaciones', 'Aprobación Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Conversiones'] },
@@ -92,6 +93,7 @@ function getMainContent() {
   } else if (activeMenu === 'Almacén') {
     if (activeSubMenu === 'Inventario') return renderAlmacenInventario();
     if (activeSubMenu === 'Proveedores') return renderAlmacenProveedores();
+    if (activeSubMenu === 'Órdenes de Compra') return renderAlmacenCompras();
     if (activeSubMenu === 'Entradas y Salidas') return renderAlmacenEntradasSalidas();
     if (activeSubMenu === 'Entrega EPP') return renderEntregaEpp();
     return renderAlmacenMantenimiento(); // Mantenimiento por defecto (con tabs)
@@ -388,6 +390,16 @@ if (activeMenu === 'Facturación') {
   // Inicializar eventos del módulo de Entrega EPP
   if (activeMenu === 'Almacén' && activeSubMenu === 'Entrega EPP') {
     setTimeout(() => initEntregaEppEvents(), 0);
+  }
+
+  // Inicializar eventos de Proveedores
+  if (activeMenu === 'Almacén' && activeSubMenu === 'Proveedores') {
+    setTimeout(() => initProveedoresEvents(), 0);
+  }
+
+  // Inicializar eventos de Órdenes de Compra
+  if (activeMenu === 'Almacén' && activeSubMenu === 'Órdenes de Compra') {
+    setTimeout(() => initComprasEvents(), 0);
   }
 }
 

@@ -27,6 +27,8 @@ use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
 use App\Http\Controllers\API\EntregaEppController;
+use App\Http\Controllers\API\ProveedorController;
+use App\Http\Controllers\API\OrdenCompraController;
 
 // Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
@@ -242,8 +244,25 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
     Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
 
+    // Proveedores
+    Route::get('/proveedores', [ProveedorController::class, 'index']);
+    Route::post('/proveedores', [ProveedorController::class, 'store']);
+    Route::get('/proveedores/{id}', [ProveedorController::class, 'show']);
+    Route::put('/proveedores/{id}', [ProveedorController::class, 'update']);
+    Route::delete('/proveedores/{id}', [ProveedorController::class, 'destroy']);
+
+    // Órdenes de Compra
+    Route::get('/ordenes-compra/estadisticas/resumen', [OrdenCompraController::class, 'estadisticas']);
+    Route::get('/ordenes-compra', [OrdenCompraController::class, 'index']);
+    Route::post('/ordenes-compra', [OrdenCompraController::class, 'store']);
+    Route::get('/ordenes-compra/{id}', [OrdenCompraController::class, 'show']);
+    Route::put('/ordenes-compra/{id}', [OrdenCompraController::class, 'update']);
+    Route::patch('/ordenes-compra/{id}/recibir', [OrdenCompraController::class, 'recibir']);
+    Route::patch('/ordenes-compra/{id}/anular', [OrdenCompraController::class, 'anular']);
+
     // Entrega EPP - equipos de protección personal
     Route::get('/entrega-epp/estadisticas/resumen', [EntregaEppController::class, 'estadisticas']);
+    Route::get('/entrega-epp/estado-tecnicos', [EntregaEppController::class, 'estadoTecnicos']);
     Route::get('/entrega-epp/productos-epp', [EntregaEppController::class, 'productosEpp']);
     Route::get('/entrega-epp', [EntregaEppController::class, 'index']);
     Route::post('/entrega-epp', [EntregaEppController::class, 'store']);

@@ -17,6 +17,8 @@ class DetalleEntregaEpp extends Model
         'observacion',
         'condicion_devolucion',
         'observacion_devolucion',
+        'estado_item',
+        'id_entrega_reemplazo',
     ];
 
     protected $casts = [
@@ -32,5 +34,10 @@ class DetalleEntregaEpp extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function entregaReemplazo()
+    {
+        return $this->belongsTo(EntregaEpp::class, 'id_entrega_reemplazo');
     }
 }

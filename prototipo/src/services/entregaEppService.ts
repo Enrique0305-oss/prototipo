@@ -10,6 +10,7 @@ export interface EntregaEpp {
   registrado_por: number;
   devuelto_por: number | null;
   observaciones: string | null;
+  motivo_entrega: string | null;
   motivo_devolucion: string | null;
   tecnico?: { id: number; nombre: string; apellidos: string; dni: string; especialidad: string };
   registrador?: { id: number; nombre: string; apellidos: string };
@@ -25,6 +26,10 @@ export interface DetalleEntregaEpp {
   id_producto: number;
   cantidad: number;
   observacion: string | null;
+  condicion_devolucion?: string | null;
+  observacion_devolucion?: string | null;
+  estado_item?: 'Activo' | 'Devuelto' | 'Reemplazado';
+  id_entrega_reemplazo?: number | null;
   producto?: { id: number; descripcion: string; stock_actual: number };
 }
 
@@ -33,6 +38,19 @@ export interface ProductoEpp {
   descripcion: string;
   stock_disponible: number;
   unidad_medida: string;
+}
+
+export interface EstadoTecnicoEpp {
+  tecnico: { id: number; nombre: string; apellidos: string; dni: string };
+  items: Array<{
+    id_detalle: number;
+    producto: { id: number; descripcion: string };
+    cantidad: number;
+    numero_entrega: string;
+    id_entrega: number;
+    fecha_entrega: string;
+    motivo_entrega: string | null;
+  }>;
 }
 
 export interface EntregaEppEstadisticas {
@@ -61,6 +79,7 @@ export const entregaEppService = {
   create: async (data: {
     id_tecnico: number;
     fecha_entrega: string;
+    motivo_entrega?: string;
     observaciones?: string;
     detalles: { id_producto: number; cantidad: number; observacion?: string }[];
   }) => {
@@ -80,6 +99,10 @@ export const entregaEppService = {
 
   getEstadisticas: async () => {
     return apiClient.get<{ success: boolean; data: EntregaEppEstadisticas }>('/entrega-epp/estadisticas/resumen');
+  },
+
+  getEstadoTecnicos: async () => {
+    return apiClient.get<{ success: boolean; data: EstadoTecnicoEpp[] }>('/entrega-epp/estado-tecnicos');
   },
 
   getPdfUrl: (id: number) => {

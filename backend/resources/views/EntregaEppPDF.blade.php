@@ -104,6 +104,10 @@
                 </span>
             </td>
         </tr>
+        <tr>
+            <td class="label">Motivo de Entrega</td>
+            <td colspan="3">{{ $entrega->motivo_entrega ?? 'Primera Asignación' }}</td>
+        </tr>
         @if($entrega->estado === 'Devuelto' && $entrega->fecha_devolucion)
         <tr>
             <td class="label">Fecha Devolución</td>
