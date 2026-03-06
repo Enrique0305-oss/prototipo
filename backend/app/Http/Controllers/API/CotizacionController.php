@@ -101,6 +101,7 @@ class CotizacionController extends Controller
             'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion',
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
+            'propuesta_tecnica' => 'nullable|string',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
             'detalles.*.id_producto' => 'nullable|exists:productos,id',
@@ -145,6 +146,7 @@ class CotizacionController extends Controller
                 'igv' => $igv,
                 'total' => $total,
                 'observaciones' => $observaciones,
+                'propuesta_tecnica' => $validated['propuesta_tecnica'] ?? null,
             ]);
 
             // Crear detalles

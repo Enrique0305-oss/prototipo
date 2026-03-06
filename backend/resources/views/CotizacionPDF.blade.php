@@ -25,13 +25,15 @@
         
         /* ENCABEZADO CON LOGO */
         .logo-container {
-            text-align: center;
-            margin-bottom: 20px;
+            text-align: right;
+            margin-bottom: 15px;
+            width: 100%;
         }
         
         .logo-container img {
-            max-width: 100%;
+            max-width: 80%;
             height: auto;
+            display: inline-block;
         }
         
         .sub-title {
@@ -45,11 +47,11 @@
         }
         
         /* LÍNEA SEPARADORA */
-        .separator {
+        /* .separator {
             height: 3px;
             background-color: #2E4A7C;
             margin: 20px 0;
-        }
+        } */
         
         /* NÚMERO DE DOCUMENTO */
         .document-number {
@@ -153,13 +155,14 @@
             font-weight: bold;
             font-size: 13px;
             text-align: center;
-            margin-top: 20px;
+            margin-top: 90px;
         }
         
         .products-table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
+            margin-top: 20px;
         }
         
         .products-table thead {
@@ -354,13 +357,6 @@
         }
         /* Configuración para el pie de página repetitivo */
 
-        /* 1. CONFIGURACIÓN GLOBAL DE LA PÁGINA */
-        /* 1. Configuración de la página */
-        @page {
-    margin: 40px 40px 80px 40px; /* Asegúrate que el margen inferior sea suficiente para el footer */
-}
-
-
         /* 2. EL FOOTER: SE REPETIRÁ EN TODAS LAS HOJAS */
         footer {
             position: fixed; 
@@ -381,6 +377,52 @@
             font-weight: bold;
             font-size: 14px; /* Un poco más grande para que sea legible */
             font-family: sans-serif;
+        }
+        /* 1. Estilo base del encabezado (aparecerá en todas las hojas por defecto) */
+        header {
+            position: fixed;
+            top: 20px; /* Ajusta la altura del logo en las hojas 2, 3... */
+            left: 10px;
+            height: 60px;
+            width: 100%;
+        }
+
+
+        @page {
+
+            margin: 90px 40px 80px 80px; 
+        }
+
+        @page :first {
+            /* margin-top: 10px;  */
+            header {
+                top: -500px; /* Lo mandamos muy arriba para que no se vea */
+                visibility: hidden;
+            }
+        }
+
+
+        .logo-small {
+            height: 80px; 
+            width: auto;
+        }
+        /* Estilos para el contenido que viene del editor Quill */
+        .proposal-text ul, .proposal-text ol {
+            margin-left: 30px;
+            margin-bottom: 15px;
+        }
+        .proposal-text li {
+            list-style-type: disc; /* Para que salgan los puntitos en las listas */
+        }
+        .contenido-desplazado {
+            margin-left: 50px; /* Ajusta el valor a tu gusto */
+            margin-right: 50px; /* Opcional: para equilibrar el ancho si es necesario */
+        }
+
+        /* IMPORTANTE: Asegúrate de que las tablas dentro de este div 
+        no tengan un ancho fijo que rompa el margen */
+        .contenido-desplazado .products-table {
+            width: 100%; 
         }
     </style>
 </head>
@@ -411,6 +453,9 @@
     $datos = ($tipo == 'capacitacion' || $tipo == 'capacitación') ? $empresaCim : $empresaMulti;
     @endphp
 
+    <header>
+        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" class="logo-small">
+    </header>
     <footer>
         <a href="http://www.qsciconsulting.com" class="footer-link">www.qsciconsulting.com</a>
     </footer>
@@ -500,149 +545,153 @@
         <div class="page-break"></div>
         
         <!-- DETALLE DE PRODUCTOS/SERVICIOS -->
-        <div class="products-title">Detalle de Productos/Servicios</div>
-        
-        <table class="products-table">
-            <thead>
-                <tr>
-                    <th>Código</th>
-                    <th style="width: 40%;">Descripción</th>
-                    <th>Cantidad</th>
-                    <th>Unidad</th>
-                    <th>Precio Unitario</th>
-                    <th>Subtotal</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($cotizacion->detalles as $index => $detalle)
-                <tr>
-                    <td class="text-center">
-                        @if($detalle->id_servicio)
-                            SRV-{{ str_pad($detalle->id_servicio, 4, '0', STR_PAD_LEFT) }}
-                        @elseif($detalle->id_producto)
-                            PRD-{{ str_pad($detalle->id_producto, 4, '0', STR_PAD_LEFT) }}
-                        @else
-                            ITEM-{{ str_pad($index + 1, 4, '0', STR_PAD_LEFT) }}
-                        @endif
-                    </td>
-                    <td>
-                        @if($detalle->id_servicio)
-                            <strong>{{ $detalle->servicio->nombre ?? 'N/A' }}</strong><br>
-                            <small style="color: #666;">{{ $detalle->descripcion_manual }}</small>
-                        @elseif($detalle->id_producto)
-                            <strong>{{ $detalle->producto->descripcion ?? 'N/A' }}</strong><br>
-                            <small style="color: #666;">{{ $detalle->descripcion_manual }}</small>
-                            @if($detalle->producto && $detalle->producto->imagen)
-                                <div style="margin-top: 8px; text-align: center;">
-                                    <img src="{{ storage_path('app/public/' . $detalle->producto->imagen) }}" alt="{{ $detalle->producto->descripcion }}" style="max-width: 180px; max-height: 130px;">
-                                </div>
-                            @endif
-                        @else
-                            {{ $detalle->descripcion_manual }}
-                        @endif
-                        @if($detalle->modalidad_sugerida)
-                            <br><small style="color: #6CB52D;"><em>Modalidad: {{ $detalle->modalidad_sugerida }}</em></small>
-                        @endif
-                        @if($detalle->frecuencia_sugerida)
-                            <br><small style="color: #6CB52D;"><em>Frecuencia: {{ $detalle->frecuencia_sugerida }}</em></small>
-                        @endif
-                    </td>
-                    <td class="text-center">{{ $detalle->cantidad }}</td>
-                    <td class="text-center">UND</td>
-                    <td class="text-right">S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
-                    <td class="text-right"><strong>S/ {{ number_format($detalle->cantidad * $detalle->precio_unitario, 2) }}</strong></td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-        
-        <!-- TOTALES -->
-        <div class="totals-container">
-            <table class="totals-table">
-                <tr>
-                    <td class="label">Subtotal:</td>
-                    <td class="value">S/ {{ number_format($cotizacion->subtotal ?? 0, 2) }}</td>
-                </tr>
-                <tr>
-                    <td class="label">IGV (18%):</td>
-                    <td class="value">S/ {{ number_format($cotizacion->igv ?? 0, 2) }}</td>
-                </tr>
-                <tr class="total-row">
-                    <td class="label">TOTAL GENERAL:</td>
-                    <td class="value">S/ {{ number_format($cotizacion->total ?? 0, 2) }}</td>
-                </tr>
-            </table>
-        </div>
-
-        <!-- NOTA SOBRE IGV -->
-        <div style="margin-top: 15px; padding: 12px 16px; border: 2px solid {{ $cotizacion->incluye_igv ? '#6CB52D' : '#dc3545' }}; border-radius: 4px; background-color: {{ $cotizacion->incluye_igv ? '#f0f9e8' : '#fff3f3' }};">
-            <strong style="color: {{ $cotizacion->incluye_igv ? '#2E4A7C' : '#dc3545' }}; font-size: 12px;">
-                @if($cotizacion->incluye_igv)
-                     Esta cotización INCLUYE IGV (18%)
+        <div class="contenido-desplazado">
+            <div class="proposal-text" style="margin-bottom: 20px;">
+                @if($cotizacion->propuesta_tecnica)
+                    {{-- Las llaves con signos de admiración sirven para renderizar HTML --}}
+                    {!! $cotizacion->propuesta_tecnica !!}
                 @else
-                     Esta cotización NO incluye IGV
+                    {{-- Texto por defecto si la base de datos está vacía --}}
+                    <p>I. PROPUESTA TÉCNICA<br>
+                    Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
                 @endif
-            </strong>
-            @if($cotizacion->observaciones)
-                <p style="margin-top: 6px; font-size: 11px; color: #555;">
-                    <strong>Observaciones:</strong> {{ $cotizacion->observaciones }}
-                </p>
-            @endif
-        </div>
-
-        <!-- SECCIÓN DE PAGOS -->
-         <div class="payment-section">
-            <p class="payment-header-text">Condiciones de pago:</p>
-            <p style="font-size: 12px; margin-bottom: 5px;"> -  Información de pago: Cuenta BCP</p>
-            <table class="payment-table">
-                <tr>
-                    <td class="label-cell">Cuenta BCP ahorro en soles</td>
-                    <td>{{ $datos['bcp'] }}</td>
-                </tr>
-                <tr>
-                    <td class="label-cell">Código de cuenta interbancario</td>
-                    <td>{{ $datos['cci_bcp'] }}</td>
-                </tr>
-                <tr>
-                    <td class="label-cell">A nombre de</td>
-                    <td><strong>{{ $datos['nombre'] }}</strong></td>
-                </tr>
-                <tr>
-                    <td class="label-cell">RUC</td>
-                    <td>{{ $datos['ruc'] }}</td>
-                </tr>
-                <tr>
-                    <td class="label-cell">Banco de la Nación Cuenta de Detracción</td>
-                    <td>{{ $datos['banco_nacion'] }}</td>
-                </tr>
-                <tr>
-                    <td class="label-cell">Código de Cuenta Interbancario</td>
-                    <td>{{ $datos['cci_nacion'] }}</td>
-                </tr>
+            </div>
+            <div class="products-title">Detalle de Productos/Servicios</div>
+            <table class="products-table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th style="width: 40%;">Descripción</th>
+                        <th>Cantidad</th>
+                        <th>Unidad</th>
+                        <th>Precio Unitario</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($cotizacion->detalles as $index => $detalle)
+                    <tr>
+                        <td class="text-center">
+                            @if($detalle->id_servicio)
+                                SRV-{{ str_pad($detalle->id_servicio, 4, '0', STR_PAD_LEFT) }}
+                            @elseif($detalle->id_producto)
+                                PRD-{{ str_pad($detalle->id_producto, 4, '0', STR_PAD_LEFT) }}
+                            @else
+                                ITEM-{{ str_pad($index + 1, 4, '0', STR_PAD_LEFT) }}
+                            @endif
+                        </td>
+                        <td>
+                            @if($detalle->id_servicio)
+                                <strong>{{ $detalle->servicio->nombre ?? 'N/A' }}</strong><br>
+                                <small style="color: #666;">{{ $detalle->descripcion_manual }}</small>
+                            @elseif($detalle->id_producto)
+                                <strong>{{ $detalle->producto->descripcion ?? 'N/A' }}</strong><br>
+                                <small style="color: #666;">{{ $detalle->descripcion_manual }}</small>
+                                @if($detalle->producto && $detalle->producto->imagen)
+                                    <div style="margin-top: 8px; text-align: center;">
+                                        <img src="{{ storage_path('app/public/' . $detalle->producto->imagen) }}" alt="{{ $detalle->producto->descripcion }}" style="max-width: 180px; max-height: 130px;">
+                                    </div>
+                                @endif
+                            @else
+                                {{ $detalle->descripcion_manual }}
+                            @endif
+                            @if($detalle->modalidad_sugerida)
+                                <br><small style="color: #6CB52D;"><em>Modalidad: {{ $detalle->modalidad_sugerida }}</em></small>
+                            @endif
+                            @if($detalle->frecuencia_sugerida)
+                                <br><small style="color: #6CB52D;"><em>Frecuencia: {{ $detalle->frecuencia_sugerida }}</em></small>
+                            @endif
+                        </td>
+                        <td class="text-center">{{ $detalle->cantidad }}</td>
+                        <td class="text-center">UND</td>
+                        <td class="text-right">S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
+                        <td class="text-right"><strong>S/ {{ number_format($detalle->cantidad * $detalle->precio_unitario, 2) }}</strong></td>
+                    </tr>
+                    @endforeach
+                </tbody>
             </table>
+            
+            <!-- TOTALES -->
+            <div class="totals-container">
+                <table class="totals-table">
+                    <tr>
+                        <td class="label">Subtotal:</td>
+                        <td class="value">S/ {{ number_format($cotizacion->subtotal ?? 0, 2) }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">IGV (18%):</td>
+                        <td class="value">S/ {{ number_format($cotizacion->igv ?? 0, 2) }}</td>
+                    </tr>
+                    <tr class="total-row">
+                        <td class="label">TOTAL GENERAL:</td>
+                        <td class="value">S/ {{ number_format($cotizacion->total ?? 0, 2) }}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- NOTA SOBRE IGV -->
+            <div style="margin-top: 15px; padding: 12px 16px; border: 2px solid {{ $cotizacion->incluye_igv ? '#6CB52D' : '#dc3545' }}; border-radius: 4px; background-color: {{ $cotizacion->incluye_igv ? '#f0f9e8' : '#fff3f3' }};">
+                <strong style="color: {{ $cotizacion->incluye_igv ? '#2E4A7C' : '#dc3545' }}; font-size: 12px;">
+                    @if($cotizacion->incluye_igv)
+                        Esta cotización INCLUYE IGV (18%)
+                    @else
+                        Esta cotización NO incluye IGV
+                    @endif
+                </strong>
+                @if($cotizacion->observaciones)
+                    <p style="margin-top: 6px; font-size: 11px; color: #555;">
+                        <strong>Observaciones:</strong> {{ $cotizacion->observaciones }}
+                    </p>
+                @endif
+            </div>
+
+            <!-- SECCIÓN DE PAGOS -->
+            <div class="payment-section">
+                <p class="payment-header-text">Condiciones de pago:</p>
+                <p style="font-size: 12px; margin-bottom: 5px;"> -  Información de pago: Cuenta BCP</p>
+                <table class="payment-table">
+                    <tr>
+                        <td class="label-cell">Cuenta BCP ahorro en soles</td>
+                        <td>{{ $datos['bcp'] }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label-cell">Código de cuenta interbancario</td>
+                        <td>{{ $datos['cci_bcp'] }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label-cell">A nombre de</td>
+                        <td><strong>{{ $datos['nombre'] }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="label-cell">RUC</td>
+                        <td>{{ $datos['ruc'] }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label-cell">Banco de la Nación Cuenta de Detracción</td>
+                        <td>{{ $datos['banco_nacion'] }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label-cell">Código de Cuenta Interbancario</td>
+                        <td>{{ $datos['cci_nacion'] }}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- CONDICIONES COMERCIALES -->
+            <div class="conditions">
+                <div class="conditions-title">Condiciones Comerciales</div>
+                <ol class="conditions-list">
+                    <li>Esta cotización será válida una vez aceptada formalmente por el cliente.</li>
+                    <li>El cliente se compromete a entregar los datos necesarios en la fecha y lugar pactado.</li>
+                    <li>Los servicios se realizarán según la orden de prioridad establecida por el cliente.</li>
+                    <li>En el evento que la empresa cliente modifique la cantidad de servicios/productos, la empresa se reserva el derecho de rechazar la entrega o iniciar el proceso sancionador correspondiente.</li>
+                    <li>Los productos/servicios deberán ser entregados conforme a los requisitos establecidos en la orden, acompañados de la documentación necesaria.</li>
+                    <li>El pago se efectuará contra la presentación de la factura y los documentos requeridos conforme a las condiciones pactadas.</li>
+                    <li>Los precios incluyen impuestos y cualquier otro cargo adicional, salvo acuerdo distinto por escrito.</li>
+                    <li>Esta cotización tiene una validez de 30 días desde la fecha de emisión.</li>
+                </ol>
+            </div>
         </div>
-        
-        <!-- CONDICIONES COMERCIALES -->
-        <div class="conditions">
-            <div class="conditions-title">Condiciones Comerciales</div>
-            <ol class="conditions-list">
-                <li>Esta cotización será válida una vez aceptada formalmente por el cliente.</li>
-                <li>El cliente se compromete a entregar los datos necesarios en la fecha y lugar pactado.</li>
-                <li>Los servicios se realizarán según la orden de prioridad establecida por el cliente.</li>
-                <li>En el evento que la empresa cliente modifique la cantidad de servicios/productos, la empresa se reserva el derecho de rechazar la entrega o iniciar el proceso sancionador correspondiente.</li>
-                <li>Los productos/servicios deberán ser entregados conforme a los requisitos establecidos en la orden, acompañados de la documentación necesaria.</li>
-                <li>El pago se efectuará contra la presentación de la factura y los documentos requeridos conforme a las condiciones pactadas.</li>
-                <li>Los precios incluyen impuestos y cualquier otro cargo adicional, salvo acuerdo distinto por escrito.</li>
-                <li>Esta cotización tiene una validez de 30 días desde la fecha de emisión.</li>
-            </ol>
-        </div>
-        
-        <!-- FOOTER -->
-        <!-- <div class="footer">
-            <p class="company-name">QSCI Group</p>
-            <p class="tagline">Servicios Multidisciplinarios - Soluciones Integrales</p>
-            <p>Documento generado el {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }}</p>
-        </div> -->
         
     </div>
 </body>

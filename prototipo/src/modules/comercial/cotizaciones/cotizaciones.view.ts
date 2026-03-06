@@ -7,6 +7,21 @@ import { catalogoCapAudService } from '../../../services/catalogoCapAudService';
 import { mostrarToast } from '../../../shared/toast';
 import type { Cotizacion, EstadisticasCotizaciones } from '../../../core/api/types';
 
+// --- INICIO DE CARGA DE QUILL ---
+if (typeof window !== 'undefined' && !document.getElementById('quill-assets')) {
+    const link = document.createElement('link');
+    link.href = 'https://cdn.quilljs.com/1.3.6/quill.snow.css';
+    link.rel = 'stylesheet';
+    link.id = 'quill-assets';
+    const script = document.createElement('script');
+    script.src = 'https://cdn.quilljs.com/1.3.6/quill.min.js';
+    document.head.appendChild(link);
+    document.head.appendChild(script);
+}
+
+let quillInstance: any = null; // Usaremos esta variable para manejar el editor
+// --- FIN DE CARGA DE QUILL ---
+
 //  STATE 
 let cotizacionesData: Cotizacion[] = [];
 let estadisticasData: EstadisticasCotizaciones | null = null;
@@ -391,6 +406,20 @@ async function abrirFormularioCotizacion() {
           </div>
         </div>
 
+        <div class="propuesta-tecnica-container" style="margin-bottom: 25px; background: #fff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Propuesta Técnica (Objetivos y Actividades)</h3>
+                <button type="button" id="btn-toggle-propuesta" style="font-size: 12px; padding: 5px 10px; cursor: pointer; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px;">
+                    Mostrar/Ocultar Editor
+                </button>
+            </div>
+
+            <div id="editor-wrapper" style="display: none;">
+                <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Use el editor para dar formato a los objetivos y actividades tal cual aparecerán en el PDF.</p>
+                <div id="editor-propuesta" style="height: 300px; background: #fff;"></div>
+            </div>
+        </div>
+
         <div class="form-section" style="margin-bottom: 24px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
             <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Detalle de Cotización</h3>
@@ -451,6 +480,36 @@ async function abrirFormularioCotizacion() {
 
   lista.style.display = 'none';
   formulario.style.display = 'block';
+
+  // --- CONFIGURACIÓN DEL EDITOR (PEGA AQUÍ) ---
+  setTimeout(() => {
+    const container = document.getElementById('editor-propuesta');
+    if (container && (window as any).Quill) {
+      quillInstance = new (window as any).Quill('#editor-propuesta', {
+        theme: 'snow',
+        placeholder: 'Escriba objetivos, actividades y temario aquí...',
+        modules: {
+          toolbar: [
+            ['bold', 'italic', 'underline'],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            [{ 'indent': '-1'}, { 'indent': '+1' }],
+            ['clean']
+          ]
+        }
+      });
+    }
+
+    const btnToggle = document.getElementById('btn-toggle-propuesta');
+    const wrapper = document.getElementById('editor-wrapper');
+    if (btnToggle && wrapper) {
+      btnToggle.onclick = () => {
+        const isHidden = wrapper.style.display === 'none';
+        wrapper.style.display = isHidden ? 'block' : 'none';
+        btnToggle.textContent = isHidden ? 'Ocultar Editor' : 'Mostrar/Ocultar Editor';
+      };
+    }
+  }, 150); // El pequeño delay asegura que el HTML ya exista en el DOM
+  // --- FIN CONFIGURACIÓN EDITOR ---
 
   // Eventos del formulario
   document.getElementById('btn-volver-lista')?.addEventListener('click', cerrarFormulario);
@@ -722,7 +781,8 @@ function calcularTotales() {
 async function guardarCotizacion() {
   const clienteId = parseInt((document.getElementById('cot-cliente') as HTMLInputElement)?.value || '0');
   const tipoCotizacion = (document.getElementById('cot-tipo') as HTMLSelectElement)?.value;
-  const observaciones = (document.getElementById('cot-observaciones') as HTMLInputElement)?.value?.trim();
+  const observaciones = (document.getElementById('cot-observaciones') as HTMLInputElement)?.value?.trim();  
+  const propuestaHtml = quillInstance ? quillInstance.root.innerHTML : '';
 
   if (!clienteId || !tipoCotizacion) {
     mostrarToast('warning', 'Campos obligatorios', 'Seleccione cliente y tipo de cotización');
@@ -774,6 +834,7 @@ async function guardarCotizacion() {
     tipo_cotizacion: tipoCotizacion,
     incluye_igv: incluyeIgv,
     observaciones: observaciones || undefined,
+    propuesta_tecnica: propuestaHtml,
     detalles
   };
 
