@@ -13,6 +13,8 @@ let estadisticasData: EstadisticasCotizaciones | null = null;
 let filtros = { search: '', tipo: '' };
 let contadorLineas = 0;
 let incluyeIgv = true;
+let paginaActual = 1;
+const itemsPorPagina = 15;
 
 //  RENDER PRINCIPAL 
 export function renderComercialCotizaciones(): string {
@@ -99,6 +101,9 @@ export function renderComercialCotizaciones(): string {
 
       <div id="cotizaciones-pagination" class="pagination">
         <span class="pagination-info"></span>
+        <div class="pagination-controls" id="cotiz-pagination-controls" style="display:flex;gap:8px;align-items:center;">
+          <!-- Se llenará dinámicamente -->
+        </div>
       </div>
     </div>
 
@@ -137,6 +142,7 @@ async function cargarCotizaciones() {
     const response = await cotizacionService.getAll(params);
     const data = response.data || response;
     cotizacionesData = Array.isArray(data) ? data : (data as any).data || [];
+    paginaActual = 1; // Resetear a primera página al cargar nuevos datos
     renderizarTabla();
   } catch (error) {
     console.error('Error cargando cotizaciones:', error);
@@ -151,10 +157,16 @@ function renderizarTabla() {
 
   if (cotizacionesData.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#64748b;">No se encontraron cotizaciones</td></tr>';
+    renderizarPaginacion();
     return;
   }
 
-  tbody.innerHTML = cotizacionesData.map(cot => {
+  // Calcular índices para paginación
+  const inicio = (paginaActual - 1) * itemsPorPagina;
+  const fin = inicio + itemsPorPagina;
+  const cotizacionesPagina = cotizacionesData.slice(inicio, fin);
+
+  tbody.innerHTML = cotizacionesPagina.map(cot => {
     const numero = cot.numero || cot.numero_cotizacion || '—';
     const cliente = cot.cliente_nombre || (cot.cliente as any)?.nombre_empresa || '—';
     const fecha = cot.fecha_emision ? new Date(cot.fecha_emision).toLocaleDateString('es-PE') : '—';
@@ -187,8 +199,87 @@ function renderizarTabla() {
     `;
   }).join('');
 
+  renderizarPaginacion();
+}
+
+function renderizarPaginacion() {
+  const totalPaginas = Math.ceil(cotizacionesData.length / itemsPorPagina);
+  const inicio = (paginaActual - 1) * itemsPorPagina + 1;
+  const fin = Math.min(inicio + itemsPorPagina - 1, cotizacionesData.length);
+
+  // Info de paginación
   const pag = document.querySelector('#cotizaciones-pagination .pagination-info');
-  if (pag) pag.textContent = `Mostrando ${cotizacionesData.length} cotizaciones aceptadas`;
+  if (pag) {
+    pag.textContent = cotizacionesData.length > 0 
+      ? `Mostrando ${inicio}-${fin} de ${cotizacionesData.length} cotizaciones`
+      : 'No hay cotizaciones';
+  }
+
+  // Controles de paginación
+  const controls = document.getElementById('cotiz-pagination-controls');
+  if (!controls) return;
+
+  if (totalPaginas <= 1) {
+    controls.innerHTML = '';
+    return;
+  }
+
+  let html = `
+    <button class="pagination-btn" id="cotiz-pag-prev" ${paginaActual === 1 ? 'disabled' : ''} style="padding:6px 12px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+    </button>
+  `;
+
+  // Números de página
+  const rango = 2; // Cuántas páginas mostrar a cada lado de la actual
+  let inicio_pag = Math.max(1, paginaActual - rango);
+  let fin_pag = Math.min(totalPaginas, paginaActual + rango);
+
+  if (inicio_pag > 1) {
+    html += `<button class="pagination-btn" data-page="1" style="padding:6px 12px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;">1</button>`;
+    if (inicio_pag > 2) html += `<span style="padding:0 4px;color:#94a3b8;">...</span>`;
+  }
+
+  for (let i = inicio_pag; i <= fin_pag; i++) {
+    const activo = i === paginaActual;
+    html += `<button class="pagination-btn" data-page="${i}" style="padding:6px 12px;border:1px solid ${activo ? '#3b82f6' : '#e2e8f0'};background:${activo ? '#3b82f6' : '#fff'};color:${activo ? '#fff' : '#1e293b'};border-radius:6px;cursor:pointer;font-weight:${activo ? '600' : '400'};">${i}</button>`;
+  }
+
+  if (fin_pag < totalPaginas) {
+    if (fin_pag < totalPaginas - 1) html += `<span style="padding:0 4px;color:#94a3b8;">...</span>`;
+    html += `<button class="pagination-btn" data-page="${totalPaginas}" style="padding:6px 12px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;">${totalPaginas}</button>`;
+  }
+
+  html += `
+    <button class="pagination-btn" id="cotiz-pag-next" ${paginaActual === totalPaginas ? 'disabled' : ''} style="padding:6px 12px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+  `;
+
+  controls.innerHTML = html;
+
+  // Event listeners
+  document.getElementById('cotiz-pag-prev')?.addEventListener('click', () => {
+    if (paginaActual > 1) {
+      paginaActual--;
+      renderizarTabla();
+    }
+  });
+
+  document.getElementById('cotiz-pag-next')?.addEventListener('click', () => {
+    if (paginaActual < totalPaginas) {
+      paginaActual++;
+      renderizarTabla();
+    }
+  });
+
+  controls.querySelectorAll('[data-page]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const page = parseInt((e.target as HTMLElement).dataset.page || '1');
+      paginaActual = page;
+      renderizarTabla();
+    });
+  });
 }
 
 //  FORMULARIO NUEVA COTIZACIÓN 
@@ -535,6 +626,8 @@ function agregarLineaDetalle() {
       <td>
         <select class="frecuencia-input" style="${selectStyle}${disabledFrecuenciaStyle}" ${disabledFrecuencia}>
           <option value="">—</option>
+          <option value="Única">Única</option>
+          <option value="Días de la semana">Días de la semana</option>
           <option value="Semanal">Semanal</option>
           <option value="Quincenal">Quincenal</option>
           <option value="Mensual">Mensual</option>

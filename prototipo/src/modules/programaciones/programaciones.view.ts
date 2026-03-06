@@ -731,6 +731,39 @@ function renderFormNueva(body: HTMLElement) {
             </select>
           </div>
           <div id="infoFrecuencia" style="display:none;margin-top:8px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px;"></div>
+          <div id="diasSemanaGroup" style="display:none;margin-top:12px;">
+            <label class="prog-form-label">Seleccionar Días <span class="prog-required">*</span></label>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px;border:1px solid #e2e8f0;border-radius:8px;background:#fafafa;">
+              <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff;" title="Lunes">
+                <input type="checkbox" class="dia-semana-check" value="Lunes" style="accent-color:#4f7cff;cursor:pointer;">
+                <span style="font-weight:500;font-size:13px;">Lunes</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff;" title="Martes">
+                <input type="checkbox" class="dia-semana-check" value="Martes" style="accent-color:#4f7cff;cursor:pointer;">
+                <span style="font-weight:500;font-size:13px;">Martes</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff;" title="Miércoles">
+                <input type="checkbox" class="dia-semana-check" value="Miércoles" style="accent-color:#4f7cff;cursor:pointer;">
+                <span style="font-weight:500;font-size:13px;">Miércoles</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff;" title="Jueves">
+                <input type="checkbox" class="dia-semana-check" value="Jueves" style="accent-color:#4f7cff;cursor:pointer;">
+                <span style="font-weight:500;font-size:13px;">Jueves</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff;" title="Viernes">
+                <input type="checkbox" class="dia-semana-check" value="Viernes" style="accent-color:#4f7cff;cursor:pointer;">
+                <span style="font-weight:500;font-size:13px;">Viernes</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff;" title="Sábado">
+                <input type="checkbox" class="dia-semana-check" value="Sábado" style="accent-color:#4f7cff;cursor:pointer;">
+                <span style="font-weight:500;font-size:13px;">Sábado</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:#fff;" title="Domingo">
+                <input type="checkbox" class="dia-semana-check" value="Domingo" style="accent-color:#4f7cff;cursor:pointer;">
+                <span style="font-weight:500;font-size:13px;">Domingo</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- Modo -->
@@ -840,11 +873,22 @@ function renderFormNueva(body: HTMLElement) {
     const frecuencia = opt?.dataset.frecuencia || '';
     const local = opt?.dataset.local || '';
     const infoDiv = body.querySelector('#infoFrecuencia') as HTMLElement;
+    const diasGroup = body.querySelector('#diasSemanaGroup') as HTMLElement;
 
-    if (frecuencia) {
-      infoDiv.innerHTML = `Frecuencia: <strong>${frecuencia}</strong>. ${frecuencia.toLowerCase() !== 'única' ? 'Puedes usar "Año Completo" para programar todas las fechas automáticamente.' : ''}`;
+    // Mostrar/ocultar selección de días según frecuencia
+    if (frecuencia.toLowerCase() === 'días de la semana' || frecuencia.toLowerCase() === 'dias de la semana') {
+      diasGroup.style.display = 'block';
+      infoDiv.innerHTML = `Frecuencia: <strong>${frecuencia}</strong>. Selecciona los días específicos de la semana.`;
       infoDiv.style.display = 'block';
-    } else { infoDiv.style.display = 'none'; }
+    } else {
+      diasGroup.style.display = 'none';
+      if (frecuencia) {
+        infoDiv.innerHTML = `Frecuencia: <strong>${frecuencia}</strong>. ${frecuencia.toLowerCase() !== 'única' ? 'Puedes usar "Año Completo" para programar todas las fechas automáticamente.' : ''}`;
+        infoDiv.style.display = 'block';
+      } else { 
+        infoDiv.style.display = 'none'; 
+      }
+    }
 
     if (local) (body.querySelector('#inputLocalSede') as HTMLInputElement).value = local;
   });
@@ -873,10 +917,27 @@ function renderFormNueva(body: HTMLElement) {
       resultDiv.innerHTML = '<p style="color:#ef4444;">Seleccione servicio con frecuencia y fecha de inicio</p>';
       return;
     }
+
+    // Si la frecuencia es "días de la semana", validar y capturar días
+    let diasSemana: string | null = null;
+    const diasGroup = body.querySelector('#diasSemanaGroup') as HTMLElement;
+    if (diasGroup && diasGroup.style.display !== 'none') {
+      const checkboxes = diasGroup.querySelectorAll('input[type="checkbox"]:checked') as NodeListOf<HTMLInputElement>;
+      if (checkboxes.length === 0) {
+        mostrarToast('warning', 'Advertencia', 'Seleccione al menos un día de la semana');
+        return;
+      }
+      const dias = Array.from(checkboxes).map(cb => cb.value);
+      diasSemana = dias.join(',');
+    }
+
     resultDiv.innerHTML = '<p style="color:#999;">Calculando fechas...</p>';
 
     try {
-      const res = await programacionService.previewAnual({ id_servicio: idServicio, frecuencia, fecha_inicio: fechaInicio });
+      const payload: any = { id_servicio: idServicio, frecuencia, fecha_inicio: fechaInicio };
+      if (diasSemana) payload.dias_semana = diasSemana;
+      
+      const res = await programacionService.previewAnual(payload);
       const preview = res.data;
       if (!preview) { resultDiv.innerHTML = '<p>Sin datos</p>'; return; }
       resultDiv.innerHTML = `
@@ -926,6 +987,17 @@ async function submitIndividual(body: HTMLElement) {
   data.id_tecnico_asignado = tecnicosIds[0]; // Primero = principal
   data.tecnicos_ids = tecnicosIds;
 
+  // Recoger días de semana si está visible
+  const diasGroup = body.querySelector('#diasSemanaGroup') as HTMLElement;
+  if (diasGroup && diasGroup.style.display !== 'none') {
+    const checkedDias = Array.from(body.querySelectorAll('.dia-semana-check:checked')) as HTMLInputElement[];
+    if (checkedDias.length === 0) {
+      mostrarToast('warning', 'Días requeridos', 'Debe seleccionar al menos un día de la semana');
+      return;
+    }
+    data.dias_semana = checkedDias.map(d => d.value).join(',');
+  }
+
   try {
     await programacionService.create(data);
     cerrarModal('modalNuevaProgramacion');
@@ -972,6 +1044,17 @@ async function submitAnual(body: HTMLElement) {
     direccion_completa: fd.get('direccion_completa') || '',
     observaciones: fd.get('observaciones') || '',
   };
+
+  // Recoger días de semana si está visible
+  const diasGroup = body.querySelector('#diasSemanaGroup') as HTMLElement;
+  if (diasGroup && diasGroup.style.display !== 'none') {
+    const checkedDias = Array.from(body.querySelectorAll('.dia-semana-check:checked')) as HTMLInputElement[];
+    if (checkedDias.length === 0) {
+      mostrarToast('warning', 'Días requeridos', 'Debe seleccionar al menos un día de la semana');
+      return;
+    }
+    data.dias_semana = checkedDias.map(d => d.value).join(',');
+  }
 
   try {
     const res = await programacionService.createAnual(data);

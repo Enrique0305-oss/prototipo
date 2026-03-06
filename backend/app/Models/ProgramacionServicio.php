@@ -16,6 +16,7 @@ class ProgramacionServicio extends Model
         'id_supervisor',
         'id_vehiculo',
         'fecha_programada',
+        'dias_semana',
         'hora_inicio',
         'hora_fin',
         'duracion_real',

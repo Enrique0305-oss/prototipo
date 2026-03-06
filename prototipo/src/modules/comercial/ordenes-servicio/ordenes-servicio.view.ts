@@ -543,7 +543,7 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
   contadorLineasSrv++;
   const lineaId = 'linea-srv-' + contadorLineasSrv;
 
-  const frecOpts = ['', 'Unica', 'Semanal', 'Quincenal', 'Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'];
+  const frecOpts = ['', 'Única', 'Días de la semana', 'Semanal', 'Quincenal', 'Mensual', 'Trimestral', 'Semestral', 'Anual'];
   const frecSelect = frecOpts.map(f => {
     const label = f || 'A SOLICITUD DEL CLIENTE';
     const sel = (f && frecuencia && f.toLowerCase() === frecuencia.toLowerCase()) ? 'selected' : (!f && !frecuencia ? 'selected' : '');

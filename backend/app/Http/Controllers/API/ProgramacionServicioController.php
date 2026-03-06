@@ -130,6 +130,7 @@ class ProgramacionServicioController extends Controller
             'direccion_completa'=> 'nullable|string|max:255',
             'coordenadas'       => 'nullable|string|max:50',
             'observaciones'     => 'nullable|string',
+            'dias_semana'       => 'nullable|string|max:100',
         ]);
 
         DB::beginTransaction();
@@ -151,6 +152,7 @@ class ProgramacionServicioController extends Controller
                 'coordenadas'        => $validated['coordenadas'] ?? null,
                 'estado_ejecucion'   => 'Programado',
                 'observaciones'      => $validated['observaciones'] ?? null,
+                'dias_semana'        => $validated['dias_semana'] ?? null,
                 'creado_por'         => $idUsuario,
             ]);
 
@@ -214,12 +216,14 @@ class ProgramacionServicioController extends Controller
             'direccion_completa'  => 'nullable|string|max:255',
             'coordenadas'         => 'nullable|string|max:50',
             'observaciones'       => 'nullable|string',
+            'dias_semana'         => 'nullable|string|max:100',
         ]);
 
         // Calcular fechas
         $fechas = $this->calcularFechasPorFrecuencia(
             $validated['frecuencia'],
-            $validated['fecha_inicio']
+            $validated['fecha_inicio'],
+            $validated['dias_semana'] ?? null
         );
 
         if (empty($fechas)) {
@@ -277,6 +281,7 @@ class ProgramacionServicioController extends Controller
                     'coordenadas'        => $validated['coordenadas'] ?? null,
                     'estado_ejecucion'   => 'Programado',
                     'observaciones'      => $validated['observaciones'] ?? null,
+                    'dias_semana'        => $validated['dias_semana'] ?? null,
                     'creado_por'         => $idUsuario,
                 ]);
 
@@ -318,11 +323,13 @@ class ProgramacionServicioController extends Controller
             'id_servicio' => 'required|integer|exists:servicios,id',
             'frecuencia'  => 'required|string',
             'fecha_inicio'=> 'required|date',
+            'dias_semana' => 'nullable|string|max:100',
         ]);
 
         $fechas = $this->calcularFechasPorFrecuencia(
             $validated['frecuencia'],
-            $validated['fecha_inicio']
+            $validated['fecha_inicio'],
+            $validated['dias_semana'] ?? null
         );
 
         // Calcular necesidad de stock
@@ -640,13 +647,55 @@ class ProgramacionServicioController extends Controller
     /**
      * Calcular fechas por frecuencia desde fecha_inicio hasta fin de año
      */
-    private function calcularFechasPorFrecuencia(string $frecuencia, string $fechaInicio): array
+    private function calcularFechasPorFrecuencia(string $frecuencia, string $fechaInicio, ?string $diasSemana = null): array
     {
         $inicio = Carbon::parse($fechaInicio);
         $finAnio = Carbon::create($inicio->year, 12, 31);
         $fechas = [];
         $current = $inicio->copy();
 
+        // Caso especial: Días de la semana
+        if (strtolower($frecuencia) === 'días de la semana' && $diasSemana) {
+            // Mapeo de nombres de días a números de Carbon (1=Lunes, 7=Domingo)
+            $mapaDias = [
+                'lunes' => Carbon::MONDAY,
+                'martes' => Carbon::TUESDAY,
+                'miércoles' => Carbon::WEDNESDAY,
+                'miercoles' => Carbon::WEDNESDAY,
+                'jueves' => Carbon::THURSDAY,
+                'viernes' => Carbon::FRIDAY,
+                'sábado' => Carbon::SATURDAY,
+                'sabado' => Carbon::SATURDAY,
+                'domingo' => Carbon::SUNDAY,
+            ];
+
+            // Convertir CSV a array y normalizar
+            $diasSeleccionados = array_map('trim', explode(',', $diasSemana));
+            $diasNumeros = [];
+            
+            foreach ($diasSeleccionados as $dia) {
+                $diaLower = strtolower($dia);
+                if (isset($mapaDias[$diaLower])) {
+                    $diasNumeros[] = $mapaDias[$diaLower];
+                }
+            }
+
+            if (empty($diasNumeros)) {
+                return $fechas;
+            }
+
+            // Iterar día por día y agregar los que coincidan
+            while ($current->lte($finAnio)) {
+                if (in_array($current->dayOfWeek, $diasNumeros)) {
+                    $fechas[] = $current->format('Y-m-d');
+                }
+                $current->addDay();
+            }
+
+            return $fechas;
+        }
+
+        // Lógica original para otras frecuencias
         while ($current->lte($finAnio)) {
             $fechas[] = $current->format('Y-m-d');
 

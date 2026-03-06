@@ -54,7 +54,7 @@ export const programacionService = {
 
   // ─── Programación Anual ──────────────────────
 
-  previewAnual: async (data: { id_servicio: number; frecuencia: string; fecha_inicio: string }) => {
+  previewAnual: async (data: { id_servicio: number; frecuencia: string; fecha_inicio: string; dias_semana?: string }) => {
     return apiClient.post<ApiResponse<PreviewAnual>>('/programacion-servicio/preview-anual', data);
   },
 
