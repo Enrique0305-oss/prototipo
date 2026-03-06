@@ -21,7 +21,8 @@ class Cotizacion extends Model
         'subtotal',
         'igv',
         'total',
-        'observaciones'
+        'observaciones',
+        'propuesta_tecnica'
     ];
 
     protected $casts = [
