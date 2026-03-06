@@ -34,18 +34,6 @@
             height: auto;
         }
         
-        /* TÍTULO PRINCIPAL */
-        .main-title {
-            background-color: #2E4A7C;
-            color: white;
-            text-align: center;
-            padding: 15px;
-            font-size: 22px;
-            font-weight: bold;
-            letter-spacing: 2px;
-            margin-bottom: 5px;
-        }
-        
         .sub-title {
             background-color: #6CB52D;
             color: white;
@@ -89,27 +77,74 @@
             margin-top: 5px;
         }
         
-        /* TABLA DE INFORMACIÓN */
-        .info-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 25px;
-            border: 1px solid #ddd;
+        /* ESTILO PROFESIONAL TIPO CARTA */
+        /* SECCIÓN DE DATOS DEL CLIENTE (ESTILO LISTA VERTICAL) */
+        .intro-section {
+            padding: 10px 40px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #1a1a1a;
         }
-        
-        .info-table td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            font-size: 12px;
+
+        .client-info-list {
+            margin-bottom: 30px;
         }
-        
-        .info-table td:first-child {
-            background-color: #f5f5f5;
+
+        .info-item {
+            margin-bottom: 8px; /* Espaciado entre cada línea */
+        }
+
+        .info-item .label {
+            font-size: 13px;
             font-weight: bold;
-            color: #2E4A7C;
-            width: 150px;
+            color: #000;
+            display: block; /* Fuerza a que el valor vaya debajo o mantenga el bloque */
+            text-transform: none;
         }
-        
+
+        .info-item .value {
+            font-size: 14px;
+            color: #2E4A7C; /* Color azul corporativo para los datos */
+            font-weight: bold;
+            display: block;
+        }
+
+        /* DISEÑO DE LA PROPUESTA (SE MANTIENE) */
+        .proposal-text {
+            margin-top: 25px;
+            font-size: 14.5px;
+            line-height: 1.6;
+            color: #333;
+            text-align: justify;
+        }
+
+        .highlight-service {
+            color: #2E4A7C;
+            font-weight: bold;
+        }
+
+        /* DISEÑO DE LA PROPUESTA COMERCIAL */
+        .proposal-text {
+            margin-top: 30px;
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: #333;
+            text-align: justify;
+        }
+
+        .proposal-text p {
+            margin-bottom: 15px;
+        }
+
+        .highlight-service {
+            color: #2E4A7C;
+            font-weight: bold;
+        }
+
+        .closing-phrase {
+            margin-top: 25px;
+            font-style: normal;
+        }
+
         /* TABLA DE PRODUCTOS */
         .products-title {
             background-color: #2E4A7C;
@@ -232,14 +267,6 @@
         }
         
         /* FOOTER */
-        .footer {
-            margin-top: 40px;
-            text-align: center;
-            font-size: 10px;
-            color: #666;
-            border-top: 1px solid #ddd;
-            padding-top: 15px;
-        }
         
         .footer .company-name {
             color: #2E4A7C;
@@ -277,6 +304,84 @@
             width: 45%;
             background-color: #ffffff;
         }
+
+        /* ESTILO PARA EL EMISOR DEBAJO DE LA PROPUESTA */
+        /* SECCIÓN DE FIRMA Y LOGOS */
+        .issued-container {
+            margin-top: 30px;
+            padding: 0 10px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .issued-name {
+            font-size: 15px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 2px;
+        }
+
+        .issued-position {
+            font-size: 14px;
+            color: #00b050; /* Color verde como en la imagen */
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .signature-logos {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .signature-logos table {
+            width: 100%;
+            border: none;
+        }
+
+        .signature-logos td {
+            border: none;
+            padding: 0;
+            vertical-align: middle;
+            width: 50%; /* Divide el espacio en dos para las imágenes */
+        }
+
+        .img-signature {
+            max-height: 70px; /* Ajusta según el tamaño de tus imágenes */
+            width: auto;
+        }  
+        /* CLASE PARA FORZAR SALTO DE PÁGINA */
+        .page-break {
+            page-break-after: always;
+        }
+        /* Configuración para el pie de página repetitivo */
+
+        /* 1. CONFIGURACIÓN GLOBAL DE LA PÁGINA */
+        /* 1. Configuración de la página */
+        @page {
+    margin: 40px 40px 80px 40px; /* Asegúrate que el margen inferior sea suficiente para el footer */
+}
+
+
+        /* 2. EL FOOTER: SE REPETIRÁ EN TODAS LAS HOJAS */
+        footer {
+            position: fixed; 
+            bottom: 20px;       /* Cambiado de -60px a 20px para que suba a la hoja */
+            left: 0px;
+            right: 0px;
+            height: 40px; 
+            text-align: center;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            width: 100%;
+            z-index: 1000;      /* Asegura que esté por encima de otros elementos */
+        }
+
+        .footer-link {
+            color: #2E4A7C;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px; /* Un poco más grande para que sea legible */
+            font-family: sans-serif;
+        }
     </style>
 </head>
 <body>
@@ -302,9 +407,13 @@
     ];
 
     // Si es tipo 'capacitacion' usa CIM, sino usa Multi
-    $tipo = strtolower($cotizacion->tipo_cotizacion);
+    $tipo = strtolower($cotizacion->tipo_cotizacion ?? '');
     $datos = ($tipo == 'capacitacion' || $tipo == 'capacitación') ? $empresaCim : $empresaMulti;
     @endphp
+
+    <footer>
+        <a href="http://www.qsciconsulting.com" class="footer-link">www.qsciconsulting.com</a>
+    </footer>
     <div class="container">
         
         <!-- LOGO -->
@@ -312,9 +421,6 @@
             <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/encabezado.png'))) }}" alt="QSCI Group">
         </div>
         
-        <!-- TÍTULO PRINCIPAL -->
-        <div class="main-title">COTIZACIÓN</div>
-        <!-- <div class="sub-title">Servicios Multidisciplinarios</div> -->
         
         <div class="separator"></div>
         
@@ -325,37 +431,73 @@
         </div>
         
         <!-- INFORMACIÓN DEL CLIENTE -->
-        <table class="info-table">
-            <tr>
-                <td>Empresa:</td>
-                <td>{{ $cotizacion->cliente->nombre_empresa }}</td>
-            </tr>
-            <!-- <tr>
-                <td>Fecha:</td>
-                <td>{{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->format('d/m/Y') }}</td>
-            </tr> -->
-            <tr>
-                <td>RUC:</td>
-                <td>{{ $cotizacion->cliente->ruc }}</td>
-            </tr>
-            <tr>
-                <td>Dirección:</td>
-                <td>{{ $cotizacion->cliente->direccion ?? 'N/A' }}</td>
-            </tr>
-            <tr>
-                <td>Tipo:</td>
-                <td>{{ $cotizacion->tipo_cotizacion }}</td>
-            </tr>
-            <tr>
-                <td>Estado:</td>
-                <td style="font-weight: bold; color: 
-                    @if($cotizacion->estado === 'Pendiente') #856404
-                    @elseif($cotizacion->estado === 'Aceptada') #155724
-                    @else #721C24 @endif;">
-                    {{ $cotizacion->estado }}
-                </td>
-            </tr>
-        </table>
+        <div class="intro-section">
+            <div class="client-info-list">
+                <div class="info-item">
+                    <span class="label">Ing.:</span>
+                    <span class="value">{{ $cotizacion->cliente->persona_contacto }}</span>
+                </div>
+
+                <div class="info-item">
+                    <span class="label">Atención:</span>
+                    <span class="value">{{ $cotizacion->cliente->nombre_empresa }}</span>
+                </div>
+
+                <div class="info-item">
+                    <span class="label">RUC:</span>
+                    <span class="value">{{ $cotizacion->cliente->ruc }}</span>
+                </div>
+
+                <div class="info-item">
+                    <span class="label">Dirección:</span>
+                    <span class="value">{{ $cotizacion->cliente->direccion ?? 'No registrada' }}</span>
+                </div>
+            </div>
+
+            <div class="proposal-text">
+                <p>
+                    Nos es grato enviarle nuestra siguiente propuesta comercial de 
+                    <span class="highlight-service">Asesoría de Diagnóstico y Auditoría BRCGS START</span>.
+                </p>
+                <p>
+                    Nuestro servicio está inspirado en vuestra empresa y queremos acompañarlos en el 
+                    cumplimiento de sus objetivos y alcance de la excelencia.
+                </p>
+                <p style="margin-top: 20px;">
+                    Quedo a su entera disposición para cualquier consulta.
+                </p>
+            </div>
+
+            <div class="issued-container">
+                <div class="issued-name">
+                    {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
+                </div>
+                <div class="issued-position">
+                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                </div>
+                <div class="signature-logos">
+                    <table>
+                        <tr>
+                            <td style="text-align: left;">
+                                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" class="img-signature">
+                            </td>
+                            <td style="text-align: right;">
+                                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-orden.png'))) }}" class="img-signature">
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="proposal-text">
+                    <p>
+                        E-mail: {{ $cotizacion->creador->correo  }}
+                    </p>
+                    <p>
+                        Número: {{ $cotizacion->creador->celular  }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="page-break"></div>
         
         <!-- DETALLE DE PRODUCTOS/SERVICIOS -->
         <div class="products-title">Detalle de Productos/Servicios</div>
@@ -496,11 +638,11 @@
         </div>
         
         <!-- FOOTER -->
-        <div class="footer">
+        <!-- <div class="footer">
             <p class="company-name">QSCI Group</p>
             <p class="tagline">Servicios Multidisciplinarios - Soluciones Integrales</p>
             <p>Documento generado el {{ \Carbon\Carbon::now()->format('d/m/Y H:i') }}</p>
-        </div>
+        </div> -->
         
     </div>
 </body>
