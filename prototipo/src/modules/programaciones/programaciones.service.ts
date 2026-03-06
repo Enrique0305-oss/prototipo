@@ -86,4 +86,26 @@ export const programacionService = {
   getPersonal: async () => {
     return apiClient.get<{ success: boolean; data: { id: number; nombre: string; apellidos: string }[] }>('/personal');
   },
+
+  downloadPDF: async (params: {
+    vista: 'mensual' | 'semanal' | 'diaria';
+    mes?: number;
+    anio?: number;
+    fecha_inicio?: string;
+    fecha?: string;
+    id_tecnico?: number;
+    estado?: string;
+  }) => {
+    const query = new URLSearchParams();
+    query.set('vista', params.vista);
+    if (params.mes) query.set('mes', String(params.mes));
+    if (params.anio) query.set('anio', String(params.anio));
+    if (params.fecha_inicio) query.set('fecha_inicio', params.fecha_inicio);
+    if (params.fecha) query.set('fecha', params.fecha);
+    if (params.id_tecnico) query.set('id_tecnico', String(params.id_tecnico));
+    if (params.estado) query.set('estado', params.estado);
+
+    const filename = `Programacion_${params.vista}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    return apiClient.downloadFile(`/programacion-servicio/pdf?${query.toString()}`, filename);
+  },
 };

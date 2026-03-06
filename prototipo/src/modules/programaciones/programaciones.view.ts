@@ -42,6 +42,10 @@ export function renderProgramaciones(): string {
           <option value="semanal" ${vistaActual === 'semanal' ? 'selected' : ''}>Vista Semanal</option>
           <option value="mensual" ${vistaActual === 'mensual' ? 'selected' : ''}>Vista Mensual</option>
         </select>
+        <button class="prog-btn-secondary" id="btnExportarPDF" title="Exportar a PDF">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
+          Exportar PDF
+        </button>
         <button class="prog-btn-primary" id="btnNuevaProgramacion">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Nueva Programación
@@ -105,6 +109,8 @@ export async function initProgramacionesEvents(): Promise<void> {
     vistaActual = (e.target as HTMLSelectElement).value as VistaProgramacion;
     renderCalendario();
   });
+
+  document.getElementById('btnExportarPDF')?.addEventListener('click', exportarPDF);
 
   document.getElementById('closeModalDetalle')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
   document.getElementById('closeModalNueva')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacion'));
@@ -992,6 +998,42 @@ function getColorByState(estado: string): string {
     'En Ejecución': 'orange', 'Realizado': 'purple', 'Reprogramado': 'yellow', 'Cancelado': 'gray',
   };
   return c[estado] || 'blue';
+}
+
+// ═══════════ Exportar PDF ═══════════
+
+async function exportarPDF() {
+  const btn = document.getElementById('btnExportarPDF') as HTMLButtonElement | null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Generando…'; }
+
+  try {
+    const params: Record<string, any> = { vista: vistaActual };
+
+    if (vistaActual === 'mensual') {
+      params.mes = fechaActual.getMonth() + 1;
+      params.anio = fechaActual.getFullYear();
+    } else if (vistaActual === 'semanal') {
+      const lunes = getLunesDeSemana(fechaActual);
+      params.fecha_inicio = fmtDate(lunes);
+    } else {
+      params.fecha = fmtDate(fechaActual);
+    }
+
+    // Pasar filtros activos
+    if (filtroTecnico) params.id_tecnico = filtroTecnico;
+    if (filtroEstados.length > 0) params.estado = filtroEstados.join(',');
+
+    await programacionService.downloadPDF(params as any);
+    mostrarToast('success', 'PDF generado', 'El archivo se descargó correctamente');
+  } catch (err: any) {
+    console.error('Error exportando PDF:', err);
+    mostrarToast('error', 'Error', 'No se pudo generar el PDF');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg> Exportar PDF`;
+    }
+  }
 }
 
 function clienteNombre(p: Programacion): string {

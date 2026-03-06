@@ -234,6 +234,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/programacion-servicio/ods-disponibles', [ProgramacionServicioController::class, 'getODSDisponibles']);
     Route::post('/programacion-servicio/preview-anual', [ProgramacionServicioController::class, 'previewAnual']);
     Route::post('/programacion-servicio/anual', [ProgramacionServicioController::class, 'storeAnual']);
+    Route::get('/programacion-servicio/pdf', [ProgramacionServicioController::class, 'generarPDF']);
     Route::get('/programacion-servicio', [ProgramacionServicioController::class, 'index']);
     Route::get('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'show']);
     Route::post('/programacion-servicio', [ProgramacionServicioController::class, 'store']);
