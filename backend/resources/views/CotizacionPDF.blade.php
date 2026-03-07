@@ -5,16 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cotización #{{ $cotizacion->numero_cotizacion }}</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
             font-family: 'Arial', sans-serif;
             color: #333;
             line-height: 1.4;
+            margin: 0;
             padding: 20px;
         }
         
@@ -25,13 +20,37 @@
         
         /* ENCABEZADO CON LOGO */
         .logo-container {
-            text-align: right;
-            margin-bottom: 15px;
             width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .logo-container table {
+            width: 100%;
+            border: none;
+        }
+
+        .logo-container td {
+            border: none;
+            padding: 0;
+            vertical-align: top;
+        }
+
+        .logo-container .logo-qsci {
+            width: 20%;
+        }
+
+        .logo-container .logo-qsci img {
+            height: 70px;
+            width: auto;
+        }
+
+        .logo-container .logo-encabezado {
+            width: 80%;
+            text-align: right;
         }
         
-        .logo-container img {
-            max-width: 80%;
+        .logo-container .logo-encabezado img {
+            max-width: 100%;
             height: auto;
             display: inline-block;
         }
@@ -147,6 +166,47 @@
             font-style: normal;
         }
 
+        /* ENCABEZADOS DE PROPUESTA (PÁGINA 2) */
+        .propuesta-numero {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            color: #000;
+            margin-top: 10px;
+            margin-bottom: 5px;
+            text-decoration: underline;
+        }
+
+        .propuesta-fecha {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 25px;
+        }
+
+        .seccion-titulo {
+            font-size: 13px;
+            font-weight: bold;
+            color: #000;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .seccion-titulo-num {
+            display: inline;
+            margin-right: 15px;
+        }
+
+        .seccion-descripcion {
+            font-size: 13px;
+            line-height: 1.6;
+            color: #333;
+            text-align: justify;
+            margin-bottom: 15px;
+        }
+
         /* TABLA DE PRODUCTOS */
         .products-title {
             background-color: #2E4A7C;
@@ -155,7 +215,7 @@
             font-weight: bold;
             font-size: 13px;
             text-align: center;
-            margin-top: 90px;
+            margin-top: 30px;
         }
         
         .products-table {
@@ -357,54 +417,48 @@
         }
         /* Configuración para el pie de página repetitivo */
 
-        /* 2. EL FOOTER: SE REPETIRÁ EN TODAS LAS HOJAS */
+        /* 2. EL FOOTER */
         footer {
             position: fixed; 
-            bottom: 20px;       /* Cambiado de -60px a 20px para que suba a la hoja */
+            bottom: -30px;
             left: 0px;
             right: 0px;
-            height: 40px; 
+            height: 30px; 
             text-align: center;
             border-top: 1px solid #ddd;
-            padding-top: 10px;
-            width: 100%;
-            z-index: 1000;      /* Asegura que esté por encima de otros elementos */
+            padding-top: 8px;
         }
 
         .footer-link {
             color: #2E4A7C;
             text-decoration: none;
             font-weight: bold;
-            font-size: 14px; /* Un poco más grande para que sea legible */
+            font-size: 12px;
             font-family: sans-serif;
         }
-        /* 1. Estilo base del encabezado (aparecerá en todas las hojas por defecto) */
+        /* 1. HEADER FIJO - aparece en el área de margen superior */
         header {
             position: fixed;
-            top: 20px; /* Ajusta la altura del logo en las hojas 2, 3... */
-            left: 10px;
-            height: 60px;
-            width: 100%;
+            top: -85px;
+            left: 0px;
+            right: 0px;
+            height: 75px;
         }
 
 
         @page {
-
-            margin: 90px 40px 80px 80px; 
+            margin: 120px 40px 60px 40px; 
         }
 
         @page :first {
-            /* margin-top: 10px;  */
-            header {
-                top: -500px; /* Lo mandamos muy arriba para que no se vea */
-                visibility: hidden;
-            }
+            margin-top: 5px;
         }
 
 
         .logo-small {
-            height: 80px; 
+            height: 70px; 
             width: auto;
+            display: block;
         }
         /* Estilos para el contenido que viene del editor Quill */
         .proposal-text ul, .proposal-text ol {
@@ -463,7 +517,16 @@
         
         <!-- LOGO -->
         <div class="logo-container">
-            <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/encabezado.png'))) }}" alt="QSCI Group">
+            <table>
+                <tr>
+                    <td class="logo-qsci">
+                        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" alt="QSCI">
+                    </td>
+                    <td class="logo-encabezado">
+                        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/encabezado.png'))) }}" alt="QSCI Group">
+                    </td>
+                </tr>
+            </table>
         </div>
         
         
@@ -544,16 +607,48 @@
         </div>
         <div class="page-break"></div>
         
-        <!-- DETALLE DE PRODUCTOS/SERVICIOS -->
+        <!-- PÁGINA DE PROPUESTA TÉCNICA -->
         <div class="contenido-desplazado">
+            
+            <!-- NÚMERO DE PROPUESTA Y FECHA -->
+            <div class="propuesta-numero">
+                NÚMERO DE PROPUESTA &ndash; {{ $cotizacion->numero_cotizacion }}
+            </div>
+            <div class="propuesta-fecha">
+                {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->isoFormat('D [de] MMMM [de] YYYY') }}
+            </div>
+
+            <!-- I. PROPUESTA TÉCNICA -->
+            <div class="seccion-titulo">
+                <span class="seccion-titulo-num">I.</span> PROPUESTA TÉCNICA
+            </div>
+            <div class="seccion-descripcion">
+                @php
+                    $nombresServicios = $cotizacion->detalles
+                        ->filter(fn($d) => $d->id_servicio && $d->servicio)
+                        ->pluck('servicio.nombre')
+                        ->unique()
+                        ->implode(', ');
+                    if(empty($nombresServicios)) {
+                        $nombresServicios = $cotizacion->detalles
+                            ->pluck('descripcion_manual')
+                            ->filter()
+                            ->unique()
+                            ->implode(', ');
+                    }
+                @endphp
+                La presente propuesta técnica considera el servicio de {{ $nombresServicios ?: 'los servicios cotizados' }}.
+            </div>
+
+            <!-- II. ESPECIFICACIONES DEL SERVICIO -->
+            <div class="seccion-titulo">
+                <span class="seccion-titulo-num">II.</span> ESPECIFICACIONES DEL SERVICIO
+            </div>
             <div class="proposal-text" style="margin-bottom: 20px;">
                 @if($cotizacion->propuesta_tecnica)
-                    {{-- Las llaves con signos de admiración sirven para renderizar HTML --}}
                     {!! $cotizacion->propuesta_tecnica !!}
                 @else
-                    {{-- Texto por defecto si la base de datos está vacía --}}
-                    <p>I. PROPUESTA TÉCNICA<br>
-                    Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
+                    <p>Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
                 @endif
             </div>
             <div class="products-title">Detalle de Productos/Servicios</div>
