@@ -23,6 +23,7 @@ use App\Http\Controllers\API\CatalogoCapacitacionAuditoriaController;
 use App\Http\Controllers\API\ProgramacionMantenimientoController;
 use App\Http\Controllers\API\AsistenciaController;
 use App\Http\Controllers\API\HorarioController;
+use App\Http\Controllers\API\ExponenteController;
 use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
@@ -97,6 +98,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'store']);
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
     Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
+
+    // Exponentes
+    Route::get('/exponentes', [ExponenteController::class, 'index']);
+    Route::get('/exponentes/{id}', [ExponenteController::class, 'show']);
+    Route::post('/exponentes', [ExponenteController::class, 'store']);
+    Route::put('/exponentes/{id}', [ExponenteController::class, 'update']);
+    Route::delete('/exponentes/{id}', [ExponenteController::class, 'destroy']);
 
     // para los equipos :v
     Route::get('/equipos', [EquipoController::class, 'index']);

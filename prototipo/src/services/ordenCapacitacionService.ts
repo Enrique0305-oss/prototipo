@@ -28,6 +28,10 @@ export const ordenCapacitacionService = {
     return apiClient.get<ApiResponse<any[]>>('/personal');
   },
 
+  getExponentes: async () => {
+    return apiClient.get<ApiResponse<any[]>>('/exponentes', { estado: 'Activo' });
+  },
+
   create: async (data: any) => {
     return apiClient.post<ApiResponse<OrdenCapacitacion>>('/ordenes-capacitacion-auditoria', data);
   },

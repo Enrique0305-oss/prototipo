@@ -1,12 +1,13 @@
 // Comercial - Ordenes de Capacitación y Auditoría (Conectado al Backend)
 import './ordenes-capacitacion.css';
 import { ordenCapacitacionService } from '../../../services/ordenCapacitacionService';
+import { exponenteService, type Exponente } from '../../../services/exponenteService';
 import { mostrarToast } from '../../../shared/toast';
 
 let ocListData: any[] = [];
 let cotizacionesDisponibles: any[] = [];
-let personalData: any[] = [];
-let selectedPonentes: { id: number; nombre: string }[] = [];
+let exponentesData: Exponente[] = [];
+let selectedExponentes: { id: number; nombre: string }[] = [];
 let ocIncluyeIgv = true;
 
 export function renderComercialOrdenesCapacitacion() {
@@ -122,7 +123,7 @@ export function renderComercialOrdenesCapacitacion() {
             <th>N° Orden</th>
             <th>Cliente</th>
             <th>Servicio</th>
-            <th>Ponente(s)</th>
+            <th>Exponente(s)</th>
             <th>Fecha/Hora</th>
             <th>Modalidad</th>
             <th>Participantes</th>
@@ -223,11 +224,11 @@ export function renderComercialOrdenesCapacitacion() {
                 <input type="hidden" id="oc-servicio-id">
               </div>
               <div class="oc-field" style="grid-column: 1 / -1;">
-                <label class="oc-label">Ponente(s) / Expositor(es) <span class="oc-required">*</span></label>
-                <div id="oc-ponentes-container" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;min-height:44px;background:#fff;">
-                  <div id="oc-ponentes-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
-                  <select id="oc-ponente-selector" class="oc-input" style="border:none;padding:4px 0;margin:0;box-shadow:none;">
-                    <option value="">+ Agregar ponente...</option>
+                <label class="oc-label">Exponente(s) <span class="oc-required">*</span></label>
+                <div id="oc-exponentes-container" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;min-height:44px;background:#fff;">
+                  <div id="oc-exponentes-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+                  <select id="oc-exponente-selector" class="oc-input" style="border:none;padding:4px 0;margin:0;box-shadow:none;">
+                    <option value="">+ Agregar exponente...</option>
                   </select>
                 </div>
               </div>
@@ -390,14 +391,14 @@ async function cargarOrdenesCapacitacion() {
       const costoTooltip = tieneIgv
         ? 'Subtotal: S/ ' + subtotalStr + '\nIGV: S/ ' + igvStr + '\nTotal: S/ ' + costoTotal
         : 'Sin IGV';
-      const ponentesStr = o.ponentes && o.ponentes.length > 0
-        ? o.ponentes.map((p: any) => p.nombre).join(', ')
-        : (o.ponente || '-');
+      const exponentesStr = o.exponentes && o.exponentes.length > 0
+        ? o.exponentes.map((e: any) => e.nombre).join(', ')
+        : '-';
       return '<tr>' +
         '<td><strong>' + (o.numero_orden || '') + '</strong></td>' +
         '<td>' + (o.cliente?.nombre_empresa || '-') + '</td>' +
         '<td>' + (o.servicio || '-') + '</td>' +
-        '<td style="max-width:180px;"><small>' + ponentesStr + '</small></td>' +
+        '<td style="max-width:180px;"><small>' + exponentesStr + '</small></td>' +
         '<td><div>' + fecha + '</div><small style="color:#64748b;">' + hora + '</small></td>' +
         '<td><span class="oc-badge ' + getModalidadBadge(o.modalidad) + '">' + (o.modalidad || '-') + '</span></td>' +
         '<td style="text-align:center;">' + (o.num_participantes || 0) + '</td>' +
@@ -450,54 +451,149 @@ async function cargarDropdownCotizaciones() {
   }
 }
 
-async function cargarDropdownPersonal() {
-  const select = document.getElementById('oc-ponente-selector') as HTMLSelectElement;
+async function cargarDropdownExponentes() {
+  const select = document.getElementById('oc-exponente-selector') as HTMLSelectElement;
   if (!select) return;
   try {
-    const res = await ordenCapacitacionService.getPersonal();
+    const res = await ordenCapacitacionService.getExponentes();
     const raw = res.data || res;
-    personalData = Array.isArray(raw) ? raw : (raw as any).data || [];
-
-    actualizarSelectorPonentes();
+    exponentesData = Array.isArray(raw) ? raw : (raw as any).data || [];
+    actualizarSelectorExponentes();
   } catch (e) {
-    console.error('Error cargando personal:', e);
+    console.error('Error cargando exponentes:', e);
     if (select) select.innerHTML = '<option value="">Error al cargar</option>';
   }
 }
 
-function actualizarSelectorPonentes() {
-  const select = document.getElementById('oc-ponente-selector') as HTMLSelectElement;
+function actualizarSelectorExponentes() {
+  const select = document.getElementById('oc-exponente-selector') as HTMLSelectElement;
   if (!select) return;
-  const selectedIds = selectedPonentes.map(p => p.id);
-  const disponibles = personalData.filter(p => !selectedIds.includes(p.id));
-  select.innerHTML = '<option value="">+ Agregar ponente...</option>' +
-    disponibles.map(p =>
-      '<option value="' + p.id + '">' + p.nombre + ' ' + (p.apellidos || '') + '</option>'
+  const selectedIds = selectedExponentes.map(e => e.id);
+  const disponibles = exponentesData.filter(e => !selectedIds.includes(e.id));
+  select.innerHTML = '<option value="">+ Agregar exponente...</option>' +
+    disponibles.map(e =>
+      '<option value="' + e.id + '">' + e.nombre + ' ' + (e.apellidos || '') + ' — ' + (e.especialidad || '') + '</option>'
     ).join('');
 }
 
-function renderPonenteTags() {
-  const container = document.getElementById('oc-ponentes-tags') as HTMLElement;
+function renderExponenteTags() {
+  const container = document.getElementById('oc-exponentes-tags') as HTMLElement;
   if (!container) return;
-  if (selectedPonentes.length === 0) {
-    container.innerHTML = '<span style="color:#94a3b8;font-size:13px;">Ningún ponente seleccionado</span>';
+  if (selectedExponentes.length === 0) {
+    container.innerHTML = '<span style="color:#94a3b8;font-size:13px;">Ningún exponente seleccionado</span>';
     return;
   }
-  container.innerHTML = selectedPonentes.map(p =>
-    '<span style="display:inline-flex;align-items:center;gap:4px;background:#e0f2fe;color:#0369a1;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:500;">' +
-      p.nombre +
-      ' <button type="button" class="btn-remove-ponente" data-id="' + p.id + '" style="background:none;border:none;cursor:pointer;color:#0369a1;font-size:16px;line-height:1;padding:0 2px;font-weight:700;">&times;</button>' +
+  container.innerHTML = selectedExponentes.map(e =>
+    '<span style="display:inline-flex;align-items:center;gap:4px;background:#fef3c7;color:#92400e;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:500;">' +
+      e.nombre +
+      ' <button type="button" class="btn-remove-exponente" data-id="' + e.id + '" style="background:none;border:none;cursor:pointer;color:#92400e;font-size:16px;line-height:1;padding:0 2px;font-weight:700;">&times;</button>' +
     '</span>'
   ).join('');
 
-  // Bind remove buttons
-  container.querySelectorAll('.btn-remove-ponente').forEach(btn => {
+  container.querySelectorAll('.btn-remove-exponente').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = Number((btn as HTMLElement).dataset.id);
-      selectedPonentes = selectedPonentes.filter(p => p.id !== id);
-      renderPonenteTags();
-      actualizarSelectorPonentes();
+      selectedExponentes = selectedExponentes.filter(e => e.id !== id);
+      renderExponenteTags();
+      actualizarSelectorExponentes();
     });
+  });
+}
+
+function abrirModalNuevoExponente() {
+  let overlay = document.getElementById('modal-nuevo-exponente-overlay') as HTMLElement;
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement('div');
+  overlay.id = 'modal-nuevo-exponente-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:10000;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:28px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <h3 style="margin:0 0 18px;font-size:18px;color:#1e293b;display:flex;align-items:center;gap:8px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        Nuevo Exponente
+      </h3>
+      <div style="display:grid;gap:12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#475569;">Nombre *</label>
+            <input id="ne-nombre" type="text" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#475569;">Apellidos *</label>
+            <input id="ne-apellidos" type="text" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;box-sizing:border-box;" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#475569;">Especialidad</label>
+            <input id="ne-especialidad" type="text" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#475569;">Profesión</label>
+            <input id="ne-profesion" type="text" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;box-sizing:border-box;" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#475569;">Teléfono</label>
+            <input id="ne-telefono" type="text" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#475569;">Email</label>
+            <input id="ne-email" type="email" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;box-sizing:border-box;" />
+          </div>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:#475569;">Institución</label>
+          <input id="ne-institucion" type="text" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;box-sizing:border-box;" />
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+        <button id="ne-cancelar" type="button" style="padding:8px 18px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:14px;color:#64748b;">Cancelar</button>
+        <button id="ne-guardar" type="button" style="padding:8px 18px;border:none;background:#f59e0b;color:#fff;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Guardar Exponente</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('ne-cancelar')!.addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+  document.getElementById('ne-guardar')!.addEventListener('click', async () => {
+    const nombre = (document.getElementById('ne-nombre') as HTMLInputElement).value.trim();
+    const apellidos = (document.getElementById('ne-apellidos') as HTMLInputElement).value.trim();
+    if (!nombre || !apellidos) {
+      mostrarToast('error', 'Campos requeridos', 'Nombre y apellidos son obligatorios');
+      return;
+    }
+    const data = {
+      nombre,
+      apellidos,
+      especialidad: (document.getElementById('ne-especialidad') as HTMLInputElement).value.trim() || null,
+      profesion: (document.getElementById('ne-profesion') as HTMLInputElement).value.trim() || null,
+      telefono: (document.getElementById('ne-telefono') as HTMLInputElement).value.trim() || null,
+      email: (document.getElementById('ne-email') as HTMLInputElement).value.trim() || null,
+      institucion: (document.getElementById('ne-institucion') as HTMLInputElement).value.trim() || null,
+      estado: 'Activo',
+    };
+    try {
+      const res = await exponenteService.create(data as any);
+      const raw = res.data || res;
+      const nuevo = (raw as any).data || raw;
+      mostrarToast('success', 'Exponente creado', nombre + ' ' + apellidos);
+      overlay.remove();
+      await cargarDropdownExponentes();
+      // Auto-seleccionar
+      if (nuevo && nuevo.id) {
+        selectedExponentes.push({ id: nuevo.id, nombre: nombre + ' ' + apellidos });
+        renderExponenteTags();
+        actualizarSelectorExponentes();
+      }
+    } catch (e: any) {
+      console.error('Error creando exponente:', e);
+      mostrarToast('error', 'Error', e?.data?.message || 'No se pudo crear el exponente');
+    }
   });
 }
 
@@ -591,9 +687,9 @@ function limpiarFormOC() {
   (document.getElementById('oc-detalles-cotizacion') as HTMLElement).style.display = 'none';
   (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = '';
   (document.getElementById('oc-servicio-id') as HTMLInputElement).value = '';
-  selectedPonentes = [];
-  renderPonenteTags();
-  actualizarSelectorPonentes();
+  selectedExponentes = [];
+  renderExponenteTags();
+  actualizarSelectorExponentes();
   (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
   (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value = '';
   (document.getElementById('oc-hora-servicio') as HTMLInputElement).value = '';
@@ -613,9 +709,7 @@ async function abrirModalNuevaOC() {
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Nueva Orden de Capacitación';
   const cotSelect = document.getElementById('oc-cotizacion-ref') as HTMLSelectElement;
   cotSelect.disabled = false;
-  await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal()]);
-
-  // Cargar siguiente número de orden
+  await Promise.all([cargarDropdownCotizaciones(), cargarDropdownExponentes()]);
   try {
     const res = await ordenCapacitacionService.getEstadisticas();
     const raw = res.data || res;
@@ -637,7 +731,7 @@ async function abrirModalEditarOC(id: number) {
     const orden = (raw as any).data || raw;
 
     limpiarFormOC();
-    await Promise.all([cargarDropdownCotizaciones(), cargarDropdownPersonal()]);
+    await Promise.all([cargarDropdownCotizaciones(), cargarDropdownExponentes()]);
 
     (document.getElementById('modal-oc-titulo') as HTMLElement).innerHTML =
       '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Ver / Editar Orden';
@@ -670,22 +764,16 @@ async function abrirModalEditarOC(id: number) {
     (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value = orden.fecha_aceptacion?.split('T')[0] || '';
     (document.getElementById('oc-hora-servicio') as HTMLInputElement).value = orden.hora_servicio || '';
 
-    // Ponentes (multi-select)
+    // Exponentes (multi-select)
     setTimeout(() => {
-      if (orden.ponentes && Array.isArray(orden.ponentes) && orden.ponentes.length > 0) {
-        selectedPonentes = orden.ponentes.map((p: any) => ({
-          id: p.id,
-          nombre: p.nombre || (p.nombre + ' ' + (p.apellidos || ''))
+      if (orden.exponentes && Array.isArray(orden.exponentes) && orden.exponentes.length > 0) {
+        selectedExponentes = orden.exponentes.map((e: any) => ({
+          id: e.id,
+          nombre: (e.nombre || '') + ' ' + (e.apellidos || '')
         }));
-      } else if (orden.id_ponente) {
-        // Fallback: usar id_ponente individual
-        const found = personalData.find(p => p.id === orden.id_ponente);
-        if (found) {
-          selectedPonentes = [{ id: found.id, nombre: found.nombre + ' ' + (found.apellidos || '') }];
-        }
       }
-      renderPonenteTags();
-      actualizarSelectorPonentes();
+      renderExponenteTags();
+      actualizarSelectorExponentes();
     }, 100);
 
     // Modalidad & rest
@@ -711,7 +799,7 @@ async function guardarOC() {
   const editId = (document.getElementById('oc-edit-id') as HTMLInputElement).value;
   const idCotizacion = (document.getElementById('oc-cotizacion-ref') as HTMLSelectElement).value;
   const idServicio = (document.getElementById('oc-servicio-id') as HTMLInputElement).value;
-  const ponenteIds = selectedPonentes.map(p => p.id);
+  const exponenteIds = selectedExponentes.map(e => e.id);
   const fechaServicio = (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value;
   const fechaAceptacion = (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value;
   const horaServicio = (document.getElementById('oc-hora-servicio') as HTMLInputElement).value;
@@ -729,8 +817,8 @@ async function guardarOC() {
     mostrarToast('error', 'Campo requerido', 'La fecha del servicio es obligatoria');
     return;
   }
-  if (ponenteIds.length === 0) {
-    mostrarToast('error', 'Campo requerido', 'Debe seleccionar al menos un ponente');
+  if (exponenteIds.length === 0) {
+    mostrarToast('error', 'Campo requerido', 'Debe seleccionar al menos un exponente');
     return;
   }
   if (!modalidad) {
@@ -745,7 +833,8 @@ async function guardarOC() {
   const payload: any = {
     id_cotizacion: Number(idCotizacion),
     id_servicio: idServicio ? Number(idServicio) : null,
-    ponentes: ponenteIds,
+    ponentes: [],
+    exponentes: exponenteIds,
     fecha_servicio: fechaServicio,
     fecha_aceptacion: fechaAceptacion || null,
     hora_servicio: horaServicio || null,
@@ -832,18 +921,18 @@ export function initOrdenesCapacitacionEvents() {
   // Recalcular al cambiar costo
   document.getElementById('oc-costo')?.addEventListener('input', () => calcularDesgloseOC());
 
-  // Ponente multi-select: agregar al elegir del dropdown
-  document.getElementById('oc-ponente-selector')?.addEventListener('change', () => {
-    const select = document.getElementById('oc-ponente-selector') as HTMLSelectElement;
+  // Exponente multi-select: agregar al elegir del dropdown
+  document.getElementById('oc-exponente-selector')?.addEventListener('change', () => {
+    const select = document.getElementById('oc-exponente-selector') as HTMLSelectElement;
     const val = select.value;
     if (!val) return;
     const id = Number(val);
-    if (selectedPonentes.some(p => p.id === id)) return;
-    const persona = personalData.find(p => p.id === id);
-    if (persona) {
-      selectedPonentes.push({ id: persona.id, nombre: persona.nombre + ' ' + (persona.apellidos || '') });
-      renderPonenteTags();
-      actualizarSelectorPonentes();
+    if (selectedExponentes.some(e => e.id === id)) return;
+    const exp = exponentesData.find(e => e.id === id);
+    if (exp) {
+      selectedExponentes.push({ id: exp.id, nombre: exp.nombre + ' ' + (exp.apellidos || '') });
+      renderExponenteTags();
+      actualizarSelectorExponentes();
     }
     select.value = '';
   });

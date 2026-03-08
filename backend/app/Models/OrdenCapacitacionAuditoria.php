@@ -16,6 +16,7 @@ class OrdenCapacitacionAuditoria extends Model
         'id_cliente',
         'id_servicio',
         'id_ponente',
+        'id_exponente',
         'fecha_servicio',
         'fecha_aceptacion',
         'hora_servicio',
@@ -69,6 +70,22 @@ class OrdenCapacitacionAuditoria extends Model
     public function ponentes()
     {
         return $this->belongsToMany(Personal::class, 'orden_capacitacion_ponentes', 'id_orden_capacitacion', 'id_ponente');
+    }
+
+    /**
+     * Exponente principal (de tabla exponentes)
+     */
+    public function exponente()
+    {
+        return $this->belongsTo(Exponente::class, 'id_exponente');
+    }
+
+    /**
+     * Relación many-to-many con Exponentes
+     */
+    public function exponentes()
+    {
+        return $this->belongsToMany(Exponente::class, 'orden_capacitacion_ponentes', 'id_orden_capacitacion', 'id_exponente');
     }
 
     // Relación con Proyecciones
