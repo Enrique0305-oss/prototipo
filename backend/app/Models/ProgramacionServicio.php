@@ -20,6 +20,8 @@ class ProgramacionServicio extends Model
         'hora_inicio',
         'hora_fin',
         'duracion_real',
+        'id_cliente_planta',
+        'id_cliente_planta_area',
         'local_sede',
         'direccion_completa',
         'coordenadas',
@@ -65,6 +67,16 @@ class ProgramacionServicio extends Model
     public function servicio()
     {
         return $this->belongsTo(Servicio::class, 'id_servicio');
+    }
+
+    public function planta()
+    {
+        return $this->belongsTo(ClientePlanta::class, 'id_cliente_planta');
+    }
+
+    public function area()
+    {
+        return $this->belongsTo(ClientePlantaArea::class, 'id_cliente_planta_area');
     }
 
     public function tecnico()

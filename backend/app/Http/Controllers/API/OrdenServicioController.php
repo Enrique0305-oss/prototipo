@@ -162,6 +162,8 @@ class OrdenServicioController extends Controller
                 'servicio_nombre' => $detalle->servicio ? $detalle->servicio->nombre : null,
                 'frecuencia' => $detalle->frecuencia_sugerida,
                 'precio' => $detalle->precio_unitario,
+                'id_cliente_planta' => $detalle->id_cliente_planta,
+                'id_cliente_planta_area' => $detalle->id_cliente_planta_area,
             ];
         });
 
@@ -206,6 +208,8 @@ class OrdenServicioController extends Controller
             'detalles.*.local' => 'nullable|string|max:255',
             'detalles.*.frecuencia' => 'nullable|string|max:100',
             'detalles.*.precio' => 'required|numeric|min:0',
+            'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
+            'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
             'incluye_igv' => 'sometimes|boolean',
             // Productos y equipos
             'productos' => 'sometimes|array',
@@ -293,6 +297,8 @@ class OrdenServicioController extends Controller
                     'local' => $detalle['local'] ?? null,
                     'frecuencia' => $detalle['frecuencia'] ?? null,
                     'precio' => $detalle['precio'],
+                    'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
+                    'id_cliente_planta_area' => $detalle['id_cliente_planta_area'] ?? null,
                 ]);
             }
 
@@ -334,7 +340,7 @@ class OrdenServicioController extends Controller
             DB::commit();
 
             // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion', 'productos.producto', 'equipos.equipo']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'equipos.equipo']);
 
             return response()->json([
                 'success' => true,
@@ -363,6 +369,8 @@ class OrdenServicioController extends Controller
             'emisor', 
             'cotizacion',
             'detalles.servicio',
+            'detalles.planta',
+            'detalles.area',
             'productos.producto',
             'equipos.equipo'
         ])->find($id);
@@ -404,6 +412,8 @@ class OrdenServicioController extends Controller
             'detalles.*.local' => 'nullable|string|max:255',
             'detalles.*.frecuencia' => 'nullable|string|max:100',
             'detalles.*.precio' => 'required_with:detalles|numeric|min:0',
+            'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
+            'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
             'incluye_igv' => 'sometimes|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
             // Productos y equipos
@@ -454,6 +464,8 @@ class OrdenServicioController extends Controller
                         'local' => $detalle['local'] ?? null,
                         'frecuencia' => $detalle['frecuencia'] ?? null,
                         'precio' => $detalle['precio'],
+                        'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
+                        'id_cliente_planta_area' => $detalle['id_cliente_planta_area'] ?? null,
                     ]);
                 }
 
@@ -549,7 +561,7 @@ class OrdenServicioController extends Controller
 
             DB::commit();
 
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'cotizacion', 'productos.producto', 'equipos.equipo']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'equipos.equipo']);
 
             return response()->json([
                 'success' => true,

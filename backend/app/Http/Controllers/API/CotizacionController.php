@@ -75,7 +75,7 @@ class CotizacionController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $cotizacion = Cotizacion::with(['cliente', 'creador', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud'])
+        $cotizacion = Cotizacion::with(['cliente', 'creador', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'detalles.planta', 'detalles.area'])
                                 ->find($id);
 
         if (!$cotizacion) {
@@ -111,6 +111,8 @@ class CotizacionController extends Controller
             'detalles.*.precio_unitario' => 'required|numeric|min:0',
             'detalles.*.frecuencia_sugerida' => 'nullable|string',
             'detalles.*.modalidad_sugerida' => 'nullable|string',
+            'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
+            'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
         ]);
 
         DB::beginTransaction();
@@ -161,6 +163,8 @@ class CotizacionController extends Controller
                     'precio_unitario' => $detalle['precio_unitario'],
                     'frecuencia_sugerida' => $detalle['frecuencia_sugerida'] ?? null,
                     'modalidad_sugerida' => $detalle['modalidad_sugerida'] ?? null,
+                    'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
+                    'id_cliente_planta_area' => $detalle['id_cliente_planta_area'] ?? null,
                 ]);
             }
 

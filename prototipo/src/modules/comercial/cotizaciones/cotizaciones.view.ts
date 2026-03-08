@@ -28,6 +28,7 @@ let estadisticasData: EstadisticasCotizaciones | null = null;
 let filtros = { search: '', tipo: '' };
 let contadorLineas = 0;
 let incluyeIgv = true;
+let plantasClienteData: any[] = [];
 let paginaActual = 1;
 const itemsPorPagina = 15;
 
@@ -420,6 +421,29 @@ async function abrirFormularioCotizacion() {
             </div>
         </div>
 
+        <!-- Sección Ubicación (Planta / Área) -->
+        <div id="seccion-ubicacion" class="form-section" style="margin-bottom: 25px; background: #fff; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; display: none;">
+          <h3 style="font-size: 15px; font-weight: 600; color: #1e293b; margin: 0 0 14px 0; display:flex; align-items:center; gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            Ubicación del Servicio
+          </h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Planta / Sede</label>
+              <select id="cot-planta" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+                <option value="">— Sin planta —</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Área</label>
+              <select id="cot-area" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+                <option value="">— Sin área —</option>
+              </select>
+            </div>
+          </div>
+          <p id="cot-planta-direccion" style="margin: 10px 0 0; font-size: 12px; color: #64748b;"></p>
+        </div>
+
         <div class="form-section" style="margin-bottom: 24px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
             <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Detalle de Cotización</h3>
@@ -432,14 +456,14 @@ async function abrirFormularioCotizacion() {
             <table class="data-table" id="tabla-detalle-cotizacion">
               <thead>
                 <tr>
-                  <th style="width: 22%;">Servicio/Producto</th>
+                  <th style="width: 24%;">Servicio/Producto</th>
                   <th style="width: 18%;">Descripción</th>
-                  <th style="width: 9%;">Cantidad</th>
+                  <th style="width: 8%;">Cantidad</th>
                   <th style="width: 11%;">Precio Unit.</th>
-                  <th style="width: 12%;">Frecuencia</th>
+                  <th style="width: 13%;">Frecuencia</th>
                   <th style="width: 12%;">Modalidad</th>
                   <th style="width: 10%;">Subtotal</th>
-                  <th style="width: 6%;"></th>
+                  <th style="width: 4%;"></th>
                 </tr>
               </thead>
               <tbody id="detalle-cotizacion-body"></tbody>
@@ -582,6 +606,8 @@ async function abrirFormularioCotizacion() {
         clienteHidden.value = val;
         clienteSearchInput.value = text;
         clienteDropdown.style.display = 'none';
+        // Cargar plantas del cliente seleccionado
+        cargarPlantasCliente(parseInt(val));
       }
     });
 
@@ -603,6 +629,20 @@ async function abrirFormularioCotizacion() {
 
   document.getElementById('btn-agregar-linea')?.addEventListener('click', () => agregarLineaDetalle());
 
+  // Cascading: planta global → áreas
+  document.getElementById('cot-planta')?.addEventListener('change', () => {
+    const plantaSel = document.getElementById('cot-planta') as HTMLSelectElement;
+    const areaSel = document.getElementById('cot-area') as HTMLSelectElement;
+    const pid = parseInt(plantaSel?.value || '0');
+    if (areaSel) areaSel.innerHTML = pid ? getAreaOptions(pid) : '<option value="">— Sin área —</option>';
+    // Mostrar dirección de la planta seleccionada
+    const dirP = document.getElementById('cot-planta-direccion');
+    if (dirP) {
+      const planta = plantasClienteData.find((p: any) => p.id === pid);
+      dirP.textContent = planta ? ` ${[planta.direccion, planta.distrito, planta.provincia, planta.departamento].filter(Boolean).join(', ')}` : '';
+    }
+  });
+
   const form = document.getElementById('form-cotizacion') as HTMLFormElement;
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -615,6 +655,41 @@ function cerrarFormulario() {
   const formulario = document.getElementById('formulario-cotizacion');
   if (lista) lista.style.display = 'block';
   if (formulario) { formulario.style.display = 'none'; formulario.innerHTML = ''; }
+}
+
+async function cargarPlantasCliente(idCliente: number) {
+  try {
+    const resp = await clienteService.getPlantas(idCliente);
+    plantasClienteData = resp.success ? (resp.data || []) : [];
+  } catch { plantasClienteData = []; }
+  // Llenar el select global de planta
+  const plantaSel = document.getElementById('cot-planta') as HTMLSelectElement;
+  const areaSel = document.getElementById('cot-area') as HTMLSelectElement;
+  const seccion = document.getElementById('seccion-ubicacion');
+  if (plantaSel) {
+    plantaSel.innerHTML = getPlantaOptions();
+    plantaSel.value = '';
+  }
+  if (areaSel) {
+    areaSel.innerHTML = '<option value="">— Sin área —</option>';
+  }
+  const dirP = document.getElementById('cot-planta-direccion');
+  if (dirP) dirP.textContent = '';
+  // Mostrar sección solo si hay plantas
+  if (seccion) seccion.style.display = plantasClienteData.length > 0 ? 'block' : 'none';
+}
+
+function getPlantaOptions(): string {
+  return '<option value="">— Sin planta —</option>' + plantasClienteData
+    .filter((p: any) => p.estado === 'Activo')
+    .map((p: any) => `<option value="${p.id}">${p.nombre}</option>`).join('');
+}
+
+function getAreaOptions(idPlanta: number): string {
+  const planta = plantasClienteData.find((p: any) => p.id === idPlanta);
+  const areas = (planta?.areas_activas || planta?.areas || []).filter((a: any) => a.estado === 'Activo');
+  return '<option value="">— Sin área —</option>' + areas
+    .map((a: any) => `<option value="${a.id}">${a.nombre}</option>`).join('');
 }
 
 function agregarLineaDetalle() {
@@ -796,6 +871,8 @@ async function guardarCotizacion() {
   }
 
   const detalles: any[] = [];
+  const globalPlanta = parseInt((document.getElementById('cot-planta') as HTMLSelectElement)?.value || '0') || null;
+  const globalArea = parseInt((document.getElementById('cot-area') as HTMLSelectElement)?.value || '0') || null;
   lineas.forEach(linea => {
     const itemSelect = linea.querySelector('.item-select') as HTMLSelectElement;
     const itemValue = itemSelect?.value || '';
@@ -825,7 +902,9 @@ async function guardarCotizacion() {
       cantidad,
       precio_unitario: precio,
       frecuencia_sugerida: frecuencia,
-      modalidad_sugerida: modalidad
+      modalidad_sugerida: modalidad,
+      id_cliente_planta: globalPlanta,
+      id_cliente_planta_area: globalArea,
     });
   });
 

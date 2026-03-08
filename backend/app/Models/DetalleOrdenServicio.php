@@ -13,6 +13,8 @@ class DetalleOrdenServicio extends Model
     protected $fillable = [
         'id_orden_servicio',
         'id_servicio',
+        'id_cliente_planta',
+        'id_cliente_planta_area',
         'local',
         'frecuencia',
         'precio'
@@ -31,5 +33,15 @@ class DetalleOrdenServicio extends Model
     public function servicio()
     {
         return $this->belongsTo(Servicio::class, 'id_servicio');
+    }
+
+    public function planta()
+    {
+        return $this->belongsTo(ClientePlanta::class, 'id_cliente_planta');
+    }
+
+    public function area()
+    {
+        return $this->belongsTo(ClientePlantaArea::class, 'id_cliente_planta_area');
     }
 }

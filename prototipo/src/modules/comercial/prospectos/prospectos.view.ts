@@ -253,6 +253,9 @@ function renderizarTablaProspectos() {
         <td>${getEstadoBadge(cliente.estado)}</td>
         <td>
           <div class="action-buttons">
+            <button class="action-btn-icon" data-action="plantas-prospecto" data-id="${cliente.id}" title="Plantas / Sedes" style="color: #0d9488;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            </button>
             <button class="action-btn-icon edit" data-action="edit-prospecto" data-id="${cliente.id}" title="Editar">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
             </button>
@@ -270,6 +273,14 @@ function renderizarTablaProspectos() {
   if (paginationInfo) {
     paginationInfo.textContent = `Mostrando ${clientesData.length} prospecto${clientesData.length !== 1 ? 's' : ''}`;
   }
+
+  // Event listeners para plantas
+  document.querySelectorAll('[data-action="plantas-prospecto"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = parseInt((e.currentTarget as HTMLElement).dataset.id || '0');
+      abrirModalPlantas(id);
+    });
+  });
 
   // Event listeners para editar
   document.querySelectorAll('[data-action="edit-prospecto"]').forEach(btn => {
@@ -624,6 +635,356 @@ function confirmarEliminarProspecto(id: number) {
       mostrarToast('error', 'Error', msg);
       btn.disabled = false;
       btn.textContent = 'Eliminar';
+    }
+  });
+}
+
+// ===== MODAL PLANTAS / SEDES =====
+
+async function abrirModalPlantas(idCliente: number) {
+  const cliente = clientesData.find(c => c.id === idCliente);
+  if (!cliente) { mostrarToast('error', 'Error', 'Cliente no encontrado'); return; }
+
+  const prev = document.getElementById('modal-plantas-cliente');
+  if (prev) prev.remove();
+
+  const html = `
+    <div id="modal-plantas-cliente" class="modal-overlay" style="display:flex; z-index:10000;">
+      <div class="modal-container" style="max-width:800px; max-height:90vh; display:flex; flex-direction:column;">
+        <div class="modal-header">
+          <h2>Plantas / Sedes — ${escHtml(cliente.nombre_empresa)}</h2>
+          <button class="modal-close" id="btn-cerrar-plantas">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="overflow-y:auto; flex:1; padding:20px 24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <p style="color:#64748b; font-size:13px;">Administra las plantas/sedes y sus áreas</p>
+            <button class="btn-primary" id="btn-nueva-planta" style="padding:6px 14px; font-size:13px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Nueva Planta
+            </button>
+          </div>
+          <div id="plantas-list" style="display:flex; flex-direction:column; gap:12px;">
+            <p style="text-align:center; color:#94a3b8; padding:40px 0;">Cargando plantas...</p>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  const modal = document.getElementById('modal-plantas-cliente')!;
+  document.getElementById('btn-cerrar-plantas')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  document.getElementById('btn-nueva-planta')?.addEventListener('click', () => abrirFormPlanta(idCliente));
+
+  await cargarListaPlantas(idCliente);
+}
+
+async function cargarListaPlantas(idCliente: number) {
+  const container = document.getElementById('plantas-list');
+  if (!container) return;
+
+  try {
+    const resp = await clienteService.getPlantas(idCliente);
+    const plantas: any[] = resp.success ? (resp.data || []) : [];
+
+    if (plantas.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:40px 0; color:#94a3b8;">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" style="margin-bottom:12px;">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          <p style="font-size:14px;">No hay plantas registradas</p>
+          <p style="font-size:12px; margin-top:4px;">Agrega la primera planta o sede del cliente</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = plantas.map((p: any) => {
+      const areas: any[] = p.areas_activas || p.areas || [];
+      const areasHtml = areas.length > 0
+        ? areas.map((a: any) => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 12px; background:#f8fafc; border-radius:6px; font-size:13px;">
+            <span>
+              <strong>${escHtml(a.nombre)}</strong>
+              ${a.descripcion ? `<span style="color:#94a3b8; margin-left:8px;">${escHtml(a.descripcion)}</span>` : ''}
+              <span class="status-indicator ${a.estado === 'Activo' ? 'success' : 'danger'}" style="font-size:10px; padding:2px 6px; margin-left:6px;">${a.estado}</span>
+            </span>
+            <span style="display:flex; gap:4px;">
+              <button class="action-btn-icon edit btn-edit-area" data-planta="${p.id}" data-area="${a.id}" title="Editar área" style="padding:4px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              </button>
+              <button class="action-btn-icon delete btn-del-area" data-planta="${p.id}" data-area="${a.id}" title="Eliminar área" style="padding:4px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </span>
+          </div>`).join('')
+        : '<p style="color:#94a3b8; font-size:12px; padding:4px 12px;">Sin áreas registradas</p>';
+
+      return `
+        <div class="planta-card" style="border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:#f0fdfa; border-bottom:1px solid #e2e8f0;">
+            <div>
+              <div style="font-weight:600; font-size:14px; color:#0f172a;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2" style="vertical-align:-3px; margin-right:6px;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                ${escHtml(p.nombre)}
+                <span class="status-indicator ${p.estado === 'Activo' ? 'success' : 'danger'}" style="font-size:10px; padding:2px 6px; margin-left:8px;">${p.estado}</span>
+              </div>
+              <div style="font-size:12px; color:#64748b; margin-top:2px;">${escHtml(p.direccion || '')} ${p.distrito ? '· ' + escHtml(p.distrito) : ''} ${p.provincia ? '· ' + escHtml(p.provincia) : ''}</div>
+              ${p.contacto_nombre ? `<div style="font-size:12px; color:#94a3b8; margin-top:2px;">Contacto: ${escHtml(p.contacto_nombre)} ${p.contacto_telefono ? '· ' + escHtml(p.contacto_telefono) : ''}</div>` : ''}
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn-secondary btn-add-area" data-planta="${p.id}" style="padding:4px 10px; font-size:12px;">+ Área</button>
+              <button class="action-btn-icon edit btn-edit-planta" data-id="${p.id}" title="Editar planta" style="padding:6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              </button>
+              <button class="action-btn-icon delete btn-del-planta" data-id="${p.id}" title="Eliminar planta" style="padding:6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div style="padding:10px 16px; display:flex; flex-direction:column; gap:6px;">
+            <div style="font-size:12px; font-weight:600; color:#64748b; margin-bottom:2px;">ÁREAS</div>
+            ${areasHtml}
+          </div>
+        </div>`;
+    }).join('');
+
+    // Bind planta events
+    container.querySelectorAll('.btn-edit-planta').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = parseInt((btn as HTMLElement).dataset.id || '0');
+        const planta = plantas.find((p: any) => p.id === pid);
+        if (planta) abrirFormPlanta(idCliente, planta);
+      });
+    });
+    container.querySelectorAll('.btn-del-planta').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = parseInt((btn as HTMLElement).dataset.id || '0');
+        if (!confirm('¿Eliminar esta planta y todas sus áreas?')) return;
+        try {
+          await clienteService.deletePlanta(idCliente, pid);
+          mostrarToast('success', 'Planta eliminada', '');
+          await cargarListaPlantas(idCliente);
+        } catch { mostrarToast('error', 'Error', 'No se pudo eliminar la planta'); }
+      });
+    });
+    // Bind area events
+    container.querySelectorAll('.btn-add-area').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = parseInt((btn as HTMLElement).dataset.planta || '0');
+        abrirFormArea(idCliente, pid);
+      });
+    });
+    container.querySelectorAll('.btn-edit-area').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pid = parseInt((btn as HTMLElement).dataset.planta || '0');
+        const aid = parseInt((btn as HTMLElement).dataset.area || '0');
+        const planta = plantas.find((p: any) => p.id === pid);
+        const area = planta?.areas?.find((a: any) => a.id === aid);
+        if (area) abrirFormArea(idCliente, pid, area);
+      });
+    });
+    container.querySelectorAll('.btn-del-area').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pid = parseInt((btn as HTMLElement).dataset.planta || '0');
+        const aid = parseInt((btn as HTMLElement).dataset.area || '0');
+        if (!confirm('¿Eliminar esta área?')) return;
+        try {
+          await clienteService.deleteArea(idCliente, pid, aid);
+          mostrarToast('success', 'Área eliminada', '');
+          await cargarListaPlantas(idCliente);
+        } catch { mostrarToast('error', 'Error', 'No se pudo eliminar el área'); }
+      });
+    });
+  } catch (err) {
+    container.innerHTML = '<p style="text-align:center; color:#e74c3c; padding:20px;">Error al cargar plantas</p>';
+  }
+}
+
+function escHtml(s: string): string {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function abrirFormPlanta(idCliente: number, planta?: any) {
+  const isEdit = !!planta;
+  const prev = document.getElementById('modal-form-planta');
+  if (prev) prev.remove();
+
+  const html = `
+    <div id="modal-form-planta" class="modal-overlay" style="display:flex; z-index:10001;">
+      <div class="modal-container" style="max-width:550px;">
+        <div class="modal-header">
+          <h2>${isEdit ? 'Editar' : 'Nueva'} Planta</h2>
+          <button class="modal-close" id="btn-cerrar-form-planta">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <form id="form-planta" class="modal-body">
+          <div class="form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Nombre de la Planta / Sede *</label>
+              <input type="text" name="nombre" required maxlength="150" class="form-input" value="${isEdit ? escHtml(planta.nombre) : ''}" placeholder="Ej: Planta Lima Norte">
+            </div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Dirección</label>
+              <input type="text" name="direccion" maxlength="255" class="form-input" value="${isEdit ? escHtml(planta.direccion || '') : ''}" placeholder="Dirección completa">
+            </div>
+            <div class="form-group">
+              <label>Distrito</label>
+              <input type="text" name="distrito" maxlength="100" class="form-input" value="${isEdit ? escHtml(planta.distrito || '') : ''}">
+            </div>
+            <div class="form-group">
+              <label>Provincia</label>
+              <input type="text" name="provincia" maxlength="100" class="form-input" value="${isEdit ? escHtml(planta.provincia || '') : ''}">
+            </div>
+            <div class="form-group">
+              <label>Departamento</label>
+              <input type="text" name="departamento" maxlength="100" class="form-input" value="${isEdit ? escHtml(planta.departamento || '') : ''}">
+            </div>
+            <div class="form-group">
+              <label>Referencia</label>
+              <input type="text" name="referencia" maxlength="255" class="form-input" value="${isEdit ? escHtml(planta.referencia || '') : ''}">
+            </div>
+            <div class="form-group">
+              <label>Coordenadas GPS</label>
+              <input type="text" name="coordenadas" maxlength="80" class="form-input" value="${isEdit ? escHtml(planta.coordenadas || '') : ''}" placeholder="-12.04, -77.02">
+            </div>
+            <div class="form-group">
+              <label>Estado</label>
+              <select name="estado" class="form-input">
+                <option value="Activo" ${isEdit && planta.estado === 'Inactivo' ? '' : 'selected'}>Activo</option>
+                <option value="Inactivo" ${isEdit && planta.estado === 'Inactivo' ? 'selected' : ''}>Inactivo</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Contacto Nombre</label>
+              <input type="text" name="contacto_nombre" maxlength="100" class="form-input" value="${isEdit ? escHtml(planta.contacto_nombre || '') : ''}">
+            </div>
+            <div class="form-group">
+              <label>Contacto Teléfono</label>
+              <input type="text" name="contacto_telefono" maxlength="20" class="form-input" value="${isEdit ? escHtml(planta.contacto_telefono || '') : ''}">
+            </div>
+          </div>
+          <div class="modal-footer" style="margin-top:20px; display:flex; gap:12px; justify-content:flex-end;">
+            <button type="button" class="btn-secondary" id="btn-cancelar-form-planta">Cancelar</button>
+            <button type="submit" class="btn-primary">${isEdit ? 'Guardar Cambios' : 'Crear Planta'}</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  const modal = document.getElementById('modal-form-planta')!;
+  const form = document.getElementById('form-planta') as HTMLFormElement;
+
+  document.getElementById('btn-cerrar-form-planta')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-form-planta')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const data: any = {};
+    fd.forEach((v, k) => { const val = (v as string).trim(); if (val) data[k] = val; });
+
+    const btn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    btn.disabled = true; btn.textContent = 'Guardando...';
+
+    try {
+      if (isEdit) {
+        await clienteService.updatePlanta(idCliente, planta.id, data);
+      } else {
+        await clienteService.createPlanta(idCliente, data);
+      }
+      modal.remove();
+      mostrarToast('success', isEdit ? 'Planta actualizada' : 'Planta creada', '');
+      await cargarListaPlantas(idCliente);
+    } catch (err: any) {
+      const msg = err.data?.message || 'Error al guardar la planta';
+      mostrarToast('error', 'Error', msg);
+      btn.disabled = false; btn.textContent = isEdit ? 'Guardar Cambios' : 'Crear Planta';
+    }
+  });
+}
+
+function abrirFormArea(idCliente: number, idPlanta: number, area?: any) {
+  const isEdit = !!area;
+  const prev = document.getElementById('modal-form-area');
+  if (prev) prev.remove();
+
+  const html = `
+    <div id="modal-form-area" class="modal-overlay" style="display:flex; z-index:10002;">
+      <div class="modal-container" style="max-width:440px;">
+        <div class="modal-header">
+          <h2>${isEdit ? 'Editar' : 'Nueva'} Área</h2>
+          <button class="modal-close" id="btn-cerrar-form-area">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <form id="form-area" class="modal-body">
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            <div class="form-group">
+              <label>Nombre del Área *</label>
+              <input type="text" name="nombre" required maxlength="150" class="form-input" value="${isEdit ? escHtml(area.nombre) : ''}" placeholder="Ej: Cocina, Almacén, Oficinas">
+            </div>
+            <div class="form-group">
+              <label>Descripción</label>
+              <textarea name="descripcion" rows="2" class="form-input" placeholder="Descripción opcional">${isEdit ? escHtml(area.descripcion || '') : ''}</textarea>
+            </div>
+            <div class="form-group">
+              <label>Estado</label>
+              <select name="estado" class="form-input">
+                <option value="Activo" ${isEdit && area.estado === 'Inactivo' ? '' : 'selected'}>Activo</option>
+                <option value="Inactivo" ${isEdit && area.estado === 'Inactivo' ? 'selected' : ''}>Inactivo</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer" style="margin-top:20px; display:flex; gap:12px; justify-content:flex-end;">
+            <button type="button" class="btn-secondary" id="btn-cancelar-form-area">Cancelar</button>
+            <button type="submit" class="btn-primary">${isEdit ? 'Guardar' : 'Crear Área'}</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  const modal = document.getElementById('modal-form-area')!;
+  const form = document.getElementById('form-area') as HTMLFormElement;
+
+  document.getElementById('btn-cerrar-form-area')?.addEventListener('click', () => modal.remove());
+  document.getElementById('btn-cancelar-form-area')?.addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const data: any = {};
+    fd.forEach((v, k) => { const val = (v as string).trim(); if (val) data[k] = val; });
+
+    const btn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    btn.disabled = true; btn.textContent = 'Guardando...';
+
+    try {
+      if (isEdit) {
+        await clienteService.updateArea(idCliente, idPlanta, area.id, data);
+      } else {
+        await clienteService.createArea(idCliente, idPlanta, data);
+      }
+      modal.remove();
+      mostrarToast('success', isEdit ? 'Área actualizada' : 'Área creada', '');
+      await cargarListaPlantas(idCliente);
+    } catch (err: any) {
+      const msg = err.data?.message || 'Error al guardar el área';
+      mostrarToast('error', 'Error', msg);
+      btn.disabled = false; btn.textContent = isEdit ? 'Guardar' : 'Crear Área';
     }
   });
 }
