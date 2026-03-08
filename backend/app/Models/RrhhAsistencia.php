@@ -18,6 +18,9 @@ class RrhhAsistencia extends Model
         'tipo_registro',
         'hora_entrada',
         'hora_salida',
+        'hora_inicio_almuerzo',
+        'hora_fin_almuerzo',
+        'exceso_almuerzo_minutos',
         'hora_esperada_entrada',
         'hora_esperada_salida',
         'gps_entrada',
@@ -30,6 +33,8 @@ class RrhhAsistencia extends Model
         'horas_trabajadas',
         'tardanza_minutos',
         'tiempo_extra_minutos',
+        'horas_extra_asignadas',
+        'hora_inicio_extra',
         'estado',
         'observaciones',
         'justificacion',
@@ -44,6 +49,8 @@ class RrhhAsistencia extends Model
         'horas_trabajadas' => 'decimal:2',
         'tardanza_minutos' => 'integer',
         'tiempo_extra_minutos' => 'integer',
+        'horas_extra_asignadas' => 'boolean',
+        'exceso_almuerzo_minutos' => 'integer',
         'dentro_rango_50m' => 'boolean',
     ];
 

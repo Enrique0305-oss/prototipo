@@ -24,6 +24,13 @@ export interface MiEstadoResponse {
       tiempo_extra_minutos: number;
       estado: string;
       hora_entrada_raw: string | null;
+      hora_inicio_almuerzo: string | null;
+      hora_fin_almuerzo: string | null;
+      hora_inicio_almuerzo_raw: string | null;
+      exceso_almuerzo_minutos: number;
+      horas_extra_asignadas: boolean;
+      hora_inicio_extra: string | null;
+      hora_inicio_extra_raw: string | null;
     } | null;
     puede_marcar_salida: boolean;
     semana: Array<{
@@ -53,6 +60,30 @@ export interface MarcarResponse {
   success: boolean;
   message: string;
   data?: any;
+}
+
+// === Asistencia Admin ===
+
+export interface AsistenciaAdminRecord {
+  id: number;
+  id_personal: number;
+  nombre: string;
+  area: string;
+  fecha: string;
+  entrada: string | null;
+  salida: string | null;
+  horas_trabajadas: number | null;
+  tardanza_minutos: number;
+  tiempo_extra_minutos: number;
+  horas_extra_asignadas: boolean;
+  hora_inicio_extra: string | null;
+  estado: string;
+  observaciones: string | null;
+}
+
+export interface ListaAdminResponse {
+  success: boolean;
+  data: AsistenciaAdminRecord[];
 }
 
 // === Horarios ===
@@ -104,6 +135,14 @@ export const rrhhService = {
     return apiClient.post<MarcarResponse>('/asistencia/marcar-salida', { id_personal: idPersonal });
   },
 
+  marcarInicioAlmuerzo: async (idPersonal: number = 1): Promise<MarcarResponse> => {
+    return apiClient.post<MarcarResponse>('/asistencia/marcar-inicio-almuerzo', { id_personal: idPersonal });
+  },
+
+  marcarFinAlmuerzo: async (idPersonal: number = 1): Promise<MarcarResponse> => {
+    return apiClient.post<MarcarResponse>('/asistencia/marcar-fin-almuerzo', { id_personal: idPersonal });
+  },
+
   // === Horarios ===
   getHorarios: async (): Promise<HorariosListResponse> => {
     return apiClient.get<HorariosListResponse>('/horarios');
@@ -119,5 +158,14 @@ export const rrhhService = {
 
   copiarHorario: async (idPersonalDestino: number, idPersonalOrigen: number): Promise<MarcarResponse> => {
     return apiClient.post<MarcarResponse>(`/horarios/${idPersonalDestino}/copiar-de/${idPersonalOrigen}`);
+  },
+
+  // === Asistencia Admin ===
+  getListaAdmin: async (fecha: string): Promise<ListaAdminResponse> => {
+    return apiClient.get<ListaAdminResponse>('/asistencia/lista', { fecha });
+  },
+
+  asignarHorasExtra: async (idAsistencia: number, asignar: boolean, horaInicioExtra?: string, observaciones?: string): Promise<MarcarResponse> => {
+    return apiClient.put<MarcarResponse>(`/asistencia/${idAsistencia}/horas-extra`, { asignar, hora_inicio_extra: horaInicioExtra, observaciones });
   },
 };

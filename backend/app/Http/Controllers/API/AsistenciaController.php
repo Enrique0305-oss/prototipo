@@ -178,6 +178,13 @@ class AsistenciaController extends Controller
                     'tiempo_extra_minutos' => $asistenciaHoy->tiempo_extra_minutos,
                     'estado' => $asistenciaHoy->estado,
                     'hora_entrada_raw' => $asistenciaHoy->hora_entrada, // Para el contador JS
+                    'hora_inicio_almuerzo' => $asistenciaHoy->hora_inicio_almuerzo ? Carbon::parse($asistenciaHoy->hora_inicio_almuerzo)->format('H:i') : null,
+                    'hora_fin_almuerzo' => $asistenciaHoy->hora_fin_almuerzo ? Carbon::parse($asistenciaHoy->hora_fin_almuerzo)->format('H:i') : null,
+                    'hora_inicio_almuerzo_raw' => $asistenciaHoy->hora_inicio_almuerzo,
+                    'exceso_almuerzo_minutos' => $asistenciaHoy->exceso_almuerzo_minutos,
+                    'horas_extra_asignadas' => (bool) $asistenciaHoy->horas_extra_asignadas,
+                    'hora_inicio_extra' => $asistenciaHoy->hora_inicio_extra ? Carbon::parse($asistenciaHoy->hora_inicio_extra)->format('H:i') : null,
+                    'hora_inicio_extra_raw' => $asistenciaHoy->hora_inicio_extra,
                 ] : null,
                 'puede_marcar_salida' => $puedeMarcarSalida,
                 'semana' => $semana,
@@ -310,22 +317,23 @@ class AsistenciaController extends Controller
 
         // Verificar que sea hora de salir
         $horaSalidaEsperada = Carbon::parse($hoy . ' ' . $asistencia->hora_esperada_salida);
-        if ($ahora->lt($horaSalidaEsperada)) {
-            $minutosRestantes = (int) $ahora->diffInMinutes($horaSalidaEsperada);
-            return response()->json([
-                'success' => false,
-                'message' => "Aún faltan {$minutosRestantes} minutos para tu hora de salida ({$horaSalidaEsperada->format('H:i')})"
-            ], 422);
-        }
 
         // Calcular horas trabajadas
         $horaEntrada = Carbon::parse($hoy . ' ' . $asistencia->hora_entrada);
         $horasTrabajadas = round($horaEntrada->diffInMinutes($ahora) / 60, 2);
 
-        // Calcular tiempo extra (si marcó después de hora_esperada_salida)
+        // Descontar exceso de almuerzo si aplica
+        if ($asistencia->exceso_almuerzo_minutos > 0) {
+            $horasTrabajadas = round($horasTrabajadas - ($asistencia->exceso_almuerzo_minutos / 60), 2);
+        }
+
+        // Calcular tiempo extra si RRHH asignó horas extra
         $tiempoExtraMinutos = 0;
-        if ($ahora->gt($horaSalidaEsperada)) {
-            $tiempoExtraMinutos = (int) $horaSalidaEsperada->diffInMinutes($ahora);
+        if ($asistencia->horas_extra_asignadas && $asistencia->hora_inicio_extra) {
+            $horaInicioExtra = Carbon::parse($hoy . ' ' . $asistencia->hora_inicio_extra);
+            if ($ahora->gt($horaInicioExtra)) {
+                $tiempoExtraMinutos = (int) $horaInicioExtra->diffInMinutes($ahora);
+            }
         }
 
         // El estado se mantiene como venía (Puntual o Tardanza) a menos que estaba Incompleto
@@ -343,11 +351,11 @@ class AsistenciaController extends Controller
         ]);
 
         $mensaje = "Salida registrada a las {$ahora->format('H:i')}";
+        $mensaje .= " - Total: {$horasTrabajadas} hrs";
         if ($tiempoExtraMinutos > 0) {
-            $hExtra = floor($tiempoExtraMinutos / 60);
-            $mExtra = $tiempoExtraMinutos % 60;
-            $textoExtra = $hExtra > 0 ? "{$hExtra}h {$mExtra}m" : "{$mExtra} minutos";
-            $mensaje .= " - Tiempo extra: {$textoExtra}";
+            $hE = floor($tiempoExtraMinutos / 60);
+            $mE = $tiempoExtraMinutos % 60;
+            $mensaje .= $hE > 0 ? " | Horas extra: {$hE}h {$mE}m" : " | Horas extra: {$mE} min";
         }
 
         return response()->json([
@@ -358,6 +366,234 @@ class AsistenciaController extends Controller
                 'horas_trabajadas' => $horasTrabajadas,
                 'tiempo_extra_minutos' => $tiempoExtraMinutos,
                 'estado' => $estado,
+            ]
+        ]);
+    }
+
+    /**
+     * GET /asistencia/lista?fecha=YYYY-MM-DD
+     * Para RRHH: lista de asistencias de todos los empleados en una fecha
+     */
+    public function listaAdmin(Request $request)
+    {
+        $fecha = $request->query('fecha', Carbon::now()->toDateString());
+
+        $registros = RrhhAsistencia::with(['personal.area'])
+            ->where('fecha', $fecha)
+            ->where('tipo_registro', 'Oficina')
+            ->orderBy('hora_entrada')
+            ->get()
+            ->map(function ($a) {
+                return [
+                    'id' => $a->id,
+                    'id_personal' => $a->id_personal,
+                    'nombre' => $a->personal ? $a->personal->nombre . ' ' . $a->personal->apellidos : 'Desconocido',
+                    'fecha' => Carbon::parse($a->fecha)->format('Y-m-d'),
+                    'area' => $a->personal && $a->personal->area ? $a->personal->area->nombre : 'Sin área',
+                    'entrada' => $a->hora_entrada ? Carbon::parse($a->hora_entrada)->format('H:i') : null,
+                    'salida' => $a->hora_salida ? Carbon::parse($a->hora_salida)->format('H:i') : null,
+                    'horas_trabajadas' => $a->horas_trabajadas,
+                    'tardanza_minutos' => $a->tardanza_minutos,
+                    'tiempo_extra_minutos' => $a->tiempo_extra_minutos,
+                    'horas_extra_asignadas' => (bool) $a->horas_extra_asignadas,
+                    'hora_inicio_extra' => $a->hora_inicio_extra ? Carbon::parse($a->hora_inicio_extra)->format('H:i') : null,
+                    'estado' => $a->estado,
+                    'observaciones' => $a->observaciones,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $registros,
+            'fecha' => $fecha,
+        ]);
+    }
+
+    /**
+     * PUT /asistencia/{id}/horas-extra
+     * Para RRHH: asignar horas extra a un empleado que está en curso (ANTES de marcar salida).
+     * Si asignar=true, activa las horas extra con hora_inicio_extra.
+     * Si asignar=false, cancela la asignación.
+     */
+    public function asignarHorasExtra(Request $request, $id)
+    {
+        $request->validate([
+            'asignar' => 'required|boolean',
+            'hora_inicio_extra' => 'nullable|date_format:H:i',
+            'observaciones' => 'nullable|string|max:500',
+        ]);
+
+        $asistencia = RrhhAsistencia::find($id);
+
+        if (!$asistencia) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Registro de asistencia no encontrado'
+            ], 404);
+        }
+
+        if ($asistencia->hora_salida) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El empleado ya marcó su salida, no se puede modificar'
+            ], 422);
+        }
+
+        if (!$asistencia->hora_entrada) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El empleado aún no ha marcado entrada'
+            ], 422);
+        }
+
+        $asignar = $request->boolean('asignar');
+
+        if ($asignar) {
+            // Por defecto: hora de salida esperada del empleado
+            $horaInicioExtra = $request->input('hora_inicio_extra')
+                ?? ($asistencia->hora_esperada_salida ? Carbon::parse($asistencia->hora_esperada_salida)->format('H:i') : Carbon::now()->format('H:i'));
+
+            $asistencia->update([
+                'horas_extra_asignadas' => true,
+                'hora_inicio_extra' => $horaInicioExtra,
+                'observaciones' => $request->input('observaciones') ?? $asistencia->observaciones,
+                'modificado_por' => $request->user()?->id,
+                'fecha_modificacion' => Carbon::now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Horas extra asignadas desde las {$horaInicioExtra}",
+                'data' => [
+                    'horas_extra_asignadas' => true,
+                    'hora_inicio_extra' => $horaInicioExtra,
+                ]
+            ]);
+        } else {
+            $asistencia->update([
+                'horas_extra_asignadas' => false,
+                'hora_inicio_extra' => null,
+                'tiempo_extra_minutos' => 0,
+                'observaciones' => $request->input('observaciones') ?? $asistencia->observaciones,
+                'modificado_por' => $request->user()?->id,
+                'fecha_modificacion' => Carbon::now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Asignación de horas extra cancelada',
+                'data' => [
+                    'horas_extra_asignadas' => false,
+                ]
+            ]);
+        }
+    }
+
+    public function marcarInicioAlmuerzo(Request $request)
+    {
+        $idPersonal = $request->user()?->id ?? $request->input('id_personal', 1);
+        $ahora = Carbon::now();
+        $hoy = $ahora->toDateString();
+
+        $asistencia = RrhhAsistencia::where('id_personal', $idPersonal)
+            ->where('fecha', $hoy)
+            ->where('tipo_registro', 'Oficina')
+            ->first();
+
+        if (!$asistencia) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No has marcado entrada hoy'
+            ], 422);
+        }
+
+        if ($asistencia->hora_inicio_almuerzo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ya registraste tu inicio de almuerzo hoy'
+            ], 422);
+        }
+
+        if ($asistencia->hora_salida) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ya registraste tu salida hoy'
+            ], 422);
+        }
+
+        $asistencia->update([
+            'hora_inicio_almuerzo' => $ahora->format('H:i:s'),
+            'fecha_modificacion' => $ahora,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Inicio de almuerzo registrado a las {$ahora->format('H:i')}",
+            'data' => [
+                'hora_inicio_almuerzo' => $ahora->format('H:i'),
+                'hora_inicio_almuerzo_raw' => $ahora->format('H:i:s'),
+            ]
+        ]);
+    }
+
+    /**
+     * POST /asistencia/marcar-fin-almuerzo
+     */
+    public function marcarFinAlmuerzo(Request $request)
+    {
+        $idPersonal = $request->user()?->id ?? $request->input('id_personal', 1);
+        $ahora = Carbon::now();
+        $hoy = $ahora->toDateString();
+
+        $asistencia = RrhhAsistencia::where('id_personal', $idPersonal)
+            ->where('fecha', $hoy)
+            ->where('tipo_registro', 'Oficina')
+            ->first();
+
+        if (!$asistencia) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No has marcado entrada hoy'
+            ], 422);
+        }
+
+        if (!$asistencia->hora_inicio_almuerzo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No has marcado inicio de almuerzo'
+            ], 422);
+        }
+
+        if ($asistencia->hora_fin_almuerzo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ya registraste tu regreso de almuerzo hoy'
+            ], 422);
+        }
+
+        // Calcular duración del almuerzo y exceso (45 min permitidos)
+        $inicioAlmuerzo = Carbon::parse($hoy . ' ' . $asistencia->hora_inicio_almuerzo);
+        $duracionMinutos = (int) $inicioAlmuerzo->diffInMinutes($ahora);
+        $excesoMinutos = max(0, $duracionMinutos - 45);
+
+        $asistencia->update([
+            'hora_fin_almuerzo' => $ahora->format('H:i:s'),
+            'exceso_almuerzo_minutos' => $excesoMinutos,
+            'fecha_modificacion' => $ahora,
+        ]);
+
+        $mensaje = "Regreso de almuerzo registrado a las {$ahora->format('H:i')} - Duración: {$duracionMinutos} min";
+        if ($excesoMinutos > 0) {
+            $mensaje .= " (exceso: {$excesoMinutos} min)";
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $mensaje,
+            'data' => [
+                'hora_fin_almuerzo' => $ahora->format('H:i'),
+                'duracion_minutos' => $duracionMinutos,
+                'exceso_almuerzo_minutos' => $excesoMinutos,
             ]
         ]);
     }

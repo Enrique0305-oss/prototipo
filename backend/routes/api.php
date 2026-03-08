@@ -217,8 +217,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // Asistencia RRHH
     Route::get('/asistencia/mi-estado', [AsistenciaController::class, 'miEstado']);
+    Route::get('/asistencia/lista', [AsistenciaController::class, 'listaAdmin']);
     Route::post('/asistencia/marcar-entrada', [AsistenciaController::class, 'marcarEntrada']);
     Route::post('/asistencia/marcar-salida', [AsistenciaController::class, 'marcarSalida']);
+    Route::post('/asistencia/marcar-inicio-almuerzo', [AsistenciaController::class, 'marcarInicioAlmuerzo']);
+    Route::post('/asistencia/marcar-fin-almuerzo', [AsistenciaController::class, 'marcarFinAlmuerzo']);
+    Route::put('/asistencia/{id}/horas-extra', [AsistenciaController::class, 'asignarHorasExtra']);
 
     // Horarios RRHH
     Route::get('/horarios', [HorarioController::class, 'index']);

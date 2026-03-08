@@ -7,7 +7,7 @@ import { authService } from './modules/auth/auth.service'
 initAuthGuard();
 import { renderDashboard, cargarAlertaStockBajo, cargarAlertaMantenimiento, cargarAlertaCotizacionesSinOrden } from './modules/dashboard/dashboard.view'
 import { renderProgramaciones, initProgramacionesEvents } from './modules/programaciones/programaciones.view'
-import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios } from './modules/recursos-humanos/recursos-humanos.view'
+import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios } from './modules/recursos-humanos/recursos-humanos.view'
 // Almacén
 import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
 import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents, initKardexEvents } from './modules/almacen/inventario/inventario.view'
@@ -378,6 +378,11 @@ if (activeMenu === 'Facturación') {
     });
   }
 
+  // Inicializar eventos del módulo de Asistencia Admin (RRHH)
+  if (activeMenu === 'Recursos Humanos' && activeRecursosTab === 'asistencia') {
+    setTimeout(() => cargarAsistenciaAdmin(), 0);
+  }
+
   // Inicializar eventos del módulo de Programaciones
   if (activeMenu === 'Programaciones') {
     initProgramacionesEvents();
@@ -602,6 +607,11 @@ function updateRecursosTabContent() {
   // Inicializar event listeners para Marcar Asistencia
   if (activeRecursosTab === 'marcar') {
     cargarMarcarAsistencia();
+  }
+
+  // Cargar asistencia admin
+  if (activeRecursosTab === 'asistencia') {
+    cargarAsistenciaAdmin();
   }
 
   // Cargar datos de horarios
