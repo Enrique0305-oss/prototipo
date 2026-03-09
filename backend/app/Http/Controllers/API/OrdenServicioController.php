@@ -662,7 +662,7 @@ class OrdenServicioController extends Controller
 
     public function generarPDF($id)
     {
-        $orden = OrdenServicio::with(['cliente', 'detalles.servicio', 'emisor', 'cotizacion'])->findOrFail($id);
+        $orden = OrdenServicio::with(['cliente', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'emisor', 'cotizacion', 'productos.producto', 'equipos.equipo'])->findOrFail($id);
         
         $multicim = [
             'nombre_empresa' => 'CONTROL DE PLAGAS Y SANEAMIENTO AMBIENTAL',

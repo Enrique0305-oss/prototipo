@@ -50,4 +50,8 @@ export const ordenCapacitacionService = {
   delete: async (id: number) => {
     return apiClient.delete<ApiResponse<null>>(`/ordenes-capacitacion-auditoria/${id}`);
   },
+
+  downloadPDF: async (id: number) => {
+    return apiClient.downloadFile(`/ordenes-capacitacion-auditoria/${id}/pdf`, `orden_capacitacion_${id}.pdf`);
+  },
 };

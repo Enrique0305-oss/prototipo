@@ -416,6 +416,10 @@ async function cargarOrdenesServicio() {
             '<button class="btn-icon btn-ver-ods" data-id="' + o.id + '" title="Ver Detalle">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' +
             '</button>' +
+            // BOTÓN DESCARGAR PDF
+            '<button class="btn-icon btn-pdf-ods" data-id="' + o.id + '" data-numero="' + (o.numero_orden || '') + '" title="Descargar PDF" style="color:#7c3aed;">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>' +
+            '</button>' +
             // BOTÓN EDITAR (El que ya tenías)
             '<button class="btn-icon btn-editar-ods" data-id="' + o.id + '" title="Editar" style="color: #0284c7;">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>' +
@@ -455,6 +459,21 @@ function bindAccionesTabla() {
       const id = Number((btn as HTMLElement).dataset.id);
       const numero = (btn as HTMLElement).dataset.numero || '';
       abrirModalEliminarODS(id, numero);
+    });
+  });
+
+  document.querySelectorAll('.btn-pdf-ods').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      const numero = (btn as HTMLElement).dataset.numero || '';
+      try {
+        mostrarToast('success', 'PDF', 'Generando PDF...');
+        await ordenServicioService.downloadPDF(id);
+        mostrarToast('success', 'PDF', 'PDF descargado: ' + numero);
+      } catch (e) {
+        console.error('Error descargando PDF:', e);
+        mostrarToast('error', 'Error', 'Error al generar el PDF');
+      }
     });
   });
 }
@@ -1208,8 +1227,19 @@ async function guardarODS() {
       await ordenServicioService.update(Number(editId), payload);
       mostrarToast('success', 'Orden Actualizada', 'La orden de servicio se actualizo correctamente');
     } else {
-      await ordenServicioService.create(payload);
+      const response = await ordenServicioService.create(payload);
       mostrarToast('success', 'Orden Creada', 'La orden de servicio se creo correctamente');
+
+      // Generar PDF automáticamente
+      const nuevaId = (response.data as any)?.id;
+      if (nuevaId) {
+        mostrarToast('success', 'PDF', 'Generando PDF de la orden de servicio...');
+        try {
+          await ordenServicioService.downloadPDF(nuevaId);
+        } catch (pdfErr) {
+          console.error('Error generando PDF:', pdfErr);
+        }
+      }
     }
     (document.getElementById('modal-ods') as HTMLElement).style.display = 'none';
     await Promise.all([cargarOrdenesServicio(), cargarEstadisticasODS()]);

@@ -503,6 +503,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'cliente', 
             'ponente', 
             'ponentes', 
+            'exponentes',
             'cotizacion', 
             'servicio'
         ])->findOrFail($id);

@@ -73,4 +73,9 @@ export const ordenServicioService = {
   delete: async (id: number) => {
     return apiClient.delete<ApiResponse<null>>(`/ordenes-servicio/${id}`);
   },
+
+  downloadPDF: async (id: number, filename?: string) => {
+    const defaultFilename = filename || `orden_servicio_${id}.pdf`;
+    return apiClient.downloadFile(`/ordenes-servicio/${id}/pdf`, defaultFilename);
+  },
 };

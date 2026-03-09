@@ -94,6 +94,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/ordenes-servicio', [OrdenServicioController::class, 'store']);
     Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
     Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
+    Route::get('/ordenes-servicio/{id}/pdf', [OrdenServicioController::class, 'generarPDF']);
 
     // Receta de productos por servicio
     Route::get('/servicios/{idServicio}/productos', [ServicioProductoController::class, 'index']);
@@ -107,6 +108,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/ordenes-capacitacion-auditoria/cotizaciones-disponibles', [OrdenCapacitacionAuditoriaController::class, 'cotizacionesDisponibles']);
     Route::get('/ordenes-capacitacion-auditoria/desde-cotizacion/{id}', [OrdenCapacitacionAuditoriaController::class, 'desdeCotizacion']);
     Route::get('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'index']);
+    Route::get('/ordenes-capacitacion-auditoria/{id}/pdf', [OrdenCapacitacionAuditoriaController::class, 'descargarPdf']);
     Route::get('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'show']);
     Route::post('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'store']);
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);

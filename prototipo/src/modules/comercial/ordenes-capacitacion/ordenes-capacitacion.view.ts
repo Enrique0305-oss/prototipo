@@ -412,6 +412,9 @@ async function cargarOrdenesCapacitacion() {
                 '<circle cx="12" cy="12" r="3"></circle>' +
               '</svg>' +
             '</button>' +
+            '<button class="oc-btn-icon btn-pdf-oc" data-id="' + o.id + '" data-numero="' + (o.numero_orden || '') + '" title="Descargar PDF" style="color:#7c3aed;">' +
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>' +
+            '</button>' +
           '</div>' +
         '</td>' +
       '</tr>';
@@ -429,6 +432,21 @@ function bindAccionesTablaOC() {
     btn.addEventListener('click', async () => {
       const id = Number((btn as HTMLElement).dataset.id);
       await abrirModalEditarOC(id);
+    });
+  });
+
+  document.querySelectorAll('.btn-pdf-oc').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      const numero = (btn as HTMLElement).dataset.numero || '';
+      try {
+        mostrarToast('success', 'PDF', 'Generando PDF...');
+        await ordenCapacitacionService.downloadPDF(id);
+        mostrarToast('success', 'PDF', 'PDF descargado: ' + numero);
+      } catch (e) {
+        console.error('Error descargando PDF:', e);
+        mostrarToast('error', 'Error', 'Error al generar el PDF');
+      }
     });
   });
 }
@@ -851,8 +869,17 @@ async function guardarOC() {
       await ordenCapacitacionService.update(Number(editId), payload);
       mostrarToast('success', 'Orden Actualizada', 'La orden se actualizó correctamente');
     } else {
-      await ordenCapacitacionService.create(payload);
+      const response = await ordenCapacitacionService.create(payload);
       mostrarToast('success', 'Orden Creada', 'La orden de capacitación se creó correctamente');
+      const nuevaId = (response.data as any)?.id;
+      if (nuevaId) {
+        try {
+          await ordenCapacitacionService.downloadPDF(nuevaId);
+          mostrarToast('success', 'PDF', 'PDF generado correctamente');
+        } catch (e) {
+          console.error('Error generando PDF:', e);
+        }
+      }
     }
     (document.getElementById('modal-oc') as HTMLElement).style.display = 'none';
     await Promise.all([cargarOrdenesCapacitacion(), cargarEstadisticasOC()]);
