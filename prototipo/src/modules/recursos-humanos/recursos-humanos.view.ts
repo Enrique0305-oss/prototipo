@@ -1,20 +1,23 @@
-// Recursos Humanos View
-import { rrhhService, type MiEstadoResponse, type EmpleadoHorarioResumen, type DiaHorario } from '../../services/rrhhService';
+﻿// Recursos Humanos View
+import { rrhhService, type MiEstadoResponse, type EmpleadoHorarioResumen, type DiaHorario, type AsistenciaAdminRecord } from '../../services/rrhhService';
 
 // Timer global para el contador de horas trabajadas (persiste aunque cierren y abran)
 let contadorInterval: ReturnType<typeof setInterval> | null = null;
-// Timer para verificar si ya se puede marcar salida
-let verificarSalidaInterval: ReturnType<typeof setInterval> | null = null;
+// Timer para el contador de almuerzo
+let almuerzoInterval: ReturnType<typeof setInterval> | null = null;
+// Timer para el contador de horas extra
+let extraInterval: ReturnType<typeof setInterval> | null = null;
 
 function limpiarTimersAsistencia() {
   if (contadorInterval) { clearInterval(contadorInterval); contadorInterval = null; }
-  if (verificarSalidaInterval) { clearInterval(verificarSalidaInterval); verificarSalidaInterval = null; }
+  if (almuerzoInterval) { clearInterval(almuerzoInterval); almuerzoInterval = null; }
+  if (extraInterval) { clearInterval(extraInterval); extraInterval = null; }
 }
 
 /**
  * Calcula las horas/minutos/segundos desde hora_entrada_raw hasta ahora.
  * Usa la fecha actual del cliente + la hora de entrada del servidor.
- * Así, si cierran el navegador y vuelven a abrir, el contador sigue correcto.
+ * AsÃ­, si cierran el navegador y vuelven a abrir, el contador sigue correcto.
  */
 function calcularTiempoTranscurrido(horaEntradaRaw: string, servidorFecha: string): { horas: number; minutos: number; segundos: number; totalSegundos: number } {
   const entrada = new Date(`${servidorFecha}T${horaEntradaRaw}`);
@@ -34,276 +37,350 @@ function formatContador(h: number, m: number, s: number): string {
 
 // Tab: Asistencia
 export function renderAsistenciaTab() {
+  const hoy = new Date().toISOString().split('T')[0];
   return `
-    <div class="search-filter-bar">
-      <div class="search-input-wrapper">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-        <input type="text" placeholder="Buscar trabajador..." class="search-input">
+    <div id="asistencia-admin-container">
+      <div class="search-filter-bar" style="margin-bottom: 16px;">
+        <div class="search-input-wrapper">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+          <input type="text" placeholder="Buscar trabajador..." class="search-input" id="asistencia-admin-search">
+        </div>
+        <input type="date" class="op-filter-select" id="asistencia-admin-fecha" value="${hoy}">
+        <button class="btn-filter" id="asistencia-admin-btn-cargar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+          Cargar
+        </button>
       </div>
-      <select class="op-filter-select">
-        <option>Todos</option>
-        <option>Administrativos</option>
-        <option>Campo</option>
-      </select>
-      <input type="date" class="op-filter-select" value="2025-01-15">
-      <button class="btn-filter">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-        Filtrar
-      </button>
-    </div>
-
-    <div class="table-container">
-      <table class="op-table">
-        <thead>
-          <tr>
-            <th>TRABAJADOR</th>
-            <th>ÁREA</th>
-            <th>FECHA</th>
-            <th>ENTRADA</th>
-            <th>SALIDA</th>
-            <th>HORAS</th>
-            <th>ESTADO</th>
-            <th>ACCIONES</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Juan Ramírez</div>
-                  <div class="equipment-id">ID: EMP-001</div>
-                </div>
-              </div>
-            </td>
-            <td><span class="badge">Campo</span></td>
-            <td>15/01/2025</td>
-            <td>08:00 AM</td>
-            <td>05:30 PM</td>
-            <td>9.5 hrs</td>
-            <td><span class="status-indicator success">Completo</span></td>
-            <td>
-                <div class="op-action-buttons">
-                  <button class="op-btn-icon" title="Ver">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
-                  <button class="op-btn-icon" title="Editar">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                  <button class="op-btn-icon" title="PDF">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                  </button>
-                </div>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">María Soto</div>
-                  <div class="equipment-id">ID: EMP-002</div>
-                </div>
-              </div>
-            </td>
-            <td><span class="badge green">Administrativo</span></td>
-            <td>15/01/2025</td>
-            <td>08:15 AM</td>
-            <td>06:00 PM</td>
-            <td>9.75 hrs</td>
-            <td><span class="status-indicator success">Completo</span></td>
-            <td>
-                <div class="op-action-buttons">
-                  <button class="op-btn-icon" title="Ver">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
-                  <button class="op-btn-icon" title="Editar">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                  <button class="op-btn-icon" title="PDF">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                  </button>
-                </div>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Pedro López</div>
-                  <div class="equipment-id">ID: EMP-003</div>
-                </div>
-              </div>
-            </td>
-            <td><span class="badge">Campo</span></td>
-            <td>15/01/2025</td>
-            <td>07:45 AM</td>
-            <td>05:15 PM</td>
-            <td>9.5 hrs</td>
-            <td><span class="status-indicator success">Completo</span></td>
-            <td>
-                <div class="op-action-buttons">
-                  <button class="op-btn-icon" title="Ver">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </button>
-                  <button class="op-btn-icon" title="Editar">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                  <button class="op-btn-icon" title="PDF">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                  </button>
-                </div>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Ana Torres</div>
-                  <div class="equipment-id">ID: EMP-004</div>
-                </div>
-              </div>
-            </td>
-            <td><span class="badge green">Administrativo</span></td>
-            <td>15/01/2025</td>
-            <td>08:30 AM</td>
-            <td>--:-- --</td>
-            <td>-- hrs</td>
-            <td><span class="status-indicator warning">En Curso</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Carlos Mendoza</div>
-                  <div class="equipment-id">ID: EMP-005</div>
-                </div>
-              </div>
-            </td>
-            <td><span class="badge">Campo</span></td>
-            <td>15/01/2025</td>
-            <td>09:10 AM</td>
-            <td>05:45 PM</td>
-            <td>8.58 hrs</td>
-            <td><span class="status-indicator warning">Tardanza</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Roberto Díaz</div>
-                  <div class="equipment-id">ID: EMP-006</div>
-                </div>
-              </div>
-            </td>
-            <td><span class="badge">Campo</span></td>
-            <td>15/01/2025</td>
-            <td>--:-- --</td>
-            <td>--:-- --</td>
-            <td>-- hrs</td>
-            <td><span class="status-indicator danger">Ausente</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="stats-row" style="margin-top: 24px;">
-      <div class="stat-box">
-        <div class="stat-box-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      <div id="asistencia-admin-body">
+        <div style="text-align: center; padding: 40px;">
+          <div class="spinner" style="margin: 0 auto 16px; width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2c4a7c; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+          <p style="color: #64748b;">Cargando registros de asistencia...</p>
         </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Total Trabajadores</div>
-          <div class="stat-box-value">24</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon blue">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Presentes Hoy</div>
-          <div class="stat-box-value">21</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon orange">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Tardanzas</div>
-          <div class="stat-box-value">2</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon red">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Ausentes</div>
-          <div class="stat-box-value">1</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="pagination">
-      <span class="pagination-info">Mostrando 1-10 de 24 registros</span>
-      <div class="pagination-controls">
-        <button class="pagination-btn" disabled>Anterior</button>
-        <button class="pagination-btn active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">3</button>
-        <button class="pagination-btn">Siguiente</button>
       </div>
     </div>
   `;
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function estadoAsistenciaClase(estado: string): string {
+  switch (estado.toLowerCase()) {
+    case 'presente': return 'success';
+    case 'tardanza': return 'warning';
+    case 'ausente': return 'danger';
+    case 'en curso': return 'warning';
+    default: return 'success';
+  }
+}
+
+function minutosAHorasTexto(minutos: number): string {
+  if (minutos <= 0) return '0 min';
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}min`;
+}
+
+function renderFilaAsistenciaAdmin(r: AsistenciaAdminRecord): string {
+  const fechaDisplay = r.fecha ? (() => { const [y, mo, d] = r.fecha.split('-'); return `${d}/${mo}/${y}`; })() : '--';
+  const horas = r.horas_trabajadas != null ? `${Number(r.horas_trabajadas).toFixed(2)} hrs` : '-- hrs';
+  const extraBadge = r.tiempo_extra_minutos > 0
+    ? `<br><small style="color:#16a34a; font-weight:600;">+${minutosAHorasTexto(r.tiempo_extra_minutos)} extra</small>`
+    : '';
+
+  // El botón solo aparece en filas "En Curso" (con entrada, sin salida)
+  let btnAccion = '';
+  if (r.entrada && !r.salida) {
+    if (r.horas_extra_asignadas) {
+      // Ya tiene horas extra asignadas — mostrar badge + botón cancelar
+      btnAccion = `
+        <span style="display: inline-flex; align-items: center; gap: 4px; background: #dbeafe; color: #1d4ed8; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Extra desde ${r.hora_inicio_extra ?? ''}
+        </span>
+        <button class="op-btn-icon cancelar-extra-btn" title="Cancelar Horas Extra" style="color: #dc2626;"
+          data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+        </button>`;
+    } else {
+      // Sin horas extra — botón para asignar
+      btnAccion = `
+        <button class="op-btn-icon asignar-extra-btn" title="Asignar Horas Extra"
+          data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}" data-fecha="${r.fecha}"
+          data-hora-salida="${r.salida ?? ''}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </button>`;
+    }
+  } else if (r.salida && r.tiempo_extra_minutos > 0) {
+    // Ya salió y tiene tiempo extra registrado — mostrar badge informativo
+    btnAccion = `
+      <span style="display: inline-flex; align-items: center; gap: 4px; background: #f0fdf4; color: #15803d; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        ${minutosAHorasTexto(r.tiempo_extra_minutos)}
+      </span>`;
+  }
+
+  return `
+    <tr>
+      <td>
+        <div class="equipment-info">
+          <div class="equipment-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          </div>
+          <div>
+            <div class="equipment-name">${escapeHtml(r.nombre)}</div>
+            <div class="equipment-id">ID: ${r.id_personal}</div>
+          </div>
+        </div>
+      </td>
+      <td><span class="badge">${escapeHtml(r.area)}</span></td>
+      <td>${fechaDisplay}</td>
+      <td>${r.entrada ?? '--:-- --'}</td>
+      <td>${r.salida ?? '--:-- --'}</td>
+      <td>${horas}${extraBadge}</td>
+      <td><span class="status-indicator ${estadoAsistenciaClase(r.estado)}">${r.estado}</span></td>
+      <td>
+        <div class="op-action-buttons">
+          ${btnAccion}
+        </div>
+      </td>
+    </tr>`;
+}
+
+export async function cargarAsistenciaAdmin(fecha?: string) {
+  const body = document.getElementById('asistencia-admin-body');
+  if (!body) return;
+
+  const fechaInput = document.getElementById('asistencia-admin-fecha') as HTMLInputElement | null;
+  const fechaUsar = fecha ?? fechaInput?.value ?? new Date().toISOString().split('T')[0];
+
+  body.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div class="spinner" style="margin: 0 auto 16px; width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2c4a7c; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      <p style="color: #64748b;">Cargando registros...</p>
+    </div>
+  `;
+
+  document.getElementById('asistencia-admin-btn-cargar')?.addEventListener('click', () => cargarAsistenciaAdmin(), { once: true });
+
+  try {
+    const resp = await rrhhService.getListaAdmin(fechaUsar);
+    if (!resp.success) throw new Error('Error al cargar datos de asistencia');
+
+    const registros = resp.data;
+    const presentes = registros.filter(r => r.entrada && !r.salida).length;
+    const completados = registros.filter(r => r.entrada && r.salida).length;
+    const tardanzas = registros.filter(r => r.tardanza_minutos > 0).length;
+    const ausentes = registros.filter(r => !r.entrada).length;
+    const totalExtra = registros.reduce((s, r) => s + r.tiempo_extra_minutos, 0);
+
+    body.innerHTML = `
+      <div class="stats-row" style="margin-bottom: 24px;">
+        <div class="stat-box">
+          <div class="stat-box-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">Total</div>
+            <div class="stat-box-value">${registros.length}</div>
+          </div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">Completados</div>
+            <div class="stat-box-value">${completados}</div>
+          </div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-icon orange">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">En Curso / Tardanzas</div>
+            <div class="stat-box-value">${presentes} / ${tardanzas}</div>
+          </div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-icon red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">Ausentes</div>
+            <div class="stat-box-value">${ausentes}</div>
+          </div>
+        </div>
+        ${totalExtra > 0 ? `
+        <div class="stat-box">
+          <div class="stat-box-icon green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">Horas Extra Total</div>
+            <div class="stat-box-value">${minutosAHorasTexto(totalExtra)}</div>
+          </div>
+        </div>` : ''}
+      </div>
+      <div class="table-container">
+        <table class="op-table">
+          <thead>
+            <tr>
+              <th>TRABAJADOR</th>
+              <th>ÁREA</th>
+              <th>FECHA</th>
+              <th>ENTRADA</th>
+              <th>SALIDA</th>
+              <th>HORAS</th>
+              <th>ESTADO</th>
+              <th>ACCIONES</th>
+            </tr>
+          </thead>
+          <tbody id="asistencia-admin-tbody">
+            ${registros.length > 0
+              ? registros.map(r => renderFilaAsistenciaAdmin(r)).join('')
+              : `<tr><td colspan="8" style="text-align:center; padding:40px; color:#64748b;">No hay registros para esta fecha.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    document.getElementById('asistencia-admin-search')?.addEventListener('input', (e) => {
+      const q = (e.target as HTMLInputElement).value.toLowerCase();
+      document.querySelectorAll<HTMLTableRowElement>('#asistencia-admin-tbody tr').forEach(row => {
+        row.style.display = (row.textContent?.toLowerCase() ?? '').includes(q) ? '' : 'none';
+      });
+    });
+
+    document.querySelectorAll<HTMLButtonElement>('.asignar-extra-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        abrirModalHorasExtra(
+          parseInt(btn.dataset.id ?? '0'),
+          btn.dataset.nombre ?? '',
+          btn.dataset.fecha ?? '',
+          null,
+          btn.dataset.horaSalida ?? null
+        );
+      });
+    });
+
+    document.querySelectorAll<HTMLButtonElement>('.cancelar-extra-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = parseInt(btn.dataset.id ?? '0');
+        const nombre = btn.dataset.nombre ?? '';
+        if (!confirm(`¿Cancelar horas extra asignadas a ${nombre}?`)) return;
+        try {
+          const resp = await rrhhService.asignarHorasExtra(id, false);
+          if (!resp.success) throw new Error(resp.message ?? 'Error');
+          mostrarNotificacionAsistencia('Horas extra canceladas', 'success');
+          const fi = document.getElementById('asistencia-admin-fecha') as HTMLInputElement | null;
+          cargarAsistenciaAdmin(fi?.value);
+        } catch (err: any) {
+          mostrarNotificacionAsistencia(err.data?.message ?? err.message ?? 'Error al cancelar', 'error');
+        }
+      });
+    });
+
+  } catch (err: any) {
+    body.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: #ef4444;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 16px; opacity: 0.5;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <p style="font-size: 16px; font-weight: 600;">${err.message ?? 'Error al cargar datos'}</p>
+        <button class="btn-primary" style="margin-top: 16px;" id="asistencia-admin-reintentar">Reintentar</button>
+      </div>
+    `;
+    document.getElementById('asistencia-admin-reintentar')?.addEventListener('click', () => cargarAsistenciaAdmin());
+  }
+}
+
+function abrirModalHorasExtra(idAsistencia: number, nombre: string, fecha: string, horaInicioExtra: string | null, horaSalidaEsperada: string | null) {
+  const fechaDisplay = fecha ? (() => { const [y, mo, d] = fecha.split('-'); return `${d}/${mo}/${y}`; })() : '--';
+  const defaultHora = horaInicioExtra ?? horaSalidaEsperada ?? '17:00';
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+
+  overlay.innerHTML = `
+    <div style="background: white; border-radius: 16px; padding: 32px; width: 480px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+        <div>
+          <h2 style="margin: 0 0 4px; color: #1a2332; font-size: 20px;">Asignar Horas Extra</h2>
+          <p style="margin: 0; color: #64748b; font-size: 14px;">${escapeHtml(nombre)} — ${fechaDisplay}</p>
+        </div>
+        <button id="modal-extra-close" style="background: none; border: none; cursor: pointer; padding: 8px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+          Hora inicio extra <span style="font-weight: 400; color: #9ca3af;">(desde cuándo se contabiliza)</span>
+        </label>
+        <input type="time" id="modal-extra-hora" value="${defaultHora}"
+          style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; box-sizing: border-box;">
+        <p style="margin: 6px 0 0; font-size: 12px; color: #9ca3af;">El tiempo extra se calculará automáticamente al marcar salida.</p>
+      </div>
+      <div style="margin-bottom: 24px;">
+        <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+          Observaciones <span style="font-weight: 400; color: #9ca3af;">(opcional)</span>
+        </label>
+        <textarea id="modal-extra-obs" rows="3" placeholder="Motivo de las horas extra, tarea asignada, etc."
+          style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; resize: vertical; box-sizing: border-box;"></textarea>
+      </div>
+      <div id="modal-extra-error" style="display: none; background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;"></div>
+      <div style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button id="modal-extra-cancel" class="btn-secondary" style="padding: 10px 24px;">Cancelar</button>
+        <button id="modal-extra-save" class="btn-primary" style="padding: 10px 24px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Asignar Horas Extra
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('#modal-extra-close')?.addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#modal-extra-cancel')?.addEventListener('click', () => overlay.remove());
+
+  overlay.querySelector('#modal-extra-save')?.addEventListener('click', async () => {
+    const horaInicio = (overlay.querySelector('#modal-extra-hora') as HTMLInputElement).value;
+    const obs = (overlay.querySelector('#modal-extra-obs') as HTMLTextAreaElement).value.trim();
+    const errorDiv = overlay.querySelector('#modal-extra-error') as HTMLElement;
+    const saveBtn = overlay.querySelector('#modal-extra-save') as HTMLButtonElement;
+
+    if (!horaInicio) {
+      errorDiv.textContent = 'Debe indicar la hora de inicio de horas extra.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    errorDiv.style.display = 'none';
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Guardando...';
+
+    try {
+      const resp = await rrhhService.asignarHorasExtra(idAsistencia, true, horaInicio, obs || undefined);
+      if (!resp.success) throw new Error(resp.message ?? 'Error al guardar');
+      overlay.remove();
+      mostrarNotificacionAsistencia(`Horas extra asignadas desde ${horaInicio}`, 'success');
+      const fi = document.getElementById('asistencia-admin-fecha') as HTMLInputElement | null;
+      cargarAsistenciaAdmin(fi?.value);
+    } catch (err: any) {
+      errorDiv.textContent = err.data?.message ?? err.message ?? 'Error al guardar';
+      errorDiv.style.display = 'block';
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Asignar Horas Extra';
+    }
+  });
 }
 
 // Tab: Empleados
@@ -318,7 +395,7 @@ export function renderEmpleadosTab() {
         <option>Todos los Departamentos</option>
         <option>Administrativo</option>
         <option>Campo</option>
-        <option>Logística</option>
+        <option>LogÃ­stica</option>
         <option>Ventas</option>
       </select>
       <select class="op-filter-select">
@@ -340,7 +417,7 @@ export function renderEmpleadosTab() {
             <th>EMPLEADO</th>
             <th>DEPARTAMENTO</th>
             <th>CARGO</th>
-            <th>TELÉFONO</th>
+            <th>TELÃ‰FONO</th>
             <th>EMAIL</th>
             <th>FECHA INGRESO</th>
             <th>ESTADO</th>
@@ -355,13 +432,13 @@ export function renderEmpleadosTab() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
                 <div>
-                  <div class="equipment-name">Juan Ramírez</div>
+                  <div class="equipment-name">Juan RamÃ­rez</div>
                   <div class="equipment-id">ID: EMP-001</div>
                 </div>
               </div>
             </td>
             <td><span class="badge">Campo</span></td>
-            <td>Técnico Fumigador</td>
+            <td>TÃ©cnico Fumigador</td>
             <td>+51 987 654 321</td>
             <td>juan.ramirez@qsci.com</td>
             <td>15/03/2023</td>
@@ -396,7 +473,7 @@ export function renderEmpleadosTab() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
                 <div>
-                  <div class="equipment-name">María Soto</div>
+                  <div class="equipment-name">MarÃ­a Soto</div>
                   <div class="equipment-id">ID: EMP-002</div>
                 </div>
               </div>
@@ -437,13 +514,13 @@ export function renderEmpleadosTab() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
                 <div>
-                  <div class="equipment-name">Pedro López</div>
+                  <div class="equipment-name">Pedro LÃ³pez</div>
                   <div class="equipment-id">ID: EMP-003</div>
                 </div>
               </div>
             </td>
             <td><span class="badge">Campo</span></td>
-            <td>Técnico Sanitización</td>
+            <td>TÃ©cnico SanitizaciÃ³n</td>
             <td>+51 998 765 432</td>
             <td>pedro.lopez@qsci.com</td>
             <td>22/06/2023</td>
@@ -489,7 +566,7 @@ export function renderEmpleadosTab() {
             <td>ana.torres@qsci.com</td>
             <td>05/09/2022</td>
             <td><span class="status-indicator warning">Vacaciones</span></td>
-            <td><button class="action-btn">⋮</button></td>
+            <td><button class="action-btn">â‹®</button></td>
           </tr>
           <tr>
             <td>
@@ -509,7 +586,7 @@ export function renderEmpleadosTab() {
             <td>carlos.mendoza@qsci.com</td>
             <td>18/11/2021</td>
             <td><span class="status-indicator success">Activo</span></td>
-            <td><button class="action-btn">⋮</button></td>
+            <td><button class="action-btn">â‹®</button></td>
           </tr>
           <tr>
             <td>
@@ -518,18 +595,18 @@ export function renderEmpleadosTab() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
                 <div>
-                  <div class="equipment-name">Roberto Díaz</div>
+                  <div class="equipment-name">Roberto DÃ­az</div>
                   <div class="equipment-id">ID: EMP-006</div>
                 </div>
               </div>
             </td>
-            <td><span class="badge blue">Logística</span></td>
+            <td><span class="badge blue">LogÃ­stica</span></td>
             <td>Chofer</td>
             <td>+51 956 789 012</td>
             <td>roberto.diaz@qsci.com</td>
             <td>30/04/2024</td>
             <td><span class="status-indicator success">Activo</span></td>
-            <td><button class="action-btn">⋮</button></td>
+            <td><button class="action-btn">â‹®</button></td>
           </tr>
           <tr>
             <td>
@@ -538,7 +615,7 @@ export function renderEmpleadosTab() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
                 <div>
-                  <div class="equipment-name">Carmen Ríos</div>
+                  <div class="equipment-name">Carmen RÃ­os</div>
                   <div class="equipment-id">ID: EMP-007</div>
                 </div>
               </div>
@@ -549,7 +626,7 @@ export function renderEmpleadosTab() {
             <td>carmen.rios@qsci.com</td>
             <td>12/08/2023</td>
             <td><span class="status-indicator success">Activo</span></td>
-            <td><button class="action-btn">⋮</button></td>
+            <td><button class="action-btn">â‹®</button></td>
           </tr>
         </tbody>
       </table>
@@ -621,7 +698,7 @@ export function renderReportesTab() {
         <option>Todos los Departamentos</option>
         <option>Administrativo</option>
         <option>Campo</option>
-        <option>Logística</option>
+        <option>LogÃ­stica</option>
         <option>Ventas</option>
       </select>
       <button class="btn-secondary">
@@ -699,7 +776,7 @@ export function renderReportesTab() {
                 <td>2</td>
               </tr>
               <tr>
-                <td><span class="badge blue">Logística</span></td>
+                <td><span class="badge blue">LogÃ­stica</span></td>
                 <td>3</td>
                 <td><strong>97.1%</strong></td>
                 <td>8</td>
@@ -733,7 +810,7 @@ export function renderReportesTab() {
               <tr>
                 <td>
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">María Soto</div>
+                    <div class="equipment-name">MarÃ­a Soto</div>
                   </div>
                 </td>
                 <td><span class="badge green">Admin</span></td>
@@ -743,7 +820,7 @@ export function renderReportesTab() {
               <tr>
                 <td>
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">Pedro López</div>
+                    <div class="equipment-name">Pedro LÃ³pez</div>
                   </div>
                 </td>
                 <td><span class="badge">Campo</span></td>
@@ -753,7 +830,7 @@ export function renderReportesTab() {
               <tr>
                 <td>
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">Carmen Ríos</div>
+                    <div class="equipment-name">Carmen RÃ­os</div>
                   </div>
                 </td>
                 <td><span class="badge orange">Ventas</span></td>
@@ -777,7 +854,7 @@ export function renderReportesTab() {
     </div>
 
     <div class="card">
-      <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Histórico de Horas Trabajadas (Enero 2025)</h3>
+      <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">HistÃ³rico de Horas Trabajadas (Enero 2025)</h3>
       <div style="height: 200px; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); border-radius: 8px; display: flex; align-items: flex-end; justify-content: space-around; padding: 20px; gap: 8px;">
         <div style="text-align: center;">
           <div style="width: 40px; height: 160px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px; margin-bottom: 8px;"></div>
@@ -802,7 +879,7 @@ export function renderReportesTab() {
 
 // Tab: Marcar Asistencia (Personal Administrativo) - Conectado al backend
 export function renderMarcarAsistenciaTab() {
-  // Retorna un placeholder que se llena dinámicamente con datos del backend
+  // Retorna un placeholder que se llena dinÃ¡micamente con datos del backend
   return `
     <div id="marcar-asistencia-container" style="max-width: 1200px; margin: 0 auto;">
       <div style="display: flex; justify-content: center; align-items: center; padding: 60px;">
@@ -838,7 +915,7 @@ export async function cargarMarcarAsistencia() {
     const resp: MiEstadoResponse = await rrhhService.getMiEstado(1);
     if (!resp.success) throw new Error('Error al cargar estado');
     
-    const { personal, horario, asistencia_hoy, puede_marcar_salida, semana, estadisticas, servidor_hora, servidor_fecha } = resp.data;
+    const { personal, horario, asistencia_hoy, semana, estadisticas, servidor_hora, servidor_fecha } = resp.data;
     const esDescanso = (resp.data as any).es_descanso === true;
 
     if (!horario && !esDescanso) {
@@ -867,15 +944,15 @@ export async function cargarMarcarAsistencia() {
               <path d="M23 11h-6"></path>
             </svg>
           </div>
-          <h2 style="margin: 0 0 12px; color: #1a2332; font-size: 24px;">¡Hoy es tu día de descanso!</h2>
-          <p style="color: #64748b; font-size: 16px; margin: 0 0 8px;">Disfruta tu día libre, ${personal.nombre.split(' ')[0]} 🎉</p>
+          <h2 style="margin: 0 0 12px; color: #1a2332; font-size: 24px;">Â¡Hoy es tu dÃ­a de descanso!</h2>
+          <p style="color: #64748b; font-size: 16px; margin: 0 0 8px;">Disfruta tu dÃ­a libre, ${personal.nombre.split(' ')[0]} ðŸŽ‰</p>
           <p style="color: #94a3b8; font-size: 13px; margin: 0;">No necesitas marcar asistencia hoy.</p>
         </div>
       `;
       return;
     }
 
-    // Aquí horario está garantizado no-null (los casos null/descanso retornaron antes)
+    // AquÃ­ horario estÃ¡ garantizado no-null (los casos null/descanso retornaron antes)
     const horarioSeguro = horario!;
 
     const fechaActual = new Date().toLocaleDateString('es-PE', {
@@ -884,8 +961,10 @@ export async function cargarMarcarAsistencia() {
 
     const yaMarcoEntrada = asistencia_hoy && asistencia_hoy.entrada;
     const yaMarcoSalida = asistencia_hoy && asistencia_hoy.salida;
+    const yaInicioAlmuerzo = asistencia_hoy && asistencia_hoy.hora_inicio_almuerzo;
+    const yaFinAlmuerzo = asistencia_hoy && asistencia_hoy.hora_fin_almuerzo;
 
-    // Construir HTML dinámico
+    // Construir HTML dinÃ¡mico
     container.innerHTML = `
       <!-- Banner de fecha y hora -->
       <div class="card" style="background: linear-gradient(135deg, #2c4a7c 0%, #1e3a5f 100%); color: white; margin-bottom: 24px;">
@@ -922,7 +1001,7 @@ export async function cargarMarcarAsistencia() {
           </div>
 
           ${yaMarcoEntrada ? `
-            <!-- Ya marcó entrada -->
+            <!-- Ya marcá entrada -->
             <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
               <div style="display: flex; align-items: center; justify-content: center; gap: 8px; color: #0369a1; margin-bottom: 8px;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -946,17 +1025,48 @@ export async function cargarMarcarAsistencia() {
             ${!yaMarcoSalida ? `
               <div id="contador-container" class="contador-activo" style="background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border: 2px solid #86efac; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
                 <div style="font-size: 12px; color: #15803d; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">
-                  ⏱ Horas Trabajadas
+                   Horas Trabajadas
                 </div>
                 <div id="contador-horas" style="font-size: 36px; font-weight: 800; color: #166534; font-family: monospace; letter-spacing: 2px;">
                   00:00:00
                 </div>
                 <div style="font-size: 11px; color: #16a34a; margin-top: 4px;">Contando desde las ${asistencia_hoy!.entrada}...</div>
               </div>
+
+              <!-- SecciÃ³n Almuerzo -->
+              ${!yaInicioAlmuerzo ? `
+                <button class="btn-primary" id="btnInicioAlmuerzo" style="width: 100%; padding: 14px; font-size: 15px; margin-bottom: 12px; background: linear-gradient(135deg, #f59e0b, #d97706);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  Iniciar Almuerzo
+                </button>
+              ` : !yaFinAlmuerzo ? `
+                <div style="background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 2px solid #fde68a; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+                  <div style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    En Almuerzo
+                  </div>
+                  <div id="contador-almuerzo" style="font-size: 28px; font-weight: 800; color: #78350f; font-family: monospace; letter-spacing: 2px;">
+                    00:00
+                  </div>
+                  <div style="font-size: 11px; color: #b45309; margin-top: 4px;">Desde las ${asistencia_hoy!.hora_inicio_almuerzo} (45 min permitidos)</div>
+                </div>
+                <button class="btn-primary" id="btnFinAlmuerzo" style="width: 100%; padding: 14px; font-size: 15px; margin-bottom: 12px; background: linear-gradient(135deg, #059669, #047857);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 6px;"><polyline points="9 10 4 15 9 20"></polyline><path d="M20 4v7a4 4 0 0 1-4 4H4"></path></svg>
+                  Regresar de Almuerzo
+                </button>
+              ` : `
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; justify-content: center; gap: 6px; color: #15803d; font-size: 13px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>Almuerzo: ${asistencia_hoy!.hora_inicio_almuerzo} - ${asistencia_hoy!.hora_fin_almuerzo}</span>
+                    ${asistencia_hoy!.exceso_almuerzo_minutos > 0 ? `<span style="color: #ea580c; font-weight: 600;">(+${asistencia_hoy!.exceso_almuerzo_minutos} min exceso)</span>` : ''}
+                  </div>
+                </div>
+              `}
             ` : ''}
 
             ${yaMarcoSalida ? `
-              <!-- Ya marcó salida -->
+              <!-- Ya marcÃ³ salida -->
               <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; color: #15803d; margin-bottom: 8px;">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -971,27 +1081,32 @@ export async function cargarMarcarAsistencia() {
                 </div>
               </div>
             ` : `
+              <!-- Indicador de Horas Extra Asignadas -->
+              ${asistencia_hoy!.horas_extra_asignadas ? `
+                <div style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border: 2px solid #93c5fd; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+                  <div style="font-size: 12px; color: #1e40af; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    Horas Extra Asignadas
+                  </div>
+                  <div id="contador-extra" style="font-size: 28px; font-weight: 800; color: #1e3a8a; font-family: monospace; letter-spacing: 2px;">
+                    00:00
+                  </div>
+                  <div style="font-size: 11px; color: #3b82f6; margin-top: 4px;">
+                    Contando desde las ${asistencia_hoy!.hora_inicio_extra ?? ''} — Al marcar salida se calculará automáticamente
+                  </div>
+                </div>
+              ` : ''}
+
               <!-- Botón Marcar Salida -->
               <div id="btn-salida-wrapper">
-                ${puede_marcar_salida ? `
-                  <button class="btn-primary" id="btnMarcarSalida" style="width: 100%; padding: 16px; font-size: 16px;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                      <polyline points="16 17 21 12 16 7"></polyline>
-                      <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                    Marcar Salida
-                  </button>
-                ` : `
-                  <button class="btn-primary" disabled style="width: 100%; padding: 16px; font-size: 16px; opacity: 0.5; cursor: not-allowed; background: #94a3b8;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                    Salida habilitada a las ${horarioSeguro.salida}
-                  </button>
-                  <div id="countdown-salida" style="font-size: 12px; color: #64748b; margin-top: 8px;"></div>
-                `}
+                <button class="btn-primary" id="btnMarcarSalida" style="width: 100%; padding: 16px; font-size: 16px;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                  </svg>
+                  Marcar Salida
+                </button>
               </div>
             `}
           ` : `
@@ -1078,7 +1193,7 @@ export async function cargarMarcarAsistencia() {
           <table class="op-table">
             <thead>
               <tr>
-                <th>DÍA</th>
+                <th>DÃA</th>
                 <th>FECHA</th>
                 <th>ENTRADA</th>
                 <th>SALIDA</th>
@@ -1109,7 +1224,7 @@ export async function cargarMarcarAsistencia() {
           </table>
         </div>
 
-        <!-- Estadísticas rápidas -->
+        <!-- EstadÃ­sticas rÃ¡pidas -->
         ${estadisticas ? `
           <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
             <div style="text-align: center;">
@@ -1118,7 +1233,7 @@ export async function cargarMarcarAsistencia() {
             </div>
             <div style="text-align: center;">
               <div style="font-size: 28px; font-weight: 700; color: #2c4a7c; margin-bottom: 4px;">${estadisticas.dias_trabajados}</div>
-              <div style="font-size: 12px; color: #64748b;">Días trabajados</div>
+              <div style="font-size: 12px; color: #64748b;">DÃ­as trabajados</div>
             </div>
             <div style="text-align: center;">
               <div style="font-size: 28px; font-weight: 700; color: #ea580c; margin-bottom: 4px;">${estadisticas.tardanzas}</div>
@@ -1142,14 +1257,19 @@ export async function cargarMarcarAsistencia() {
     // Iniciar reloj en vivo
     iniciarRelojVivo();
 
-    // Si marcó entrada pero no salida, iniciar contador de horas trabajadas
+    // Si marcá entrada pero no salida, iniciar contador de horas trabajadas
     if (yaMarcoEntrada && !yaMarcoSalida && asistencia_hoy?.hora_entrada_raw) {
       iniciarContadorHoras(asistencia_hoy.hora_entrada_raw, servidor_fecha);
     }
 
-    // Si aún no puede marcar salida, verificar periódicamente
-    if (yaMarcoEntrada && !yaMarcoSalida && !puede_marcar_salida) {
-      iniciarVerificacionSalida(horarioSeguro.salida, servidor_fecha);
+    // Si está en almuerzo, iniciar contador de almuerzo
+    if (yaMarcoEntrada && !yaMarcoSalida && yaInicioAlmuerzo && !yaFinAlmuerzo && asistencia_hoy?.hora_inicio_almuerzo_raw) {
+      iniciarContadorAlmuerzo(asistencia_hoy.hora_inicio_almuerzo_raw, servidor_fecha);
+    }
+
+    // Si tiene horas extra asignadas y aún no sale, iniciar contador extra
+    if (yaMarcoEntrada && !yaMarcoSalida && asistencia_hoy?.horas_extra_asignadas && asistencia_hoy?.hora_inicio_extra_raw) {
+      iniciarContadorExtra(asistencia_hoy.hora_inicio_extra_raw, servidor_fecha);
     }
 
     // Bind event listeners
@@ -1188,7 +1308,7 @@ function iniciarRelojVivo() {
 /**
  * Inicia el contador basado en hora_entrada_raw del servidor.
  * CLAVE: Si cierran el navegador y vuelven, hora_entrada_raw viene del backend (BD),
- * así que el contador se recalcula correctamente.
+ * asÃ­ que el contador se recalcula correctamente.
  */
 function iniciarContadorHoras(horaEntradaRaw: string, servidorFecha: string) {
   const contadorEl = document.getElementById('contador-horas');
@@ -1202,44 +1322,6 @@ function iniciarContadorHoras(horaEntradaRaw: string, servidorFecha: string) {
   contadorInterval = setInterval(actualizar, 1000);
 }
 
-/**
- * Verifica periódicamente si ya llegó la hora de salida para habilitar el botón.
- */
-function iniciarVerificacionSalida(horaSalida: string, servidorFecha: string) {
-  const wrapper = document.getElementById('btn-salida-wrapper');
-  if (!wrapper) return;
-
-  const countdown = document.getElementById('countdown-salida');
-
-  verificarSalidaInterval = setInterval(() => {
-    const ahora = new Date();
-    const salidaDate = new Date(`${servidorFecha}T${horaSalida}:00`);
-    
-    if (ahora >= salidaDate) {
-      // Ya es hora, habilitar el botón
-      wrapper.innerHTML = `
-        <button class="btn-primary" id="btnMarcarSalida" style="width: 100%; padding: 16px; font-size: 16px;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-          Marcar Salida
-        </button>
-      `;
-      // Rebind
-      document.getElementById('btnMarcarSalida')?.addEventListener('click', handleMarcarSalida);
-      if (verificarSalidaInterval) { clearInterval(verificarSalidaInterval); verificarSalidaInterval = null; }
-    } else if (countdown) {
-      const diff = Math.floor((salidaDate.getTime() - ahora.getTime()) / 1000);
-      const h = Math.floor(diff / 3600);
-      const m = Math.floor((diff % 3600) / 60);
-      const s = diff % 60;
-      countdown.textContent = `Faltan ${h > 0 ? h + 'h ' : ''}${m}m ${s}s para habilitar salida`;
-    }
-  }, 1000);
-}
-
 async function handleMarcarEntrada() {
   const btn = document.getElementById('btnMarcarEntrada') as HTMLButtonElement;
   if (!btn) return;
@@ -1250,7 +1332,7 @@ async function handleMarcarEntrada() {
   try {
     const resp = await rrhhService.marcarEntrada(1);
     if (resp.success) {
-      // Mostrar notificación
+      // Mostrar notificaciÃ³n
       mostrarNotificacionAsistencia(resp.message, resp.data?.estado === 'Puntual' ? 'success' : 'warning');
       // Recargar todo el tab
       setTimeout(() => cargarMarcarAsistencia(), 500);
@@ -1260,7 +1342,7 @@ async function handleMarcarEntrada() {
       btn.innerHTML = 'Marcar Entrada';
     }
   } catch (err: any) {
-    const msg = err?.data?.message || 'Error de conexión';
+    const msg = err?.data?.message || 'Error de conexiÃ³n';
     mostrarNotificacionAsistencia(msg, 'error');
     btn.disabled = false;
     btn.innerHTML = 'Marcar Entrada';
@@ -1286,16 +1368,114 @@ async function handleMarcarSalida() {
       btn.innerHTML = 'Marcar Salida';
     }
   } catch (err: any) {
-    const msg = err?.data?.message || 'Error de conexión';
+    const msg = err?.data?.message || 'Error de conexiÃ³n';
     mostrarNotificacionAsistencia(msg, 'error');
     btn.disabled = false;
     btn.innerHTML = 'Marcar Salida';
   }
 }
 
+function iniciarContadorAlmuerzo(horaInicioAlmuerzoRaw: string, servidorFecha: string) {
+  const contadorEl = document.getElementById('contador-almuerzo');
+  if (!contadorEl) return;
+
+  const actualizar = () => {
+    const ahora = new Date();
+    const inicio = new Date(`${servidorFecha}T${horaInicioAlmuerzoRaw}`);
+    const diffMs = ahora.getTime() - inicio.getTime();
+    const totalMin = Math.floor(diffMs / 60000);
+    const seg = Math.floor((diffMs % 60000) / 1000);
+    const display = `${String(totalMin).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
+    contadorEl.textContent = display;
+    // Cambiar color si excede 45 min
+    if (totalMin >= 45) {
+      contadorEl.style.color = '#dc2626';
+    }
+  };
+  actualizar();
+  almuerzoInterval = setInterval(actualizar, 1000);
+}
+
+function iniciarContadorExtra(horaInicioExtraRaw: string, servidorFecha: string) {
+  const contadorEl = document.getElementById('contador-extra');
+  if (!contadorEl) return;
+
+  const actualizar = () => {
+    const ahora = new Date();
+    const inicio = new Date(`${servidorFecha}T${horaInicioExtraRaw}`);
+    const diffMs = ahora.getTime() - inicio.getTime();
+    if (diffMs < 0) {
+      contadorEl.textContent = 'Pendiente';
+      return;
+    }
+    const totalMin = Math.floor(diffMs / 60000);
+    const seg = Math.floor((diffMs % 60000) / 1000);
+    const hrs = Math.floor(totalMin / 60);
+    const min = totalMin % 60;
+    contadorEl.textContent = hrs > 0
+      ? `${String(hrs).padStart(2, '0')}:${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`
+      : `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
+  };
+  actualizar();
+  extraInterval = setInterval(actualizar, 1000);
+}
+
+async function handleInicioAlmuerzo() {
+  const btn = document.getElementById('btnInicioAlmuerzo') as HTMLButtonElement;
+  if (!btn) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span>Registrando...</span>';
+
+  try {
+    const resp = await rrhhService.marcarInicioAlmuerzo(1);
+    if (resp.success) {
+      mostrarNotificacionAsistencia(resp.message, 'success');
+      setTimeout(() => cargarMarcarAsistencia(), 500);
+    } else {
+      mostrarNotificacionAsistencia(resp.message || 'Error al registrar inicio de almuerzo', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Iniciar Almuerzo';
+    }
+  } catch (err: any) {
+    const msg = err?.data?.message || 'Error de conexiÃ³n';
+    mostrarNotificacionAsistencia(msg, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Iniciar Almuerzo';
+  }
+}
+
+async function handleFinAlmuerzo() {
+  const btn = document.getElementById('btnFinAlmuerzo') as HTMLButtonElement;
+  if (!btn) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span>Registrando...</span>';
+
+  try {
+    const resp = await rrhhService.marcarFinAlmuerzo(1);
+    if (resp.success) {
+      if (almuerzoInterval) { clearInterval(almuerzoInterval); almuerzoInterval = null; }
+      mostrarNotificacionAsistencia(resp.message, resp.data?.exceso_almuerzo_minutos > 0 ? 'warning' : 'success');
+      setTimeout(() => cargarMarcarAsistencia(), 500);
+    } else {
+      mostrarNotificacionAsistencia(resp.message || 'Error al registrar fin de almuerzo', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 6px;"><polyline points="9 10 4 15 9 20"></polyline><path d="M20 4v7a4 4 0 0 1-4 4H4"></path></svg> Regresar de Almuerzo';
+    }
+  } catch (err: any) {
+    const msg = err?.data?.message || 'Error de conexiÃ³n';
+    mostrarNotificacionAsistencia(msg, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 6px;"><polyline points="9 10 4 15 9 20"></polyline><path d="M20 4v7a4 4 0 0 1-4 4H4"></path></svg> Regresar de Almuerzo';
+  }
+}
+
 function bindMarcarAsistenciaEvents() {
   document.getElementById('btnMarcarEntrada')?.addEventListener('click', handleMarcarEntrada);
   document.getElementById('btnMarcarSalida')?.addEventListener('click', handleMarcarSalida);
+  document.getElementById('btnInicioAlmuerzo')?.addEventListener('click', handleInicioAlmuerzo);
+  document.getElementById('btnFinAlmuerzo')?.addEventListener('click', handleFinAlmuerzo);
 }
 
 function mostrarNotificacionAsistencia(mensaje: string, tipo: 'success' | 'warning' | 'error') {
@@ -1306,7 +1486,7 @@ function mostrarNotificacionAsistencia(mensaje: string, tipo: 'success' | 'warni
   };
   const c = colores[tipo];
   
-  // Remover notificación anterior
+  // Remover notificaciÃ³n anterior
   document.getElementById('asistencia-notif')?.remove();
   
   const notif = document.createElement('div');
@@ -1410,9 +1590,9 @@ export async function cargarHorarios() {
           <thead>
             <tr>
               <th>EMPLEADO</th>
-              <th>ÁREA</th>
-              <th>DÍAS LABORALES</th>
-              <th>DÍAS DESCANSO</th>
+              <th>ÃREA</th>
+              <th>DÃAS LABORALES</th>
+              <th>DÃAS DESCANSO</th>
               <th>ESTADO</th>
               <th>ACCIONES</th>
             </tr>
@@ -1437,7 +1617,7 @@ export async function cargarHorarios() {
           <line x1="9" y1="9" x2="15" y2="15"></line>
         </svg>
         <h3 style="margin: 0 0 8px; color: #dc2626;">Error al cargar horarios</h3>
-        <p style="color: #64748b;">Verifica tu conexión e intenta nuevamente.</p>
+        <p style="color: #64748b;">Verifica tu conexiÃ³n e intenta nuevamente.</p>
         <button class="btn-primary" style="margin-top: 16px;" onclick="document.querySelector('[data-tab=horarios]')?.click()">Reintentar</button>
       </div>
     `;
@@ -1562,7 +1742,7 @@ async function abrirModalHorario(idPersonal: number) {
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <div>
           <h2 style="margin: 0 0 4px; color: #1a2332; font-size: 20px;">Horario Semanal</h2>
-          <p style="margin: 0; color: #64748b; font-size: 14px;">${personal.nombre} — ${personal.area}</p>
+          <p style="margin: 0; color: #64748b; font-size: 14px;">${personal.nombre} â€” ${personal.area}</p>
         </div>
         <button id="modal-horario-close" style="background: none; border: none; cursor: pointer; padding: 8px;">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -1706,10 +1886,10 @@ function abrirModalCopiarHorario(idPersonalDestino: number) {
         <div style="margin-bottom: 20px;">
           <label style="display: block; font-size: 14px; font-weight: 600; color: #334155; margin-bottom: 8px;">Copiar horario de:</label>
           <select id="copiar-origen-select" style="width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px;">
-            ${disponibles.map(e => `<option value="${e.id}">${e.nombre} (${e.area}) — ${e.dias_laborales} lab / ${e.dias_descanso} desc</option>`).join('')}
+            ${disponibles.map(e => `<option value="${e.id}">${e.nombre} (${e.area}) â€” ${e.dias_laborales} lab / ${e.dias_descanso} desc</option>`).join('')}
           </select>
         </div>
-        <p style="font-size: 12px; color: #ea580c; margin-bottom: 20px;">⚠️ Esto reemplazará el horario actual de ${destino.nombre.split(' ')[0]}.</p>
+        <p style="font-size: 12px; color: #ea580c; margin-bottom: 20px;">âš ï¸ Esto reemplazarÃ¡ el horario actual de ${destino.nombre.split(' ')[0]}.</p>
         <div style="display: flex; justify-content: flex-end; gap: 12px;">
           <button id="modal-copiar-cancel" class="btn-secondary" style="padding: 10px 24px;">Cancelar</button>
           <button id="modal-copiar-confirm" class="btn-primary" style="padding: 10px 24px;">

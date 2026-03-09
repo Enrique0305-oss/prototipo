@@ -15,6 +15,8 @@ class CotizacionDetalle extends Model
         'id_servicio',
         'id_producto',
         'id_catalogo_cap_aud',
+        'id_cliente_planta',
+        'id_cliente_planta_area',
         'descripcion_manual',
         'cantidad',
         'precio_unitario',
@@ -46,6 +48,16 @@ class CotizacionDetalle extends Model
     public function catalogoCapAud()
     {
         return $this->belongsTo(CatalogoCapacitacionAuditoria::class, 'id_catalogo_cap_aud');
+    }
+
+    public function planta()
+    {
+        return $this->belongsTo(ClientePlanta::class, 'id_cliente_planta');
+    }
+
+    public function area()
+    {
+        return $this->belongsTo(ClientePlantaArea::class, 'id_cliente_planta_area');
     }
 
     // Accessor para calcular subtotal

@@ -33,6 +33,8 @@ class ProgramacionServicioController extends Controller
             'supervisor',
             'vehiculo',
             'insumos.producto',
+            'planta',
+            'area',
         ]);
 
         // Filtro por fecha exacta
@@ -102,6 +104,8 @@ class ProgramacionServicioController extends Controller
             'vehiculo',
             'insumos.producto',
             'creador',
+            'planta',
+            'area',
         ])->findOrFail($id);
 
         return response()->json([
@@ -129,6 +133,8 @@ class ProgramacionServicioController extends Controller
             'local_sede'        => 'nullable|string|max:150',
             'direccion_completa'=> 'nullable|string|max:255',
             'coordenadas'       => 'nullable|string|max:50',
+            'id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
+            'id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
             'observaciones'     => 'nullable|string',
             'dias_semana'       => 'nullable|string|max:100',
         ]);
@@ -150,6 +156,8 @@ class ProgramacionServicioController extends Controller
                 'local_sede'         => $validated['local_sede'] ?? null,
                 'direccion_completa' => $validated['direccion_completa'] ?? null,
                 'coordenadas'        => $validated['coordenadas'] ?? null,
+                'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
+                'id_cliente_planta_area' => $validated['id_cliente_planta_area'] ?? null,
                 'estado_ejecucion'   => 'Programado',
                 'observaciones'      => $validated['observaciones'] ?? null,
                 'dias_semana'        => $validated['dias_semana'] ?? null,
@@ -179,6 +187,8 @@ class ProgramacionServicioController extends Controller
                 'supervisor',
                 'vehiculo',
                 'insumos.producto',
+                'planta',
+                'area',
             ]);
 
             return response()->json([
@@ -215,6 +225,8 @@ class ProgramacionServicioController extends Controller
             'local_sede'          => 'nullable|string|max:150',
             'direccion_completa'  => 'nullable|string|max:255',
             'coordenadas'         => 'nullable|string|max:50',
+            'id_cliente_planta'   => 'nullable|integer|exists:cliente_planta,id',
+            'id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
             'observaciones'       => 'nullable|string',
             'dias_semana'         => 'nullable|string|max:100',
         ]);
@@ -279,6 +291,8 @@ class ProgramacionServicioController extends Controller
                     'local_sede'         => $validated['local_sede'] ?? null,
                     'direccion_completa' => $validated['direccion_completa'] ?? null,
                     'coordenadas'        => $validated['coordenadas'] ?? null,
+                    'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
+                    'id_cliente_planta_area' => $validated['id_cliente_planta_area'] ?? null,
                     'estado_ejecucion'   => 'Programado',
                     'observaciones'      => $validated['observaciones'] ?? null,
                     'dias_semana'        => $validated['dias_semana'] ?? null,
@@ -379,6 +393,8 @@ class ProgramacionServicioController extends Controller
             'local_sede'          => 'nullable|string|max:150',
             'direccion_completa'  => 'nullable|string|max:255',
             'coordenadas'         => 'nullable|string|max:50',
+            'id_cliente_planta'   => 'nullable|integer|exists:cliente_planta,id',
+            'id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
             'estado_ejecucion'    => 'sometimes|in:Programado,Confirmado,En Camino,En Ejecución,Realizado,Reprogramado,Cancelado',
             'observaciones'       => 'nullable|string',
         ]);
@@ -473,6 +489,8 @@ class ProgramacionServicioController extends Controller
                         'hora_fin' => $prog->hora_fin ? Carbon::parse($prog->hora_fin)->format('H:i') : null,
                         'local_sede' => $prog->local_sede,
                         'direccion_completa' => $prog->direccion_completa,
+                        'id_cliente_planta' => $prog->id_cliente_planta,
+                        'id_cliente_planta_area' => $prog->id_cliente_planta_area,
                     ];
                 }
             }
@@ -566,6 +584,7 @@ class ProgramacionServicioController extends Controller
                     'id' => $orden->id,
                     'numero_orden' => $orden->numero_orden,
                     'cliente' => $orden->cliente->nombre_empresa ?? $orden->cliente->persona_contacto ?? 'Sin cliente',
+                    'id_cliente' => $orden->id_cliente,
                     'estado' => $orden->estado,
                     'fecha_tentativa' => $orden->fecha_tentativa,
                     'detalles' => $orden->detalles->map(function ($det) {
@@ -576,6 +595,8 @@ class ProgramacionServicioController extends Controller
                             'local' => $det->local,
                             'frecuencia' => $det->frecuencia,
                             'precio' => $det->precio,
+                            'id_cliente_planta' => $det->id_cliente_planta,
+                            'id_cliente_planta_area' => $det->id_cliente_planta_area,
                         ];
                     }),
                 ];

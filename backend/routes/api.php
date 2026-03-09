@@ -23,6 +23,8 @@ use App\Http\Controllers\API\CatalogoCapacitacionAuditoriaController;
 use App\Http\Controllers\API\ProgramacionMantenimientoController;
 use App\Http\Controllers\API\AsistenciaController;
 use App\Http\Controllers\API\HorarioController;
+use App\Http\Controllers\API\ExponenteController;
+use App\Http\Controllers\API\ClientePlantaController;
 use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
@@ -48,6 +50,17 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/clientes/{id}', [ClienteController::class, 'update']);
     Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
     Route::get('/clientes/estadisticas/resumen', [ClienteController::class, 'estadisticas']);
+
+    // Plantas y Áreas del cliente
+    Route::get('/clientes/{idCliente}/plantas', [ClientePlantaController::class, 'index']);
+    Route::post('/clientes/{idCliente}/plantas', [ClientePlantaController::class, 'store']);
+    Route::get('/clientes/{idCliente}/plantas/{id}', [ClientePlantaController::class, 'show']);
+    Route::put('/clientes/{idCliente}/plantas/{id}', [ClientePlantaController::class, 'update']);
+    Route::delete('/clientes/{idCliente}/plantas/{id}', [ClientePlantaController::class, 'destroy']);
+    Route::get('/clientes/{idCliente}/plantas/{idPlanta}/areas', [ClientePlantaController::class, 'indexAreas']);
+    Route::post('/clientes/{idCliente}/plantas/{idPlanta}/areas', [ClientePlantaController::class, 'storeArea']);
+    Route::put('/clientes/{idCliente}/plantas/{idPlanta}/areas/{idArea}', [ClientePlantaController::class, 'updateArea']);
+    Route::delete('/clientes/{idCliente}/plantas/{idPlanta}/areas/{idArea}', [ClientePlantaController::class, 'destroyArea']);
 
     // para las cotizaciones :v
     Route::get('/cotizaciones', [CotizacionController::class, 'index']);
@@ -97,6 +110,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'store']);
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
     Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
+
+    // Exponentes
+    Route::get('/exponentes', [ExponenteController::class, 'index']);
+    Route::get('/exponentes/{id}', [ExponenteController::class, 'show']);
+    Route::post('/exponentes', [ExponenteController::class, 'store']);
+    Route::put('/exponentes/{id}', [ExponenteController::class, 'update']);
+    Route::delete('/exponentes/{id}', [ExponenteController::class, 'destroy']);
 
     // para los equipos :v
     Route::get('/equipos', [EquipoController::class, 'index']);
@@ -217,8 +237,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // Asistencia RRHH
     Route::get('/asistencia/mi-estado', [AsistenciaController::class, 'miEstado']);
+    Route::get('/asistencia/lista', [AsistenciaController::class, 'listaAdmin']);
     Route::post('/asistencia/marcar-entrada', [AsistenciaController::class, 'marcarEntrada']);
     Route::post('/asistencia/marcar-salida', [AsistenciaController::class, 'marcarSalida']);
+    Route::post('/asistencia/marcar-inicio-almuerzo', [AsistenciaController::class, 'marcarInicioAlmuerzo']);
+    Route::post('/asistencia/marcar-fin-almuerzo', [AsistenciaController::class, 'marcarFinAlmuerzo']);
+    Route::put('/asistencia/{id}/horas-extra', [AsistenciaController::class, 'asignarHorasExtra']);
 
     // Horarios RRHH
     Route::get('/horarios', [HorarioController::class, 'index']);

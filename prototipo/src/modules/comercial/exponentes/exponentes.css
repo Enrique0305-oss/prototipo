@@ -1,0 +1,120 @@
+/* ═══ Exponentes CSS (mismo patrón que Proveedores) ═══ */
+.exp-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.exp-breadcrumb { font-size: 20px; font-weight: 700; color: #1e293b; }
+.exp-actions { display: flex; gap: 10px; align-items: center; }
+
+/* Botones */
+.exp-btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #1e3a5f; color: #fff; border: none;
+  padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 500; transition: background .2s;
+}
+.exp-btn-primary:hover { background: #2d5a8e; }
+.exp-btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+.exp-btn-secondary {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #f1f5f9; color: #374151; border: 1px solid #e2e8f0;
+  padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 500; transition: background .2s;
+}
+.exp-btn-secondary:hover { background: #e2e8f0; }
+
+.exp-btn-icon-sm {
+  background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569;
+  padding: 5px 7px; border-radius: 6px; cursor: pointer;
+  display: inline-flex; align-items: center; transition: background .2s;
+}
+.exp-btn-icon-sm:hover { background: #e2e8f0; }
+.exp-btn-danger-sm { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+.exp-btn-danger-sm:hover { background: #fee2e2; }
+.exp-actions-cell { display: flex; gap: 5px; }
+
+/* Filters */
+.exp-filters-bar {
+  display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+}
+.exp-search-box {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 8px; padding: 6px 12px; flex: 1; min-width: 220px;
+}
+.exp-search-input { border: none; outline: none; font-size: 13px; width: 100%; background: transparent; }
+.exp-filter-select {
+  border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 7px 10px; font-size: 13px; background: #fff; cursor: pointer;
+}
+
+/* Badges */
+.exp-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+}
+.exp-badge-activo { background: #dcfce7; color: #15803d; }
+.exp-badge-inactivo { background: #f1f5f9; color: #64748b; }
+
+/* Stats bar */
+.exp-stats-bar {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 14px; margin-bottom: 20px;
+}
+@media (max-width: 768px) { .exp-stats-bar { grid-template-columns: 1fr; } }
+.exp-stat-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 14px 18px;
+}
+.exp-stat-value { font-size: 24px; font-weight: 700; color: #1e3a5f; }
+.exp-stat-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; margin-top: 2px; }
+
+/* Modal */
+.exp-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.exp-modal-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,.45);
+}
+.exp-modal-content {
+  position: relative; z-index: 1;
+  background: #fff; border-radius: 12px;
+  width: 90%; max-width: 680px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+.exp-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; border-bottom: 1px solid #e2e8f0;
+}
+.exp-modal-header h2 { font-size: 17px; font-weight: 700; color: #1e293b; margin: 0; }
+.exp-modal-close {
+  background: none; border: none; font-size: 22px; cursor: pointer;
+  color: #94a3b8; line-height: 1; padding: 2px 6px;
+}
+.exp-modal-body { padding: 20px 24px; }
+.exp-modal-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding-top: 20px; border-top: 1px solid #f1f5f9; margin-top: 20px;
+}
+
+/* Form */
+.exp-form-section-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  color: #64748b; letter-spacing: .5px; margin-bottom: 10px;
+  padding-bottom: 5px; border-bottom: 1px solid #f1f5f9;
+}
+.exp-form-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.exp-form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }
+.exp-form-group label { font-size: 12px; font-weight: 600; color: #374151; }
+.exp-col-2 { flex: 2; }
+.exp-input {
+  border: 1px solid #e2e8f0; border-radius: 7px;
+  padding: 7px 10px; font-size: 13px; outline: none;
+  transition: border-color .2s; background: #fff;
+}
+.exp-input:focus { border-color: #1e3a5f; }
+textarea.exp-input { resize: vertical; }

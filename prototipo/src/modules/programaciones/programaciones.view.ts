@@ -2,6 +2,7 @@
 import './programaciones.css';
 import { programacionService } from './programaciones.service';
 import { mostrarToast, confirmarAccion } from '../../shared/toast';
+import { clienteService } from '../../services/clienteService';
 import type {
   Programacion,
   Tecnico,
@@ -30,6 +31,53 @@ let fechaActual = new Date();
 let filtroEstados: EstadoEjecucion[] = ['Programado', 'Confirmado', 'En Camino', 'En Ejecución'];
 let filtroTecnico: number | null = null;
 let filtroCliente: number | null = null;
+let plantasClienteDataProg: any[] = [];
+
+async function cargarPlantasClienteProg(idCliente: number) {
+  try {
+    const res = await clienteService.getPlantas(idCliente);
+    const raw = res.data || res;
+    plantasClienteDataProg = (raw as any).data || raw;
+  } catch {
+    plantasClienteDataProg = [];
+  }
+}
+
+function getPlantaOptionsProg(selectedId?: number | null): string {
+  let opts = '<option value="">-- Planta --</option>';
+  plantasClienteDataProg.forEach((p: any) => {
+    if (p.estado !== 'Activo') return;
+    const sel = selectedId && p.id == selectedId ? 'selected' : '';
+    opts += `<option value="${p.id}" ${sel}>${p.nombre}</option>`;
+  });
+  return opts;
+}
+
+function getAreaOptionsProg(idPlanta: number | null, selectedId?: number | null): string {
+  let opts = '<option value="">-- Área --</option>';
+  if (!idPlanta) return opts;
+  const planta = plantasClienteDataProg.find((p: any) => p.id == idPlanta);
+  if (!planta) return opts;
+  const areas = planta.areas_activas || planta.areas || [];
+  areas.forEach((a: any) => {
+    if (a.estado && a.estado !== 'Activo') return;
+    const sel = selectedId && a.id == selectedId ? 'selected' : '';
+    opts += `<option value="${a.id}" ${sel}>${a.nombre}</option>`;
+  });
+  return opts;
+}
+
+function getPlantaDireccion(idPlanta: number | null): string {
+  if (!idPlanta) return '';
+  const planta = plantasClienteDataProg.find((p: any) => p.id == idPlanta);
+  return planta ? (planta.direccion || '') : '';
+}
+
+function getPlantaNombre(idPlanta: number | null): string {
+  if (!idPlanta) return '';
+  const planta = plantasClienteDataProg.find((p: any) => p.id == idPlanta);
+  return planta ? (planta.nombre || '') : '';
+}
 
 // ═══════════ Render principal ═══════════
 
@@ -417,7 +465,7 @@ function renderVistaDiaria(): string {
                 <div class="prog-day-service-details">
                   <div><strong>Servicio:</strong> ${s.servicio?.nombre || 'Servicio'}</div>
                   <div><strong>Técnico:</strong> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre + ' ' + t.apellidos).join(', ') : (s.tecnico ? s.tecnico.nombre + ' ' + s.tecnico.apellidos : 'Sin asignar')}</div>
-                  <div><strong>Local:</strong> ${s.local_sede || '—'}</div>
+                  <div><strong>Local:</strong> ${s.planta ? s.planta.nombre : (s.local_sede || '—')}</div>
                   ${s.vehiculo ? `<div><strong>Vehículo:</strong> ${s.vehiculo.placa} - ${s.vehiculo.marca} ${s.vehiculo.modelo}</div>` : ''}
                 </div>
               </div>
@@ -484,8 +532,9 @@ async function abrirModalDetalle(id: number) {
         <div class="prog-detalle-section">
           <h3 class="prog-detalle-section-title">Cliente y Ubicación</h3>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${clienteNombre(p)}</div></div>
-          <div class="prog-detalle-row"><div class="prog-detalle-label">Local:</div><div class="prog-detalle-value">${p.local_sede || '—'}</div></div>
-          <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.direccion_completa || '—'}</div></div>
+          <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
+          <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${p.area ? p.area.nombre : '—'}</div></div>
+          <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.planta ? (p.planta.direccion || '—') : (p.direccion_completa || '—')}</div></div>
         </div>
         <div class="prog-detalle-section">
           <h3 class="prog-detalle-section-title">Recursos Asignados</h3>
@@ -599,6 +648,8 @@ function mostrarModalSugerencia(sug: SugerenciaSiguiente) {
         hora_fin: sug.hora_fin || '12:00',
         local_sede: sug.local_sede || '',
         direccion_completa: sug.direccion_completa || '',
+        id_cliente_planta: sug.id_cliente_planta || null,
+        id_cliente_planta_area: sug.id_cliente_planta_area || null,
       });
       cerrarModal('modalSugerencia');
       await recargarProgramaciones();
@@ -609,9 +660,13 @@ function mostrarModalSugerencia(sug: SugerenciaSiguiente) {
 
 // ═══════════ Modal Edición ═══════════
 
-function abrirEdicion(p: Programacion) {
+async function abrirEdicion(p: Programacion) {
   const body = document.getElementById('modalDetalleBody');
   if (!body) return;
+
+  // Cargar plantas del cliente
+  const idCliente = (p as any).orden_servicio?.id_cliente || (p as any).id_cliente;
+  if (idCliente) await cargarPlantasClienteProg(idCliente);
 
   body.innerHTML = `
     <form id="formEditarProg" class="prog-form">
@@ -666,8 +721,8 @@ function abrirEdicion(p: Programacion) {
         <div class="prog-form-section prog-form-section-full">
           <h3 class="prog-form-section-title">Ubicación</h3>
           <div class="prog-form-row">
-            <div class="prog-form-group"><label class="prog-form-label">Local/Sede</label><input type="text" class="prog-form-control" name="local_sede" value="${p.local_sede || ''}"></div>
-            <div class="prog-form-group"><label class="prog-form-label">Dirección</label><input type="text" class="prog-form-control" name="direccion_completa" value="${p.direccion_completa || ''}"></div>
+            <div class="prog-form-group"><label class="prog-form-label">Planta</label><select class="prog-form-control" name="id_cliente_planta" id="editPlantaSelect">${getPlantaOptionsProg(p.id_cliente_planta)}</select></div>
+            <div class="prog-form-group"><label class="prog-form-label">Área</label><select class="prog-form-control" name="id_cliente_planta_area" id="editAreaSelect">${getAreaOptionsProg(p.id_cliente_planta || null, p.id_cliente_planta_area)}</select></div>
           </div>
           <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="2">${p.observaciones || ''}</textarea></div>
         </div>
@@ -683,11 +738,25 @@ function abrirEdicion(p: Programacion) {
   // Lógica de badge "Principal" para edición
   setupPrincipalBadge(body.querySelector('#editTecnicosCheckboxes') as HTMLElement);
 
+  // Cascada planta → área en edición
+  body.querySelector('#editPlantaSelect')?.addEventListener('change', (e) => {
+    const idPlanta = parseInt((e.target as HTMLSelectElement).value) || null;
+    const areaSel = body.querySelector('#editAreaSelect') as HTMLSelectElement;
+    if (areaSel) areaSel.innerHTML = getAreaOptionsProg(idPlanta);
+  });
+
   body.querySelector('#formEditarProg')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
     const data: Record<string, any> = {};
     fd.forEach((v, k) => { if (k !== 'tecnicos_ids') data[k] = v || null; });
+
+    // Derivar local_sede y direccion_completa de planta si se seleccionó
+    const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || null;
+    data.id_cliente_planta = idPlantaSel;
+    data.id_cliente_planta_area = parseInt(fd.get('id_cliente_planta_area') as string) || null;
+    data.local_sede = getPlantaNombre(idPlantaSel) || '';
+    data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
 
     // Recoger técnicos
     const checkedTecs = Array.from(body.querySelectorAll('#editTecnicosCheckboxes input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
@@ -845,8 +914,8 @@ function renderFormNueva(body: HTMLElement) {
         <!-- Ubicación -->
         <div class="prog-form-section">
           <h3 class="prog-form-section-title">Ubicación</h3>
-          <div class="prog-form-group"><label class="prog-form-label">Local/Sede</label><input type="text" class="prog-form-control" name="local_sede" id="inputLocalSede" placeholder="Ej: Planta Principal"></div>
-          <div class="prog-form-group"><label class="prog-form-label">Dirección Completa</label><textarea class="prog-form-control" name="direccion_completa" id="inputDireccion" rows="2" placeholder="Dirección completa"></textarea></div>
+          <div class="prog-form-group"><label class="prog-form-label">Planta</label><select class="prog-form-control" name="id_cliente_planta" id="newPlantaSelect"><option value="">-- Planta --</option></select></div>
+          <div class="prog-form-group"><label class="prog-form-label">Área</label><select class="prog-form-control" name="id_cliente_planta_area" id="newAreaSelect"><option value="">-- Área --</option></select></div>
           <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="2"></textarea></div>
         </div>
       </div>
@@ -864,7 +933,7 @@ function renderFormNueva(body: HTMLElement) {
   // Lógica de badge "Principal" para técnicos
   setupPrincipalBadge(body.querySelector('#tecnicosCheckboxes') as HTMLElement);
 
-  selectODS?.addEventListener('change', () => {
+  selectODS?.addEventListener('change', async () => {
     const odsId = parseInt(selectODS.value);
     const ods = odsDisponibles.find(o => o.id === odsId);
     const grupoServicio = body.querySelector('#grupoServicio') as HTMLElement;
@@ -872,11 +941,19 @@ function renderFormNueva(body: HTMLElement) {
 
     if (ods && ods.detalles.length > 0) {
       selectServicio.innerHTML = '<option value="">Seleccionar servicio...</option>' +
-        ods.detalles.map(d => `<option value="${d.id_servicio}" data-frecuencia="${d.frecuencia || ''}" data-local="${d.local || ''}">${d.servicio_nombre}${d.frecuencia ? ' (' + d.frecuencia + ')' : ''}</option>`).join('');
+        ods.detalles.map(d => `<option value="${d.id_servicio}" data-frecuencia="${d.frecuencia || ''}" data-local="${d.local || ''}" data-id-planta="${d.id_cliente_planta || ''}" data-id-area="${d.id_cliente_planta_area || ''}">${d.servicio_nombre}${d.frecuencia ? ' (' + d.frecuencia + ')' : ''}</option>`).join('');
       grupoServicio.style.display = 'block';
       detallesDiv.innerHTML = `<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;">
         <strong>Cliente:</strong> ${ods.cliente} &nbsp;|&nbsp; <strong>Servicios:</strong> ${ods.detalles.length}
       </div>`;
+      // Cargar plantas del cliente de esta ODS
+      if (ods.id_cliente) {
+        await cargarPlantasClienteProg(ods.id_cliente);
+        const plantaSel = body.querySelector('#newPlantaSelect') as HTMLSelectElement;
+        if (plantaSel) plantaSel.innerHTML = getPlantaOptionsProg();
+        const areaSel = body.querySelector('#newAreaSelect') as HTMLSelectElement;
+        if (areaSel) areaSel.innerHTML = getAreaOptionsProg(null);
+      }
     } else {
       grupoServicio.style.display = 'none';
       detallesDiv.innerHTML = '';
@@ -887,7 +964,6 @@ function renderFormNueva(body: HTMLElement) {
   selectServicio?.addEventListener('change', () => {
     const opt = selectServicio.selectedOptions[0];
     const frecuencia = opt?.dataset.frecuencia || '';
-    const local = opt?.dataset.local || '';
     const infoDiv = body.querySelector('#infoFrecuencia') as HTMLElement;
     const diasGroup = body.querySelector('#diasSemanaGroup') as HTMLElement;
 
@@ -906,7 +982,24 @@ function renderFormNueva(body: HTMLElement) {
       }
     }
 
-    if (local) (body.querySelector('#inputLocalSede') as HTMLInputElement).value = local;
+    // Auto-seleccionar planta/area del detalle del servicio
+    const idPlantaDet = parseInt(opt?.dataset.idPlanta || '') || null;
+    const idAreaDet = parseInt(opt?.dataset.idArea || '') || null;
+    const plantaSel = body.querySelector('#newPlantaSelect') as HTMLSelectElement;
+    if (plantaSel) {
+      plantaSel.innerHTML = getPlantaOptionsProg(idPlantaDet);
+    }
+    const areaSel = body.querySelector('#newAreaSelect') as HTMLSelectElement;
+    if (areaSel) {
+      areaSel.innerHTML = getAreaOptionsProg(idPlantaDet, idAreaDet);
+    }
+  });
+
+  // Cascada planta → área en nueva programación
+  body.querySelector('#newPlantaSelect')?.addEventListener('change', (e) => {
+    const idPlanta = parseInt((e.target as HTMLSelectElement).value) || null;
+    const areaSel = body.querySelector('#newAreaSelect') as HTMLSelectElement;
+    if (areaSel) areaSel.innerHTML = getAreaOptionsProg(idPlanta);
   });
 
   body.querySelectorAll('input[name="modo"]').forEach(r => r.addEventListener('change', () => {
@@ -996,6 +1089,13 @@ async function submitIndividual(body: HTMLElement) {
   const data: Record<string, any> = {};
   fd.forEach((v, k) => { if (!k.includes('anual') && k !== 'modo' && k !== 'tecnicos_ids') data[k] = v || null; });
 
+  // Derivar local_sede y direccion_completa de planta
+  const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || null;
+  data.id_cliente_planta = idPlantaSel;
+  data.id_cliente_planta_area = parseInt(fd.get('id_cliente_planta_area') as string) || null;
+  data.local_sede = getPlantaNombre(idPlantaSel) || '';
+  data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
+
   // Recoger técnicos seleccionados
   const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
   if (checkedTecs.length === 0) { mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico'); return; }
@@ -1045,6 +1145,7 @@ async function submitAnual(body: HTMLElement) {
   if (!ok) return;
 
   const fd = new FormData(body.querySelector('#formNuevaProg') as HTMLFormElement);
+  const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || null;
   const data: Record<string, any> = {
     id_orden_servicio: selectODS.value,
     id_servicio: selectServicio.value,
@@ -1056,8 +1157,10 @@ async function submitAnual(body: HTMLElement) {
     fecha_inicio: fechaInicio,
     hora_inicio: horaInicio || '08:00',
     hora_fin: horaFin || '12:00',
-    local_sede: fd.get('local_sede') || '',
-    direccion_completa: fd.get('direccion_completa') || '',
+    id_cliente_planta: idPlantaSel,
+    id_cliente_planta_area: parseInt(fd.get('id_cliente_planta_area') as string) || null,
+    local_sede: getPlantaNombre(idPlantaSel) || '',
+    direccion_completa: getPlantaDireccion(idPlantaSel) || '',
     observaciones: fd.get('observaciones') || '',
   };
 

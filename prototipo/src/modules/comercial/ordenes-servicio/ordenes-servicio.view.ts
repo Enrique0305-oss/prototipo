@@ -6,6 +6,7 @@ import { productoService } from '../../../services/productoService';
 import { equipoService } from '../../../services/equipoService';
 import { authService } from '../../auth/auth.service';
 import { mostrarToast } from '../../../shared/toast';
+import { clienteService } from '../../../services/clienteService';
 
 let odsListData: any[] = [];
 let cotizacionesDisponibles: any[] = [];
@@ -16,6 +17,7 @@ let productosDisponiblesODS: any[] = [];
 let equiposDisponiblesODS: any[] = [];
 let odsProductoRows: { id_producto: number; cantidad: number; observacion: string; stock?: number }[] = [];
 let odsEquipoRows: { id_equipo: number; observacion: string }[] = [];
+let plantasClienteDataODS: any[] = [];
 
 export function renderComercialOrdenesServicio() {
   return `
@@ -215,11 +217,12 @@ export function renderComercialOrdenesServicio() {
               <table class="os-table">
                 <thead>
                   <tr>
-                    <th style="width:28%;">Servicio</th>
-                    <th style="width:22%;">Local / Ubicacion</th>
-                    <th style="width:20%;">Frecuencia</th>
-                    <th style="width:18%;">Precio</th>
-                    <th style="width:12%;"></th>
+                    <th style="width:22%;">Servicio</th>
+                    <th style="width:18%;">Planta</th>
+                    <th style="width:18%;">Área</th>
+                    <th style="width:16%;">Frecuencia</th>
+                    <th style="width:16%;">Precio</th>
+                    <th style="width:10%;"></th>
                   </tr>
                 </thead>
                 <tbody id="ods-detalle-body"></tbody>
@@ -516,8 +519,12 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     tbody.innerHTML = '';
     contadorLineasSrv = 0;
 
+    // Cargar plantas del cliente antes de crear las filas
+    const idCliente = data.cliente?.id;
+    if (idCliente) await cargarPlantasClienteODS(idCliente);
+
     detalles.forEach((d: any) => {
-      agregarLineaConDatos(d.id_servicio, d.servicio_nombre || '', d.frecuencia || '', Number(d.precio || 0));
+      agregarLineaConDatos(d.id_servicio, d.servicio_nombre || '', d.frecuencia || '', Number(d.precio || 0), d.id_cliente_planta || null, d.id_cliente_planta_area || null);
     });
 
     calcularTotalCosto();
@@ -536,7 +543,48 @@ function buildServicioSelectOptions(selectedId: number | null): string {
   return opts;
 }
 
-function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuencia: string, precio: number) {
+async function cargarPlantasClienteODS(idCliente: number) {
+  try {
+    const res = await clienteService.getPlantas(idCliente);
+    const raw = res.data || res;
+    plantasClienteDataODS = (raw as any).data || raw;
+  } catch {
+    plantasClienteDataODS = [];
+  }
+  // Actualizar selects existentes
+  document.querySelectorAll('#ods-detalle-body .planta-select').forEach(sel => {
+    const s = sel as HTMLSelectElement;
+    const cur = s.value;
+    s.innerHTML = getPlantaOptionsODS();
+    if (cur) s.value = cur;
+  });
+}
+
+function getPlantaOptionsODS(selectedId?: number | null): string {
+  let opts = '<option value="">-- Planta --</option>';
+  plantasClienteDataODS.forEach((p: any) => {
+    if (p.estado !== 'Activo') return;
+    const sel = selectedId && p.id == selectedId ? 'selected' : '';
+    opts += '<option value="' + p.id + '" ' + sel + '>' + p.nombre + '</option>';
+  });
+  return opts;
+}
+
+function getAreaOptionsODS(idPlanta: number | null, selectedId?: number | null): string {
+  let opts = '<option value="">-- Área --</option>';
+  if (!idPlanta) return opts;
+  const planta = plantasClienteDataODS.find((p: any) => p.id == idPlanta);
+  if (!planta) return opts;
+  const areas = planta.areas_activas || planta.areas || [];
+  areas.forEach((a: any) => {
+    if (a.estado && a.estado !== 'Activo') return;
+    const sel = selectedId && a.id == selectedId ? 'selected' : '';
+    opts += '<option value="' + a.id + '" ' + sel + '>' + a.nombre + '</option>';
+  });
+  return opts;
+}
+
+function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuencia: string, precio: number, idPlanta?: number | null, idArea?: number | null) {
   const tbody = document.getElementById('ods-detalle-body');
   if (!tbody) return;
 
@@ -563,7 +611,10 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
         '<input type="hidden" class="servicio-id-hidden" value="' + (idServicio || '') + '">' +
       '</td>' +
       '<td>' +
-        '<input type="text" class="os-input os-input-sm local-input" placeholder="Ej: Oficina Central..." value="">' +
+        '<select class="os-input os-input-sm planta-select">' + getPlantaOptionsODS(idPlanta) + '</select>' +
+      '</td>' +
+      '<td>' +
+        '<select class="os-input os-input-sm area-select">' + getAreaOptionsODS(idPlanta || null, idArea) + '</select>' +
       '</td>' +
       '<td>' +
         '<select class="os-input os-input-sm frecuencia-select">' + frecSelect + '</select>' +
@@ -617,6 +668,20 @@ function bindLineasServicios() {
   document.querySelectorAll('.servicio-select').forEach(sel => {
     (sel as HTMLElement).removeEventListener('change', syncServicioHidden);
     (sel as HTMLElement).addEventListener('change', syncServicioHidden);
+  });
+  // Cascada planta → área
+  document.querySelectorAll('#ods-detalle-body .planta-select').forEach(sel => {
+    const s = sel as HTMLSelectElement;
+    s.replaceWith(s.cloneNode(true));
+  });
+  document.querySelectorAll('#ods-detalle-body .planta-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const tr = (e.target as HTMLElement).closest('tr');
+      if (!tr) return;
+      const idPlanta = parseInt((e.target as HTMLSelectElement).value) || null;
+      const areaSel = tr.querySelector('.area-select') as HTMLSelectElement;
+      if (areaSel) areaSel.innerHTML = getAreaOptionsODS(idPlanta);
+    });
   });
 }
 
@@ -974,18 +1039,20 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
     if (igvRow) igvRow.style.display = incluyeIgv ? 'flex' : 'none';
 
     // 6. Detalles (Agregamos las líneas)
+    // Cargar plantas del cliente antes de crear las filas
+    const idClienteEdit = orden.cliente?.id || orden.id_cliente;
+    if (idClienteEdit) await cargarPlantasClienteODS(idClienteEdit);
+
     const detalles = orden.detalles || [];
     detalles.forEach((d: any) => {
       agregarLineaConDatos(
         d.id_servicio,
         d.servicio?.nombre || ('Servicio #' + d.id_servicio),
         d.frecuencia || '',
-        Number(d.precio || 0)
+        Number(d.precio || 0),
+        d.id_cliente_planta || null,
+        d.id_cliente_planta_area || null
       );
-      const lastRow = document.getElementById('linea-srv-' + contadorLineasSrv);
-      if (lastRow) {
-        (lastRow.querySelector('.local-input') as HTMLInputElement).value = d.local || '';
-      }
     });
 
     // 7. Productos asignados
@@ -1099,7 +1166,8 @@ async function guardarODS() {
   lineas.forEach(linea => {
     const selectSrv = linea.querySelector('.servicio-select') as HTMLSelectElement;
     const idServicio = selectSrv?.value || (linea.querySelector('.servicio-id-hidden') as HTMLInputElement)?.value;
-    const local = (linea.querySelector('.local-input') as HTMLInputElement)?.value || '';
+    const idPlanta = parseInt((linea.querySelector('.planta-select') as HTMLSelectElement)?.value) || null;
+    const idArea = parseInt((linea.querySelector('.area-select') as HTMLSelectElement)?.value) || null;
     const frecuencia = (linea.querySelector('.frecuencia-select') as HTMLSelectElement)?.value || '';
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
 
@@ -1107,7 +1175,8 @@ async function guardarODS() {
 
     detalles.push({
       id_servicio: Number(idServicio),
-      local: local || null,
+      id_cliente_planta: idPlanta,
+      id_cliente_planta_area: idArea,
       frecuencia: frecuencia || null,
       precio,
     });

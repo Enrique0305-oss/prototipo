@@ -17,7 +17,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = OrdenCapacitacionAuditoria::with(['cliente', 'ponente', 'ponentes', 'cotizacion', 'servicio']);
+        $query = OrdenCapacitacionAuditoria::with(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'cotizacion', 'servicio']);
 
         // Filtro por búsqueda
         if ($request->has('search')) {
@@ -69,6 +69,12 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'ponentes' => $orden->ponentes->map(fn($p) => [
                     'id' => $p->id,
                     'nombre' => $p->nombre . ' ' . ($p->apellidos ?? ''),
+                ]),
+                'exponentes' => $orden->exponentes->map(fn($e) => [
+                    'id' => $e->id,
+                    'nombre' => $e->nombre . ' ' . $e->apellidos,
+                    'especialidad' => $e->especialidad,
+                    'profesion' => $e->profesion,
                 ]),
                 'servicio' => $orden->servicio ? $orden->servicio->nombre : null,
                 'cotizacion_numero' => $orden->cotizacion ? $orden->cotizacion->numero_cotizacion : null,
@@ -210,8 +216,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'id_cotizacion' => 'required|exists:cotizacion,id',
             'id_servicio' => 'nullable|exists:servicios,id',
             'id_ponente' => 'nullable|exists:personal,id',
-            'ponentes' => 'required|array|min:1',
+            'ponentes' => 'nullable|array',
             'ponentes.*' => 'exists:personal,id',
+            'exponentes' => 'nullable|array',
+            'exponentes.*' => 'exists:exponentes,id',
             'fecha_servicio' => 'required|date',
             'fecha_aceptacion' => 'nullable|date',
             'hora_servicio' => 'nullable|date_format:H:i',
@@ -259,13 +267,15 @@ class OrdenCapacitacionAuditoriaController extends Controller
             DB::beginTransaction();
 
             // Crear orden de capacitación/auditoría
-            $ponenteIds = $validated['ponentes'];
+            $ponenteIds = $validated['ponentes'] ?? [];
+            $exponenteIds = $validated['exponentes'] ?? [];
             $orden = OrdenCapacitacionAuditoria::create([
                 'numero_orden' => OrdenCapacitacionAuditoria::generarNumero(),
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
                 'id_servicio' => $validated['id_servicio'] ?? null,
-                'id_ponente' => $ponenteIds[0],
+                'id_ponente' => !empty($ponenteIds) ? $ponenteIds[0] : null,
+                'id_exponente' => !empty($exponenteIds) ? $exponenteIds[0] : null,
                 'fecha_servicio' => $validated['fecha_servicio'],
                 'fecha_aceptacion' => $validated['fecha_aceptacion'] ?? null,
                 'hora_servicio' => $validated['hora_servicio'] ?? null,
@@ -281,12 +291,19 @@ class OrdenCapacitacionAuditoriaController extends Controller
             ]);
 
             // Sincronizar ponentes en tabla pivot
-            $orden->ponentes()->sync($ponenteIds);
+            if (!empty($ponenteIds)) {
+                $orden->ponentes()->sync($ponenteIds);
+            }
+
+            // Sincronizar exponentes en tabla pivot
+            if (!empty($exponenteIds)) {
+                $orden->exponentes()->sync($exponenteIds);
+            }
 
             DB::commit();
 
             // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'ponente', 'ponentes', 'servicio', 'cotizacion']);
+            $orden->load(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'servicio', 'cotizacion']);
 
             return response()->json([
                 'success' => true,
@@ -314,6 +331,8 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'cliente', 
             'ponente',
             'ponentes',
+            'exponente',
+            'exponentes',
             'cotizacion',
             'servicio'
         ])->find($id);
@@ -348,8 +367,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
         $validated = $request->validate([
             'id_servicio' => 'nullable|exists:servicios,id',
             'id_ponente' => 'nullable|exists:personal,id',
-            'ponentes' => 'sometimes|array|min:1',
+            'ponentes' => 'sometimes|array',
             'ponentes.*' => 'exists:personal,id',
+            'exponentes' => 'sometimes|array',
+            'exponentes.*' => 'exists:exponentes,id',
             'fecha_servicio' => 'sometimes|date',
             'fecha_aceptacion' => 'nullable|date',
             'hora_servicio' => 'nullable|date_format:H:i',
@@ -383,12 +404,19 @@ class OrdenCapacitacionAuditoriaController extends Controller
             if (isset($validated['ponentes'])) {
                 $ponenteIds = $validated['ponentes'];
                 $orden->ponentes()->sync($ponenteIds);
-                $validated['id_ponente'] = $ponenteIds[0];
+                $validated['id_ponente'] = !empty($ponenteIds) ? $ponenteIds[0] : null;
                 unset($validated['ponentes']);
             }
 
+            if (isset($validated['exponentes'])) {
+                $exponenteIds = $validated['exponentes'];
+                $orden->exponentes()->sync($exponenteIds);
+                $validated['id_exponente'] = !empty($exponenteIds) ? $exponenteIds[0] : null;
+                unset($validated['exponentes']);
+            }
+
             $orden->update($validated);
-            $orden->load(['cliente', 'ponente', 'ponentes', 'servicio', 'cotizacion']);
+            $orden->load(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'servicio', 'cotizacion']);
 
             return response()->json([
                 'success' => true,

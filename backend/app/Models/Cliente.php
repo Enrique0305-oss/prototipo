@@ -47,6 +47,16 @@ class Cliente extends Model
         return $this->hasMany(OrdenCapacitacionAuditoria::class, 'id_cliente');
     }
 
+    public function plantas()
+    {
+        return $this->hasMany(ClientePlanta::class, 'id_cliente');
+    }
+
+    public function plantasActivas()
+    {
+        return $this->hasMany(ClientePlanta::class, 'id_cliente')->where('estado', 'Activo');
+    }
+
     // Scopes
     public function scopeActivos($query)
     {

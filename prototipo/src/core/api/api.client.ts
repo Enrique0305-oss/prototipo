@@ -69,6 +69,17 @@ export class ApiClient {
     return this.handleResponse<T>(response);
   }
 
+  async put<T>(endpoint: string, data?: any): Promise<T> {
+    const url = this.buildURL(endpoint);
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify(data),
+    });
+
+    return this.handleResponse<T>(response);
+  }
+
   async delete<T>(endpoint: string): Promise<T> {
     const url = this.buildURL(endpoint);
     const response = await fetch(url, {

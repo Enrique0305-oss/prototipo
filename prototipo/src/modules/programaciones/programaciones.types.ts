@@ -23,6 +23,8 @@ export interface Programacion {
   local_sede?: string;
   direccion_completa?: string;
   coordenadas?: string;
+  id_cliente_planta?: number | null;
+  id_cliente_planta_area?: number | null;
   estado_ejecucion: EstadoEjecucion;
   fecha_ejecucion_real?: string;
   observaciones?: string;
@@ -39,6 +41,8 @@ export interface Programacion {
   tecnicos?: { id: number; nombre: string; apellidos: string; pivot?: { rol: string } }[];
   supervisor?: { id: number; nombre: string; apellidos: string };
   vehiculo?: { id: number; placa: string; modelo: string; marca: string };
+  planta?: { id: number; nombre: string; direccion?: string };
+  area?: { id: number; nombre: string };
   insumos?: ProgramacionInsumo[];
 }
 
@@ -75,6 +79,7 @@ export interface ODSDisponible {
   id: number;
   numero_orden: string;
   cliente: string;
+  id_cliente?: number;
   estado: string;
   fecha_tentativa?: string;
   detalles: ODSDetalle[];
@@ -87,6 +92,8 @@ export interface ODSDetalle {
   local?: string;
   frecuencia?: string;
   precio: number;
+  id_cliente_planta?: number | null;
+  id_cliente_planta_area?: number | null;
 }
 
 export interface PreviewAnual {
@@ -117,6 +124,8 @@ export interface SugerenciaSiguiente {
   hora_fin?: string;
   local_sede?: string;
   direccion_completa?: string;
+  id_cliente_planta?: number | null;
+  id_cliente_planta_area?: number | null;
 }
 
 export interface FiltroProgramacion {
