@@ -46,6 +46,13 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if ($personal->estado === 'Inactivo') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tu cuenta se encuentra desactivada. Contacta al administrador.',
+            ], 403);
+        }
+
         // Revocar tokens anteriores
         $personal->tokens()->delete();
 
