@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Multicim;
 
 class CotizacionController extends Controller
 {
@@ -17,7 +18,7 @@ class CotizacionController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Cotizacion::with(['cliente', 'creador']);
+        $query = Cotizacion::with(['cliente', 'creador', 'empresa']);
 
         // Filtros
         if ($request->has('estado')) {
@@ -50,6 +51,7 @@ class CotizacionController extends Controller
             return [
                 'id' => $cot->id,
                 'numero' => $cot->numero_cotizacion,
+                'empresa_emisora' => $cot->empresa->alias_empresa ?? 'N/A',
                 'id_cliente' => $cot->id_cliente,
                 'cliente_nombre' => $cot->cliente->nombre_empresa ?? 'N/A',
                 'fecha_emision' => $cot->fecha_emision->format('Y-m-d'),
@@ -98,6 +100,7 @@ class CotizacionController extends Controller
     {
         $validated = $request->validate([
             'id_cliente' => 'required|exists:cliente,id',
+            'id_multicim' => 'required|exists:multicim,id',
             'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion',
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
@@ -139,6 +142,7 @@ class CotizacionController extends Controller
             $cotizacion = Cotizacion::create([
                 'numero_cotizacion' => Cotizacion::generarNumero(),
                 'id_cliente' => $validated['id_cliente'],
+                'id_multicim' => $validated['id_multicim'],
                 'fecha_emision' => now(),
                 'id_personal_creador' => auth()->id() ?? 1,
                 'estado' => 'Pendiente',
@@ -173,7 +177,7 @@ class CotizacionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Cotización creada exitosamente',
-                'data' => $cotizacion->load('detalles')
+                'data' => $cotizacion->load('detalles', 'empresa')
             ], 201);
 
         } catch (\Exception $e) {
@@ -312,7 +316,7 @@ class CotizacionController extends Controller
      */
     public function generarPDF($id, Request $request)
     {
-        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'creador'])
+        $cotizacion = Cotizacion::with(['cliente', 'empresa', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'creador'])
                                 ->find($id);
 
         if (!$cotizacion) {

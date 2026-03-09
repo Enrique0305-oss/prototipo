@@ -481,32 +481,6 @@
     </style>
 </head>
 <body>
-    @php
-    // Datos de CIM
-    $empresaCim = [
-        'nombre' => 'CIM CONSULTORES PARA LA INDUSTRIA ALIMENTARIA SAC',
-        'ruc' => '20604910090',
-        'bcp' => '191-2656778-0-39',
-        'cci_bcp' => '00219100265677803955',
-        'banco_nacion' => '00-004-156900',
-        'cci_nacion' => '1800400000415690000'
-    ];
-
-    // Datos de Multitasking
-    $empresaMulti = [
-        'nombre' => 'Multitasking servicios generales SAC',
-        'ruc' => '20607499234',
-        'bcp' => '191-9289661-0-57',
-        'cci_bcp' => '00219100928966105750',
-        'banco_nacion' => '00-054-127251',
-        'cci_nacion' => '01805400005412725174'
-    ];
-
-    // Si es tipo 'capacitacion' usa CIM, sino usa Multi
-    $tipo = strtolower($cotizacion->tipo_cotizacion ?? '');
-    $datos = ($tipo == 'capacitacion' || $tipo == 'capacitación') ? $empresaCim : $empresaMulti;
-    @endphp
-
     <header>
         <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" class="logo-small">
     </header>
@@ -750,35 +724,35 @@
             <!-- SECCIÓN DE PAGOS -->
             <div class="payment-section">
                 <p class="payment-header-text">Condiciones de pago:</p>
-                <p style="font-size: 12px; margin-bottom: 5px;"> -  Información de pago: Cuenta BCP</p>
+                <p style="font-size: 12px; margin-bottom: 5px;"> - Información de pago: Cuenta BCP</p>
+                
                 <table class="payment-table">
                     <tr>
                         <td class="label-cell">Cuenta BCP ahorro en soles</td>
-                        <td>{{ $datos['bcp'] }}</td>
+                        <td>{{ $cotizacion->empresa->cuenta_bcp }}</td>
                     </tr>
                     <tr>
                         <td class="label-cell">Código de cuenta interbancario</td>
-                        <td>{{ $datos['cci_bcp'] }}</td>
+                        <td>{{ $cotizacion->empresa->codigo_interbancario_bcp }}</td>
                     </tr>
                     <tr>
                         <td class="label-cell">A nombre de</td>
-                        <td><strong>{{ $datos['nombre'] }}</strong></td>
+                        <td><strong>{{ $cotizacion->empresa->nombre_empresa }}</strong></td>
                     </tr>
                     <tr>
                         <td class="label-cell">RUC</td>
-                        <td>{{ $datos['ruc'] }}</td>
+                        <td>{{ $cotizacion->empresa->ruc }}</td>
                     </tr>
                     <tr>
                         <td class="label-cell">Banco de la Nación Cuenta de Detracción</td>
-                        <td>{{ $datos['banco_nacion'] }}</td>
+                        <td>{{ $cotizacion->empresa->banco_nacion }}</td>
                     </tr>
                     <tr>
-                        <td class="label-cell">Código de Cuenta Interbancario</td>
-                        <td>{{ $datos['cci_nacion'] }}</td>
+                        <td class="label-cell">Código de Cuenta Interbancario (Detracción)</td>
+                        <td>{{ $cotizacion->empresa->codigo_interbancario_nacion }}</td>
                     </tr>
                 </table>
             </div>
-            
         </div>
         
     </div>

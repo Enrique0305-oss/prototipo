@@ -373,7 +373,7 @@ async function abrirFormularioCotizacion() {
               <input type="date" id="cot-fecha" class="form-control" value="${hoy}" readonly style="background: #f1f5f9; width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
             </div>
             <div class="form-group" style="position:relative;">
-              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Cliente *</label>
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Cliente </label>
               <input type="hidden" id="cot-cliente" value="" />
               <div id="cliente-combo" style="position:relative;">
                 <input type="text" id="cot-cliente-search" class="form-control" placeholder="Buscar cliente por nombre o RUC..." autocomplete="off"
@@ -385,7 +385,7 @@ async function abrirFormularioCotizacion() {
               </div>
             </div>
             <div class="form-group">
-              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tipo de Cotización *</label>
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tipo de Cotización </label>
               <select id="cot-tipo" class="form-control" required style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
                 <option value="">Seleccione tipo...</option>
                 <option value="Servicio">Servicio</option>
@@ -393,12 +393,22 @@ async function abrirFormularioCotizacion() {
                 <option value="Capacitacion">Capacitación</option>
               </select>
             </div>
-            <div class="form-group">
-              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">¿Incluye IGV?</label>
-              <select id="cot-igv" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
-                <option value="1" selected>Sí - Con IGV (18%)</option>
-                <option value="0">No - Sin IGV</option>
-              </select>
+            <div style="grid-column: span 1; display: flex; gap: 12px;">
+              <div style="flex: 1;">
+                  <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">¿Incluye IGV?</label>
+                  <select id="cot-igv" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+                    <option value="1" selected>Sí (18%)</option>
+                    <option value="0">No IGV</option>
+                  </select>
+              </div>
+              <div style="flex: 1;">
+                  <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Condiciones de Pago</label>
+                  <select id="cot-multicim" class="form-control" required style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+                    <option value="">Seleccione...</option>
+                    <option value="1">CIM</option>
+                    <option value="2">MULTI</option>
+                  </select>
+              </div>
             </div>
             <div class="form-group">
               <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Observaciones</label>
@@ -523,6 +533,12 @@ async function abrirFormularioCotizacion() {
       });
     }
 
+    const multicimSelect = document.getElementById('cot-multicim');
+    multicimSelect?.addEventListener('change', (e) => {
+        const val = (e.target as HTMLSelectElement).value;
+        const label = val === '1' ? 'CIM' : 'MULTITASKING';
+        if(val) mostrarToast('success', 'Empresa Seleccionada', `Esta cotización se emitirá a nombre de ${label}`);
+    });
     const btnToggle = document.getElementById('btn-toggle-propuesta');
     const wrapper = document.getElementById('editor-wrapper');
     if (btnToggle && wrapper) {
@@ -854,10 +870,16 @@ function calcularTotales() {
 }
 
 async function guardarCotizacion() {
+  const multicimId = parseInt((document.getElementById('cot-multicim') as HTMLSelectElement)?.value || '0');
   const clienteId = parseInt((document.getElementById('cot-cliente') as HTMLInputElement)?.value || '0');
   const tipoCotizacion = (document.getElementById('cot-tipo') as HTMLSelectElement)?.value;
   const observaciones = (document.getElementById('cot-observaciones') as HTMLInputElement)?.value?.trim();  
   const propuestaHtml = quillInstance ? quillInstance.root.innerHTML : '';
+
+  if (!multicimId || !clienteId || !tipoCotizacion) {
+    mostrarToast('warning', 'Campos obligatorios', 'Seleccione la empresa emisora, el cliente y el tipo de cotización');
+    return;
+  }
 
   if (!clienteId || !tipoCotizacion) {
     mostrarToast('warning', 'Campos obligatorios', 'Seleccione cliente y tipo de cotización');
@@ -909,6 +931,7 @@ async function guardarCotizacion() {
   });
 
   const data = {
+    id_multicim: multicimId,
     id_cliente: clienteId,
     tipo_cotizacion: tipoCotizacion,
     incluye_igv: incluyeIgv,

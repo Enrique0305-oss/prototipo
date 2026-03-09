@@ -13,6 +13,7 @@ class Cotizacion extends Model
     protected $fillable = [
         'numero_cotizacion',
         'id_cliente',
+        'id_multicim',
         'fecha_emision',
         'id_personal_creador',
         'estado',
@@ -37,6 +38,11 @@ class Cotizacion extends Model
     public function cliente()
     {
         return $this->belongsTo(Cliente::class, 'id_cliente');
+    }
+
+    public function empresa() 
+    {
+        return $this->belongsTo(Multicim::class, 'id_multicim');
     }
 
     public function creador()
