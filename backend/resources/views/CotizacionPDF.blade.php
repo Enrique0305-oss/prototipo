@@ -565,7 +565,25 @@
             <div class="proposal-text">
                 <p>
                     Nos es grato enviarle nuestra siguiente propuesta comercial de 
-                    <span class="highlight-service">Asesoría de Diagnóstico y Auditoría BRCGS START</span>.
+                    <span class="highlight-service">
+                        {{-- Aquí usamos la lógica dinámica --}}
+                        @php
+                            $nombresServicios = $cotizacion->detalles
+                                ->filter(fn($d) => $d->id_servicio && $d->servicio)
+                                ->pluck('servicio.nombre')
+                                ->unique()
+                                ->implode(', ');
+
+                            if(empty($nombresServicios)) {
+                                $nombresServicios = $cotizacion->detalles
+                                    ->pluck('descripcion_manual')
+                                    ->filter()
+                                    ->unique()
+                                    ->implode(', ');
+                            }
+                        @endphp
+                        {{ $nombresServicios ?: 'Asesoría y Servicios Especializados' }}
+                    </span>.
                 </p>
                 <p>
                     Nuestro servicio está inspirado en vuestra empresa y queremos acompañarlos en el 
@@ -623,26 +641,15 @@
                 <span class="seccion-titulo-num">I.</span> PROPUESTA TÉCNICA
             </div>
             <div class="seccion-descripcion">
-                @php
-                    $nombresServicios = $cotizacion->detalles
-                        ->filter(fn($d) => $d->id_servicio && $d->servicio)
-                        ->pluck('servicio.nombre')
-                        ->unique()
-                        ->implode(', ');
-                    if(empty($nombresServicios)) {
-                        $nombresServicios = $cotizacion->detalles
-                            ->pluck('descripcion_manual')
-                            ->filter()
-                            ->unique()
-                            ->implode(', ');
-                    }
-                @endphp
-                La presente propuesta técnica considera el servicio de {{ $nombresServicios ?: 'los servicios cotizados' }}.
+                Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.
             </div>
 
             <!-- II. ESPECIFICACIONES DEL SERVICIO -->
             <div class="seccion-titulo">
-                <span class="seccion-titulo-num">II.</span> ESPECIFICACIONES DEL SERVICIO
+                <span class="seccion-titulo-num">II.</span> SOBRE LOS SERVICIOS BRINDADOS
+            </div>
+            <div class="seccion-descripcion">
+                    A continuación, se detallarán la lista de actividades incluidas en el servicio.
             </div>
             <div class="proposal-text" style="margin-bottom: 20px;">
                 @if($cotizacion->propuesta_tecnica)
@@ -772,20 +779,6 @@
                 </table>
             </div>
             
-            <!-- CONDICIONES COMERCIALES -->
-            <div class="conditions">
-                <div class="conditions-title">Condiciones Comerciales</div>
-                <ol class="conditions-list">
-                    <li>Esta cotización será válida una vez aceptada formalmente por el cliente.</li>
-                    <li>El cliente se compromete a entregar los datos necesarios en la fecha y lugar pactado.</li>
-                    <li>Los servicios se realizarán según la orden de prioridad establecida por el cliente.</li>
-                    <li>En el evento que la empresa cliente modifique la cantidad de servicios/productos, la empresa se reserva el derecho de rechazar la entrega o iniciar el proceso sancionador correspondiente.</li>
-                    <li>Los productos/servicios deberán ser entregados conforme a los requisitos establecidos en la orden, acompañados de la documentación necesaria.</li>
-                    <li>El pago se efectuará contra la presentación de la factura y los documentos requeridos conforme a las condiciones pactadas.</li>
-                    <li>Los precios incluyen impuestos y cualquier otro cargo adicional, salvo acuerdo distinto por escrito.</li>
-                    <li>Esta cotización tiene una validez de 30 días desde la fecha de emisión.</li>
-                </ol>
-            </div>
         </div>
         
     </div>
