@@ -32,6 +32,7 @@ use App\Http\Controllers\API\EntregaEppController;
 use App\Http\Controllers\API\ProveedorController;
 use App\Http\Controllers\API\SalidaProgramacionController;
 use App\Http\Controllers\API\OrdenCompraController;
+use App\Http\Controllers\API\PersonalController;
 
 // Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
@@ -300,4 +301,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/entrega-epp/{id}', [EntregaEppController::class, 'show']);
     Route::patch('/entrega-epp/{id}/devolver', [EntregaEppController::class, 'devolver']);
     Route::get('/entrega-epp/{id}/pdf', [EntregaEppController::class, 'generarPDF']);
+
+    // Gestión de Usuarios
+    Route::get('/personal/areas-lista', [PersonalController::class, 'areasLista']);
+    Route::get('/personal/usuarios', [PersonalController::class, 'index']);
+    Route::get('/personal/usuarios/{id}', [PersonalController::class, 'show']);
+    Route::post('/personal/usuarios', [PersonalController::class, 'store']);
+    Route::put('/personal/usuarios/{id}', [PersonalController::class, 'update']);
+    Route::patch('/personal/usuarios/{id}/estado', [PersonalController::class, 'toggleEstado']);
+    Route::patch('/personal/usuarios/{id}/reset-password', [PersonalController::class, 'resetPassword']);
 });

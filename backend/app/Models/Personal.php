@@ -20,7 +20,8 @@ class Personal extends Authenticatable
         'correo',
         'id_area',
         'usuario',
-        'password'
+        'password',
+        'estado'
     ];
 
     protected $hidden = [
