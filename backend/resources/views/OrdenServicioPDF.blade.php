@@ -99,16 +99,18 @@
     {{-- ── UBICACIÓN (Planta / Área) ── --}}
     @php
         $primerDetalle = $orden->detalles->first();
-        $planta = $primer
-        ?->planta;
+        // Corregido: Variable completa y uso de operador nullsafe
+        $planta = $primerDetalle?->planta;
         $area = $primerDetalle?->area;
+        
         $ubicacionTexto = '';
         if ($planta) {
             $ubicacionTexto = $planta->nombre;
             if ($area) $ubicacionTexto .= ' — ' . $area->nombre;
             $direccionPlanta = implode(', ', array_filter([$planta->direccion, $planta->distrito, $planta->provincia, $planta->departamento]));
         } else {
-            $ubicacionTexto = $primerDetalle->local ?? 'UBICACI&Oacute;N GENERAL';
+            // Si no hay planta, usamos el campo local o un texto genérico
+            $ubicacionTexto = $primerDetalle->local ?? 'UBICACIÓN GENERAL';
             $direccionPlanta = '';
         }
     @endphp
@@ -213,7 +215,9 @@
 
     {{-- ── EMITIDO POR ── --}}
     <div style="margin-top: 15px;">
-        <strong>Emitido por:</strong> {{ $orden->emisor->nombre ?? '' }} {{ $orden->emisor->apellidos ?? '' }}
+        <strong>Emitido por:</strong> 
+        {{ mb_strtoupper($orden->emisor->nombre ?? 'USUARIO NO ENCONTRADO') }} 
+        {{ mb_strtoupper($orden->emisor->apellidos ?? '') }}
     </div>
 
     {{-- ── NOTA AMARILLA FIJA ── --}}
