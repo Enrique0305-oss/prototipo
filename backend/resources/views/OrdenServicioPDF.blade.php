@@ -36,6 +36,16 @@
 
         .observation { background-color: #fde9d9; padding: 5px; border: 1px solid #000; margin-top: 10px; font-size: 9px; }
         .no-border { border: none !important; }
+
+        .nota-informativa {
+            background-color: #ffff00; /* Amarillo brillante */
+            border: 1px solid #000;
+            padding: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 9px;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -89,7 +99,8 @@
     {{-- ── UBICACIÓN (Planta / Área) ── --}}
     @php
         $primerDetalle = $orden->detalles->first();
-        $planta = $primerDetalle?->planta;
+        $planta = $primer
+        ?->planta;
         $area = $primerDetalle?->area;
         $ubicacionTexto = '';
         if ($planta) {
@@ -203,6 +214,11 @@
     {{-- ── EMITIDO POR ── --}}
     <div style="margin-top: 15px;">
         <strong>Emitido por:</strong> {{ $orden->emisor->nombre ?? '' }} {{ $orden->emisor->apellidos ?? '' }}
+    </div>
+
+    {{-- ── NOTA AMARILLA FIJA ── --}}
+    <div class="nota-informativa">
+        Esta orden de servicio se basa en la cotización que aceptó el cliente, si hay alguna modificación sobre esta orden de servicio por parte del área de operaciones se tiene que avisar al área comercial por un documento.
     </div>
 </body>
 </html>
