@@ -216,9 +216,11 @@ class OrdenServicioController extends Controller
             'productos.*.id_producto' => 'required_with:productos|integer|exists:productos,id',
             'productos.*.cantidad' => 'required_with:productos|numeric|min:0.01',
             'productos.*.observacion' => 'nullable|string|max:255',
+            'productos.*.id_servicio' => 'nullable|integer|exists:servicios,id',
             'equipos' => 'sometimes|array',
             'equipos.*.id_equipo' => 'required_with:equipos|integer|exists:equipo,id',
             'equipos.*.observacion' => 'nullable|string|max:255',
+            'equipos.*.id_servicio' => 'nullable|integer|exists:servicios,id',
         ]);
 
         // Verificar que la cotización sea tipo Servicio
@@ -308,6 +310,7 @@ class OrdenServicioController extends Controller
                 foreach ($validated['productos'] as $prod) {
                     OrdenServicioProducto::create([
                         'id_orden_servicio' => $orden->id,
+                        'id_servicio' => $prod['id_servicio'] ?? null,
                         'id_producto' => $prod['id_producto'],
                         'cantidad' => $prod['cantidad'],
                         'observacion' => $prod['observacion'] ?? null,
@@ -331,6 +334,7 @@ class OrdenServicioController extends Controller
                 foreach ($validated['equipos'] as $eq) {
                     OrdenServicioEquipo::create([
                         'id_orden_servicio' => $orden->id,
+                        'id_servicio' => $eq['id_servicio'] ?? null,
                         'id_equipo' => $eq['id_equipo'],
                         'observacion' => $eq['observacion'] ?? null,
                     ]);
@@ -340,7 +344,7 @@ class OrdenServicioController extends Controller
             DB::commit();
 
             // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'equipos.equipo']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'productos.servicio', 'equipos.equipo', 'equipos.servicio']);
 
             return response()->json([
                 'success' => true,
@@ -372,7 +376,9 @@ class OrdenServicioController extends Controller
             'detalles.planta',
             'detalles.area',
             'productos.producto',
-            'equipos.equipo'
+            'productos.servicio',
+            'equipos.equipo',
+            'equipos.servicio'
         ])->find($id);
 
         if (!$orden) {
@@ -421,9 +427,11 @@ class OrdenServicioController extends Controller
             'productos.*.id_producto' => 'required_with:productos|integer|exists:productos,id',
             'productos.*.cantidad' => 'required_with:productos|numeric|min:0.01',
             'productos.*.observacion' => 'nullable|string|max:255',
+            'productos.*.id_servicio' => 'nullable|integer|exists:servicios,id',
             'equipos' => 'sometimes|array',
             'equipos.*.id_equipo' => 'required_with:equipos|integer|exists:equipo,id',
             'equipos.*.observacion' => 'nullable|string|max:255',
+            'equipos.*.id_servicio' => 'nullable|integer|exists:servicios,id',
         ]);
 
         try {
@@ -527,6 +535,7 @@ class OrdenServicioController extends Controller
                 foreach ($validated['productos'] as $prod) {
                     OrdenServicioProducto::create([
                         'id_orden_servicio' => $orden->id,
+                        'id_servicio' => $prod['id_servicio'] ?? null,
                         'id_producto' => $prod['id_producto'],
                         'cantidad' => $prod['cantidad'],
                         'observacion' => $prod['observacion'] ?? null,
@@ -551,6 +560,7 @@ class OrdenServicioController extends Controller
                 foreach ($validated['equipos'] as $eq) {
                     OrdenServicioEquipo::create([
                         'id_orden_servicio' => $orden->id,
+                        'id_servicio' => $eq['id_servicio'] ?? null,
                         'id_equipo' => $eq['id_equipo'],
                         'observacion' => $eq['observacion'] ?? null,
                     ]);
@@ -561,7 +571,7 @@ class OrdenServicioController extends Controller
 
             DB::commit();
 
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'equipos.equipo']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'productos.servicio', 'equipos.equipo', 'equipos.servicio']);
 
             return response()->json([
                 'success' => true,

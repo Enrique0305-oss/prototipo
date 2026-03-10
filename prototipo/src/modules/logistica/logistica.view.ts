@@ -2,6 +2,7 @@
 import { clienteService } from '../../services/clienteService';
 import { servicioService } from '../../services/servicioService';
 import { productoService } from '../../services/productoService';
+import { equipoService } from '../../services/equipoService';
 import { catalogoCapAudService } from '../../services/catalogoCapAudService';
 import type { CatalogoCapAud } from '../../services/catalogoCapAudService';
 import { mostrarToast } from '../../shared/toast';
@@ -17,7 +18,8 @@ let filtroSearchCatalogo = '';
 let filtroEstadoCatalogo = 'activo';
 let filtroTipoCatalogo = '';
 let productosDisponiblesReceta: any[] = [];
-let recetaRows: { id_producto: number; cantidad_default: number; observacion: string }[] = [];
+let equiposDisponiblesReceta: any[] = [];
+let recetaRows: { id_producto: number; cantidad_default: number; observacion: string; id_equipo: number }[] = [];
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
@@ -270,34 +272,28 @@ export function renderServiciosDisponiblesTab() {
             <input type="text" id="servicio-plantilla" class="form-input" maxlength="255" placeholder="Nombre de la plantilla">
           </div>
 
-          <!-- Materiales / Receta (solo visible al editar) -->
+          <!-- Receta del Servicio (solo visible al editar) -->
           <div id="servicio-receta-section" style="display:none;margin-top:20px;padding-top:20px;border-top:1px solid #e2e8f0;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
               <label class="form-label" style="margin:0;font-size:15px;font-weight:600;color:#1a2332;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-                Materiales / Receta
+                Receta del Servicio
               </label>
-              <button type="button" class="btn-secondary" id="btn-agregar-receta" style="padding:4px 12px;font-size:13px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                Agregar
-              </button>
+              <div style="display:flex;gap:8px;">
+                <button type="button" class="btn-secondary" id="btn-agregar-equipo-receta" style="padding:4px 12px;font-size:13px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Agregar Equipo
+                </button>
+                <button type="button" class="btn-secondary" id="btn-agregar-receta" style="padding:4px 12px;font-size:13px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Agregar Producto (sin equipo)
+                </button>
+              </div>
             </div>
-            <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Productos que se usan por defecto al ejecutar este servicio.</p>
-            <div style="overflow-x:auto;">
-              <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                <thead>
-                  <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
-                    <th style="text-align:left;padding:8px;width:45%;">Producto</th>
-                    <th style="text-align:center;padding:8px;width:18%;">Cantidad</th>
-                    <th style="text-align:left;padding:8px;width:27%;">Observación</th>
-                    <th style="text-align:center;padding:8px;width:10%;"></th>
-                  </tr>
-                </thead>
-                <tbody id="receta-tbody"></tbody>
-              </table>
-            </div>
+            <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Equipos y productos que se usan por defecto al ejecutar este servicio.</p>
+            <div id="receta-container"></div>
             <div id="receta-empty" style="text-align:center;padding:16px;color:#94a3b8;font-size:13px;display:none;">
-              Sin materiales asignados. Haga clic en "Agregar" para añadir.
+              Sin equipos ni materiales asignados.
             </div>
           </div>
         </div>
@@ -608,36 +604,114 @@ function limpiarFormServicio() {
   (document.getElementById('servicio-plantilla-group') as HTMLElement).style.display = 'none';
   // Limpiar receta
   recetaRows = [];
-  const recetaTbody = document.getElementById('receta-tbody');
-  if (recetaTbody) recetaTbody.innerHTML = '';
+  const recetaContainer = document.getElementById('receta-container');
+  if (recetaContainer) recetaContainer.innerHTML = '';
   const recetaSection = document.getElementById('servicio-receta-section');
   if (recetaSection) recetaSection.style.display = 'none';
   actualizarRecetaUI();
 }
 
 function actualizarRecetaUI() {
-  const tbody = document.getElementById('receta-tbody');
+  const container = document.getElementById('receta-container');
   const emptyMsg = document.getElementById('receta-empty');
-  if (!tbody) return;
+  if (!container) return;
+
   if (recetaRows.length === 0) {
-    tbody.innerHTML = '';
+    container.innerHTML = '';
     if (emptyMsg) emptyMsg.style.display = 'block';
     return;
   }
   if (emptyMsg) emptyMsg.style.display = 'none';
-  tbody.innerHTML = recetaRows.map((r, idx) => {
-    const prodOpts = productosDisponiblesReceta.map(p => {
-      const sel = p.id === r.id_producto ? 'selected' : '';
-      return `<option value="${p.id}" ${sel}>${p.descripcion}${p.unidad ? ' (' + p.unidad + ')' : ''}</option>`;
-    }).join('');
-    return `<tr data-receta-idx="${idx}">
-      <td style="padding:6px 8px;"><select class="form-input receta-prod-select" data-idx="${idx}" style="padding:6px 8px;font-size:13px;"><option value="">Seleccione...</option>${prodOpts}</select></td>
-      <td style="padding:6px 8px;text-align:center;"><input type="number" class="form-input receta-cant-input" data-idx="${idx}" value="${r.cantidad_default}" min="0.01" step="0.01" style="width:80px;text-align:center;padding:6px;font-size:13px;"></td>
-      <td style="padding:6px 8px;"><input type="text" class="form-input receta-obs-input" data-idx="${idx}" value="${r.observacion || ''}" maxlength="200" style="padding:6px 8px;font-size:13px;" placeholder="Opcional"></td>
-      <td style="padding:6px 8px;text-align:center;"><button type="button" class="btn-icon receta-remove-btn" data-idx="${idx}" style="color:#ef4444;" title="Eliminar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
-    </tr>`;
-  }).join('');
+
+  // Agrupar por id_equipo
+  const equipoIds = [...new Set(recetaRows.filter(r => r.id_equipo > 0).map(r => r.id_equipo))];
+  const sinEquipo = recetaRows.filter(r => !r.id_equipo || r.id_equipo === 0);
+
+  let html = '';
+
+  // Render cada grupo de equipo
+  equipoIds.forEach(eqId => {
+    const eq = equiposDisponiblesReceta.find((e: any) => e.id === eqId);
+    const eqNombre = eq ? `${eq.descripcion} - ${eq.marca || ''} ${eq.modelo || ''}` : `Equipo #${eqId}`;
+    const prods = recetaRows.filter(r => r.id_equipo === eqId);
+
+    html += `
+      <div class="receta-equipo-group" data-equipo-id="${eqId}" style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#1e3a5f;color:#fff;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+            ${eqNombre}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button type="button" class="receta-add-prod-to-equipo" data-equipo-id="${eqId}" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:3px 10px;border-radius:4px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Producto
+            </button>
+            <button type="button" class="receta-remove-equipo" data-equipo-id="${eqId}" style="background:none;border:none;color:#fca5a5;cursor:pointer;padding:4px;" title="Quitar equipo y sus productos">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+          </div>
+        </div>
+        <div style="padding:8px;">
+          ${prods.length === 0 ? '<p style="text-align:center;color:#94a3b8;font-size:12px;padding:8px 0;margin:0;">Sin productos. Haga clic en "+ Producto".</p>' : `
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+              <th style="text-align:left;padding:6px 8px;width:45%;">Producto</th>
+              <th style="text-align:center;padding:6px 8px;width:18%;">Cantidad</th>
+              <th style="text-align:left;padding:6px 8px;width:27%;">Observación</th>
+              <th style="text-align:center;padding:6px 8px;width:10%;"></th>
+            </tr></thead>
+            <tbody>${prods.map(r => {
+              const globalIdx = recetaRows.indexOf(r);
+              return renderRecetaProductRow(r, globalIdx);
+            }).join('')}</tbody>
+          </table>`}
+        </div>
+      </div>`;
+  });
+
+  // Productos sin equipo
+  if (sinEquipo.length > 0) {
+    html += `
+      <div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f1f5f9;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#475569;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+            Productos sin equipo
+          </div>
+        </div>
+        <div style="padding:8px;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+              <th style="text-align:left;padding:6px 8px;width:45%;">Producto</th>
+              <th style="text-align:center;padding:6px 8px;width:18%;">Cantidad</th>
+              <th style="text-align:left;padding:6px 8px;width:27%;">Observación</th>
+              <th style="text-align:center;padding:6px 8px;width:10%;"></th>
+            </tr></thead>
+            <tbody>${sinEquipo.map(r => {
+              const globalIdx = recetaRows.indexOf(r);
+              return renderRecetaProductRow(r, globalIdx);
+            }).join('')}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  container.innerHTML = html;
   bindRecetaEvents();
+}
+
+function renderRecetaProductRow(r: typeof recetaRows[0], idx: number): string {
+  const prodOpts = productosDisponiblesReceta.map(p => {
+    const sel = p.id === r.id_producto ? 'selected' : '';
+    return `<option value="${p.id}" ${sel}>${p.descripcion}${p.unidad ? ' (' + p.unidad + ')' : ''}</option>`;
+  }).join('');
+  return `<tr data-receta-idx="${idx}">
+    <td style="padding:6px 8px;"><select class="form-input receta-prod-select" data-idx="${idx}" style="padding:6px 8px;font-size:13px;"><option value="">Seleccione...</option>${prodOpts}</select></td>
+    <td style="padding:6px 8px;text-align:center;"><input type="number" class="form-input receta-cant-input" data-idx="${idx}" value="${r.cantidad_default}" min="0.01" step="0.01" style="width:80px;text-align:center;padding:6px;font-size:13px;"></td>
+    <td style="padding:6px 8px;"><input type="text" class="form-input receta-obs-input" data-idx="${idx}" value="${r.observacion || ''}" maxlength="200" style="padding:6px 8px;font-size:13px;" placeholder="Opcional"></td>
+    <td style="padding:6px 8px;text-align:center;"><button type="button" class="btn-icon receta-remove-btn" data-idx="${idx}" style="color:#ef4444;" title="Eliminar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
+  </tr>`;
 }
 
 function bindRecetaEvents() {
@@ -666,25 +740,95 @@ function bindRecetaEvents() {
       actualizarRecetaUI();
     });
   });
+  // Agregar producto a un equipo específico
+  document.querySelectorAll('.receta-add-prod-to-equipo').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const eqId = Number((btn as HTMLElement).dataset.equipoId);
+      recetaRows.push({ id_producto: 0, cantidad_default: 1, observacion: '', id_equipo: eqId });
+      actualizarRecetaUI();
+    });
+  });
+  // Eliminar equipo y todos sus productos
+  document.querySelectorAll('.receta-remove-equipo').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const eqId = Number((btn as HTMLElement).dataset.equipoId);
+      recetaRows = recetaRows.filter(r => r.id_equipo !== eqId);
+      actualizarRecetaUI();
+    });
+  });
 }
 
 function agregarFilaReceta() {
-  recetaRows.push({ id_producto: 0, cantidad_default: 1, observacion: '' });
+  recetaRows.push({ id_producto: 0, cantidad_default: 1, observacion: '', id_equipo: 0 });
   actualizarRecetaUI();
-  // Focus the last product select
-  const selects = document.querySelectorAll('.receta-prod-select');
-  if (selects.length > 0) (selects[selects.length - 1] as HTMLSelectElement).focus();
+}
+
+function agregarEquipoReceta() {
+  // Mostrar selector de equipo en un mini-diálogo
+  const equipoOpts = equiposDisponiblesReceta
+    .filter((eq: any) => {
+      // Excluir equipos ya agregados
+      const yaExiste = recetaRows.some(r => r.id_equipo === eq.id);
+      return !yaExiste;
+    })
+    .map((eq: any) => `<option value="${eq.id}">${eq.descripcion} - ${eq.marca || ''} ${eq.modelo || ''}</option>`).join('');
+
+  if (!equipoOpts) {
+    mostrarToast('warning', 'Sin equipos', 'No hay equipos disponibles para agregar o ya están todos asignados');
+    return;
+  }
+
+  const container = document.getElementById('receta-container');
+  if (!container) return;
+
+  // Insertar mini formulario para seleccionar equipo
+  const pickerId = 'equipo-picker-' + Date.now();
+  const pickerHtml = `
+    <div id="${pickerId}" style="margin-bottom:12px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;display:flex;align-items:center;gap:10px;">
+      <label style="font-size:13px;font-weight:600;color:#1e40af;white-space:nowrap;">Seleccione equipo:</label>
+      <select class="form-input equipo-picker-select" style="flex:1;padding:6px 8px;font-size:13px;">
+        <option value="">—</option>
+        ${equipoOpts}
+      </select>
+      <button type="button" class="btn-primary equipo-picker-confirm" style="padding:5px 14px;font-size:12px;">Agregar</button>
+      <button type="button" class="equipo-picker-cancel" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:18px;">&times;</button>
+    </div>`;
+  container.insertAdjacentHTML('afterbegin', pickerHtml);
+
+  const pickerEl = document.getElementById(pickerId)!;
+  pickerEl.querySelector('.equipo-picker-confirm')?.addEventListener('click', () => {
+    const sel = pickerEl.querySelector('.equipo-picker-select') as HTMLSelectElement;
+    const eqId = Number(sel.value);
+    if (!eqId) { mostrarToast('warning', 'Equipo', 'Seleccione un equipo'); return; }
+    // Agregar una fila placeholder para crear el grupo
+    recetaRows.push({ id_producto: 0, cantidad_default: 1, observacion: '', id_equipo: eqId });
+    actualizarRecetaUI();
+  });
+  pickerEl.querySelector('.equipo-picker-cancel')?.addEventListener('click', () => {
+    pickerEl.remove();
+  });
 }
 
 async function cargarProductosParaReceta() {
-  if (productosDisponiblesReceta.length > 0) return;
-  try {
-    const res = await productoService.getAll({ estado: 'Activo', per_page: 500 });
-    const raw = res.data || res;
-    productosDisponiblesReceta = Array.isArray(raw) ? raw : (raw as any).data || [];
-  } catch (e) {
-    console.error('Error cargando productos para receta:', e);
-    productosDisponiblesReceta = [];
+  if (productosDisponiblesReceta.length === 0) {
+    try {
+      const res = await productoService.getAll({ estado: 'Activo', per_page: 500 });
+      const raw = res.data || res;
+      productosDisponiblesReceta = Array.isArray(raw) ? raw : (raw as any).data || [];
+    } catch (e) {
+      console.error('Error cargando productos para receta:', e);
+      productosDisponiblesReceta = [];
+    }
+  }
+  if (equiposDisponiblesReceta.length === 0) {
+    try {
+      const res = await equipoService.getAll({ estado: 'Activo', per_page: 500 });
+      const raw = res.data || res;
+      equiposDisponiblesReceta = Array.isArray(raw) ? raw : (raw as any).data || [];
+    } catch (e) {
+      console.error('Error cargando equipos para receta:', e);
+      equiposDisponiblesReceta = [];
+    }
   }
 }
 
@@ -736,6 +880,7 @@ async function abrirModalEditarServicio(id: number) {
         id_producto: r.id_producto,
         cantidad_default: Number(r.cantidad_default),
         observacion: r.observacion || '',
+        id_equipo: r.id_equipo || 0,
       }));
     } catch (e) {
       console.error('Error cargando receta:', e);
@@ -793,6 +938,7 @@ async function guardarServicio() {
           id_producto: r.id_producto,
           cantidad_default: r.cantidad_default,
           observacion: r.observacion || undefined,
+          id_equipo: r.id_equipo || undefined,
         })));
       } catch (recetaError) {
         console.error('Error sincronizando receta:', recetaError);
@@ -813,6 +959,7 @@ async function guardarServicio() {
             id_producto: r.id_producto,
             cantidad_default: r.cantidad_default,
             observacion: r.observacion || undefined,
+            id_equipo: r.id_equipo || undefined,
           })));
         } catch (recetaError) {
           console.error('Error sincronizando receta:', recetaError);
@@ -897,12 +1044,21 @@ export function initServiciosTabEvents() {
     });
   }
 
-  // Botón agregar material a receta
+  // Botón agregar material a receta (sin equipo)
   const btnAgregarReceta = document.getElementById('btn-agregar-receta');
   if (btnAgregarReceta) {
     btnAgregarReceta.addEventListener('click', async () => {
       await cargarProductosParaReceta();
       agregarFilaReceta();
+    });
+  }
+
+  // Botón agregar equipo a receta
+  const btnAgregarEquipo = document.getElementById('btn-agregar-equipo-receta');
+  if (btnAgregarEquipo) {
+    btnAgregarEquipo.addEventListener('click', async () => {
+      await cargarProductosParaReceta();
+      agregarEquipoReceta();
     });
   }
 

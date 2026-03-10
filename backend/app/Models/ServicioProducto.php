@@ -12,6 +12,7 @@ class ServicioProducto extends Model
     protected $fillable = [
         'id_servicio',
         'id_producto',
+        'id_equipo',
         'cantidad_default',
         'observacion',
     ];
@@ -28,5 +29,10 @@ class ServicioProducto extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function equipo()
+    {
+        return $this->belongsTo(Equipo::class, 'id_equipo');
     }
 }

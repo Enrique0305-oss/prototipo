@@ -70,7 +70,7 @@ export const servicioService = {
     return apiClient.delete<ApiResponse<null>>(`/servicios/${idServicio}/productos/${id}`);
   },
 
-  syncProductos: async (idServicio: number, productos: { id_producto: number; cantidad_default: number; observacion?: string }[]) => {
+  syncProductos: async (idServicio: number, productos: { id_producto: number; cantidad_default: number; observacion?: string; id_equipo?: number }[]) => {
     return apiClient.post<ApiResponse<any>>(`/servicios/${idServicio}/productos/sync`, { productos });
   },
 };

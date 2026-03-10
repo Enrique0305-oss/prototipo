@@ -21,7 +21,7 @@ class ServicioProductoController extends Controller
             return response()->json(['success' => false, 'message' => 'Servicio no encontrado'], 404);
         }
 
-        $items = ServicioProducto::with('producto')
+        $items = ServicioProducto::with(['producto', 'equipo'])
             ->where('id_servicio', $idServicio)
             ->get()
             ->map(function ($item) {
@@ -32,6 +32,8 @@ class ServicioProductoController extends Controller
                     'unidad' => $item->producto ? $item->producto->unidad : '',
                     'cantidad_default' => $item->cantidad_default,
                     'observacion' => $item->observacion,
+                    'id_equipo' => $item->id_equipo,
+                    'equipo_descripcion' => $item->equipo ? $item->equipo->descripcion : null,
                 ];
             });
 
@@ -55,6 +57,7 @@ class ServicioProductoController extends Controller
             'id_producto' => 'required|integer|exists:productos,id',
             'cantidad_default' => 'required|numeric|min:0.01',
             'observacion' => 'nullable|string|max:255',
+            'id_equipo' => 'nullable|integer|exists:equipo,id',
         ]);
 
         // Verificar que no exista ya
@@ -72,6 +75,7 @@ class ServicioProductoController extends Controller
         $item = ServicioProducto::create([
             'id_servicio' => $idServicio,
             'id_producto' => $validated['id_producto'],
+            'id_equipo' => $validated['id_equipo'] ?? null,
             'cantidad_default' => $validated['cantidad_default'],
             'observacion' => $validated['observacion'] ?? null,
         ]);
@@ -140,6 +144,7 @@ class ServicioProductoController extends Controller
             'productos.*.id_producto' => 'required|integer|exists:productos,id',
             'productos.*.cantidad_default' => 'required|numeric|min:0.01',
             'productos.*.observacion' => 'nullable|string|max:255',
+            'productos.*.id_equipo' => 'nullable|integer|exists:equipo,id',
         ]);
 
         // Eliminar receta anterior
@@ -151,6 +156,7 @@ class ServicioProductoController extends Controller
             $items[] = ServicioProducto::create([
                 'id_servicio' => $idServicio,
                 'id_producto' => $prod['id_producto'],
+                'id_equipo' => $prod['id_equipo'] ?? null,
                 'cantidad_default' => $prod['cantidad_default'],
                 'observacion' => $prod['observacion'] ?? null,
             ]);

@@ -11,6 +11,7 @@ class OrdenServicioEquipo extends Model
 
     protected $fillable = [
         'id_orden_servicio',
+        'id_servicio',
         'id_equipo',
         'observacion',
     ];
@@ -23,5 +24,10 @@ class OrdenServicioEquipo extends Model
     public function equipo()
     {
         return $this->belongsTo(Equipo::class, 'id_equipo');
+    }
+
+    public function servicio()
+    {
+        return $this->belongsTo(Servicio::class, 'id_servicio');
     }
 }
