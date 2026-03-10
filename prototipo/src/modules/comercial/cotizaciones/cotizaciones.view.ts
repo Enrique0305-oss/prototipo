@@ -431,29 +431,6 @@ async function abrirFormularioCotizacion() {
             </div>
         </div>
 
-        <!-- Sección Ubicación (Planta / Área) -->
-        <div id="seccion-ubicacion" class="form-section" style="margin-bottom: 25px; background: #fff; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; display: none;">
-          <h3 style="font-size: 15px; font-weight: 600; color: #1e293b; margin: 0 0 14px 0; display:flex; align-items:center; gap:8px;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-            Ubicación del Servicio
-          </h3>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            <div>
-              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Planta / Sede</label>
-              <select id="cot-planta" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
-                <option value="">— Sin planta —</option>
-              </select>
-            </div>
-            <div>
-              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Área</label>
-              <select id="cot-area" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
-                <option value="">— Sin área —</option>
-              </select>
-            </div>
-          </div>
-          <p id="cot-planta-direccion" style="margin: 10px 0 0; font-size: 12px; color: #64748b;"></p>
-        </div>
-
         <div class="form-section" style="margin-bottom: 24px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
             <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Detalle de Cotización</h3>
@@ -466,14 +443,15 @@ async function abrirFormularioCotizacion() {
             <table class="data-table" id="tabla-detalle-cotizacion">
               <thead>
                 <tr>
-                  <th style="width: 24%;">Servicio/Producto</th>
-                  <th style="width: 18%;">Descripción</th>
+                  <th style="width: 20%;">Servicio/Producto</th>
+                  <th style="width: 14%;">Planta</th>
+                  <th style="width: 14%;">Área</th>
                   <th style="width: 8%;">Cantidad</th>
                   <th style="width: 11%;">Precio Unit.</th>
-                  <th style="width: 13%;">Frecuencia</th>
-                  <th style="width: 12%;">Modalidad</th>
-                  <th style="width: 10%;">Subtotal</th>
-                  <th style="width: 4%;"></th>
+                  <th style="width: 11%;">Frecuencia</th>
+                  <th style="width: 10%;">Modalidad</th>
+                  <th style="width: 9%;">Subtotal</th>
+                  <th style="width: 3%;"></th>
                 </tr>
               </thead>
               <tbody id="detalle-cotizacion-body"></tbody>
@@ -645,19 +623,7 @@ async function abrirFormularioCotizacion() {
 
   document.getElementById('btn-agregar-linea')?.addEventListener('click', () => agregarLineaDetalle());
 
-  // Cascading: planta global → áreas
-  document.getElementById('cot-planta')?.addEventListener('change', () => {
-    const plantaSel = document.getElementById('cot-planta') as HTMLSelectElement;
-    const areaSel = document.getElementById('cot-area') as HTMLSelectElement;
-    const pid = parseInt(plantaSel?.value || '0');
-    if (areaSel) areaSel.innerHTML = pid ? getAreaOptions(pid) : '<option value="">— Sin área —</option>';
-    // Mostrar dirección de la planta seleccionada
-    const dirP = document.getElementById('cot-planta-direccion');
-    if (dirP) {
-      const planta = plantasClienteData.find((p: any) => p.id === pid);
-      dirP.textContent = planta ? ` ${[planta.direccion, planta.distrito, planta.provincia, planta.departamento].filter(Boolean).join(', ')}` : '';
-    }
-  });
+
 
   const form = document.getElementById('form-cotizacion') as HTMLFormElement;
   form?.addEventListener('submit', async (e) => {
@@ -678,21 +644,15 @@ async function cargarPlantasCliente(idCliente: number) {
     const resp = await clienteService.getPlantas(idCliente);
     plantasClienteData = resp.success ? (resp.data || []) : [];
   } catch { plantasClienteData = []; }
-  // Llenar el select global de planta
-  const plantaSel = document.getElementById('cot-planta') as HTMLSelectElement;
-  const areaSel = document.getElementById('cot-area') as HTMLSelectElement;
-  const seccion = document.getElementById('seccion-ubicacion');
-  if (plantaSel) {
-    plantaSel.innerHTML = getPlantaOptions();
-    plantaSel.value = '';
-  }
-  if (areaSel) {
-    areaSel.innerHTML = '<option value="">— Sin área —</option>';
-  }
-  const dirP = document.getElementById('cot-planta-direccion');
-  if (dirP) dirP.textContent = '';
-  // Mostrar sección solo si hay plantas
-  if (seccion) seccion.style.display = plantasClienteData.length > 0 ? 'block' : 'none';
+  // Actualizar selects de planta en filas existentes
+  document.querySelectorAll('#detalle-cotizacion-body .planta-input').forEach(sel => {
+    const select = sel as HTMLSelectElement;
+    select.innerHTML = getPlantaOptions();
+    select.value = '';
+  });
+  document.querySelectorAll('#detalle-cotizacion-body .area-input').forEach(sel => {
+    (sel as HTMLSelectElement).innerHTML = '<option value="">— Sin área —</option>';
+  });
 }
 
 function getPlantaOptions(): string {
@@ -765,7 +725,14 @@ function agregarLineaDetalle() {
         </select>
       </td>
       <td>
-        <input type="text" class="descripcion-input" placeholder="Descripción..." ${esProducto ? '' : 'readonly'} style="${inputStyle} ${esProducto ? '' : 'background:#f8fafc; color:#475569;'}">
+        <select class="planta-input" style="${selectStyle}">
+          ${getPlantaOptions()}
+        </select>
+      </td>
+      <td>
+        <select class="area-input" style="${selectStyle}">
+          <option value="">— Sin área —</option>
+        </select>
       </td>
       <td>
         <input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}">
@@ -810,21 +777,24 @@ function agregarLineaDetalle() {
 
     const fila = document.getElementById(lineaId)!;
 
-    // Auto-llenar descripción (servicio) o precio (producto) al seleccionar
+    // Auto-llenar precio al seleccionar item
     const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
     itemSelect?.addEventListener('change', () => {
       const opt = itemSelect.options[itemSelect.selectedIndex];
-      const descripcion = opt?.dataset?.descripcion;
-      if (descripcion) {
-        const descInput = fila.querySelector('.descripcion-input') as HTMLInputElement;
-        if (descInput) descInput.value = descripcion;
-      }
       const precio = opt?.dataset?.precio;
       if (precio) {
         const precioInput = fila.querySelector('.precio-input') as HTMLInputElement;
         if (precioInput) precioInput.value = precio;
       }
       calcularSubtotalLinea(lineaId);
+    });
+
+    // Cascading: planta → áreas dentro de la fila
+    const plantaSelect = fila.querySelector('.planta-input') as HTMLSelectElement;
+    plantaSelect?.addEventListener('change', () => {
+      const areaSelect = fila.querySelector('.area-input') as HTMLSelectElement;
+      const pid = parseInt(plantaSelect.value || '0');
+      if (areaSelect) areaSelect.innerHTML = pid ? getAreaOptions(pid) : '<option value="">— Sin área —</option>';
     });
 
     fila.querySelector('.cantidad-input')?.addEventListener('input', () => calcularSubtotalLinea(lineaId));
@@ -893,16 +863,15 @@ async function guardarCotizacion() {
   }
 
   const detalles: any[] = [];
-  const globalPlanta = parseInt((document.getElementById('cot-planta') as HTMLSelectElement)?.value || '0') || null;
-  const globalArea = parseInt((document.getElementById('cot-area') as HTMLSelectElement)?.value || '0') || null;
   lineas.forEach(linea => {
     const itemSelect = linea.querySelector('.item-select') as HTMLSelectElement;
     const itemValue = itemSelect?.value || '';
-    const descripcion = (linea.querySelector('.descripcion-input') as HTMLInputElement)?.value?.trim();
     const cantidad = parseInt((linea.querySelector('.cantidad-input') as HTMLInputElement)?.value || '1');
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
     const frecuencia = (linea.querySelector('.frecuencia-input') as HTMLSelectElement)?.value || null;
     const modalidad = (linea.querySelector('.modalidad-input') as HTMLSelectElement)?.value || null;
+    const plantaVal = parseInt((linea.querySelector('.planta-input') as HTMLSelectElement)?.value || '0') || null;
+    const areaVal = parseInt((linea.querySelector('.area-input') as HTMLSelectElement)?.value || '0') || null;
 
     let id_servicio: number | null = null;
     let id_producto: number | null = null;
@@ -920,13 +889,12 @@ async function guardarCotizacion() {
       id_servicio,
       id_producto,
       id_catalogo_cap_aud,
-      descripcion_manual: descripcion || null,
       cantidad,
       precio_unitario: precio,
       frecuencia_sugerida: frecuencia,
       modalidad_sugerida: modalidad,
-      id_cliente_planta: globalPlanta,
-      id_cliente_planta_area: globalArea,
+      id_cliente_planta: plantaVal,
+      id_cliente_planta_area: areaVal,
     });
   });
 
