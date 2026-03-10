@@ -24,6 +24,15 @@
         .bg-blue { background-color: #d9e2f3; text-transform: uppercase; font-weight: bold; }
         .observation { background-color: #fde9d9; padding: 5px; border: 1px solid #000; margin-top: 10px; font-size: 9px; }
         .no-border { border: none !important; }
+        .nota-informativa {
+            background-color: #ffff00; /* Amarillo brillante */
+            border: 1px solid #000;
+            padding: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 9px;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -104,7 +113,7 @@
     </table>
 
     {{-- ── TOTALES ── --}}
-    <table>
+    <!-- <table>
         <tr>
             <td class="no-border" style="width: 55%;"></td>
             <td class="label text-right" style="width: 25%;">SUBTOTAL</td>
@@ -122,7 +131,7 @@
             <td class="label text-right" style="font-size: 11px;">TOTAL</td>
             <td class="text-right" style="font-size: 11px; font-weight: bold;">S/. {{ number_format($orden->total ?? 0, 2) }}</td>
         </tr>
-    </table>
+    </table> -->
 
     {{-- ── OBSERVACIÓN ── --}}
     <div class="observation">
@@ -132,6 +141,11 @@
     {{-- ── EMITIDO POR ── --}}
     <div style="margin-top: 15px;">
         <strong>Emitido por:</strong> {{ $orden->emisor->nombre ?? '' }} {{ $orden->emisor->apellidos ?? '' }}
+    </div>
+
+    {{-- ── NOTA AMARILLA FIJA ── --}}
+    <div class="nota-informativa">
+        Esta orden de servicio se basa en la cotización que aceptó el cliente, si hay alguna modificación sobre esta orden de servicio por parte del área de operaciones se tiene que avisar al área comercial por un documento.
     </div>
 </body>
 </html>

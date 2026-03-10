@@ -16,7 +16,13 @@
         }
 
         table { width: 100%; border-collapse: collapse; margin-bottom: -1px; }
+        /* Regla general con una excepción */
         th, td { border: 1px solid #000; padding: 5px 6px; vertical-align: middle; }
+
+        /* NUEVA CLASE: Quita bordes a la tabla y a sus celdas internas */
+        .no-border, .no-border tr, .no-border td { 
+            border: none !important; 
+        }
 
         .label { font-weight: bold; background-color: #f2f2f2; text-transform: uppercase; }
         .text-center { text-align: center; }
@@ -47,23 +53,20 @@
     @endphp
 
     {{-- ENCABEZADO --}}
-    <table>
+    <table class="no-border" style="margin-bottom: 10px;">
         <tr>
-            <td style="width: 25%; text-align: center; padding: 8px;">
-                @php $pathLogo = public_path('images/logo.png'); @endphp
+            <td style="width: 25%; text-align: left">
+                @php $pathLogo = public_path('images/qsci-capa.png'); @endphp
                 @if(file_exists($pathLogo))
-                    <img src="data:image/png;base64,{{ base64_encode(file_get_contents($pathLogo)) }}" width="140">
+                    <img src="data:image/png;base64,{{ base64_encode(file_get_contents($pathLogo)) }}" width="240">
                 @else
                     <div style="font-weight: bold; color: #1e4ba1; font-size: 14px;">QSCIGROUP</div>
                 @endif
             </td>
-            <td style="width: 50%; text-align: center; font-size: 13px; font-weight: bold; color: #1e4ba1; padding: 8px;">
-                ORDEN DE SERVICIO DE<br>CAPACITACIONES Y AUDITOR&Iacute;AS
-            </td>
-            <td style="width: 25%; text-align: center; padding: 8px;">
-                @php $pathIso = public_path('images/logo-orden.png'); @endphp
+            <td style="width: 25%; text-align: right">
+                @php $pathIso = public_path('images/logo-calidad.png'); @endphp
                 @if(file_exists($pathIso))
-                    <img src="data:image/png;base64,{{ base64_encode(file_get_contents($pathIso)) }}" width="100">
+                    <img src="data:image/png;base64,{{ base64_encode(file_get_contents($pathIso)) }}" width="120">
                 @else
                     <strong>QSCI</strong>
                 @endif
@@ -81,38 +84,44 @@
         </tr>
     </table>
 
+    {{-- ESPACIADOR DE SEGURIDAD --}}
+    <div style="height: 22px; width: 100%;"></div>
+
     {{-- DATOS DEL CLIENTE --}}
     <table>
         <tr>
-            <td class="label" style="width: 15%;">CLIENTE</td>
-            <td colspan="3" style="font-weight: bold;">{{ mb_strtoupper($orden->cliente->nombre_empresa ?? '---') }}</td>
+            <td class="label" style="width: 25%;">CLIENTE</td>
+            <td colspan="3" style="font-weight: bold; text-align: center;">{{ mb_strtoupper($orden->cliente->nombre_empresa ?? '---') }}</td>
         </tr>
         <tr>
             <td class="label">RUC</td>
-            <td>{{ $orden->cliente->ruc ?? '---' }}</td>
-            <td class="label" style="width: 15%;">COTIZACI&Oacute;N</td>
-            <td>{{ $orden->cotizacion->numero_cotizacion ?? '---' }}</td>
+            <td colspan="3" style="text-align: center;">{{ $orden->cliente->ruc ?? '---' }}</td>
         </tr>
         <tr>
             <td class="label">DIRECCI&Oacute;N</td>
-            <td colspan="3">{{ mb_strtoupper($orden->cliente->direccion ?? '---') }}</td>
+            <td colspan="3" style="text-align: center;">{{ mb_strtoupper($orden->cliente->direccion ?? '---') }}</td>
+        </tr>
+        <tr>
+            <td class="label">N° COTIZACI&Oacute;N</td>
+            <td colspan="3" style="text-align: center;">{{ $orden->cotizacion->numero_cotizacion ?? '---' }}</td>
         </tr>
     </table>
 
     {{-- FECHAS --}}
     <table>
         <tr>
-            <td class="label" style="width: 25%;">FECHA DEL SERVICIO</td>
-            <td class="text-center" style="width: 25%;">{{ $fechaServicio ? $fechaServicio->format('d/m/Y') : '---' }}</td>
-            <td class="text-center" style="width: 50%; font-weight: bold;">{{ mb_strtoupper($fechaLarga) }}</td>
+            <td class="label">FECHA ACEPTACI&Oacute;N DE COTIZACI&Oacute;N</td>
+            <td class="text-center" colspan="3">{{ $fechaAceptacion ? $fechaAceptacion->format('d/m/Y') : '---' }}</td>
         </tr>
         <tr>
-            <td class="label">FECHA ACEPTACI&Oacute;N</td>
-            <td class="text-center" colspan="2">{{ $fechaAceptacion ? $fechaAceptacion->format('d/m/Y') : '---' }}</td>
+            <td class="label" style="width: 25%;">FECHA TENTATIVA DEL SERVICIO</td>
+            <td colspan="3" class="text-center">{{ $fechaServicio ? $fechaServicio->format('d/m/Y') : '---' }}</td>
+            <!-- <td class="text-center" style="width: 25%;">{{ $fechaServicio ? $fechaServicio->format('d/m/Y') : '---' }}</td> -->
+            <!-- <td class="text-center" style="width: 50%; font-weight: bold;">{{ mb_strtoupper($fechaLarga) }}</td> -->
         </tr>
         <tr>
             <td class="label">HORA</td>
-            <td class="text-center" colspan="2">
+            <td class="text-center" colspan="3">
                 @if($orden->hora_servicio)
                     {{ \Carbon\Carbon::parse($orden->hora_servicio)->format('h:i a') }}
                 @else
@@ -120,16 +129,19 @@
                 @endif
             </td>
         </tr>
+        <tr>
+            <td class="label">TOTAL</td>
+            <td class="text-center" colspan="3">S/. {{ number_format($orden->costo ?? 0, 2) }}</td>
+        </tr>
     </table>
+
+    {{-- ESPACIADOR DE SEGURIDAD --}}
+    <div style="height: 22px; width: 100%;"></div>
 
     {{-- DETALLES DEL SERVICIO --}}
     <table>
         <tr class="bg-blue">
             <td style="width: 40%;" class="text-blue">SERVICIO</td>
-            <td style="width: 60%;" class="text-blue text-center">DETALLE</td>
-        </tr>
-        <tr>
-            <td class="label">CAPACITACI&Oacute;N / AUDITOR&Iacute;A</td>
             <td class="text-center">{{ mb_strtoupper($servicioNombre) }}</td>
         </tr>
         <tr>
@@ -141,7 +153,7 @@
             <td class="text-center">{{ mb_strtoupper($orden->modalidad ?? 'PRESENCIAL') }}</td>
         </tr>
         <tr>
-            <td class="label">PARTICIPANTES</td>
+            <td class="label">N° PARTICIPANTES</td>
             <td class="text-center">{{ $orden->num_participantes ?? 0 }} PERSONAS</td>
         </tr>
         <tr>
@@ -151,7 +163,7 @@
     </table>
 
     {{-- COSTOS --}}
-    <table style="margin-top: 8px;">
+    <!-- <table style="margin-top: 8px;">
         <tr>
             <td style="width: 60%; border: none;"></td>
             <td class="label text-right" style="width: 20%;">SUBTOTAL</td>
@@ -169,7 +181,7 @@
             <td class="label text-right" style="font-size: 11px;">TOTAL</td>
             <td class="text-right" style="font-size: 11px; font-weight: bold;">S/. {{ number_format($orden->costo ?? 0, 2) }}</td>
         </tr>
-    </table>
+    </table> -->
 
     {{-- OBSERVACIONES --}}
     <div class="observation-box">
@@ -177,6 +189,13 @@
         @if($orden->observaciones)
             <br>{{ $orden->observaciones }}
         @endif
+    </div>
+
+    {{-- EMITIDO POR --}}
+    <div style="margin-top: 15px; font-size: 10px; font-style: italic;">
+        <strong>Emitido por:</strong> 
+        {{ mb_strtoupper($orden->emisor->nombre ?? 'USUARIO NO ENCONTRADO') }} 
+        {{ mb_strtoupper($orden->emisor->apellidos ?? '') }}
     </div>
 
     {{-- PIE --}}
