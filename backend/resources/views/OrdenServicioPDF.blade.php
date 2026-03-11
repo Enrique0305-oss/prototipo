@@ -179,7 +179,7 @@
             @foreach($orden->equipos as $index => $eq)
             <tr>
                 <td class="text-center">{{ $index + 1 }}</td>
-                <td>{{ mb_strtoupper($eq->equipo->nombre ?? 'EQUIPO') }}</td>
+                <td>{{ mb_strtoupper($eq->equipo->descripcion ?? 'EQUIPO') }}</td>
                 <td class="text-center">{{ $eq->observacion ?? '-' }}</td>
             </tr>
             @endforeach
