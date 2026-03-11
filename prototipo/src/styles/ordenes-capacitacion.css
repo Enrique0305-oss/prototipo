@@ -363,7 +363,8 @@
   width: 100%;
   max-width: 1000px;
   max-height: 90vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
@@ -373,10 +374,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  position: sticky;
-  top: 0;
   background: white;
   z-index: 10;
+  flex-shrink: 0;
+  border-radius: 16px 16px 0 0;
 }
 
 .oc-form-title {
@@ -410,6 +411,9 @@
 
 .oc-form-content {
   padding: 28px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Form Sections */
@@ -556,8 +560,11 @@ select.oc-input:disabled {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding-top: 24px;
+  padding: 20px 28px;
   border-top: 2px solid #e2e8f0;
+  background: white;
+  flex-shrink: 0;
+  border-radius: 0 0 16px 16px;
 }
 
 /* Responsive */

@@ -350,7 +350,6 @@ export function renderComercialOrdenesCapacitacion() {
               </div>
             </div>
           </div>
-        </div>
 
         <div class="oc-form-actions" style="padding:20px 28px;">
           <button type="button" class="oc-btn-cancel" id="modal-oc-cancelar">Cancelar</button>
@@ -821,8 +820,8 @@ function limpiarFormOC() {
   (document.getElementById('oc-costo') as HTMLInputElement).value = '0.00';
   calcularDesgloseOC();
   (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = '';
-  const matBody = document.getElementById('oc-materiales-body');
-  const eqBody = document.getElementById('oc-equipos-body');
+  const matBody = document.getElementById('body-materiales');
+  const eqBody = document.getElementById('body-equipos');
   if (matBody) matBody.innerHTML = ''; 
   if (eqBody) eqBody.innerHTML = '';
   (document.getElementById('oc-id-usuario') as HTMLInputElement).value = '';
@@ -923,6 +922,14 @@ async function abrirModalEditarOC(id: number) {
     calcularDesgloseOC();
     (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = orden.observaciones || '';
 
+    // Recargar materiales y equipos de la orden
+    if (orden.materiales && Array.isArray(orden.materiales)) {
+      orden.materiales.forEach((m: any) => agregarFilaMaterial({ material: m.material || '', cantidad: m.cantidad || '', disposicion: m.disposicion || '' }));
+    }
+    if (orden.equipos && Array.isArray(orden.equipos)) {
+      orden.equipos.forEach((e: any) => agregarFilaEquipo({ equipo: e.equipo || '', disposicion: e.disposicion || '' }));
+    }
+
     (document.getElementById('modal-oc') as HTMLElement).style.display = 'flex';
   } catch (e) {
     console.error('Error cargando OC:', e);
@@ -948,19 +955,18 @@ async function guardarOC() {
   const aprobacionTotal = (document.getElementById('oc-aprobacion-total') as HTMLInputElement)?.value || '';
 
   // --- RECOLECCIÓN DIRECTA DE MATERIALES ---
-  const filasMateriales = document.querySelectorAll('#oc-materiales-body tr'); 
+  const filasMateriales = document.querySelectorAll('#body-materiales tr'); 
   const materiales = Array.from(filasMateriales).map(fila => ({
       material: (fila.querySelector('.mat-desc') as HTMLInputElement)?.value || '',
       cantidad: (fila.querySelector('.mat-cant') as HTMLInputElement)?.value || '',
-      disposicion: (fila.querySelector('.mat-disp') as HTMLInputElement)?.value || '' // Cambiado de 'unidad' a 'disposicion'
+      disposicion: (fila.querySelector('.mat-disp') as HTMLInputElement)?.value || ''
   })).filter(m => m.material.trim() !== ""); 
 
   // --- RECOLECCIÓN DE EQUIPOS ---
-  // Tabla: detalle_orden_capacitacion_equipos (equipo, disposicion)
-  const filasEquipos = document.querySelectorAll('#oc-equipos-body tr'); 
+  const filasEquipos = document.querySelectorAll('#body-equipos tr'); 
   const equipos = Array.from(filasEquipos).map(fila => ({
       equipo: (fila.querySelector('.eq-desc') as HTMLInputElement)?.value || '',
-      disposicion: (fila.querySelector('.eq-disp') as HTMLInputElement)?.value || '' // Eliminado 'cantidad', agregado 'disposicion'
+      disposicion: (fila.querySelector('.eq-disp') as HTMLInputElement)?.value || ''
   })).filter(e => e.equipo.trim() !== "");
 
   const idUsuario = (document.getElementById('oc-id-usuario') as HTMLInputElement).value;
