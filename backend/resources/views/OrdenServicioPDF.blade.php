@@ -96,95 +96,208 @@
         </tr>
     </table>
 
-    {{-- ── UBICACIÓN (Planta / Área) ── --}}
+    {{-- ── DATOS AGRUPADOS POR PLANTA ── --}}
     @php
-        $primerDetalle = $orden->detalles->first();
-        // Corregido: Variable completa y uso de operador nullsafe
-        $planta = $primerDetalle?->planta;
-        $area = $primerDetalle?->area;
-        
-        $ubicacionTexto = '';
-        if ($planta) {
-            $ubicacionTexto = $planta->nombre;
-            if ($area) $ubicacionTexto .= ' — ' . $area->nombre;
-            $direccionPlanta = implode(', ', array_filter([$planta->direccion, $planta->distrito, $planta->provincia, $planta->departamento]));
-        } else {
-            // Si no hay planta, usamos el campo local o un texto genérico
-            $ubicacionTexto = $primerDetalle->local ?? 'UBICACIÓN GENERAL';
-            $direccionPlanta = '';
-        }
+        // Agrupar detalles (servicios) por id_cliente_planta
+        $detallesPorPlanta = $orden->detalles->groupBy(function($d) {
+            return $d->id_cliente_planta ?? 0;
+        });
+
+        // Agrupar productos por id_cliente_planta
+        $productosPorPlanta = $orden->productos->groupBy(function($p) {
+            return $p->id_cliente_planta ?? 0;
+        });
+
+        // Agrupar equipos por id_cliente_planta
+        $equiposPorPlanta = $orden->equipos->groupBy(function($e) {
+            return $e->id_cliente_planta ?? 0;
+        });
+
+        // Obtener todas las plantas únicas (de detalles, productos y equipos)
+        $todasPlantaIds = collect()
+            ->merge($detallesPorPlanta->keys())
+            ->merge($productosPorPlanta->keys())
+            ->merge($equiposPorPlanta->keys())
+            ->unique()
+            ->filter(fn($id) => $id > 0)
+            ->values();
+
+        // Equipos generales (sin planta asignada)
+        $equiposGenerales = $equiposPorPlanta->get(0, collect());
+        $productosGenerales = $productosPorPlanta->get(0, collect());
     @endphp
-    <div class="location-title">
-        {{ $ubicacionTexto }}
-        @if($direccionPlanta)
-            <br><span style="font-size: 9px; font-weight: normal;">{{ $direccionPlanta }}</span>
+
+    @foreach($todasPlantaIds as $plantaId)
+        @php
+            $detallesPlanta = $detallesPorPlanta->get($plantaId, collect());
+            $productosPlanta = $productosPorPlanta->get($plantaId, collect());
+            $equiposPlanta = $equiposPorPlanta->get($plantaId, collect());
+
+            // Obtener info de planta desde cualquier registro que la tenga
+            $plantaObj = $detallesPlanta->first()?->planta 
+                ?? $productosPlanta->first()?->planta 
+                ?? $equiposPlanta->first()?->planta;
+            $plantaNombre = $plantaObj->nombre ?? "Planta #$plantaId";
+            $direccionPlanta = $plantaObj 
+                ? implode(', ', array_filter([$plantaObj->direccion, $plantaObj->distrito, $plantaObj->provincia, $plantaObj->departamento])) 
+                : '';
+        @endphp
+
+        {{-- Header de Planta --}}
+        <div class="location-title" style="margin-top: 10px;">
+            {{ $plantaNombre }}
+            @if($direccionPlanta)
+                <br><span style="font-size: 9px; font-weight: normal;">{{ $direccionPlanta }}</span>
+            @endif
+        </div>
+
+        {{-- Tabla 1: Servicios de esta planta --}}
+        @if($detallesPlanta->count() > 0)
+        <table>
+            <thead>
+                <tr class="bg-blue">
+                    <th style="width: 8%;">N&ordm;</th>
+                    <th style="width: 52%;">SERVICIO</th>
+                    <th style="width: 20%;">FRECUENCIA</th>
+                    <th style="width: 20%;">PRECIO</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($detallesPlanta->values() as $index => $detalle)
+                <tr>
+                    <td class="text-center">{{ $index + 1 }}</td>
+                    <td>{{ mb_strtoupper($detalle->servicio->nombre ?? 'SERVICIO') }}</td>
+                    <td class="text-center">{{ mb_strtoupper($detalle->frecuencia ?? 'A SOLICITUD') }}</td>
+                    <td class="text-right">S/. {{ number_format($detalle->precio ?? 0, 2) }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
         @endif
-    </div>
 
-    {{-- ── TABLA DE SERVICIOS ── --}}
-    <table>
-        <thead>
-            <tr class="bg-blue">
-                <th style="width: 8%;">N&ordm;</th>
-                <th style="width: 52%;">SERVICIO</th>
-                <th style="width: 20%;">FRECUENCIA</th>
-                <th style="width: 20%;">PRECIO</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($orden->detalles as $index => $detalle)
-            <tr>
-                <td class="text-center">{{ $index + 1 }}</td>
-                <td>{{ mb_strtoupper($detalle->servicio->nombre ?? 'SERVICIO') }}</td>
-                <td class="text-center">{{ mb_strtoupper($detalle->frecuencia ?? 'A SOLICITUD') }}</td>
-                <td class="text-right">S/. {{ number_format($detalle->precio ?? 0, 2) }}</td>
-            </tr>
-            @endforeach
-        </tbody>
-    </table>
+        {{-- Tabla 2: Productos + Equipos combinados por Área --}}
+        @php
+            // Agrupar productos de esta planta por área
+            $prodsPorArea = $productosPlanta->groupBy(function($p) {
+                return $p->id_cliente_planta_area ?? 0;
+            });
+            // Agrupar equipos de esta planta por área
+            $eqsPorArea = $equiposPlanta->groupBy(function($e) {
+                return $e->id_cliente_planta_area ?? 0;
+            });
+            // Todas las áreas de esta planta
+            $areaIds = collect()
+                ->merge($prodsPorArea->keys())
+                ->merge($eqsPorArea->keys())
+                ->unique()
+                ->values();
 
-    {{-- ── TABLA DE PRODUCTOS / MATERIALES ── --}}
-    @if($orden->productos->count() > 0)
-    <table style="margin-top: 8px;">
-        <thead>
-            <tr class="bg-blue">
-                <th style="width: 8%;">N&ordm;</th>
-                <th style="width: 62%;">PRODUCTOS / MATERIALES</th>
-                <th style="width: 30%;">CANTIDAD</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($orden->productos as $index => $item)
-            <tr>
-                <td class="text-center">{{ $index + 1 }}</td>
-                <td>{{ mb_strtoupper($item->producto->descripcion ?? 'PRODUCTO NO DEFINIDO') }}</td>
-                <td class="text-center">{{ $item->cantidad }} <small>{{ $item->producto->unidad ?? '' }}</small></td>
-            </tr>
-            @endforeach
-        </tbody>
-    </table>
-    @endif
+            $hayCombinados = $productosPlanta->count() > 0 || $equiposPlanta->count() > 0;
+        @endphp
 
-    {{-- ── EQUIPOS ── --}}
-    @if($orden->equipos->count() > 0)
-    <table style="margin-top: 8px;">
-        <thead>
-            <tr class="bg-blue">
-                <th style="width: 8%;">N&ordm;</th>
-                <th style="width: 62%;">EQUIPOS</th>
-                <th style="width: 30%;">OBSERVACI&Oacute;N</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($orden->equipos as $index => $eq)
-            <tr>
-                <td class="text-center">{{ $index + 1 }}</td>
-                <td>{{ mb_strtoupper($eq->equipo->descripcion ?? 'EQUIPO') }}</td>
-                <td class="text-center">{{ $eq->observacion ?? '-' }}</td>
-            </tr>
-            @endforeach
-        </tbody>
-    </table>
+        @if($hayCombinados)
+        <table style="margin-top: 8px;">
+            <thead>
+                <tr class="bg-blue">
+                    <th style="width: 8%;">N&ordm;</th>
+                    <th style="width: 17%;">&Aacute;REA</th>
+                    <th style="width: 35%;">PRODUCTOS / MATERIALES</th>
+                    <th style="width: 15%;">CANTIDAD</th>
+                    <th style="width: 25%;">EQUIPO</th>
+                </tr>
+            </thead>
+            <tbody>
+                @php $numArea = 0; @endphp
+                @foreach($areaIds as $areaId)
+                    @php
+                        $numArea++;
+                        $prodsArea = $prodsPorArea->get($areaId, collect())->values();
+                        $eqsArea = $eqsPorArea->get($areaId, collect())->values();
+                        $maxFilas = max($prodsArea->count(), $eqsArea->count(), 1);
+
+                        // Obtener nombre del área
+                        $areaObj = $prodsArea->first()?->area ?? $eqsArea->first()?->area;
+                        $areaNombre = $areaObj->nombre ?? ($areaId > 0 ? "Área #$areaId" : 'GENERAL');
+                    @endphp
+                    @for($i = 0; $i < $maxFilas; $i++)
+                        <tr>
+                            @if($i === 0)
+                                <td class="text-center" style="vertical-align: middle;" @if($maxFilas > 1) rowspan="{{ $maxFilas }}" @endif>{{ $numArea }}</td>
+                                <td style="vertical-align: middle; font-weight: 600;" @if($maxFilas > 1) rowspan="{{ $maxFilas }}" @endif>{{ mb_strtoupper($areaNombre) }}</td>
+                            @endif
+                            <td>{{ isset($prodsArea[$i]) ? mb_strtoupper($prodsArea[$i]->producto->descripcion ?? '') : '' }}</td>
+                            <td class="text-center">{{ isset($prodsArea[$i]) ? $prodsArea[$i]->cantidad : '' }}</td>
+                            <td>{{ isset($eqsArea[$i]) ? mb_strtoupper($eqsArea[$i]->equipo->descripcion ?? '') : '' }}</td>
+                        </tr>
+                    @endfor
+                @endforeach
+            </tbody>
+        </table>
+        @endif
+
+    @endforeach
+
+    {{-- ── EQUIPOS GENERALES (sin planta/área - agregados manualmente) ── --}}
+    @if($equiposGenerales->count() > 0 || $productosGenerales->count() > 0)
+        @php
+            // Si hay detalles sin planta, mostrar servicios generales
+            $detallesGenerales = $detallesPorPlanta->get(0, collect());
+        @endphp
+
+        @if($todasPlantaIds->count() > 0)
+        <div class="location-title" style="margin-top: 10px;">
+            GENERAL
+        </div>
+        @endif
+
+        @if($detallesGenerales->count() > 0)
+        <table>
+            <thead>
+                <tr class="bg-blue">
+                    <th style="width: 8%;">N&ordm;</th>
+                    <th style="width: 52%;">SERVICIO</th>
+                    <th style="width: 20%;">FRECUENCIA</th>
+                    <th style="width: 20%;">PRECIO</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($detallesGenerales->values() as $index => $detalle)
+                <tr>
+                    <td class="text-center">{{ $index + 1 }}</td>
+                    <td>{{ mb_strtoupper($detalle->servicio->nombre ?? 'SERVICIO') }}</td>
+                    <td class="text-center">{{ mb_strtoupper($detalle->frecuencia ?? 'A SOLICITUD') }}</td>
+                    <td class="text-right">S/. {{ number_format($detalle->precio ?? 0, 2) }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @endif
+
+        @php
+            $maxFilasGen = max($productosGenerales->count(), $equiposGenerales->count(), 1);
+            $prodsGen = $productosGenerales->values();
+            $eqsGen = $equiposGenerales->values();
+        @endphp
+        <table style="margin-top: 8px;">
+            <thead>
+                <tr class="bg-blue">
+                    <th style="width: 8%;">N&ordm;</th>
+                    <th style="width: 42%;">PRODUCTOS / MATERIALES</th>
+                    <th style="width: 15%;">CANTIDAD</th>
+                    <th style="width: 35%;">EQUIPO</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for($i = 0; $i < $maxFilasGen; $i++)
+                <tr>
+                    <td class="text-center">{{ $i + 1 }}</td>
+                    <td>{{ isset($prodsGen[$i]) ? mb_strtoupper($prodsGen[$i]->producto->descripcion ?? '') : '' }}</td>
+                    <td class="text-center">{{ isset($prodsGen[$i]) ? $prodsGen[$i]->cantidad : '' }}</td>
+                    <td>{{ isset($eqsGen[$i]) ? mb_strtoupper($eqsGen[$i]->equipo->descripcion ?? '') : '' }}</td>
+                </tr>
+                @endfor
+            </tbody>
+        </table>
     @endif
 
     {{-- ── TOTALES ── --}}

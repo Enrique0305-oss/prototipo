@@ -15,8 +15,8 @@ let incluyeIgv = true;
 let contadorLineasSrv = 0;
 let productosDisponiblesODS: any[] = [];
 let equiposDisponiblesODS: any[] = [];
-let odsProductoRows: { id_producto: number; cantidad: number; observacion: string; stock?: number; id_servicio?: number }[] = [];
-let odsEquipoRows: { id_equipo: number; observacion: string; id_servicio?: number }[] = [];
+let odsProductoRows: { id_producto: number; cantidad: number; observacion: string; stock?: number; id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
+let odsEquipoRows: { id_equipo: number; observacion: string; id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
 let plantasClienteDataODS: any[] = [];
 
 export function renderComercialOrdenesServicio() {
@@ -788,6 +788,34 @@ function getServiceName(idServicio?: number): string {
   return `Servicio #${idServicio}`;
 }
 
+function getPlantaName(idPlanta?: number | null): string {
+  if (!idPlanta) return '';
+  const planta = plantasClienteDataODS.find((p: any) => p.id == idPlanta);
+  return planta?.nombre || `Planta #${idPlanta}`;
+}
+
+function getAreaName(idPlanta?: number | null, idArea?: number | null): string {
+  if (!idArea || !idPlanta) return '';
+  const planta = plantasClienteDataODS.find((p: any) => p.id == idPlanta);
+  if (!planta) return `Área #${idArea}`;
+  const areas = planta.areas_activas || planta.areas || [];
+  const area = areas.find((a: any) => a.id == idArea);
+  return area?.nombre || `Área #${idArea}`;
+}
+
+function getGroupLabel(idServicio?: number, idPlanta?: number | null, idArea?: number | null): string {
+  let label = getServiceName(idServicio);
+  const plantaNombre = getPlantaName(idPlanta);
+  const areaNombre = getAreaName(idPlanta, idArea);
+  if (plantaNombre) label += ` → ${plantaNombre}`;
+  if (areaNombre) label += ` → ${areaNombre}`;
+  return label;
+}
+
+function getGroupKey(r: { id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }): string {
+  return `${r.id_servicio || 0}-${r.id_cliente_planta || 0}-${r.id_cliente_planta_area || 0}`;
+}
+
 function renderProductosODS() {
   const tbody = document.getElementById('ods-productos-body');
   const emptyEl = document.getElementById('ods-productos-empty');
@@ -800,23 +828,26 @@ function renderProductosODS() {
   }
   if (emptyEl) emptyEl.style.display = 'none';
 
-  // Agrupar por id_servicio manteniendo orden
-  const serviceOrder: (number | undefined)[] = [];
+  // Agrupar por servicio+planta+area manteniendo orden
+  const groupOrder: string[] = [];
   odsProductoRows.forEach(r => {
-    const key = r.id_servicio || 0;
-    if (!serviceOrder.includes(key)) serviceOrder.push(key);
+    const key = getGroupKey(r);
+    if (!groupOrder.includes(key)) groupOrder.push(key);
   });
 
   let html = '';
-  serviceOrder.forEach(srvId => {
-    const rows = odsProductoRows.filter(r => (r.id_servicio || 0) === srvId);
-    if (srvId && srvId > 0) {
-      const srvName = getServiceName(srvId);
+  groupOrder.forEach(groupKey => {
+    const rows = odsProductoRows.filter(r => getGroupKey(r) === groupKey);
+    const first = rows[0];
+    const srvId = first.id_servicio || 0;
+    const hasGroup = srvId > 0 || first.id_cliente_planta;
+
+    if (hasGroup) {
+      const groupLabel = getGroupLabel(first.id_servicio, first.id_cliente_planta, first.id_cliente_planta_area);
       html += `<tr class="ods-srv-header"><td colspan="5" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-        ${srvName}</td></tr>`;
-    } else if (serviceOrder.length > 1 || (serviceOrder.length === 1 && srvId === 0 && odsProductoRows.some(r => r.id_servicio && r.id_servicio > 0))) {
-      // Solo mostrar "Generales" si hay más de un grupo o hay mezcla
+        ${groupLabel}</td></tr>`;
+    } else if (groupOrder.length > 1) {
       html += `<tr class="ods-srv-header"><td colspan="5" style="background:#f8fafc;padding:6px 10px;font-size:12px;font-weight:600;color:#64748b;border-bottom:2px solid #e2e8f0;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
         Generales</td></tr>`;
@@ -889,15 +920,21 @@ function agregarProductoODS(idProducto = 0, cantidad = 1, observacion = '') {
 
 async function cargarRecetaDesdeServicios() {
   const lineas = document.querySelectorAll('#ods-detalle-body tr');
-  const servicioIds: { id: number; nombre: string }[] = [];
+  const servicioLineas: { id: number; nombre: string; idPlanta: number | null; idArea: number | null; plantaNombre: string; areaNombre: string }[] = [];
   lineas.forEach(linea => {
     const idSrv = Number((linea.querySelector('.servicio-id-hidden') as HTMLInputElement)?.value || 0);
     const select = linea.querySelector('.servicio-select') as HTMLSelectElement;
     const nombre = select ? select.options[select.selectedIndex]?.text || '' : '';
-    if (idSrv > 0) servicioIds.push({ id: idSrv, nombre });
+    const plantaSelect = linea.querySelector('.planta-select') as HTMLSelectElement;
+    const areaSelect = linea.querySelector('.area-select') as HTMLSelectElement;
+    const idPlanta = plantaSelect ? parseInt(plantaSelect.value) || null : null;
+    const idArea = areaSelect ? parseInt(areaSelect.value) || null : null;
+    const plantaNombre = plantaSelect && plantaSelect.selectedIndex > 0 ? plantaSelect.options[plantaSelect.selectedIndex]?.text || '' : '';
+    const areaNombre = areaSelect && areaSelect.selectedIndex > 0 ? areaSelect.options[areaSelect.selectedIndex]?.text || '' : '';
+    if (idSrv > 0) servicioLineas.push({ id: idSrv, nombre, idPlanta, idArea, plantaNombre, areaNombre });
   });
 
-  if (servicioIds.length === 0) {
+  if (servicioLineas.length === 0) {
     mostrarToast('error', 'Sin servicios', 'Agregue al menos un servicio primero');
     return;
   }
@@ -909,14 +946,26 @@ async function cargarRecetaDesdeServicios() {
   odsProductoRows = [];
   odsEquipoRows = [];
 
-  for (const srv of servicioIds) {
+  // Agrupar por servicio+planta+area para evitar cargar receta duplicada
+  const cargados = new Set<string>();
+
+  for (const linea of servicioLineas) {
+    const clave = `${linea.id}-${linea.idPlanta || 0}-${linea.idArea || 0}`;
+    if (cargados.has(clave)) continue;
+    cargados.add(clave);
+
     try {
-      const res = await servicioService.getProductos(srv.id);
+      const res = await servicioService.getProductos(linea.id);
       const raw = res.data || res;
       const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
       items.forEach((item: any) => {
-        // Verificar si ya existe este producto EN EL MISMO SERVICIO, si sí sumar cantidad
-        const existing = odsProductoRows.find(r => r.id_producto === item.id_producto && (r.id_servicio || 0) === srv.id);
+        // Verificar si ya existe este producto para la misma combinación servicio+planta+área
+        const existing = odsProductoRows.find(r =>
+          r.id_producto === item.id_producto &&
+          (r.id_servicio || 0) === linea.id &&
+          (r.id_cliente_planta || null) === linea.idPlanta &&
+          (r.id_cliente_planta_area || null) === linea.idArea
+        );
         if (existing) {
           existing.cantidad += Number(item.cantidad_default);
         } else {
@@ -924,16 +973,29 @@ async function cargarRecetaDesdeServicios() {
             id_producto: item.id_producto,
             cantidad: Number(item.cantidad_default),
             observacion: item.observacion || '',
-            id_servicio: srv.id,
+            id_servicio: linea.id,
+            id_cliente_planta: linea.idPlanta,
+            id_cliente_planta_area: linea.idArea,
           });
         }
-        // Agregar equipo si existe y no está duplicado para este servicio
-        if (item.id_equipo && !odsEquipoRows.find(r => r.id_equipo === item.id_equipo && (r.id_servicio || 0) === srv.id)) {
-          odsEquipoRows.push({ id_equipo: item.id_equipo, observacion: '', id_servicio: srv.id });
+        // Agregar equipo si existe y no está duplicado para esta combinación
+        if (item.id_equipo && !odsEquipoRows.find(r =>
+          r.id_equipo === item.id_equipo &&
+          (r.id_servicio || 0) === linea.id &&
+          (r.id_cliente_planta || null) === linea.idPlanta &&
+          (r.id_cliente_planta_area || null) === linea.idArea
+        )) {
+          odsEquipoRows.push({
+            id_equipo: item.id_equipo,
+            observacion: '',
+            id_servicio: linea.id,
+            id_cliente_planta: linea.idPlanta,
+            id_cliente_planta_area: linea.idArea,
+          });
         }
       });
     } catch (e) {
-      console.error(`Error cargando receta del servicio ${srv.id}:`, e);
+      console.error(`Error cargando receta del servicio ${linea.id}:`, e);
     }
   }
 
@@ -943,7 +1005,7 @@ async function cargarRecetaDesdeServicios() {
   if (totalCargados > 0) {
     let msg = `Se cargaron ${odsProductoRows.length} producto(s)`;
     if (odsEquipoRows.length > 0) msg += ` y ${odsEquipoRows.length} equipo(s)`;
-    msg += ` desde la receta de ${servicioIds.length} servicio(s)`;
+    msg += ` desde la receta de ${cargados.size} combinación(es) servicio/planta/área`;
     mostrarToast('success', 'Receta Cargada', msg);
   } else {
     mostrarToast('error', 'Sin receta', 'Los servicios seleccionados no tienen receta de materiales');
@@ -973,22 +1035,26 @@ function renderEquiposODS() {
   }
   if (emptyEl) emptyEl.style.display = 'none';
 
-  // Agrupar por id_servicio
-  const serviceOrder: (number | undefined)[] = [];
+  // Agrupar por servicio+planta+area
+  const groupOrder: string[] = [];
   odsEquipoRows.forEach(r => {
-    const key = r.id_servicio || 0;
-    if (!serviceOrder.includes(key)) serviceOrder.push(key);
+    const key = getGroupKey(r);
+    if (!groupOrder.includes(key)) groupOrder.push(key);
   });
 
   let html = '';
-  serviceOrder.forEach(srvId => {
-    const rows = odsEquipoRows.filter(r => (r.id_servicio || 0) === srvId);
-    if (srvId && srvId > 0) {
-      const srvName = getServiceName(srvId);
+  groupOrder.forEach(groupKey => {
+    const rows = odsEquipoRows.filter(r => getGroupKey(r) === groupKey);
+    const first = rows[0];
+    const srvId = first.id_servicio || 0;
+    const hasGroup = srvId > 0 || first.id_cliente_planta;
+
+    if (hasGroup) {
+      const groupLabel = getGroupLabel(first.id_servicio, first.id_cliente_planta, first.id_cliente_planta_area);
       html += `<tr class="ods-srv-header"><td colspan="3" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-        ${srvName}</td></tr>`;
-    } else if (serviceOrder.length > 1 || (serviceOrder.length === 1 && srvId === 0 && odsEquipoRows.some(r => r.id_servicio && r.id_servicio > 0))) {
+        ${groupLabel}</td></tr>`;
+    } else if (groupOrder.length > 1) {
       html += `<tr class="ods-srv-header"><td colspan="3" style="background:#f8fafc;padding:6px 10px;font-size:12px;font-weight:600;color:#64748b;border-bottom:2px solid #e2e8f0;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
         Generales</td></tr>`;
@@ -1158,6 +1224,8 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
       cantidad: Number(p.cantidad),
       observacion: p.observacion || '',
       id_servicio: p.id_servicio || 0,
+      id_cliente_planta: p.id_cliente_planta || null,
+      id_cliente_planta_area: p.id_cliente_planta_area || null,
     }));
     renderProductosODS();
 
@@ -1167,6 +1235,8 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
       id_equipo: e.id_equipo,
       observacion: e.observacion || '',
       id_servicio: e.id_servicio || 0,
+      id_cliente_planta: e.id_cliente_planta || null,
+      id_cliente_planta_area: e.id_cliente_planta_area || null,
     }));
     renderEquiposODS();
 
@@ -1295,10 +1365,10 @@ async function guardarODS() {
     detalles,
     productos: odsProductoRows
       .filter(r => r.id_producto > 0 && r.cantidad > 0)
-      .map(r => ({ id_producto: r.id_producto, cantidad: r.cantidad, observacion: r.observacion || null, id_servicio: r.id_servicio || null })),
+      .map(r => ({ id_producto: r.id_producto, cantidad: r.cantidad, observacion: r.observacion || null, id_servicio: r.id_servicio || null, id_cliente_planta: r.id_cliente_planta || null, id_cliente_planta_area: r.id_cliente_planta_area || null })),
     equipos: odsEquipoRows
       .filter(r => r.id_equipo > 0)
-      .map(r => ({ id_equipo: r.id_equipo, observacion: r.observacion || null, id_servicio: r.id_servicio || null })),
+      .map(r => ({ id_equipo: r.id_equipo, observacion: r.observacion || null, id_servicio: r.id_servicio || null, id_cliente_planta: r.id_cliente_planta || null, id_cliente_planta_area: r.id_cliente_planta_area || null })),
   };
   console.log('ODS Payload:', JSON.stringify(payload, null, 2));
 
