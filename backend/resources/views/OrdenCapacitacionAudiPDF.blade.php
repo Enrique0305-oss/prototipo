@@ -145,8 +145,20 @@
             <td class="text-center">{{ mb_strtoupper($servicioNombre) }}</td>
         </tr>
         <tr>
-            <td class="label">EXPONENTE / AUDITOR</td>
+            <td class="label">PONENTES</td>
             <td class="text-center">{{ mb_strtoupper($exponentesStr) }}</td>
+        </tr>
+        <tr>
+            <td class="label">HORAS DE CAPACITACION</td>
+            <td class="text-center">{{ $orden->horas_capacitacion ?? '---' }}</td>
+        </tr>
+        <tr>
+            <td class="label">PARTICIPACIÓN TOTAL</td>
+            <td class="text-center">{{ $orden->participacion_total ?? '---' }}</td>
+        </tr>
+        <tr>
+            <td class="label">APROBACIÓN TOTAL</td>
+            <td class="text-center">{{ $orden->aprobacion_total ?? '---' }}</td>
         </tr>
         <tr>
             <td class="label">MODALIDAD</td>
@@ -160,6 +172,52 @@
             <td class="label">CERTIFICADOS</td>
             <td class="text-center">{{ $orden->num_certificados ?? 0 }}</td>
         </tr>
+    </table>
+
+    {{-- TABLA DE MATERIALES --}}
+    <table style="margin-top: 10px;">
+        <thead>
+            <tr class="bg-blue">
+                <td style="width: 50%;" class="text-blue">MATERIALES</td>
+                <td style="width: 20%;" class="text-center text-blue">CANTIDAD</td>
+                <td style="width: 30%;" class="text-center text-blue">DISPOSICIÓN</td>
+            </tr>
+        </thead>
+        <tbody>
+            @if($orden->materiales && $orden->materiales->count() > 0)
+                @foreach($orden->materiales as $item)
+                    <tr>
+                        <td>{{ $item->material }}</td>
+                        <td align="center">{{ $item->cantidad }}</td>
+                        <td align="center">{{ $item->disposicion }}</td>
+                    </tr>
+                @endforeach
+            @else
+                <tr><td colspan="3" align="center">NO SE REGISTRARON MATERIALES</td></tr>
+            @endif
+        </tbody>
+    </table>
+
+    {{-- TABLA DE EQUIPOS AUDIOVISUALES --}}
+    <table style="margin-top: 10px;">
+        <thead>
+            <tr class="bg-blue">
+                <td style="width: 70%;" class="text-blue">EQUIPOS AUDIOVISUALES</td>
+                <td style="width: 30%;" class="text-center text-blue">DISPOSICIÓN</td>
+            </tr>
+        </thead>
+        <tbody>
+            @if($orden->equipos && $orden->equipos->count() > 0)
+                @foreach($orden->equipos as $item)
+                    <tr>
+                        <td>{{ $item->equipo }}</td>
+                        <td align="center">{{ $item->disposicion }}</td> {{-- Sin colspan --}}
+                    </tr>
+                @endforeach
+            @else
+                <tr><td colspan="2" align="center">NO SE REGISTRARON EQUIPOS</td></tr> {{-- Colspan 2 aquí --}}
+            @endif
+        </tbody>
     </table>
 
     {{-- COSTOS --}}

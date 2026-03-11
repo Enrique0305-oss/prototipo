@@ -28,6 +28,10 @@ class OrdenCapacitacionAuditoria extends Model
         'igv',
         'incluye_igv',
         'estado',
+        'emitido_por',
+        'horas_capacitacion',
+        'participacion_total',
+        'aprobacion_total',
         'observaciones'
     ];
 
@@ -47,6 +51,11 @@ class OrdenCapacitacionAuditoria extends Model
     public function cliente()
     {
         return $this->belongsTo(Cliente::class, 'id_cliente');
+    }
+
+    public function emisor()
+    {
+        return $this->belongsTo(Personal::class, 'emitido_por');
     }
 
     public function cotizacion()
@@ -92,6 +101,18 @@ class OrdenCapacitacionAuditoria extends Model
     public function proyecciones()
     {
         return $this->hasMany(Proyeccion::class, 'id_orden_capacitacion_auditoria');
+    }
+
+    //Relacion para su detalle de materiales y equipos
+
+    public function materiales()
+    {
+        return $this->hasMany(DetalleOrdenCapacitacionMaterial::class, 'id_orden_capacitacion');
+    }
+
+    public function equipos()
+    {
+        return $this->hasMany(DetalleOrdenCapacitacionEquipo::class, 'id_orden_capacitacion');
     }
 
     // Generar número de orden

@@ -223,6 +223,11 @@ export function renderComercialOrdenesCapacitacion() {
                 <input type="text" id="oc-servicio-nombre" class="oc-input" readonly placeholder="Se auto-completa desde cotización">
                 <input type="hidden" id="oc-servicio-id">
               </div>
+              <div>
+                <label style="display:block; font-size:14px; font-weight:600; margin-bottom:5px;">Emitido por</label>
+                <input type="text" id="oc-emitido-por" readonly 
+                      style="width:100%; padding:8px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:6px; color:#64748b;" />
+                <input type="hidden" id="oc-id-usuario" /> </div>
               <div class="oc-field" style="grid-column: 1 / -1;">
                 <label class="oc-label">Exponente(s) <span class="oc-required">*</span></label>
                 <div id="oc-exponentes-container" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;min-height:44px;background:#fff;">
@@ -231,6 +236,18 @@ export function renderComercialOrdenesCapacitacion() {
                     <option value="">+ Agregar exponente...</option>
                   </select>
                 </div>
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Horas de Capacitación</label>
+                <input type="text" id="oc-horas-capacitacion" class="oc-input" placeholder="Ej: 08 horas">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Participación Total (%)</label>
+                <input type="text" id="oc-participacion-total" class="oc-input" placeholder="Ej: 95%">
+              </div>
+              <div class="oc-field">
+                <label class="oc-label">Aprobación Total (%)</label>
+                <input type="text" id="oc-aprobacion-total" class="oc-input" placeholder="Ej: 90%">
               </div>
               <div class="oc-field">
                 <label class="oc-label">Fecha del Servicio <span class="oc-required">*</span></label>
@@ -272,7 +289,47 @@ export function renderComercialOrdenesCapacitacion() {
                 <label class="oc-label">Subtotal <span class="oc-required">*</span></label>
                 <input type="number" id="oc-costo" class="oc-input" min="0" step="0.01" value="0.00">
               </div>
-            </div>
+            </div> <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:25px;">
+    <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h4 style="margin:0; font-size:14px; color:#1e293b; font-weight:600;">Materiales</h4>
+            <button type="button" id="btn-add-material" style="background:#fff; border:1px solid #e2e8f0; padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer;">+ Agregar Material</button>
+        </div>
+        <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+            <table style="width:100%; border-collapse: collapse;">
+                <thead style="background:#2d4a68; color:#fff; font-size:11px;">
+                    <tr>
+                        <th style="padding:10px; text-align:left;">MATERIALES</th>
+                        <th style="padding:10px; text-align:center; width:50px;">CANT.</th>
+                        <th style="padding:10px; text-align:left; width:100px;">DISPOSICIÓN</th>
+                        <th style="width:30px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="body-materiales" style="font-size:12px; background:#fff;"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h4 style="margin:0; font-size:14px; color:#1e293b; font-weight:600;">Equipos Audiovisuales</h4>
+            <button type="button" id="btn-add-equipo" style="background:#fff; border:1px solid #e2e8f0; padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer;">+ Agregar Equipo</button>
+        </div>
+        <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+            <table style="width:100%; border-collapse: collapse;">
+                <thead style="background:#2d4a68; color:#fff; font-size:11px;">
+                    <tr>
+                        <th style="padding:10px; text-align:left;">EQUIPOS</th>
+                        <th style="padding:10px; text-align:left; width:120px;">DISPOSICIÓN</th>
+                        <th style="width:30px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="body-equipos" style="font-size:12px; background:#fff;"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+      </div>
             <!-- Desglose de costos -->
             <div id="oc-desglose-costos" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin-top:8px;">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -312,7 +369,52 @@ export function renderComercialOrdenesCapacitacion() {
   </div>
   `;
 }
+// =============================
+// PARA MATERIALES Y EQUIPOS (EN DESARROLLO)
+// =============================
+function agregarFilaMaterial(data = { material: '', cantidad: '', disposicion: '' }) { // 'material' en singular
+  const tbody = document.getElementById('body-materiales');
+  if (!tbody) return;
+  const tr = document.createElement('tr');
+  tr.style.borderBottom = "1px solid #e2e8f0";
+  tr.innerHTML = `
+    <td style="padding:5px;">
+        <input type="text" class="mat-desc" value="${data.material || ''}" placeholder="Material..." style="width:100%; border:none; outline:none; background:transparent;">
+    </td>
+    <td style="padding:5px;">
+        <input type="number" class="mat-cant" value="${data.cantidad || 1}" style="width:100%; border:none; outline:none; background:transparent; text-align:center;">
+    </td>
+    <td style="padding:5px;">
+        <input type="text" class="mat-disp" value="${data.disposicion || ''}" placeholder="Ej: QSCI" style="width:100%; border:none; outline:none; background:transparent;">
+    </td>
+    <td style="padding:5px; text-align:center;">
+      <button type="button" class="btn-del-row" style="color:#ef4444; border:none; background:none; cursor:pointer; font-weight:bold;">&times;</button>
+    </td>
+  `;
+  tr.querySelector('.btn-del-row')?.addEventListener('click', () => tr.remove());
+  tbody.appendChild(tr);
+}
 
+// CORRECCIÓN PARA EQUIPOS
+function agregarFilaEquipo(data = { equipo: '', disposicion: '' }) { // 'equipo' en singular
+  const tbody = document.getElementById('body-equipos');
+  if (!tbody) return;
+  const tr = document.createElement('tr');
+  tr.style.borderBottom = "1px solid #e2e8f0";
+  tr.innerHTML = `
+    <td style="padding:5px;">
+        <input type="text" class="eq-desc" value="${data.equipo || ''}" placeholder="Equipo..." style="width:100%; border:none; outline:none; background:transparent;">
+    </td>
+    <td style="padding:5px;">
+        <input type="text" class="eq-disp" value="${data.disposicion || ''}" placeholder="Ej: CLIENTE" style="width:100%; border:none; outline:none; background:transparent;">
+    </td>
+    <td style="padding:5px; text-align:center;">
+      <button type="button" class="btn-del-row" style="color:#ef4444; border:none; background:none; cursor:pointer; font-weight:bold;">&times;</button>
+    </td>
+  `;
+  tr.querySelector('.btn-del-row')?.addEventListener('click', () => tr.remove());
+  tbody.appendChild(tr);
+}
 // =============================
 // FUNCIONES
 // =============================
@@ -719,10 +821,25 @@ function limpiarFormOC() {
   (document.getElementById('oc-costo') as HTMLInputElement).value = '0.00';
   calcularDesgloseOC();
   (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = '';
+  const matBody = document.getElementById('oc-materiales-body');
+  const eqBody = document.getElementById('oc-equipos-body');
+  if (matBody) matBody.innerHTML = ''; 
+  if (eqBody) eqBody.innerHTML = '';
+  (document.getElementById('oc-id-usuario') as HTMLInputElement).value = '';
+  (document.getElementById('oc-emitido-por') as HTMLInputElement).value = '';
 }
 
 async function abrirModalNuevaOC() {
   limpiarFormOC();
+  const userRaw = sessionStorage.getItem('qsci_user');
+  if (userRaw) {
+    const userData = JSON.parse(userRaw);
+    // Concatenamos nombre y apellido según tu captura
+    const nombreCompleto = `${userData.nombre || ''} ${userData.apellido || ''}`.trim();
+    
+    (document.getElementById('oc-emitido-por') as HTMLInputElement).value = nombreCompleto;
+    (document.getElementById('oc-id-usuario') as HTMLInputElement).value = String(userData.id || '');
+  }
   (document.getElementById('modal-oc-titulo') as HTMLElement).innerHTML =
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Nueva Orden de Capacitación';
   const cotSelect = document.getElementById('oc-cotizacion-ref') as HTMLSelectElement;
@@ -826,6 +943,27 @@ async function guardarOC() {
   const numCertificados = (document.getElementById('oc-num-certificados') as HTMLInputElement).value;
   const costo = (document.getElementById('oc-costo') as HTMLInputElement).value;
   const observaciones = (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value?.trim();
+  const horasCapacitacion = (document.getElementById('oc-horas-capacitacion') as HTMLInputElement)?.value || '';
+  const participacionTotal = (document.getElementById('oc-participacion-total') as HTMLInputElement)?.value || '';
+  const aprobacionTotal = (document.getElementById('oc-aprobacion-total') as HTMLInputElement)?.value || '';
+
+  // --- RECOLECCIÓN DIRECTA DE MATERIALES ---
+  const filasMateriales = document.querySelectorAll('#oc-materiales-body tr'); 
+  const materiales = Array.from(filasMateriales).map(fila => ({
+      material: (fila.querySelector('.mat-desc') as HTMLInputElement)?.value || '',
+      cantidad: (fila.querySelector('.mat-cant') as HTMLInputElement)?.value || '',
+      disposicion: (fila.querySelector('.mat-disp') as HTMLInputElement)?.value || '' // Cambiado de 'unidad' a 'disposicion'
+  })).filter(m => m.material.trim() !== ""); 
+
+  // --- RECOLECCIÓN DE EQUIPOS ---
+  // Tabla: detalle_orden_capacitacion_equipos (equipo, disposicion)
+  const filasEquipos = document.querySelectorAll('#oc-equipos-body tr'); 
+  const equipos = Array.from(filasEquipos).map(fila => ({
+      equipo: (fila.querySelector('.eq-desc') as HTMLInputElement)?.value || '',
+      disposicion: (fila.querySelector('.eq-disp') as HTMLInputElement)?.value || '' // Eliminado 'cantidad', agregado 'disposicion'
+  })).filter(e => e.equipo.trim() !== "");
+
+  const idUsuario = (document.getElementById('oc-id-usuario') as HTMLInputElement).value;
 
   if (!idCotizacion) {
     mostrarToast('error', 'Campo requerido', 'Debe seleccionar una cotización de referencia');
@@ -850,6 +988,7 @@ async function guardarOC() {
 
   const payload: any = {
     id_cotizacion: Number(idCotizacion),
+    id_usuario: Number(idUsuario),
     id_servicio: idServicio ? Number(idServicio) : null,
     ponentes: [],
     exponentes: exponenteIds,
@@ -861,6 +1000,11 @@ async function guardarOC() {
     num_certificados: parseInt(numCertificados) || 0,
     costo: parseFloat(costo) || 0,
     incluye_igv: ocIncluyeIgv,
+    horas_capacitacion: horasCapacitacion,
+    participacion_total: participacionTotal,
+    aprobacion_total: aprobacionTotal,
+    materiales,
+    equipos,
     observaciones: observaciones || null,
   };
 
@@ -917,6 +1061,9 @@ function calcularDesgloseOC() {
 export function initOrdenesCapacitacionEvents() {
   // Botón nueva OC
   document.getElementById('btn-nueva-oc')?.addEventListener('click', abrirModalNuevaOC);
+
+  document.getElementById('btn-add-material')?.addEventListener('click', () => agregarFilaMaterial());
+  document.getElementById('btn-add-equipo')?.addEventListener('click', () => agregarFilaEquipo());
 
   // Filtrar
   document.getElementById('oc-btn-filtrar')?.addEventListener('click', cargarOrdenesCapacitacion);

@@ -226,6 +226,11 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'modalidad' => 'required|in:Presencial,Virtual,Híbrido',
             'num_participantes' => 'required|integer|min:1',
             'num_certificados' => 'nullable|integer|min:0',
+            'horas_capacitacion' => 'nullable|string', 
+            'participacion_total' => 'nullable|string', 
+            'aprobacion_total'    => 'nullable|string', 
+            'materiales'         => 'nullable|array',  
+            'equipos'            => 'nullable|array',
             'costo' => 'required|numeric|min:0',
             'incluye_igv' => 'nullable|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
@@ -245,35 +250,32 @@ class OrdenCapacitacionAuditoriaController extends Controller
             $total = $subtotal;
         }
 
-        // Verificar que la cotización sea tipo Capacitacion
         $cotizacion = Cotizacion::find($validated['id_cotizacion']);
         
         if ($cotizacion->tipo_cotizacion !== 'Capacitacion') {
-            return response()->json([
-                'success' => false,
-                'message' => 'La cotización debe ser de tipo Capacitacion'
-            ], 400);
+            return response()->json(['success' => false, 'message' => 'La cotización debe ser de tipo Capacitacion'], 400);
         }
 
-        // Verificar que no tenga ya una orden
         if ($cotizacion->ordenCapacitacionAuditoria) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Esta cotización ya tiene una orden de capacitación/auditoría'
-            ], 400);
+            return response()->json(['success' => false, 'message' => 'Esta cotización ya tiene una orden'], 400);
         }
 
         try {
             DB::beginTransaction();
 
-            // Crear orden de capacitación/auditoría
             $ponenteIds = $validated['ponentes'] ?? [];
             $exponenteIds = $validated['exponentes'] ?? [];
+
+            // 1. CREAR LA ORDEN PRINCIPAL 
+            // Nota: Quitamos 'materiales' y 'equipos' de aquí porque van a sus propias tablas
             $orden = OrdenCapacitacionAuditoria::create([
                 'numero_orden' => OrdenCapacitacionAuditoria::generarNumero(),
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
                 'id_servicio' => $validated['id_servicio'] ?? null,
+                'horas_capacitacion' => $validated['horas_capacitacion'] ?? null, 
+                'participacion_total' => $validated['participacion_total'] ?? null, 
+                'aprobacion_total'    => $validated['aprobacion_total'] ?? null,
                 'id_ponente' => !empty($ponenteIds) ? $ponenteIds[0] : null,
                 'id_exponente' => !empty($exponenteIds) ? $exponenteIds[0] : null,
                 'fecha_servicio' => $validated['fecha_servicio'],
@@ -286,24 +288,40 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'igv' => $igv,
                 'incluye_igv' => $incluyeIgv,
                 'costo' => $total,
+                'emitido_por' => auth()->id(),
                 'estado' => 'Aprobado',
                 'observaciones' => $validated['observaciones'] ?? null,
             ]);
 
-            // Sincronizar ponentes en tabla pivot
-            if (!empty($ponenteIds)) {
-                $orden->ponentes()->sync($ponenteIds);
+            // 2. GUARDAR LOS MATERIALES (En la tabla detalle_orden_capacitacion_materiales)
+            if (!empty($validated['materiales'])) {
+                foreach ($validated['materiales'] as $mat) {
+                    $orden->materiales()->create([
+                        'material'    => $mat['material'],
+                        'cantidad'    => $mat['cantidad'],
+                        'disposicion' => $mat['disposicion']
+                    ]);
+                }
             }
 
-            // Sincronizar exponentes en tabla pivot
-            if (!empty($exponenteIds)) {
-                $orden->exponentes()->sync($exponenteIds);
+            // 3. GUARDAR LOS EQUIPOS (En la tabla detalle_orden_capacitacion_equipos)
+            if (!empty($validated['equipos'])) {
+                foreach ($validated['equipos'] as $eq) {
+                    $orden->equipos()->create([
+                        'equipo'      => $eq['equipo'],
+                        'disposicion' => $eq['disposicion']
+                    ]);
+                }
             }
+
+            // Sincronizar ponentes y exponentes (tablas pivot)
+            if (!empty($ponenteIds)) { $orden->ponentes()->sync($ponenteIds); }
+            if (!empty($exponenteIds)) { $orden->exponentes()->sync($exponenteIds); }
 
             DB::commit();
 
-            // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'servicio', 'cotizacion']);
+            // IMPORTANTE: Cargamos 'materiales' y 'equipos' en la respuesta
+            $orden->load(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'servicio', 'cotizacion', 'materiales', 'equipos']);
 
             return response()->json([
                 'success' => true,
@@ -313,10 +331,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
             return response()->json([
                 'success' => false,
-                'message' => 'Error al crear la orden de capacitación/auditoría',
+                'message' => 'Error al crear la orden',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -334,7 +351,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'exponente',
             'exponentes',
             'cotizacion',
-            'servicio'
+            'servicio',
+            'materiales', // Cargar materiales
+            'equipos'     // Cargar equipos
         ])->find($id);
 
         if (!$orden) {
@@ -381,9 +400,14 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'incluye_igv' => 'nullable|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
             'observaciones' => 'nullable|string',
+            'horas_capacitacion' => 'nullable|string',
+            'participacion_total' => 'nullable|string', 
+            'aprobacion_total'    => 'nullable|string', 
+            'materiales'         => 'nullable|array',
+            'equipos'            => 'nullable|array',
         ]);
 
-        // Recalcular IGV si se envía costo o incluye_igv
+        // Recalcular IGV
         if (isset($validated['costo']) || isset($validated['incluye_igv'])) {
             $costoIngresado = $validated['costo'] ?? $orden->subtotal;
             $incluyeIgv = $validated['incluye_igv'] ?? $orden->incluye_igv;
@@ -400,7 +424,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
         }
 
         try {
-            // Si se envían ponentes, sincronizar pivot y actualizar id_ponente principal
+            DB::beginTransaction();
+
+            // 1. Sincronizar Ponentes
             if (isset($validated['ponentes'])) {
                 $ponenteIds = $validated['ponentes'];
                 $orden->ponentes()->sync($ponenteIds);
@@ -408,6 +434,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 unset($validated['ponentes']);
             }
 
+            // 2. Sincronizar Exponentes
             if (isset($validated['exponentes'])) {
                 $exponenteIds = $validated['exponentes'];
                 $orden->exponentes()->sync($exponenteIds);
@@ -415,19 +442,50 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 unset($validated['exponentes']);
             }
 
+            // 3. ACTUALIZAR MATERIALES (Borrar actuales e insertar nuevos)
+            if (isset($validated['materiales'])) {
+                $orden->materiales()->delete(); // Borramos los detalles viejos
+                foreach ($validated['materiales'] as $mat) {
+                    $orden->materiales()->create([
+                        'material'    => $mat['material'],
+                        'cantidad'    => $mat['cantidad'],
+                        'disposicion' => $mat['disposicion']
+                    ]);
+                }
+                unset($validated['materiales']); // Quitamos del array principal
+            }
+
+            // 4. ACTUALIZAR EQUIPOS (Borrar actuales e insertar nuevos)
+            if (isset($validated['equipos'])) {
+                $orden->equipos()->delete(); // Borramos los detalles viejos
+                foreach ($validated['equipos'] as $eq) {
+                    $orden->equipos()->create([
+                        'equipo'      => $eq['equipo'],
+                        'disposicion' => $eq['disposicion']
+                    ]);
+                }
+                unset($validated['equipos']); // Quitamos del array principal
+            }
+
+            // 5. Actualizar la tabla principal
             $orden->update($validated);
-            $orden->load(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'servicio', 'cotizacion']);
+
+            DB::commit();
+
+            // Cargamos todas las relaciones incluyendo las nuevas de detalles
+            $orden->load(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'servicio', 'cotizacion', 'materiales', 'equipos']);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Orden de capacitación/auditoría actualizada exitosamente',
+                'message' => 'Orden de capacitación actualizada exitosamente',
                 'data' => $orden
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar la orden de capacitación/auditoría',
+                'message' => 'Error al actualizar la orden',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -505,7 +563,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'ponentes', 
             'exponentes',
             'cotizacion', 
-            'servicio'
+            'servicio',
+            'materiales', // Cargar materiales
+            'equipos',     // Cargar equipos
+            'emisor'
         ])->findOrFail($id);
 
         $orden->servicio_nombre = $orden->servicio ? $orden->servicio->nombre : 'SERVICIO NO ESPECIFICADO';
