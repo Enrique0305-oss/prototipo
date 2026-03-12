@@ -651,6 +651,14 @@
                     <p>Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
                 @endif
             </div>
+
+            <!-- III. PROPUESTA ECONÓMICA -->
+            <div class="seccion-titulo">
+                <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÓMICA
+            </div>
+            <div class="seccion-descripcion">
+                    El siguiente cuadro muestra la respectiva cotización por el servicio de auditoría:
+            </div>
             <div class="products-title">Detalle de Productos/Servicios</div>
             <table class="products-table">
                 <thead>
