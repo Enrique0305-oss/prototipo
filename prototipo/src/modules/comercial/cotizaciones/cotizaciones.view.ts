@@ -871,6 +871,9 @@ function agregarLineaDetalle() {
   const selectStyle = inputStyle;
   const esProducto = tipo === 'Producto';
   const esServicio = tipo === 'Servicio';
+  // Cantidad: se bloquea en Servicio (siempre 1)
+  const disabledCantidad = esServicio ? 'disabled' : '';
+  const disabledCantidadStyle = esServicio ? 'background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : '';
   // Frecuencia: se bloquea solo en Producto
   const disabledFrecuencia = esProducto ? 'disabled' : '';
   const disabledFrecuenciaStyle = esProducto ? 'background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : '';
@@ -896,7 +899,7 @@ function agregarLineaDetalle() {
         </select>
       </td>
       <td>
-        <input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}">
+        <input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}${disabledCantidadStyle}" ${disabledCantidad}>
       </td>
       <td>
         <input type="number" class="precio-input" value="0.00" min="0" step="0.01" style="${inputStyle}">
