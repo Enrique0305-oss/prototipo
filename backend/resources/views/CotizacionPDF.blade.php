@@ -468,6 +468,22 @@
         .proposal-text li {
             list-style-type: disc; /* Para que salgan los puntitos en las listas */
         }
+
+        /* Mejora la visualización de tablas dentro del texto generado por Quill */
+        .proposal-text table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+        }
+        .proposal-text th,
+        .proposal-text td {
+            border: 1px solid #444;
+            padding: 6px 8px;
+        }
+        .proposal-text td {
+            vertical-align: top;
+        }
+
         .contenido-desplazado {
             margin-left: 50px; /* Ajusta el valor a tu gusto */
             margin-right: 50px; /* Opcional: para equilibrar el ancho si es necesario */
@@ -482,7 +498,10 @@
 </head>
 <body>
     <header>
-        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" class="logo-small">
+        @php
+            $headerLogo = ($cotizacion->id_multicim ?? 1) == 2 ? 'logo-orden.png' : 'logo-calidad.png';
+        @endphp
+        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/' . $headerLogo))) }}" class="logo-small">
     </header>
     <footer>
         <a href="http://www.qsciconsulting.com" class="footer-link">www.qsciconsulting.com</a>
@@ -494,7 +513,7 @@
             <table>
                 <tr>
                     <td class="logo-qsci">
-                        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" alt="QSCI">
+                        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/' . $headerLogo))) }}" alt="QSCI">
                     </td>
                     <td class="logo-encabezado">
                         <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/encabezado.png'))) }}" alt="QSCI Group">
@@ -631,6 +650,14 @@
                 @else
                     <p>Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
                 @endif
+            </div>
+
+            <!-- III. PROPUESTA ECONÓMICA -->
+            <div class="seccion-titulo">
+                <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÓMICA
+            </div>
+            <div class="seccion-descripcion">
+                    El siguiente cuadro muestra la respectiva cotización por el servicio de auditoría:
             </div>
             <div class="products-title">Detalle de Productos/Servicios</div>
             <table class="products-table">
