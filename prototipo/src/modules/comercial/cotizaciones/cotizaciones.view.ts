@@ -8,15 +8,38 @@ import { mostrarToast } from '../../../shared/toast';
 import type { Cotizacion, EstadisticasCotizaciones } from '../../../core/api/types';
 
 // --- INICIO DE CARGA DE QUILL ---
-if (typeof window !== 'undefined' && !document.getElementById('quill-assets')) {
+// Cargamos Quill de forma segura y permitimos inicializarlo cuando el script esté listo.
+let quillLoadPromise: Promise<void> | null = null;
+function ensureQuillLoaded(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if ((window as any).Quill) return Promise.resolve();
+  if (quillLoadPromise) return quillLoadPromise;
+
+  quillLoadPromise = new Promise<void>((resolve) => {
+    if (document.getElementById('quill-script')) {
+      const existingScript = document.getElementById('quill-script') as HTMLScriptElement;
+      existingScript.addEventListener('load', () => resolve());
+      existingScript.addEventListener('error', () => resolve());
+      return;
+    }
+
     const link = document.createElement('link');
-    link.href = 'https://cdn.quilljs.com/1.3.6/quill.snow.css';
+    link.href = 'https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css';
     link.rel = 'stylesheet';
     link.id = 'quill-assets';
+
     const script = document.createElement('script');
-    script.src = 'https://cdn.quilljs.com/1.3.6/quill.min.js';
+    script.src = 'https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js';
+    script.id = 'quill-script';
+
+    script.addEventListener('load', () => resolve());
+    script.addEventListener('error', () => resolve());
+
     document.head.appendChild(link);
     document.head.appendChild(script);
+  });
+
+  return quillLoadPromise;
 }
 
 let quillInstance: any = null; // Usaremos esta variable para manejar el editor
@@ -425,16 +448,24 @@ async function abrirFormularioCotizacion() {
                 </button>
             </div>
 
+            <div id="table-controls" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom: 10px;">
+              <button type="button" class="btn-secondary" id="btn-insert-table-5x5" style="padding:6px 10px;">Insertar tabla 5×5</button>
+              <button type="button" class="btn-secondary" id="btn-add-row" style="padding:6px 10px;">Agregar fila</button>
+              <button type="button" class="btn-secondary" id="btn-del-row" style="padding:6px 10px;">Eliminar fila</button>
+              <button type="button" class="btn-secondary" id="btn-add-col" style="padding:6px 10px;">Agregar columna</button>
+              <button type="button" class="btn-secondary" id="btn-del-col" style="padding:6px 10px;">Eliminar columna</button>
+            </div>
+
             <div id="editor-wrapper" style="display: none;">
                 <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Use el editor para dar formato a los objetivos y actividades tal cual aparecerán en el PDF.</p>
-                <div id="editor-propuesta" style="height: 300px; background: #fff;"></div>
+                <div id="editor-propuesta" style="height: 600px; background: #fff;"></div>
             </div>
         </div>
 
         <div class="form-section" style="margin-bottom: 24px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
             <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Detalle de Cotización</h3>
-            <button type="button" class="btn-secondary" id="btn-agregar-linea" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:#475569;">
+            <button type="button" class="btn-secondary" id="btn-agregar-linea" disabled style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:not-allowed;opacity:0.6;font-size:13px;font-weight:600;color:#475569;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               Agregar Línea
             </button>
@@ -494,39 +525,160 @@ async function abrirFormularioCotizacion() {
   formulario.style.display = 'block';
 
   // --- CONFIGURACIÓN DEL EDITOR (PEGA AQUÍ) ---
-  setTimeout(() => {
-    const container = document.getElementById('editor-propuesta');
-    if (container && (window as any).Quill) {
-      quillInstance = new (window as any).Quill('#editor-propuesta', {
-        theme: 'snow',
-        placeholder: 'Escriba objetivos, actividades y temario aquí...',
-        modules: {
-          toolbar: [
-            ['bold', 'italic', 'underline'],
-            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-            [{ 'indent': '-1'}, { 'indent': '+1' }],
-            ['clean']
-          ]
-        }
-      });
-    }
+  await ensureQuillLoaded();
+  // Aseguramos que el DOM ya haya renderizado el HTML generado.
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
-    const multicimSelect = document.getElementById('cot-multicim');
-    multicimSelect?.addEventListener('change', (e) => {
-        const val = (e.target as HTMLSelectElement).value;
-        const label = val === '1' ? 'CIM' : 'MULTITASKING';
-        if(val) mostrarToast('success', 'Empresa Seleccionada', `Esta cotización se emitirá a nombre de ${label}`);
+  const container = document.getElementById('editor-propuesta');
+  if (container && (window as any).Quill) {
+    const isCursorInsideTable = () => {
+      const sel = document.getSelection();
+      if (!sel || !sel.anchorNode) return false;
+
+      let node: Node | null = sel.anchorNode;
+      while (node) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          if (el.tagName === 'TD') return true;
+        }
+        node = node.parentNode;
+      }
+      return false;
+    };
+
+    quillInstance = new (window as any).Quill('#editor-propuesta', {
+      theme: 'snow',
+      placeholder: 'Escriba objetivos, actividades y temario aquí...',
+      modules: {
+        table: {
+          Selection: true,
+          operationMenu: {
+            items: {
+              insertLineBefore: { text: 'Insertar fila antes' },
+              insertLineAfter: { text: 'Insertar fila después' },
+              insertColumnBefore: { text: 'Insertar columna antes' },
+              insertColumnAfter: { text: 'Insertar columna después' },
+              deleteLine: { text: 'Eliminar fila' },
+              deleteColumn: { text: 'Eliminar columna' },
+              unmergeCells: { text: 'Deshacer combinación' }
+            },
+            color: {
+              colors: ['#2563eb', '#ef4444', '#10b981'],
+              text: 'Fondo de celda'
+            }
+          }
+        },
+        toolbar: [
+          [{'header': [1, 2, 3, false]}],
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          [{ 'indent': '-1'}, { 'indent': '+1' }],
+          // La tabla se maneja con los botones personalizados de la UI
+          ['clean']
+        ],
+      }
     });
-    const btnToggle = document.getElementById('btn-toggle-propuesta');
-    const wrapper = document.getElementById('editor-wrapper');
-    if (btnToggle && wrapper) {
-      btnToggle.onclick = () => {
-        const isHidden = wrapper.style.display === 'none';
-        wrapper.style.display = isHidden ? 'block' : 'none';
-        btnToggle.textContent = isHidden ? 'Ocultar Editor' : 'Mostrar/Ocultar Editor';
-      };
-    }
-  }, 150); // El pequeño delay asegura que el HTML ya exista en el DOM
+
+    const tableModule = quillInstance.getModule('table');
+    const runTableAction = (action: () => void) => {
+      if (!tableModule) {
+        mostrarToast('warning', 'Tablas', 'El módulo de tablas no está disponible');
+        return;
+      }
+      try {
+        action();
+      } catch (error) {
+        console.error('Error en acción de tabla:', error);
+      }
+    };
+
+    const findParentCell = (node: Node | null): HTMLElement | null => {
+      while (node) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          if (el.tagName === 'TD') return el;
+        }
+        node = node.parentNode;
+      }
+      return null;
+    };
+
+    const moveSelectionToNextCell = () => {
+      const sel = document.getSelection();
+      if (!sel || !sel.anchorNode) return;
+
+      const currentCell = findParentCell(sel.anchorNode);
+      if (!currentCell) return;
+      const currentRow = currentCell.parentElement;
+      if (!currentRow) return;
+
+      let nextCell = currentCell.nextElementSibling as HTMLElement | null;
+      if (!nextCell) {
+        const nextRow = currentRow.nextElementSibling as HTMLElement | null;
+        if (!nextRow) return;
+        nextCell = nextRow.querySelector('td');
+      }
+      if (!nextCell) return;
+
+      try {
+        const blot = (window as any).Quill.find(nextCell);
+        if (!blot) return;
+        const index = quillInstance.getIndex(blot);
+        quillInstance.setSelection(index, 0, 'silent');
+      } catch (e) {
+        // Fallback: no hacemos nada
+      }
+    };
+
+    document.addEventListener('keydown', (evt: KeyboardEvent) => {
+      if (evt.key !== 'Enter') return;
+      if (!isCursorInsideTable()) return;
+
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+
+      if (evt.shiftKey) {
+        const range = quillInstance.getSelection(true);
+        if (!range) return;
+        quillInstance.insertText(range.index, '\n', 'user');
+        quillInstance.setSelection(range.index + 1, 0, 'silent');
+      } else {
+        moveSelectionToNextCell();
+      }
+    }, true);
+
+    document.getElementById('btn-insert-table-5x5')?.addEventListener('click', () => {
+      runTableAction(() => tableModule.insertTable(5, 5));
+    });
+    document.getElementById('btn-add-row')?.addEventListener('click', () => {
+      runTableAction(() => tableModule.insertRowBelow());
+    });
+    document.getElementById('btn-del-row')?.addEventListener('click', () => {
+      runTableAction(() => tableModule.deleteRow());
+    });
+    document.getElementById('btn-add-col')?.addEventListener('click', () => {
+      runTableAction(() => tableModule.insertColumnRight());
+    });
+    document.getElementById('btn-del-col')?.addEventListener('click', () => {
+      runTableAction(() => tableModule.deleteColumn());
+    });
+  }
+
+  const multicimSelect = document.getElementById('cot-multicim');
+  multicimSelect?.addEventListener('change', (e) => {
+      const val = (e.target as HTMLSelectElement).value;
+      const label = val === '1' ? 'CIM' : 'MULTITASKING';
+      if(val) mostrarToast('success', 'Empresa Seleccionada', `Esta cotización se emitirá a nombre de ${label}`);
+  });
+  const btnToggle = document.getElementById('btn-toggle-propuesta');
+  const wrapper = document.getElementById('editor-wrapper');
+  if (btnToggle && wrapper) {
+    btnToggle.onclick = () => {
+      const isHidden = wrapper.style.display === 'none';
+      wrapper.style.display = isHidden ? 'block' : 'none';
+      btnToggle.textContent = isHidden ? 'Ocultar Editor' : 'Mostrar/Ocultar Editor';
+    };
+  }
   // --- FIN CONFIGURACIÓN EDITOR ---
 
   // Eventos del formulario
@@ -619,6 +771,15 @@ async function abrirFormularioCotizacion() {
     if (tbody) tbody.innerHTML = '';
     contadorLineas = 0;
     calcularTotales();
+
+    const btnAgregar = document.getElementById('btn-agregar-linea') as HTMLButtonElement;
+    const tipo = (document.getElementById('cot-tipo') as HTMLSelectElement)?.value;
+    if (btnAgregar) {
+      const enabled = Boolean(tipo);
+      btnAgregar.disabled = !enabled;
+      btnAgregar.style.cursor = enabled ? 'pointer' : 'not-allowed';
+      btnAgregar.style.opacity = enabled ? '1' : '0.6';
+    }
   });
 
   document.getElementById('btn-agregar-linea')?.addEventListener('click', () => agregarLineaDetalle());
