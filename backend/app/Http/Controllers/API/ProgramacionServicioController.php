@@ -10,7 +10,6 @@ use App\Models\OrdenServicio;
 use App\Models\DetalleOrdenServicio;
 use App\Models\ServicioProducto;
 use App\Models\Kardex;
-use App\Models\Inventario;
 use App\Models\Tecnico;
 use App\Models\Vehiculo;
 use Illuminate\Http\Request;
@@ -245,33 +244,8 @@ class ProgramacionServicioController extends Controller
             ], 422);
         }
 
-        // Validar stock total necesario
-        $receta = ServicioProducto::where('id_servicio', $validated['id_servicio'])->get();
-        $alertasStock = [];
-        foreach ($receta as $item) {
-            $necesario = $item->cantidad_default * count($fechas);
-            $inv = Inventario::where('id_productos', $item->id_producto)->first();
-            $disponible = $inv ? $inv->cantidad_disponible : 0;
-            if ($necesario > $disponible) {
-                $alertasStock[] = [
-                    'id_producto' => $item->id_producto,
-                    'producto' => $item->producto->descripcion ?? "Producto #{$item->id_producto}",
-                    'necesario' => $necesario,
-                    'disponible' => $disponible,
-                    'deficit' => $necesario - $disponible,
-                ];
-            }
-        }
-
-        if (!empty($alertasStock) && !$request->boolean('forzar')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Stock insuficiente para cubrir todas las programaciones.',
-                'alertas_stock' => $alertasStock,
-                'total_programaciones' => count($fechas),
-                'fechas' => $fechas,
-            ], 422);
-        }
+        // Ya no se valida stock en este punto.
+        // El descuento y control de stock se gestiona en Salidas de Programación.
 
         DB::beginTransaction();
         try {
