@@ -14,6 +14,28 @@ let currentFilters = {
   id_categoria: null as number | null,
 };
 
+const UNIDAD_OPTIONS = [
+  'Litros',
+  'Kilogramos',
+  'Unidades',
+  'Unidad',
+  'Par',
+  'Cajas',
+  'Galones',
+  'Gramos',
+];
+
+function renderUnidadOptions(selectedValue = ''): string {
+  const unidades = selectedValue && !UNIDAD_OPTIONS.includes(selectedValue)
+    ? [...UNIDAD_OPTIONS, selectedValue]
+    : UNIDAD_OPTIONS;
+
+  return unidades.map((unidad) => {
+    const selected = unidad === selectedValue ? 'selected' : '';
+    return `<option value="${unidad}" ${selected}>${unidad}</option>`;
+  }).join('');
+}
+
 // Vista de Productos (Tab 1)
 export function renderProductosTab() {
   return `
@@ -851,7 +873,7 @@ function actualizarEstadisticas() {
       </div>
       <div class="stat-box-content">
         <div class="stat-box-label">Inventario Total</div>
-        <div class="stat-box-value">$${valorTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span class="stat-box-note">valorizado</span></div>
+        <div class="stat-box-value">S/${valorTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span class="stat-box-note">valorizado</span></div>
       </div>
     </div>
     <div class="stat-box">
@@ -958,8 +980,8 @@ function renderizarTablaProductos() {
         <td><strong>${stock}</strong></td>
         <td>${stockSeguridad}</td>
         <td>${producto.unidad || '-'}</td>
-        <td>$${precio.toFixed(2)}</td>
-        <td>$${valorTotal.toFixed(2)}</td>
+        <td>S/${precio.toFixed(2)}</td>
+        <td>S/${valorTotal.toFixed(2)}</td>
         <td>${estadoBadge}</td>
         <td>
           <div class="action-buttons">
@@ -1109,14 +1131,7 @@ function renderModalNuevoProducto(): string {
               <label for="producto-unidad">Unidad</label>
               <select id="producto-unidad" name="unidad" class="form-input">
                 <option value="">Seleccionar unidad</option>
-                <option value="Litros">Litros</option>
-                <option value="Kilogramos">Kilogramos</option>
-                <option value="Unidades">Unidades</option>
-                <option value="Unidad">Unidad</option>
-                <option value="Par">Par</option>
-                <option value="Cajas">Cajas</option>
-                <option value="Galones">Galones</option>
-                <option value="Gramos">Gramos</option>
+                ${renderUnidadOptions()}
               </select>
             </div>
 
@@ -1419,17 +1434,14 @@ async function handleSubmitNuevoProducto(e: Event) {
 // ===== MODAL EDITAR PRODUCTO =====
 
 function renderModalEditarProducto(producto: Producto): string {
-  const categoriaSeleccionada = Number(producto.id_categoria ?? producto.categoria?.id ?? 0);
+  const categoriaSeleccionada = Number(producto.id_categoria ?? (producto.categoria as any)?.id ?? 0);
   const categoriasOptions = categoriasData.map(cat => {
     const catId = cat.id_categoria || (cat as any).id;
     const selected = Number(catId) === categoriaSeleccionada ? 'selected' : '';
     return `<option value="${catId}" ${selected}>${cat.nombre}</option>`;
   }).join('');
 
-  const unidades = ['Litros', 'Kilogramos', 'Unidades', 'Cajas', 'Galones', 'Gramos'];
-  const unidadOptions = unidades.map(u => 
-    `<option value="${u}" ${producto.unidad === u ? 'selected' : ''}>${u}</option>`
-  ).join('');
+  const unidadOptions = renderUnidadOptions(producto.unidad || '');
 
   return `
     <div id="modal-editar-producto" class="modal-overlay" style="display: flex;">
