@@ -824,7 +824,7 @@ function actualizarEstadisticas() {
   
   const valorTotal = productosData.reduce((sum, p) => {
     const stock = p.inventario?.cantidad_disponible || 0;
-    const precio = p.precio_unitario || 0;
+    const precio = Number(p.precio_unitario ?? 0);
     return sum + (stock * precio);
   }, 0);
 
@@ -922,7 +922,7 @@ function renderizarTablaProductos() {
   tbody.innerHTML = productosData.map(producto => {
     const stock = producto.inventario?.cantidad_disponible || 0;
     const stockSeguridad = producto.inventario?.stock_seguridad || 0;
-    const precio = producto.precio_unitario || 0;
+    const precio = Number(producto.precio_unitario ?? 0);
     const valorTotal = stock * precio;
 
     // Semáforo de estado basado en stock vs stock_seguridad
@@ -1127,6 +1127,12 @@ function renderModalNuevoProducto(): string {
             </div>
 
             <div class="form-group">
+              <label for="producto-stock-seguridad">Stock de Seguridad *</label>
+              <input type="number" id="producto-stock-seguridad" name="stock_seguridad"
+                     step="1" min="0" required placeholder="0" class="form-input">
+            </div>
+
+            <div class="form-group">
               <label for="producto-fecha-vencim">Fecha de Vencimiento</label>
               <input type="date" id="producto-fecha-vencim" name="fecha_vencim" class="form-input">
             </div>
@@ -1310,6 +1316,13 @@ async function handleSubmitNuevoProducto(e: Event) {
     ubicacion: formData.get('ubicacion') as string,
   };
 
+  const stockSeguridad = formData.get('stock_seguridad') as string;
+  if (!stockSeguridad || stockSeguridad === '' || Number.isNaN(Number(stockSeguridad))) {
+    mostrarToast('warning', 'Campo requerido', 'Por favor ingresa el stock de seguridad');
+    return;
+  }
+  data.stock_seguridad = Number(stockSeguridad);
+
   // Validar que id_categoria sea un número válido
   if (isNaN(data.id_categoria)) {
     mostrarToast('error', 'Error', 'Categoría inválida');
@@ -1406,9 +1419,10 @@ async function handleSubmitNuevoProducto(e: Event) {
 // ===== MODAL EDITAR PRODUCTO =====
 
 function renderModalEditarProducto(producto: Producto): string {
+  const categoriaSeleccionada = Number(producto.id_categoria ?? producto.categoria?.id ?? 0);
   const categoriasOptions = categoriasData.map(cat => {
     const catId = cat.id_categoria || (cat as any).id;
-    const selected = catId === producto.id_categoria ? 'selected' : '';
+    const selected = Number(catId) === categoriaSeleccionada ? 'selected' : '';
     return `<option value="${catId}" ${selected}>${cat.nombre}</option>`;
   }).join('');
 
@@ -1475,6 +1489,12 @@ function renderModalEditarProducto(producto: Producto): string {
               <label for="edit-precio">Precio Unitario</label>
               <input type="number" id="edit-precio" name="precio_unitario" 
                      step="0.01" min="0" value="${producto.precio_unitario || ''}" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-stock-seguridad">Stock de Seguridad *</label>
+              <input type="number" id="edit-stock-seguridad" name="stock_seguridad"
+                     step="1" min="0" value="${producto.inventario?.stock_seguridad ?? 0}" class="form-input" required>
             </div>
 
             <div class="form-group">
@@ -1651,6 +1671,9 @@ async function abrirModalEditarProducto(id: number) {
 
     const precio = formData.get('precio_unitario') as string;
     data.precio_unitario = precio ? parseFloat(precio) : null;
+
+    const stockSeguridad = formData.get('stock_seguridad') as string;
+    data.stock_seguridad = stockSeguridad ? Number(stockSeguridad) : 0;
 
     const fecha = formData.get('fecha_vencim') as string;
     data.fecha_vencim = fecha || null;

@@ -22,6 +22,7 @@ export const productoService = {
     id_categoria: number;
     n_lote: string;
     ubicacion: string;
+    stock_seguridad: number;
     unidad?: string;
     precio_unitario?: number;
     fecha_vencim?: string;
@@ -34,7 +35,7 @@ export const productoService = {
     return apiClient.get<ApiResponse<Producto>>(`/productos/${id}`);
   },
 
-  update: async (id: number, data: Partial<Producto>) => {
+  update: async (id: number, data: Partial<Producto> & { stock_seguridad?: number }) => {
     return apiClient.post<ApiResponse<Producto>>(`/productos/${id}`, {
       ...data,
       _method: 'PUT',

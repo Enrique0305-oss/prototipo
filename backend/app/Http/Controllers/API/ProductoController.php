@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Producto;
 use App\Models\Categoria;
+use App\Models\Inventario;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -64,6 +65,7 @@ class ProductoController extends Controller
                 'id' => $producto->id,
                 'sku' => $producto->sku,
                 'descripcion' => $producto->descripcion,
+                'id_categoria' => $producto->id_categoria,
                 'n_lote' => $producto->n_lote,
                 'fecha_vencim' => $producto->fecha_vencim ? $producto->fecha_vencim->format('Y-m-d') : null,
                 'ubicacion' => $producto->ubicacion,
@@ -103,6 +105,7 @@ class ProductoController extends Controller
             'n_lote' => 'required|string|max:50',
             'unidad' => 'nullable|string|max:20',
             'precio_unitario' => 'nullable|numeric|min:0',
+            'stock_seguridad' => 'required|integer|min:0',
             'estado' => 'nullable|in:Activo,Inactivo',
         ], [
             'descripcion.required' => 'La descripción del producto es requerida',
@@ -111,6 +114,8 @@ class ProductoController extends Controller
             'ubicacion.required' => 'La ubicación es requerida',
             'n_lote.required' => 'El número de lote es requerido',
             'precio_unitario.numeric' => 'El precio debe ser un número válido',
+            'stock_seguridad.required' => 'El stock de seguridad es requerido',
+            'stock_seguridad.integer' => 'El stock de seguridad debe ser un número entero',
         ]);
 
         if ($validator->fails()) {
@@ -135,6 +140,14 @@ class ProductoController extends Controller
             'unidad' => $request->unidad,
             'precio_unitario' => $request->precio_unitario,
             'estado' => $request->estado ?? 'Activo',
+        ]);
+
+        Inventario::create([
+            'id_productos' => $producto->id,
+            'cantidad_disponible' => 0,
+            'stock_seguridad' => $request->stock_seguridad,
+            'Tipo' => 'Entrada',
+            'Cantidad_total' => 0,
         ]);
 
         $producto->load(['categoria', 'inventario']);
@@ -200,6 +213,7 @@ class ProductoController extends Controller
             'id' => $producto->id,
             'sku' => $producto->sku,
             'descripcion' => $producto->descripcion,
+            'id_categoria' => $producto->id_categoria,
             'n_lote' => $producto->n_lote,
             'fecha_vencim' => $producto->fecha_vencim ? $producto->fecha_vencim->format('Y-m-d') : null,
             'ubicacion' => $producto->ubicacion,
@@ -249,6 +263,7 @@ class ProductoController extends Controller
             'n_lote' => 'sometimes|required|string|max:50',
             'unidad' => 'nullable|string|max:20',
             'precio_unitario' => 'nullable|numeric|min:0',
+            'stock_seguridad' => 'nullable|integer|min:0',
             'estado' => 'sometimes|in:Activo,Inactivo',
         ]);
 
@@ -285,6 +300,23 @@ class ProductoController extends Controller
             'precio_unitario',
             'estado'
         ]));
+
+        if ($request->has('stock_seguridad')) {
+            $inventario = $producto->inventario;
+            if ($inventario) {
+                $inventario->update([
+                    'stock_seguridad' => $request->stock_seguridad,
+                ]);
+            } else {
+                Inventario::create([
+                    'id_productos' => $producto->id,
+                    'cantidad_disponible' => 0,
+                    'stock_seguridad' => $request->stock_seguridad,
+                    'Tipo' => 'Entrada',
+                    'Cantidad_total' => 0,
+                ]);
+            }
+        }
 
         $producto->load(['categoria', 'inventario']);
 
