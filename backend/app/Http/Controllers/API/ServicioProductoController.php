@@ -147,12 +147,23 @@ class ServicioProductoController extends Controller
             'productos.*.id_equipo' => 'nullable|integer|exists:equipo,id',
         ]);
 
+        // Agrupar productos duplicados sumando cantidades
+        $agrupados = [];
+        foreach ($validated['productos'] as $prod) {
+            $key = $prod['id_producto'] . '-' . ($prod['id_equipo'] ?? 'null');
+            if (isset($agrupados[$key])) {
+                $agrupados[$key]['cantidad_default'] += $prod['cantidad_default'];
+            } else {
+                $agrupados[$key] = $prod;
+            }
+        }
+
         // Eliminar receta anterior
         ServicioProducto::where('id_servicio', $idServicio)->delete();
 
         // Crear nueva
         $items = [];
-        foreach ($validated['productos'] as $prod) {
+        foreach ($agrupados as $prod) {
             $items[] = ServicioProducto::create([
                 'id_servicio' => $idServicio,
                 'id_producto' => $prod['id_producto'],
