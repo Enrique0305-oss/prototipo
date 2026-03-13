@@ -112,6 +112,64 @@
         .dot-realizado { background: #22c55e; }
         .dot-reprogramado { background: #ef4444; }
         .dot-cancelado { background: #94a3b8; }
+
+        /* VISTA DIARIA OPERATIVA */
+        .ops-summary {
+            display: table; width: 100%; margin-bottom: 14px;
+            border-collapse: separate; border-spacing: 8px 0;
+        }
+        .ops-summary-item {
+            display: table-cell; width: 33.33%;
+            background: #f4f7fb; border: 1px solid #d8e1f0; border-radius: 6px;
+            padding: 10px 12px; text-align: center;
+        }
+        .ops-summary-value { font-size: 18px; font-weight: bold; color: #2E4A7C; }
+        .ops-summary-label { font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.6px; }
+
+        .tech-card {
+            border: 1px solid #d8e1f0; border-radius: 8px; margin-bottom: 14px; overflow: hidden;
+        }
+        .tech-card-header {
+            background: #2E4A7C; color: #fff; padding: 10px 12px;
+        }
+        .tech-card-time {
+            font-size: 18px; font-weight: bold; letter-spacing: 0.8px;
+        }
+        .tech-card-service {
+            margin-top: 2px; font-size: 13px; font-weight: bold;
+        }
+        .tech-card-client {
+            margin-top: 2px; font-size: 10px; opacity: 0.95;
+        }
+        .tech-card-body {
+            padding: 10px 12px 12px;
+        }
+        .tech-meta {
+            width: 100%; border-collapse: collapse; margin-bottom: 8px;
+        }
+        .tech-meta td {
+            padding: 5px 0; border-bottom: 1px solid #edf2f7; vertical-align: top; font-size: 10px;
+        }
+        .tech-meta tr:last-child td { border-bottom: none; }
+        .tech-meta-label {
+            width: 110px; font-weight: bold; color: #2E4A7C;
+        }
+        .tech-section-title {
+            font-size: 11px; font-weight: bold; color: #2E4A7C; margin: 10px 0 6px;
+            text-transform: uppercase; letter-spacing: 0.6px;
+        }
+        .insumos-table { width: 100%; border-collapse: collapse; }
+        .insumos-table th {
+            background: #eef3fb; color: #2E4A7C; padding: 6px 8px; text-align: left;
+            font-size: 9px; border: 1px solid #d8e1f0;
+        }
+        .insumos-table td {
+            padding: 6px 8px; border: 1px solid #e5e7eb; font-size: 10px;
+        }
+        .insumos-empty {
+            padding: 8px 10px; background: #fafafa; border: 1px dashed #d1d5db;
+            color: #6b7280; font-size: 10px;
+        }
     </style>
 </head>
 <body>
@@ -126,30 +184,34 @@
             </div>
         @endif
 
-        <div class="main-title">PROGRAMACIÓN DE SERVICIOS</div>
+        <div class="main-title">{{ $vista === 'diaria' ? 'HOJA OPERATIVA DEL DÍA' : 'PROGRAMACIÓN DE SERVICIOS' }}</div>
         <div class="sub-title">{{ $titulo }}</div>
 
         {{-- RESUMEN ESTADÍSTICO --}}
-        <div class="stats-bar">
-            <div class="stat-item"><div class="stat-value">{{ $total }}</div><div class="stat-label">Total</div></div>
-            <div class="stat-item"><div class="stat-value">{{ $contadores['Programado'] ?? 0 }}</div><div class="stat-label">Programados</div></div>
-            <div class="stat-item"><div class="stat-value">{{ $contadores['Confirmado'] ?? 0 }}</div><div class="stat-label">Confirmados</div></div>
-            <div class="stat-item"><div class="stat-value">{{ $contadores['En Ejecución'] ?? 0 }}</div><div class="stat-label">En Ejecución</div></div>
-            <div class="stat-item"><div class="stat-value">{{ $contadores['Realizado'] ?? 0 }}</div><div class="stat-label">Realizados</div></div>
-            <div class="stat-item"><div class="stat-value">{{ $contadores['Reprogramado'] ?? 0 }}</div><div class="stat-label">Reprogramados</div></div>
-            <div class="stat-item"><div class="stat-value">{{ $contadores['Cancelado'] ?? 0 }}</div><div class="stat-label">Cancelados</div></div>
-        </div>
+        @if($vista !== 'diaria')
+            <div class="stats-bar">
+                <div class="stat-item"><div class="stat-value">{{ $total }}</div><div class="stat-label">Total</div></div>
+                <div class="stat-item"><div class="stat-value">{{ $contadores['Programado'] ?? 0 }}</div><div class="stat-label">Programados</div></div>
+                <div class="stat-item"><div class="stat-value">{{ $contadores['Confirmado'] ?? 0 }}</div><div class="stat-label">Confirmados</div></div>
+                <div class="stat-item"><div class="stat-value">{{ $contadores['En Ejecución'] ?? 0 }}</div><div class="stat-label">En Ejecución</div></div>
+                <div class="stat-item"><div class="stat-value">{{ $contadores['Realizado'] ?? 0 }}</div><div class="stat-label">Realizados</div></div>
+                <div class="stat-item"><div class="stat-value">{{ $contadores['Reprogramado'] ?? 0 }}</div><div class="stat-label">Reprogramados</div></div>
+                <div class="stat-item"><div class="stat-value">{{ $contadores['Cancelado'] ?? 0 }}</div><div class="stat-label">Cancelados</div></div>
+            </div>
+        @endif
 
         {{-- LEYENDA --}}
-        <div class="legend">
-            <span><span class="dot dot-programado"></span>Programado</span>
-            <span><span class="dot dot-confirmado"></span>Confirmado</span>
-            <span><span class="dot dot-en-camino"></span>En Camino</span>
-            <span><span class="dot dot-en-ejecucion"></span>En Ejecución</span>
-            <span><span class="dot dot-realizado"></span>Realizado</span>
-            <span><span class="dot dot-reprogramado"></span>Reprogramado</span>
-            <span><span class="dot dot-cancelado"></span>Cancelado</span>
-        </div>
+        @if($vista !== 'diaria')
+            <div class="legend">
+                <span><span class="dot dot-programado"></span>Programado</span>
+                <span><span class="dot dot-confirmado"></span>Confirmado</span>
+                <span><span class="dot dot-en-camino"></span>En Camino</span>
+                <span><span class="dot dot-en-ejecucion"></span>En Ejecución</span>
+                <span><span class="dot dot-realizado"></span>Realizado</span>
+                <span><span class="dot dot-reprogramado"></span>Reprogramado</span>
+                <span><span class="dot dot-cancelado"></span>Cancelado</span>
+            </div>
+        @endif
 
         {{-- ═══════════════════════════════════════════════════════════ --}}
         {{-- VISTA MENSUAL --}}
@@ -332,83 +394,107 @@
         {{-- ═══════════════════════════════════════════════════════════ --}}
         @elseif($vista === 'diaria')
             @if($programaciones->count() > 0)
-                <table class="detail-table">
-                    <thead>
-                        <tr>
-                            <th style="width:75px;">Horario</th>
-                            <th>Servicio</th>
-                            <th>ODS</th>
-                            <th>Cliente</th>
-                            <th>Local / Sede</th>
-                            <th>Dirección</th>
-                            <th>Técnico(s)</th>
-                            <th>Supervisor</th>
-                            <th>Vehículo</th>
-                            <th style="width:75px;">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($programaciones->sortBy('hora_inicio') as $p)
-                            @php
-                                $badgeClass = 'badge-' . str_replace(' ', '-', strtolower($p->estado_ejecucion));
-                                $cliente = $p->ordenServicio && $p->ordenServicio->cliente
-                                    ? ($p->ordenServicio->cliente->nombre_empresa ?: $p->ordenServicio->cliente->persona_contacto)
-                                    : '—';
-                                $tecnicos = $p->tecnicos->count() > 0
-                                    ? $p->tecnicos->map(fn($t) => $t->nombre . ' ' . $t->apellidos)->implode(', ')
-                                    : ($p->tecnico ? $p->tecnico->nombre . ' ' . $p->tecnico->apellidos : '—');
-                                $supervisor = $p->supervisor ? $p->supervisor->nombre . ' ' . $p->supervisor->apellidos : '—';
-                                $vehiculo = $p->vehiculo ? $p->vehiculo->placa . ' - ' . $p->vehiculo->marca . ' ' . $p->vehiculo->modelo : '—';
-                            @endphp
-                            <tr>
-                                <td>{{ \Carbon\Carbon::parse($p->hora_inicio)->format('H:i') }}{{ $p->hora_fin ? ' - ' . \Carbon\Carbon::parse($p->hora_fin)->format('H:i') : '' }}</td>
-                                <td>{{ $p->servicio->nombre ?? '—' }}</td>
-                                <td>{{ $p->ordenServicio->numero_orden ?? '—' }}</td>
-                                <td>{{ $cliente }}</td>
-                                <td>{{ $p->local_sede ?: '—' }}</td>
-                                <td style="font-size:9px;">{{ $p->direccion_completa ?: '—' }}</td>
-                                <td style="font-size:9px;">{{ $tecnicos }}</td>
-                                <td style="font-size:9px;">{{ $supervisor }}</td>
-                                <td style="font-size:9px;">{{ $vehiculo }}</td>
-                                <td><span class="badge {{ $badgeClass }}">{{ $p->estado_ejecucion }}</span></td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-
-                {{-- INSUMOS por servicio (vista diaria muestra más detalle) --}}
                 @php
-                    $conInsumos = $programaciones->filter(fn($p) => $p->insumos && $p->insumos->count() > 0);
+                    $tecnicosUnicos = $programaciones
+                        ->flatMap(function ($p) {
+                            if ($p->tecnicos && $p->tecnicos->count() > 0) {
+                                return $p->tecnicos->pluck('id');
+                            }
+                            return $p->tecnico ? collect([$p->tecnico->id]) : collect();
+                        })
+                        ->filter()
+                        ->unique()
+                        ->count();
+                    $vehiculosAsignados = $programaciones->pluck('id_vehiculo')->filter()->unique()->count();
                 @endphp
-                @if($conInsumos->count() > 0)
-                    <h3 style="font-size:13px; color:#2E4A7C; margin:15px 0 8px;">Insumos / Productos Asignados</h3>
-                    @foreach($conInsumos as $p)
-                        <div style="font-size:10px; font-weight:bold; margin:8px 0 3px; color:#555;">
-                            {{ \Carbon\Carbon::parse($p->hora_inicio)->format('H:i') }} — {{ $p->servicio->nombre ?? 'Servicio' }}
-                            ({{ $p->ordenServicio && $p->ordenServicio->cliente ? ($p->ordenServicio->cliente->nombre_empresa ?: $p->ordenServicio->cliente->persona_contacto) : '' }})
+                <div class="ops-summary">
+                    <div class="ops-summary-item">
+                        <div class="ops-summary-value">{{ $programaciones->count() }}</div>
+                        <div class="ops-summary-label">Servicios del día</div>
+                    </div>
+                    <div class="ops-summary-item">
+                        <div class="ops-summary-value">{{ $tecnicosUnicos }}</div>
+                        <div class="ops-summary-label">Técnicos asignados</div>
+                    </div>
+                    <div class="ops-summary-item">
+                        <div class="ops-summary-value">{{ $vehiculosAsignados }}</div>
+                        <div class="ops-summary-label">Vehículos asignados</div>
+                    </div>
+                </div>
+
+                @foreach($programaciones->sortBy('hora_inicio') as $p)
+                    @php
+                        $cliente = $p->ordenServicio && $p->ordenServicio->cliente
+                            ? ($p->ordenServicio->cliente->nombre_empresa ?: $p->ordenServicio->cliente->persona_contacto)
+                            : '—';
+                        $tecnicos = $p->tecnicos->count() > 0
+                            ? $p->tecnicos->map(fn($t) => $t->nombre . ' ' . $t->apellidos)->implode(', ')
+                            : ($p->tecnico ? $p->tecnico->nombre . ' ' . $p->tecnico->apellidos : '—');
+                        $supervisor = $p->supervisor ? $p->supervisor->nombre . ' ' . $p->supervisor->apellidos : 'No asignado';
+                        $vehiculo = $p->vehiculo ? $p->vehiculo->placa . ' - ' . $p->vehiculo->marca . ' ' . $p->vehiculo->modelo : 'No asignado';
+                    @endphp
+                    <div class="tech-card">
+                        <div class="tech-card-header">
+                            <div class="tech-card-time">{{ \Carbon\Carbon::parse($p->hora_inicio)->format('H:i') }}{{ $p->hora_fin ? ' - ' . \Carbon\Carbon::parse($p->hora_fin)->format('H:i') : '' }}</div>
+                            <div class="tech-card-service">{{ $p->servicio->nombre ?? 'Servicio' }}</div>
+                            <div class="tech-card-client">{{ $cliente }}</div>
                         </div>
-                        <table class="detail-table" style="margin-bottom:8px;">
-                            <thead>
+                        <div class="tech-card-body">
+                            <table class="tech-meta">
                                 <tr>
-                                    <th>Producto</th>
-                                    <th style="width:90px;">Cant. Asignada</th>
-                                    <th style="width:90px;">Cant. Utilizada</th>
-                                    <th style="width:80px;">Estado</th>
+                                    <td class="tech-meta-label">Local / Sede</td>
+                                    <td>{{ $p->local_sede ?: '—' }}</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($p->insumos as $ins)
+                                <tr>
+                                    <td class="tech-meta-label">Dirección</td>
+                                    <td>{{ $p->direccion_completa ?: '—' }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="tech-meta-label">Técnicos</td>
+                                    <td>{{ $tecnicos }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="tech-meta-label">Vehículo</td>
+                                    <td>{{ $vehiculo }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="tech-meta-label">Supervisor</td>
+                                    <td>{{ $supervisor }}</td>
+                                </tr>
+                                @if(!empty($p->observaciones))
                                     <tr>
-                                        <td>{{ $ins->producto->descripcion ?? '—' }}</td>
-                                        <td style="text-align:center;">{{ $ins->cantidad_asignada }}</td>
-                                        <td style="text-align:center;">{{ $ins->cantidad_utilizada ?? '—' }}</td>
-                                        <td style="text-align:center;">{{ $ins->estado }}</td>
+                                        <td class="tech-meta-label">Indicaciones</td>
+                                        <td>{{ $p->observaciones }}</td>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    @endforeach
-                @endif
+                                @endif
+                            </table>
+
+                            <div class="tech-section-title">Insumos asignados</div>
+                            @if($p->insumos && $p->insumos->count() > 0)
+                                <table class="insumos-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Producto</th>
+                                            <th style="width:90px; text-align:center;">Cantidad</th>
+                                            <th style="width:110px; text-align:center;">Utilizada</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($p->insumos as $ins)
+                                            <tr>
+                                                <td>{{ $ins->producto->descripcion ?? '—' }}</td>
+                                                <td style="text-align:center;">{{ $ins->cantidad_asignada }}</td>
+                                                <td style="text-align:center;">{{ $ins->cantidad_utilizada ?? '—' }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            @else
+                                <div class="insumos-empty">No hay insumos asignados para este servicio.</div>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
             @else
                 <div style="padding:30px; text-align:center; color:#999; font-size:14px;">
                     No hay servicios programados para este día.
