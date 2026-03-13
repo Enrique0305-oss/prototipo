@@ -559,23 +559,28 @@
                 <p>
                     Nos es grato enviarle nuestra siguiente propuesta comercial de 
                     <span class="highlight-service">
-                        {{-- Aquí usamos la lógica dinámica --}}
                         @php
-                            $nombresServicios = $cotizacion->detalles
-                                ->filter(fn($d) => $d->id_servicio && $d->servicio)
-                                ->pluck('servicio.nombre')
-                                ->unique()
-                                ->implode(', ');
+                            // 1. lista de nombres de servicios o manuales
+                            $serviciosColeccion = $cotizacion->detalles
+                                ->map(function($d) {
+                                    return $d->id_servicio && $d->servicio ? $d->servicio->nombre : $d->descripcion_manual;
+                                })
+                                ->filter()
+                                ->unique();
 
-                            if(empty($nombresServicios)) {
-                                $nombresServicios = $cotizacion->detalles
-                                    ->pluck('descripcion_manual')
-                                    ->filter()
-                                    ->unique()
-                                    ->implode(', ');
+                            $cantidad = $serviciosColeccion->count();
+                            
+                            // 2. logica de cuando se seleccione mas servicios
+                            if ($cantidad > 1) {
+                                // Si hay más de 2, ponemos el nombre general
+                                $textoMostrar = "servicio de Control de plagas";
+                            } else {
+                                // Si hay 1 o 2, los listamos separados por coma
+                                $textoMostrar = $serviciosColeccion->implode(', ');
                             }
                         @endphp
-                        {{ $nombresServicios ?: 'Asesoría y Servicios Especializados' }}
+                        
+                        {{ $textoMostrar ?: 'Asesoría y Servicios Especializados' }}
                     </span>.
                 </p>
                 <p>
@@ -617,7 +622,14 @@
             </div>
         </div>
         <div class="page-break"></div>
-        
+    
+        <!-- CONDICIONAL CUANDO SEA UN SERVICIO DE LIMPIEZA RESERVORIOS -->
+        @php
+            $mostrarSeccionEspecial = $cotizacion->detalles->contains(function($detalle) {
+                // Verifica que el servicio no sea nulo y que el nombre coincida exactamente
+                return $detalle->servicio && $detalle->servicio->nombre === 'LIMPIEZA DE CISTERNAS Y RESERVORIOS';
+            });
+        @endphp
         <!-- PÁGINA DE PROPUESTA TÉCNICA -->
         <div class="contenido-desplazado">
             
@@ -644,6 +656,36 @@
             <div class="seccion-descripcion">
                     A continuación, se detallarán la lista de actividades incluidas en el servicio.
             </div>
+
+            {{-- 2. SECCIÓN DINÁMICA DE IMÁGENES CUANDOS SEA SERVICIO DE LIMPIEZA --}}
+            @if($mostrarSeccionEspecial)
+                <div style="margin-top: 15px; text-align: center;">
+                    <div style="margin-bottom: 10px; text-align: left;">
+                        <strong style="font-size: 13px;">• SERVICIO PARA PRESTAR:</strong>
+                        <p style="margin: 5px 0 15px 15px; font-size: 14px; color: #333;">LIMPIEZA DE RESERVORIO DE AGUA</p>
+                        
+                        <strong style="font-size: 13px;">• PROCEDIMIENTO DEL SERVICIO:</strong>
+                    </div>
+
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                        <tr>
+                            <td style="width: 33%; padding: 5px;">
+                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_1.png') }}" style="width: 100%; border: 1px solid #ddd;">
+                            </td>
+                            <td style="width: 33%; padding: 5px;">
+                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_2.png') }}" style="width: 100%; border: 1px solid #ddd;">
+                            </td>
+                            <td style="width: 33%; padding: 5px;">
+                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_3.png') }}" style="width: 100%; border: 1px solid #ddd;">
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div style="margin-bottom: 10px; text-align: left;">
+                        <strong style="font-size: 13px;">• PERSONAL ASIGNADO:</strong>
+                    </div>
+                </div>
+            @endif
             <div class="proposal-text" style="margin-bottom: 20px;">
                 @if($cotizacion->propuesta_tecnica)
                     {!! $cotizacion->propuesta_tecnica !!}
@@ -657,7 +699,7 @@
                 <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÓMICA
             </div>
             <div class="seccion-descripcion">
-                    El siguiente cuadro muestra la respectiva cotización por el servicio de auditoría:
+                    El siguiente cuadro muestra la respectiva cotización por el servicio brindado:
             </div>
             <div class="products-title">Detalle de Productos/Servicios</div>
             <table class="products-table">
