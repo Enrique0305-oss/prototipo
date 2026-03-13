@@ -816,20 +816,46 @@ function getGroupKey(r: { id_servicio?: number; id_cliente_planta?: number | nul
   return `${r.id_servicio || 0}-${r.id_cliente_planta || 0}-${r.id_cliente_planta_area || 0}`;
 }
 
+function parseGroupKey(groupKey: string): { idServicio: number; idPlanta: number | null; idArea: number | null } {
+  const [idServicioRaw, idPlantaRaw, idAreaRaw] = groupKey.split('-').map(v => Number(v || 0));
+  return {
+    idServicio: idServicioRaw || 0,
+    idPlanta: idPlantaRaw || null,
+    idArea: idAreaRaw || null,
+  };
+}
+
+function getGroupOrderFromDetalleODS(): string[] {
+  const order: string[] = [];
+  const lineas = document.querySelectorAll('#ods-detalle-body tr');
+  lineas.forEach((linea) => {
+    const idServicio = Number((linea.querySelector('.servicio-id-hidden') as HTMLInputElement)?.value || 0);
+    if (!idServicio) return;
+    const idPlanta = parseInt((linea.querySelector('.planta-select') as HTMLSelectElement)?.value || '0') || 0;
+    const idArea = parseInt((linea.querySelector('.area-select') as HTMLSelectElement)?.value || '0') || 0;
+    const key = `${idServicio}-${idPlanta}-${idArea}`;
+    if (!order.includes(key)) order.push(key);
+  });
+  return order;
+}
+
 function renderProductosODS() {
   const tbody = document.getElementById('ods-productos-body');
   const emptyEl = document.getElementById('ods-productos-empty');
   if (!tbody) return;
 
   if (odsProductoRows.length === 0) {
-    tbody.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'block';
-    return;
+    const groupsFromDetalle = getGroupOrderFromDetalleODS();
+    if (groupsFromDetalle.length === 0) {
+      tbody.innerHTML = '';
+      if (emptyEl) emptyEl.style.display = 'block';
+      return;
+    }
   }
   if (emptyEl) emptyEl.style.display = 'none';
 
   // Agrupar por servicio+planta+area manteniendo orden
-  const groupOrder: string[] = [];
+  const groupOrder = getGroupOrderFromDetalleODS();
   odsProductoRows.forEach(r => {
     const key = getGroupKey(r);
     if (!groupOrder.includes(key)) groupOrder.push(key);
@@ -838,19 +864,34 @@ function renderProductosODS() {
   let html = '';
   groupOrder.forEach(groupKey => {
     const rows = odsProductoRows.filter(r => getGroupKey(r) === groupKey);
+    const parsed = parseGroupKey(groupKey);
     const first = rows[0];
-    const srvId = first.id_servicio || 0;
-    const hasGroup = srvId > 0 || first.id_cliente_planta;
+    const srvId = first?.id_servicio || parsed.idServicio || 0;
+    const idPlanta = first?.id_cliente_planta ?? parsed.idPlanta;
+    const idArea = first?.id_cliente_planta_area ?? parsed.idArea;
+    const hasGroup = srvId > 0 || !!idPlanta;
 
     if (hasGroup) {
-      const groupLabel = getGroupLabel(first.id_servicio, first.id_cliente_planta, first.id_cliente_planta_area);
+      const groupLabel = getGroupLabel(srvId, idPlanta, idArea);
       html += `<tr class="ods-srv-header"><td colspan="5" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-        ${groupLabel}</td></tr>`;
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+            ${groupLabel}
+          </span>
+          <button type="button" class="btn-secondary ods-prod-add-group" data-group-key="${groupKey}" style="font-size:11px;padding:2px 8px;line-height:1.3;">
+            + Añadir producto
+          </button>
+        </div>
+      </td></tr>`;
     } else if (groupOrder.length > 1) {
       html += `<tr class="ods-srv-header"><td colspan="5" style="background:#f8fafc;padding:6px 10px;font-size:12px;font-weight:600;color:#64748b;border-bottom:2px solid #e2e8f0;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
         Generales</td></tr>`;
+    }
+    if (rows.length === 0) {
+      html += `<tr><td colspan="5" style="text-align:center;color:#94a3b8;font-size:12px;padding:8px;">Sin productos para este bloque</td></tr>`;
+      return;
     }
     rows.forEach(r => {
       const idx = odsProductoRows.indexOf(r);
@@ -871,6 +912,14 @@ function renderProductosODS() {
 }
 
 function bindProductosODSEvents() {
+  document.querySelectorAll('.ods-prod-add-group').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const groupKey = (e.currentTarget as HTMLElement).dataset.groupKey || '0-0-0';
+      const group = parseGroupKey(groupKey);
+      await cargarProductosDisponiblesODS();
+      agregarProductoODS(0, 1, '', group.idServicio, group.idPlanta, group.idArea);
+    });
+  });
   document.querySelectorAll('.ods-prod-select').forEach(sel => {
     sel.addEventListener('change', (e) => {
       const idx = Number((e.target as HTMLSelectElement).dataset.idx);
@@ -913,8 +962,22 @@ function bindProductosODSEvents() {
   });
 }
 
-function agregarProductoODS(idProducto = 0, cantidad = 1, observacion = '') {
-  odsProductoRows.push({ id_producto: idProducto, cantidad, observacion });
+function agregarProductoODS(
+  idProducto = 0,
+  cantidad = 1,
+  observacion = '',
+  idServicio: number = 0,
+  idPlanta: number | null = null,
+  idArea: number | null = null,
+) {
+  odsProductoRows.push({
+    id_producto: idProducto,
+    cantidad,
+    observacion,
+    id_servicio: idServicio || undefined,
+    id_cliente_planta: idPlanta,
+    id_cliente_planta_area: idArea,
+  });
   renderProductosODS();
 }
 
@@ -1029,14 +1092,17 @@ function renderEquiposODS() {
   if (!tbody) return;
 
   if (odsEquipoRows.length === 0) {
-    tbody.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'block';
-    return;
+    const groupsFromDetalle = getGroupOrderFromDetalleODS();
+    if (groupsFromDetalle.length === 0) {
+      tbody.innerHTML = '';
+      if (emptyEl) emptyEl.style.display = 'block';
+      return;
+    }
   }
   if (emptyEl) emptyEl.style.display = 'none';
 
   // Agrupar por servicio+planta+area
-  const groupOrder: string[] = [];
+  const groupOrder = getGroupOrderFromDetalleODS();
   odsEquipoRows.forEach(r => {
     const key = getGroupKey(r);
     if (!groupOrder.includes(key)) groupOrder.push(key);
@@ -1045,19 +1111,34 @@ function renderEquiposODS() {
   let html = '';
   groupOrder.forEach(groupKey => {
     const rows = odsEquipoRows.filter(r => getGroupKey(r) === groupKey);
+    const parsed = parseGroupKey(groupKey);
     const first = rows[0];
-    const srvId = first.id_servicio || 0;
-    const hasGroup = srvId > 0 || first.id_cliente_planta;
+    const srvId = first?.id_servicio || parsed.idServicio || 0;
+    const idPlanta = first?.id_cliente_planta ?? parsed.idPlanta;
+    const idArea = first?.id_cliente_planta_area ?? parsed.idArea;
+    const hasGroup = srvId > 0 || !!idPlanta;
 
     if (hasGroup) {
-      const groupLabel = getGroupLabel(first.id_servicio, first.id_cliente_planta, first.id_cliente_planta_area);
+      const groupLabel = getGroupLabel(srvId, idPlanta, idArea);
       html += `<tr class="ods-srv-header"><td colspan="3" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-        ${groupLabel}</td></tr>`;
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+            ${groupLabel}
+          </span>
+          <button type="button" class="btn-secondary ods-equipo-add-group" data-group-key="${groupKey}" style="font-size:11px;padding:2px 8px;line-height:1.3;">
+            + Añadir equipo
+          </button>
+        </div>
+      </td></tr>`;
     } else if (groupOrder.length > 1) {
       html += `<tr class="ods-srv-header"><td colspan="3" style="background:#f8fafc;padding:6px 10px;font-size:12px;font-weight:600;color:#64748b;border-bottom:2px solid #e2e8f0;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
         Generales</td></tr>`;
+    }
+    if (rows.length === 0) {
+      html += `<tr><td colspan="3" style="text-align:center;color:#94a3b8;font-size:12px;padding:8px;">Sin equipos para este bloque</td></tr>`;
+      return;
     }
     rows.forEach(r => {
       const idx = odsEquipoRows.indexOf(r);
@@ -1074,6 +1155,14 @@ function renderEquiposODS() {
 }
 
 function bindEquiposODSEvents() {
+  document.querySelectorAll('.ods-equipo-add-group').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const groupKey = (e.currentTarget as HTMLElement).dataset.groupKey || '0-0-0';
+      const group = parseGroupKey(groupKey);
+      await cargarEquiposDisponiblesODS();
+      agregarEquipoODS(0, '', group.idServicio, group.idPlanta, group.idArea);
+    });
+  });
   document.querySelectorAll('.ods-equipo-select').forEach(sel => {
     sel.addEventListener('change', (e) => {
       const idx = Number((e.target as HTMLSelectElement).dataset.idx);
@@ -1095,8 +1184,20 @@ function bindEquiposODSEvents() {
   });
 }
 
-function agregarEquipoODS(idEquipo = 0, observacion = '') {
-  odsEquipoRows.push({ id_equipo: idEquipo, observacion });
+function agregarEquipoODS(
+  idEquipo = 0,
+  observacion = '',
+  idServicio: number = 0,
+  idPlanta: number | null = null,
+  idArea: number | null = null,
+) {
+  odsEquipoRows.push({
+    id_equipo: idEquipo,
+    observacion,
+    id_servicio: idServicio || undefined,
+    id_cliente_planta: idPlanta,
+    id_cliente_planta_area: idArea,
+  });
   renderEquiposODS();
 }
 

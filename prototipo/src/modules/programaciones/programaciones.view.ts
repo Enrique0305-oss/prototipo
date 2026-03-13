@@ -1059,16 +1059,6 @@ function renderFormNueva(body: HTMLElement) {
               </div>
             `).join('')}
           </div>
-          ${preview.stock && preview.stock.length > 0 ? `
-          <div style="padding:12px 16px;background:#fffbeb;border-top:1px solid #fde68a;">
-            <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Validación de Stock</div>
-            <table style="width:100%;font-size:12px;border-collapse:collapse;">
-              <tr style="background:#fef3c7;"><th style="padding:4px 8px;text-align:left;">Producto</th><th style="padding:4px 8px;">Necesario</th><th style="padding:4px 8px;">Disponible</th><th style="padding:4px 8px;">Estado</th></tr>
-              ${preview.stock.map(s => `
-                <tr><td style="padding:4px 8px;">${s.producto}</td><td style="padding:4px 8px;text-align:center;">${s.total_necesario}</td><td style="padding:4px 8px;text-align:center;">${s.stock_disponible}</td><td style="padding:4px 8px;text-align:center;">${s.suficiente ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" style="vertical-align:middle;"><polyline points="20 6 9 17 4 12"></polyline></svg>' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" style="vertical-align:middle;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> Insuficiente'}</td></tr>
-              `).join('')}
-            </table>
-          </div>` : ''}
         </div>`;
     } catch (err) { resultDiv.innerHTML = '<p style="color:#ef4444;">Error al previsualizar</p>'; console.error(err); }
   });
@@ -1182,7 +1172,15 @@ async function submitAnual(body: HTMLElement) {
     const total = res.total_programaciones || (res.data ? res.data.length : 0);
     mostrarToast('success', 'Programación Anual Creada', `Se crearon ${total} programaciones exitosamente`);
   } catch (err: any) {
-    mostrarToast('error', 'Error', err?.response?.data?.message || 'No se pudo crear la programación anual');
+    let message = err?.data?.message || err?.response?.data?.message || 'No se pudo crear la programación anual';
+    const errors = err?.data?.errors || err?.response?.data?.errors;
+    if (errors && typeof errors === 'object') {
+      const detalles = Object.entries(errors)
+        .map(([campo, msgs]: [string, any]) => `${campo}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+        .join(' | ');
+      if (detalles) message = `${message}. ${detalles}`;
+    }
+    mostrarToast('error', 'Error', message);
     console.error(err);
   }
 }
