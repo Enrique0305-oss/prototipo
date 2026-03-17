@@ -183,6 +183,9 @@ export interface Producto {
   n_lote: string;
   unidad?: string; // Ej: "Litros", "Unidades", "Kg"
   precio_unitario?: number;
+  ingre_activo?: string;
+  plag_objetivo?: string;
+  presentacion?: string;
   estado: 'Activo' | 'Inactivo';
   imagen?: string | null;
   imagen_url?: string | null;

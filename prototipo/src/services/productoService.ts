@@ -26,6 +26,9 @@ export const productoService = {
     unidad?: string;
     precio_unitario?: number;
     fecha_vencim?: string;
+    ingre_activo?: string;
+    plag_objetivo?: string;
+    presentacion?: string;
     estado?: 'Activo' | 'Inactivo';
   }) => {
     return apiClient.post<ApiResponse<Producto>>('/productos', data);

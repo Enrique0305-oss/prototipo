@@ -20,7 +20,10 @@ class Producto extends Model
         'unidad',
         'precio_unitario',
         'estado',
-        'imagen'
+        'imagen',
+        'ingre_activo',
+        'plag_objetivo',
+        'presentacion'
     ];
 
     protected $casts = [

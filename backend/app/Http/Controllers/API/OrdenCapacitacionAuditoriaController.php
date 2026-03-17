@@ -235,6 +235,8 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'incluye_igv' => 'nullable|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
             'observaciones' => 'nullable|string',
+            'op_tecnico' => 'nullable|string',
+            'supervisor' => 'nullable|string',
         ]);
 
         // Calcular subtotal e IGV
@@ -405,6 +407,8 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'aprobacion_total'    => 'nullable|string', 
             'materiales'         => 'nullable|array',
             'equipos'            => 'nullable|array',
+            'op_tecnico' => 'nullable|string',
+            'supervisor' => 'nullable|string',
         ]);
 
         // Recalcular IGV

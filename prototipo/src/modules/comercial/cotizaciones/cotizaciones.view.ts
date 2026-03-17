@@ -54,24 +54,27 @@ let incluyeIgv = true;
 let plantasClienteData: any[] = [];
 let paginaActual = 1;
 const itemsPorPagina = 15;
+let tabActivo = 'historial';
+const tabsInicializados: Record<string, boolean> = { servicio: false, producto: false, capacitacion: false };
+let quillKeydownController: AbortController | null = null;
 
 //  RENDER PRINCIPAL 
 export function renderComercialCotizaciones(): string {
   return `
     <div class="page-header">
       <h1>Órdenes de Cotización</h1>
-      <div class="header-actions">
-        <button class="btn-primary" id="btn-nueva-cotizacion">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          Nueva Cotización
-        </button>
-      </div>
     </div>
 
-    <!-- Lista de cotizaciones -->
-    <div id="lista-cotizaciones">
+    <!-- Navegación por tabs -->
+    <div class="cotiz-tabs-nav" style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:24px;">
+      <button class="cotiz-tab active" data-tab="historial" style="padding:10px 24px;background:none;border:none;border-bottom:3px solid #2563eb;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:600;color:#2563eb;transition:color .15s;">Historial General</button>
+      <button class="cotiz-tab" data-tab="servicio" style="padding:10px 24px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:500;color:#64748b;transition:color .15s;">Servicio</button>
+      <button class="cotiz-tab" data-tab="producto" style="padding:10px 24px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:500;color:#64748b;transition:color .15s;">Producto</button>
+      <button class="cotiz-tab" data-tab="capacitacion" style="padding:10px 24px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:500;color:#64748b;transition:color .15s;">Capacitación</button>
+    </div>
+
+    <!-- Panel: Historial General -->
+    <div id="cotiz-panel-historial">
       <div class="stats-row" style="margin-bottom: 24px;" id="cotizaciones-stats">
         <div class="stat-box">
           <div class="stat-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></div>
@@ -146,8 +149,20 @@ export function renderComercialCotizaciones(): string {
       </div>
     </div>
 
-    <!-- Formulario de nueva cotización (oculto) -->
-    <div id="formulario-cotizacion" style="display: none;"></div>
+    <!-- Panel: Servicio -->
+    <div id="cotiz-panel-servicio" style="display:none;">
+      <div id="cotiz-form-servicio"></div>
+    </div>
+
+    <!-- Panel: Producto -->
+    <div id="cotiz-panel-producto" style="display:none;">
+      <div id="cotiz-form-producto"></div>
+    </div>
+
+    <!-- Panel: Capacitación -->
+    <div id="cotiz-panel-capacitacion" style="display:none;">
+      <div id="cotiz-form-capacitacion"></div>
+    </div>
   `;
 }
 
@@ -322,10 +337,15 @@ function renderizarPaginacion() {
 }
 
 //  FORMULARIO NUEVA COTIZACIÓN 
-async function abrirFormularioCotizacion() {
-  const lista = document.getElementById('lista-cotizaciones');
-  const formulario = document.getElementById('formulario-cotizacion');
-  if (!lista || !formulario) return;
+async function abrirFormularioCotizacion(tipoFijo?: string) {
+  const panelMap: Record<string, string> = {
+    Servicio: 'cotiz-form-servicio',
+    Producto: 'cotiz-form-producto',
+    Capacitacion: 'cotiz-form-capacitacion'
+  };
+  const panelEl = tipoFijo ? document.getElementById(panelMap[tipoFijo] || '') : null;
+  if (!panelEl) return;
+  panelEl.innerHTML = '<div style="padding:40px;text-align:center;color:#64748b;font-size:14px;">Cargando formulario...</div>';
 
   // Cargar clientes aceptados y servicios/productos
   let clientesOptions = '';
@@ -372,16 +392,7 @@ async function abrirFormularioCotizacion() {
   incluyeIgv = true;
   contadorLineas = 0;
 
-  formulario.innerHTML = `
-    <div class="page-header">
-      <h1>
-        <button class="btn-back" id="btn-volver-lista" style="background:none;border:none;cursor:pointer;margin-right:8px;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-        </button>
-        Nueva Orden de Cotización
-      </h1>
-    </div>
-
+  panelEl.innerHTML = `
     <div class="form-card" style="background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
       <form id="form-cotizacion">
         <div class="form-section" style="margin-bottom: 24px;">
@@ -408,13 +419,18 @@ async function abrirFormularioCotizacion() {
               </div>
             </div>
             <div class="form-group">
-              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tipo de Cotización </label>
-              <select id="cot-tipo" class="form-control" required style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
-                <option value="">Seleccione tipo...</option>
-                <option value="Servicio">Servicio</option>
-                <option value="Producto">Producto</option>
-                <option value="Capacitacion">Capacitación</option>
-              </select>
+              <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tipo de Cotización</label>
+              ${tipoFijo ? `
+                <input type="text" class="form-control" value="${tipoFijo === 'Capacitacion' ? 'Capacitación' : tipoFijo}" readonly style="background:#f1f5f9;color:#1e293b;font-weight:600;width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;cursor:not-allowed;">
+                <input type="hidden" id="cot-tipo" value="${tipoFijo}">
+              ` : `
+                <select id="cot-tipo" class="form-control" required style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+                  <option value="">Seleccione tipo...</option>
+                  <option value="Servicio">Servicio</option>
+                  <option value="Producto">Producto</option>
+                  <option value="Capacitacion">Capacitación</option>
+                </select>
+              `}
             </div>
             <div style="grid-column: span 1; display: flex; gap: 12px;">
               <div style="flex: 1;">
@@ -465,7 +481,7 @@ async function abrirFormularioCotizacion() {
         <div class="form-section" style="margin-bottom: 24px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
             <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Detalle de Cotización</h3>
-            <button type="button" class="btn-secondary" id="btn-agregar-linea" disabled style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:not-allowed;opacity:0.6;font-size:13px;font-weight:600;color:#475569;">
+            <button type="button" class="btn-secondary" id="btn-agregar-linea" ${tipoFijo ? '' : 'disabled'} style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:${tipoFijo ? 'pointer' : 'not-allowed'};opacity:${tipoFijo ? '1' : '0.6'};font-size:13px;font-weight:600;color:#475569;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               Agregar Línea
             </button>
@@ -520,9 +536,6 @@ async function abrirFormularioCotizacion() {
       </form>
     </div>
   `;
-
-  lista.style.display = 'none';
-  formulario.style.display = 'block';
 
   // --- CONFIGURACIÓN DEL EDITOR (PEGA AQUÍ) ---
   await ensureQuillLoaded();
@@ -630,6 +643,8 @@ async function abrirFormularioCotizacion() {
       }
     };
 
+    if (quillKeydownController) quillKeydownController.abort();
+    quillKeydownController = new AbortController();
     document.addEventListener('keydown', (evt: KeyboardEvent) => {
       if (evt.key !== 'Enter') return;
       if (!isCursorInsideTable()) return;
@@ -645,7 +660,7 @@ async function abrirFormularioCotizacion() {
       } else {
         moveSelectionToNextCell();
       }
-    }, true);
+    }, { capture: true, signal: quillKeydownController.signal });
 
     document.getElementById('btn-insert-table-5x5')?.addEventListener('click', () => {
       runTableAction(() => tableModule.insertTable(5, 5));
@@ -682,8 +697,13 @@ async function abrirFormularioCotizacion() {
   // --- FIN CONFIGURACIÓN EDITOR ---
 
   // Eventos del formulario
-  document.getElementById('btn-volver-lista')?.addEventListener('click', cerrarFormulario);
-  document.getElementById('btn-cancelar-cotiz')?.addEventListener('click', cerrarFormulario);
+  document.getElementById('btn-cancelar-cotiz')?.addEventListener('click', () => {
+    if (tipoFijo) {
+      abrirFormularioCotizacion(tipoFijo);
+    } else {
+      cerrarFormulario();
+    }
+  });
 
   document.getElementById('cot-igv')?.addEventListener('change', (e) => {
     incluyeIgv = (e.target as HTMLSelectElement).value === '1';
@@ -789,15 +809,25 @@ async function abrirFormularioCotizacion() {
   const form = document.getElementById('form-cotizacion') as HTMLFormElement;
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    await guardarCotizacion();
+    await guardarCotizacion(tipoFijo);
   });
 }
 
 function cerrarFormulario() {
-  const lista = document.getElementById('lista-cotizaciones');
-  const formulario = document.getElementById('formulario-cotizacion');
-  if (lista) lista.style.display = 'block';
-  if (formulario) { formulario.style.display = 'none'; formulario.innerHTML = ''; }
+  ['servicio', 'producto', 'capacitacion'].forEach(p => {
+    const panel = document.getElementById(`cotiz-panel-${p}`);
+    if (panel) panel.style.display = 'none';
+  });
+  const historialPanel = document.getElementById('cotiz-panel-historial');
+  if (historialPanel) historialPanel.style.display = 'block';
+  document.querySelectorAll('.cotiz-tab').forEach(t => {
+    const el = t as HTMLElement;
+    const isActive = el.dataset.tab === 'historial';
+    el.style.borderBottomColor = isActive ? '#2563eb' : 'transparent';
+    el.style.color = isActive ? '#2563eb' : '#64748b';
+    el.style.fontWeight = isActive ? '600' : '500';
+  });
+  tabActivo = 'historial';
 }
 
 async function cargarPlantasCliente(idCliente: number) {
@@ -1003,7 +1033,7 @@ function calcularTotales() {
   if (totalEl) totalEl.textContent = `S/ ${total.toFixed(2)}`;
 }
 
-async function guardarCotizacion() {
+async function guardarCotizacion(tipoFijo?: string) {
   const multicimId = parseInt((document.getElementById('cot-multicim') as HTMLSelectElement)?.value || '0');
   const clienteId = parseInt((document.getElementById('cot-cliente') as HTMLInputElement)?.value || '0');
   const tipoCotizacion = (document.getElementById('cot-tipo') as HTMLSelectElement)?.value;
@@ -1091,9 +1121,13 @@ async function guardarCotizacion() {
         }
       }
 
-      cerrarFormulario();
       await cargarCotizaciones();
       await cargarEstadisticas();
+      if (tipoFijo) {
+        await abrirFormularioCotizacion(tipoFijo);
+      } else {
+        cerrarFormulario();
+      }
     }
   } catch (error: any) {
     let msg = 'Error al crear la cotización';
@@ -1129,8 +1163,48 @@ export function initCotizacionesEvents() {
   cargarEstadisticas();
   cargarCotizaciones();
 
-  // Botón nueva cotización
-  document.getElementById('btn-nueva-cotizacion')?.addEventListener('click', () => abrirFormularioCotizacion());
+  // Reset estado de tabs al inicializar
+  tabActivo = 'historial';
+  tabsInicializados.servicio = false;
+  tabsInicializados.producto = false;
+  tabsInicializados.capacitacion = false;
+
+  // Navegación por tabs
+  document.querySelectorAll('.cotiz-tab').forEach(tab => {
+    tab.addEventListener('click', async (e) => {
+      const nuevoTab = (e.currentTarget as HTMLElement).dataset.tab || 'historial';
+      if (nuevoTab === tabActivo) return;
+      tabActivo = nuevoTab;
+
+      // Actualizar estilos de tabs
+      document.querySelectorAll('.cotiz-tab').forEach(t => {
+        const el = t as HTMLElement;
+        const isActive = el.dataset.tab === nuevoTab;
+        el.style.borderBottomColor = isActive ? '#2563eb' : 'transparent';
+        el.style.color = isActive ? '#2563eb' : '#64748b';
+        el.style.fontWeight = isActive ? '600' : '500';
+      });
+
+      // Mostrar/ocultar paneles
+      ['historial', 'servicio', 'producto', 'capacitacion'].forEach(p => {
+        const panel = document.getElementById(`cotiz-panel-${p}`);
+        if (panel) panel.style.display = 'none';
+      });
+      const panelActivo = document.getElementById(`cotiz-panel-${nuevoTab}`);
+      if (panelActivo) panelActivo.style.display = 'block';
+
+      // Cargar formulario en tabs de tipo (solo la primera vez)
+      if (nuevoTab !== 'historial' && !tabsInicializados[nuevoTab]) {
+        tabsInicializados[nuevoTab] = true;
+        const tipoMap: Record<string, string> = {
+          servicio: 'Servicio',
+          producto: 'Producto',
+          capacitacion: 'Capacitacion'
+        };
+        await abrirFormularioCotizacion(tipoMap[nuevoTab]);
+      }
+    });
+  });
 
   // Búsqueda con debounce
   let debounce: ReturnType<typeof setTimeout>;

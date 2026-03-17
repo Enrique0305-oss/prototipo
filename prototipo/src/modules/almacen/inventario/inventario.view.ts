@@ -1159,6 +1159,24 @@ function renderModalNuevoProducto(): string {
                 <option value="Inactivo">Inactivo</option>
               </select>
             </div>
+
+            <div class="form-group">
+              <label for="producto-ingre-activo">Ingrediente Activo</label>
+             <input type="text" id="producto-ingre-activo" name="ingre_activo"
+                     placeholder="Ej: Cipermetrina" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="producto-plag-objetivo">Plaga Objetivo</label>
+             <input type="text" id="producto-plag-objetivo" name="plag_objetivo"
+                     placeholder="Ej: Moscas" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="producto-presentacion">Presentación</label>
+              <input type="text" id="producto-presentacion" name="presentacion"
+                     placeholder="Ej: 250ml" class="form-input">
+            </div>
           </div>
 
           <!-- Campo de imagen -->
@@ -1354,6 +1372,15 @@ async function handleSubmitNuevoProducto(e: Event) {
   const fechaVencim = formData.get('fecha_vencim') as string;
   if (fechaVencim) data.fecha_vencim = fechaVencim;
 
+  const ingreActivo = (formData.get('ingre_activo') as string)?.trim();
+  if (ingreActivo) data.ingre_activo = ingreActivo;
+
+  const plagObjetivo = (formData.get('plag_objetivo') as string)?.trim();
+  if (plagObjetivo) data.plag_objetivo = plagObjetivo;
+
+  const presentacion = (formData.get('presentacion') as string)?.trim();
+  if (presentacion) data.presentacion = presentacion;
+
   const estado = formData.get('estado') as string;
   if (estado) data.estado = estado;
 
@@ -1522,6 +1549,24 @@ function renderModalEditarProducto(producto: Producto): string {
                 <option value="Inactivo" ${producto.estado === 'Inactivo' ? 'selected' : ''}>Inactivo</option>
               </select>
             </div>
+
+            <div class="form-group">
+              <label for="edit-ingre-activo">Ingrediente Activo</label>
+              <input type="text" id="edit-ingre-activo" name="ingre_activo"
+                     value="${producto.ingre_activo || ''}" placeholder="Ej: Cipermetrina" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-plag-objetivo">Plaga Objetivo</label>
+              <input type="text" id="edit-plag-objetivo" name="plag_objetivo"
+                     value="${producto.plag_objetivo || ''}" placeholder="Ej: Moscas" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-presentacion">Presentación</label>
+              <input type="text" id="edit-presentacion" name="presentacion"
+                     value="${producto.presentacion || ''}" placeholder="Ej: 250ml" class="form-input">
+            </div>
           </div>
 
           <!-- Campo de imagen -->
@@ -1689,6 +1734,15 @@ async function abrirModalEditarProducto(id: number) {
 
     const fecha = formData.get('fecha_vencim') as string;
     data.fecha_vencim = fecha || null;
+
+    const ingreActivo = (formData.get('ingre_activo') as string)?.trim();
+    data.ingre_activo = ingreActivo || null;
+
+    const plagObjetivo = (formData.get('plag_objetivo') as string)?.trim();
+    data.plag_objetivo = plagObjetivo || null;
+
+    const presentacion = (formData.get('presentacion') as string)?.trim();
+    data.presentacion = presentacion || null;
 
     const estado = formData.get('estado') as string;
     if (estado) data.estado = estado;

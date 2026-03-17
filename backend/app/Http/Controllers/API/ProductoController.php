@@ -74,6 +74,9 @@ class ProductoController extends Controller
                 'estado' => $producto->estado,
                 'imagen' => $producto->imagen,
                 'imagen_url' => $producto->imagen ? asset('storage/' . $producto->imagen) : null,
+                'ingre_activo' => $producto->ingre_activo,
+                'plag_objetivo' => $producto->plag_objetivo,
+                'presentacion' => $producto->presentacion,
                 'categoria' => $producto->categoria ? [
                     'id' => $producto->categoria->id,
                     'nombre' => $producto->categoria->nombre,
@@ -107,6 +110,9 @@ class ProductoController extends Controller
             'precio_unitario' => 'nullable|numeric|min:0',
             'stock_seguridad' => 'required|integer|min:0',
             'estado' => 'nullable|in:Activo,Inactivo',
+            'ingre_activo' => 'nullable|string|max:500',
+            'plag_objetivo' => 'nullable|string|max:500',
+            'presentacion' => 'nullable|string|max:500'
         ], [
             'descripcion.required' => 'La descripción del producto es requerida',
             'id_categoria.required' => 'La categoría es requerida',
@@ -140,6 +146,9 @@ class ProductoController extends Controller
             'unidad' => $request->unidad,
             'precio_unitario' => $request->precio_unitario,
             'estado' => $request->estado ?? 'Activo',
+            'ingre_activo' => $request->ingre_activo,
+            'plag_objetivo' => $request->plag_objetivo,
+            'presentacion' => $request->presentacion,
         ]);
 
         Inventario::create([
@@ -222,6 +231,9 @@ class ProductoController extends Controller
             'estado' => $producto->estado,
             'imagen' => $producto->imagen,
             'imagen_url' => $producto->imagen ? asset('storage/' . $producto->imagen) : null,
+            'ingre_activo' => $producto->ingre_activo,
+            'plag_objetivo' => $producto->plag_objetivo,
+            'presentacion' => $producto->presentacion,
             'categoria' => $producto->categoria ? [
                 'id' => $producto->categoria->id,
                 'nombre' => $producto->categoria->nombre,
@@ -265,6 +277,10 @@ class ProductoController extends Controller
             'precio_unitario' => 'nullable|numeric|min:0',
             'stock_seguridad' => 'nullable|integer|min:0',
             'estado' => 'sometimes|in:Activo,Inactivo',
+            'ingre_activo' => 'nullable|string|max:500',
+            'plag_objetivo' => 'nullable|string|max:500',
+            'presentacion' => 'nullable|string|max:500',
+
         ]);
 
         if ($validator->fails()) {
@@ -298,7 +314,10 @@ class ProductoController extends Controller
             'n_lote',
             'unidad',
             'precio_unitario',
-            'estado'
+            'estado',
+            'ingre_activo',
+            'plag_objetivo',
+            'presentacion'
         ]));
 
         if ($request->has('stock_seguridad')) {
