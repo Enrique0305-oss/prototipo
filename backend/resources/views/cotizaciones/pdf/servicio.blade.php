@@ -12,10 +12,7 @@
 </head>
 <body>
     <header>
-        @php
-            $headerLogo = ($cotizacion->id_multicim ?? 1) == 2 ? 'logo-orden.png' : 'logo-calidad.png';
-        @endphp
-        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/' . $headerLogo))) }}" class="logo-small">
+        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-orden.png'))) }}" class="logo-small">
     </header>
     <footer>
         <a href="http://www.qsciconsulting.com" class="footer-link">www.qsciconsulting.com</a>
@@ -27,7 +24,7 @@
             <table>
                 <tr>
                     <td class="logo-qsci">
-                        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/' . $headerLogo))) }}" alt="QSCI">
+                        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-orden.png'))) }}" alt="QSCI">
                     </td>
                     <td class="logo-encabezado">
                         <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/encabezado.png'))) }}" alt="QSCI Group">
@@ -39,13 +36,13 @@
         
         <div class="separator"></div>
         
-        <!-- NÃšMERO DE DOCUMENTO -->
+        <!-- NÚMERO DE DOCUMENTO -->
         <div class="document-number">
-            <strong>DOCUMENTO NÂ°:</strong> <span>{{ $cotizacion->numero_cotizacion }}</span>
-            <div class="document-date">Fecha de emisiÃ³n: {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->format('d/m/Y') }}</div>
+            <strong>DOCUMENTO N°:</strong> <span>{{ $cotizacion->numero_cotizacion }}</span>
+            <div class="document-date">Fecha de emisión: {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->format('d/m/Y') }}</div>
         </div>
         
-        <!-- INFORMACIÃ“N DEL CLIENTE -->
+        <!-- INFORMACIóN DEL CLIENTE -->
         <div class="intro-section">
             <div class="client-info-list">
                 <div class="info-item">
@@ -54,7 +51,7 @@
                 </div>
 
                 <div class="info-item">
-                    <span class="label">AtenciÃ³n:</span>
+                    <span class="label">Atención:</span>
                     <span class="value">{{ $cotizacion->cliente->nombre_empresa }}</span>
                 </div>
 
@@ -64,7 +61,7 @@
                 </div>
 
                 <div class="info-item">
-                    <span class="label">DirecciÃ³n:</span>
+                    <span class="label">Dirección:</span>
                     <span class="value">{{ $cotizacion->cliente->direccion ?? 'No registrada' }}</span>
                 </div>
             </div>
@@ -98,11 +95,11 @@
                     </span>.
                 </p>
                 <p>
-                    Nuestro servicio estÃ¡ inspirado en vuestra empresa y queremos acompaÃ±arlos en el 
+                    Nuestro servicio está inspirado en vuestra empresa y queremos acompañarlos en el 
                     cumplimiento de sus objetivos y alcance de la excelencia.
                 </p>
                 <p style="margin-top: 20px;">
-                    Quedo a su entera disposiciÃ³n para cualquier consulta.
+                    Quedo a su entera disposición para cualquier consulta.
                 </p>
             </div>
 
@@ -130,7 +127,7 @@
                         E-mail: {{ $cotizacion->creador->correo  }}
                     </p>
                     <p>
-                        NÃºmero: {{ $cotizacion->creador->celular  }}
+                        Número: {{ $cotizacion->creador->celular  }}
                     </p>
                 </div>
             </div>
@@ -143,24 +140,30 @@
                 // Verifica que el servicio no sea nulo y que el nombre coincida exactamente
                 return $detalle->servicio && $detalle->servicio->nombre === 'LIMPIEZA DE CISTERNAS Y RESERVORIOS';
             });
+            $totalServicios = $cotizacion->detalles->count();
+            $esSoloLimpieza = ($mostrarSeccionEspecial && $totalServicios === 1);
         @endphp
         <!-- PÃGINA DE PROPUESTA TÃ‰CNICA -->
         <div class="contenido-desplazado">
             
             <!-- NÃšMERO DE PROPUESTA Y FECHA -->
             <div class="propuesta-numero">
-                NÃšMERO DE PROPUESTA &ndash; {{ $cotizacion->numero_cotizacion }}
+                NÚMERO DE PROPUESTA &ndash; {{ $cotizacion->numero_cotizacion }}
             </div>
             <div class="propuesta-fecha">
                 {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->isoFormat('D [de] MMMM [de] YYYY') }}
             </div>
 
-            <!-- I. PROPUESTA TÃ‰CNICA -->
+            <!-- I. PROPUESTA TÉCNICA -->
             <div class="seccion-titulo">
-                <span class="seccion-titulo-num">I.</span> PROPUESTA TÃ‰CNICA
+                <span class="seccion-titulo-num">I.</span> PROPUESTA TÉCNICA
             </div>
             <div class="seccion-descripcion">
-                Presentamos a su consideraciÃ³n la oferta econÃ³mica, a continuaciÃ³n, definiremos los componentes que hacen parte del alcance de la propuesta.
+                Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.
+                <ul>
+                    <li>INFORMACIÓN: La organización cumple con lso parámetros establecidos conforme DS 022 - 2001 SA del MInisterio de Salud que regula las actividades de Saneamiento Ambiental</li>
+                    <li>Las actividades se realizarán en las siguiente dirección: {{ $cotizacion->cliente->direccion ?? 'No registrada' }}</li>
+                </ul>
             </div>
 
             <!-- II. ESPECIFICACIONES DEL SERVICIO -->
@@ -168,17 +171,17 @@
                 <span class="seccion-titulo-num">II.</span> SOBRE LOS SERVICIOS BRINDADOS
             </div>
             <div class="seccion-descripcion">
-                    A continuaciÃ³n, se detallarÃ¡n la lista de actividades incluidas en el servicio.
+                    A continuación, se detallarán la lista de actividades incluidas en el servicio.
             </div>
 
             {{-- 2. SECCIÃ“N DINÃMICA DE IMÃGENES CUANDOS SEA SERVICIO DE LIMPIEZA --}}
             @if($mostrarSeccionEspecial)
                 <div style="margin-top: 15px; text-align: center;">
                     <div style="margin-bottom: 10px; text-align: left;">
-                        <strong style="font-size: 13px;">â€¢ SERVICIO PARA PRESTAR:</strong>
+                        <strong style="font-size: 13px;">- SERVICIO PARA PRESTAR:</strong>
                         <p style="margin: 5px 0 15px 15px; font-size: 14px; color: #333;">LIMPIEZA DE RESERVORIO DE AGUA</p>
                         
-                        <strong style="font-size: 13px;">â€¢ PROCEDIMIENTO DEL SERVICIO:</strong>
+                        <strong style="font-size: 13px;">- PROCEDIMIENTO DEL SERVICIO:</strong>
                     </div>
 
                     <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -196,7 +199,7 @@
                     </table>
 
                     <div style="margin-bottom: 10px; text-align: left;">
-                        <strong style="font-size: 13px;">â€¢ PERSONAL ASIGNADO:</strong>
+                        <strong style="font-size: 13px;">- PERSONAL ASIGNADO:</strong>
                     </div>
                 </div>
             @endif
@@ -209,8 +212,9 @@
             </div>
 
             <!-- II.1 CONTROL INTEGRADO DE PLAGAS -->
-            <div class="seccion-titulo" style="margin-top: 25px;">
-                <span class="seccion-titulo-num">II.1</span> CONTROL INTEGRADO DE PLAGAS
+            <div class="proposal-text">
+                <span class="seccion-titulo-num">2.1</span> Control Integrado de Plagas
+                <p>2.1.1. El siguiente cuadro detalla actividades encaminadas de los servicios </p>
             </div>
             <table class="products-table" style="margin-bottom: 20px;">
                 <thead>
@@ -349,8 +353,8 @@
             @endphp
             
             @if(count($productosQuimicos) > 0)
-                <div class="seccion-titulo" style="margin-top: 25px;">
-                    <span class="seccion-titulo-num">II.2</span> PRODUCTOS QUÍMICOS DISPONIBLES
+                <div class="proporsal-text">
+                    <span class="seccion-titulo-num">2.1.2</span> Productos disponibles para actividades de control
                 </div>
                 <table class="products-table" style="margin-bottom: 20px;">
                     <thead>
@@ -378,11 +382,70 @@
                     </tbody>
                 </table>
             @endif
+
+            <div class="proporsal-text">
+                <span class="seccion-titulo-num">2.1.3</span> Documentación 
+                @if($esSoloLimpieza)
+                    <p>Relizamos nuestras actividades bajo estándares de BRC Foods Ver.9, 
+                        AIB y FSSC 22000 por tanto, contamos con la siguiente documentación 
+                        que es entregada al cliente:</p>
+                        <ul>
+                            <li>Ficha de Servicio</li>
+                            <li>Certificado de Saneamiento Ambiental</li>
+                            <li>Informe técnico de las actividades</li>
+                        </ul>
+                @else
+                    <p>Relizamos nuestras actividades bajo estándares de BRC Foods Ver.9, 
+                        AIB y FSSC 22000 por tanto, contamos con la siguiente documentación 
+                        que es entregada al cliente:</p>
+                        <ul>
+                            <li>Ficha de Servicio</li>
+                            <li>Certificado de Saneamiento Ambiental</li>
+                            <li>Informe técnico de las actividades</li>
+                            <li>Fichas técnicas de los productos</li>
+                            <li>Soporte Programa Manejo Integrado de Plagas</li>
+                            <li>Evaluación de riesgo de los establicimientos dentro del programa MIP 
+                                con soporte bibliográfico</li>
+                            <li>Procedimiento General MIP y procedimiento de actividades específicas</li>
+                            <li>Registros de monitoreo por plaga objetivo</li>
+                            <li>Sabana de planes de acción bajo el estándar de inspecciones DIGESA y auditorias 
+                                Internacionales</li>
+                            <li>Informe detallado con indicadores</li>
+                        </ul>
+                @endif
+            </div>
+            <div class="proporsal-text">
+                <span class="seccion-titulo-num">2.1.4</span> Salud Ocupacional 
+                @if($esSoloLimpieza)
+                    <p>Nuestro personal se presenta en sus instalaciones con la copia del SCTR vigente, 
+                        además de contar con:</p>
+                    <ul>
+                        <li>Exámenes Médicos Ocupacionales</li>
+                        <li>Programa de Seguridad y Salud en el trabajo</li>
+                        <li>Capacitación en Manejo Integrado de Plagas</li>
+                        <li>Capacitación en BPM</li>
+                    </ul>
+                @else
+                    <p>Nuestro personal se presenta en sus instalaciones con la copia del SCTR vigente, 
+                        además de contar con:</p>
+                    <ul>
+                        <li>Programa de Seguridad y Salud en el trabajo</li>
+                        <li>Exámenes de ETAS</li>
+                        <li>Capacitación en Manejo Integrado de Plagas</li>
+                        <li>Capacitación en Auditorías Internos en BRC Foods Ver.9</li>
+                        <li>Capacitación en Manipulación de Productos Químicos</li>
+                        <li>Capacitación en BPM</li>
+                    </ul>
+                @endif
+            </div>
+
+             <!-- III. PROPUESTA ECONÓMICA -->
+
             <div class="seccion-titulo">
-                <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÃ“MICA
+                <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÓMICA
             </div>
             <div class="seccion-descripcion">
-                    El siguiente cuadro muestra la respectiva cotizaciÃ³n por el servicio brindado:
+                    El siguiente cuadro muestra la respectiva cotización por el servicio brindado:
             </div>
             <div class="products-title">Detalle de Servicios</div>
             <table class="products-table">
@@ -432,9 +495,9 @@
             <div style="margin-top: 15px; padding: 12px 16px; border: 2px solid {{ $cotizacion->incluye_igv ? '#6CB52D' : '#dc3545' }}; border-radius: 4px; background-color: {{ $cotizacion->incluye_igv ? '#f0f9e8' : '#fff3f3' }};">
                 <strong style="color: {{ $cotizacion->incluye_igv ? '#2E4A7C' : '#dc3545' }}; font-size: 12px;">
                     @if($cotizacion->incluye_igv)
-                        Esta cotizaciÃ³n INCLUYE IGV (18%)
+                        Esta cotización INCLUYE IGV (18%)
                     @else
-                        Esta cotizaciÃ³n NO incluye IGV
+                        Esta cotización NO incluye IGV
                     @endif
                 </strong>
                 @if($cotizacion->observaciones)
@@ -447,7 +510,7 @@
             <!-- SECCIÃ“N DE PAGOS -->
             <div class="payment-section">
                 <p class="payment-header-text">Condiciones de pago:</p>
-                <p style="font-size: 12px; margin-bottom: 5px;"> - InformaciÃ³n de pago: Cuenta BCP</p>
+                <p style="font-size: 12px; margin-bottom: 5px;"> - Información de pago: Cuenta BCP</p>
                 
                 <table class="payment-table">
                     <tr>
@@ -455,7 +518,7 @@
                         <td>{{ $cotizacion->empresa->cuenta_bcp }}</td>
                     </tr>
                     <tr>
-                        <td class="label-cell">CÃ³digo de cuenta interbancario</td>
+                        <td class="label-cell">Código de cuenta interbancario</td>
                         <td>{{ $cotizacion->empresa->codigo_interbancario_bcp }}</td>
                     </tr>
                     <tr>
@@ -467,14 +530,74 @@
                         <td>{{ $cotizacion->empresa->ruc }}</td>
                     </tr>
                     <tr>
-                        <td class="label-cell">Banco de la NaciÃ³n Cuenta de DetracciÃ³n</td>
+                        <td class="label-cell">Banco de la Nación Cuenta de Detracción</td>
                         <td>{{ $cotizacion->empresa->banco_nacion }}</td>
                     </tr>
                     <tr>
-                        <td class="label-cell">CÃ³digo de Cuenta Interbancario (DetracciÃ³n)</td>
+                        <td class="label-cell">Código de Cuenta Interbancario (Detracción)</td>
                         <td>{{ $cotizacion->empresa->codigo_interbancario_nacion }}</td>
                     </tr>
                 </table>
+
+                <p class="payment-header-text" style="font-size: 14px; margin-bottom: 5px;">IV CONSIDERACIONES</p>
+                <ul>
+                    @if($esSoloLimpieza)
+                        <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
+                        la actividad</li>
+                        <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
+                        la actividad</li>
+                        <li>El presupuesto se basa en la metodología actualmente vigente. Sin embargo, si se determina que es 
+                        necesario evaluar otras opciones de eliminación mediante an+alisis de tendencia, se aplcar+a un recargo adicional correspondiente</li>
+                        <li>Vigencia de la oferta: 15 días</li>
+                    @else
+                        <li>Mensualmente se evalúan los comportamientos de las plagas objeto del control con el propósito
+                        de determinar la efectividad de las actividades y realizar las mejoras que correspondan para garantizar 
+                        mantener nuveles mínimos de presencia de plagas.</li>
+                        <li>El cliente es responsale se seguir las recomendaciones y sugerencias que resulten de las actividades 
+                        de inspección y control con el propósito de disminuir las condiciones que puedan favorecer el sustento y 
+                        desarrollo de plagas.</li>
+                        <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
+                        la actividad</li>
+                        <li>Cualquier daño o deterioro de los dispositivos serán responsabilidad del cliente.</li>
+                        <li>Los productos a usar pueden variar de acuerdo a la observación del especialista.</li>
+                        <li>Los químicos son referenciales, ya que el especialista recomendará los cambios según la evaluación. que realice</li>
+                        <li>El presupuesto se basa en la metodología actualmente vigente. Sin embargo, si se determina que es 
+                        necesario evaluar otras opciones de eliminación mediante an+alisis de tendencia, se aplcar+a un recargo adicional correspondiente</li>
+                        <li>Vigencia de la oferta: 15 días</li>
+                    @endif
+                </ul>
+            </div>
+            
+            <div class="issued-container">
+                <div class="proporsal-text">
+                    Atentamente,
+                </div> <br>
+                <div class="issued-name">
+                    {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
+                </div>
+                <div class="issued-position">
+                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                </div>
+                <div class="signature-logos">
+                    <table>
+                        <tr>
+                            <td style="text-align: left;">
+                                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" class="img-signature">
+                            </td>
+                            <td style="text-align: right;">
+                                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-orden.png'))) }}" class="img-signature">
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="proposal-text">
+                    <p>
+                        E-mail: {{ $cotizacion->creador->correo  }}
+                    </p>
+                    <p>
+                        Número: {{ $cotizacion->creador->celular  }}
+                    </p>
+                </div>
             </div>
         </div>
         
