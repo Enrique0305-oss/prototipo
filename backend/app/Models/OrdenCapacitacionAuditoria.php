@@ -33,8 +33,6 @@ class OrdenCapacitacionAuditoria extends Model
         'participacion_total',
         'aprobacion_total',
         'observaciones',
-        'op_tecnico',
-        'supervisor'
     ];
 
     protected $casts = [
