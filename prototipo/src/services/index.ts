@@ -11,6 +11,7 @@ export { ordenCapacitacionService } from './ordenCapacitacionService';
 export { productoService } from './productoService';
 export { categoriaService } from './categoriaService';
 export { equipoService } from './equipoService';
+export { inventarioAjusteService } from './inventarioAjusteService';
 
 // Servicios Recursos Humanos y Logística
 export { vehiculoService } from './vehiculoService';

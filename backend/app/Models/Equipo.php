@@ -18,7 +18,8 @@ class Equipo extends Model
         'encargado',
         'responsable',
         'contacto',
-        'estado'
+        'estado',
+        'imagen'
     ];
 
     // Relaciones

@@ -581,6 +581,24 @@ function renderGestionEquiposTab() {
               <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Contacto *</label>
               <input type="number" id="equipo-contacto" class="search-input" style="width:100%;" required placeholder="Ej: 987654321">
             </div>
+
+            <!-- Sección de imagen mejorada -->
+            <div style="grid-column:1/-1; margin-top:8px;">
+              <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:12px;">Imagen del Equipo (Opcional)</label>
+              <div style="padding:16px; border:2px dashed #cbd5e1; border-radius:8px; text-align:center; cursor:pointer; transition:border-color 0.2s; background:#fafafa; position:relative;" id="zona-imagen-equipo">
+                <input type="file" id="equipo-imagen-input" accept="image/jpeg,image/jpg,image/png,image/webp" style="display:none;">
+                <div id="preview-imagen-equipo-zona">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom:8px; margin-left:auto; margin-right:auto; display:block;">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                  </svg>
+                  <div style="font-size:13px; color:#64748b; font-weight:500;">Haz clic para subir imagen del equipo</div>
+                  <div style="font-size:11px; color:#94a3b8; margin-top:4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+                </div>
+                <div id="equipo-imagen-preview" style="display:none; margin-top:12px;"></div>
+              </div>
+            </div>
           </div>
           <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0;">
             <button type="button" id="btn-cancelar-equipo" style="padding:10px 20px; border:1px solid #d1d5db; border-radius:8px; background:#fff; cursor:pointer; font-size:14px;">Cancelar</button>
@@ -1418,6 +1436,50 @@ function bindAccionesEquipos() {
         (document.getElementById('equipo-responsable') as HTMLInputElement).value = eq.responsable;
         (document.getElementById('equipo-contacto') as HTMLInputElement).value = String(eq.contacto);
 
+        // Mostrar imagen si existe
+        const preview = document.getElementById('preview-imagen-equipo-zona');
+        const btnEliminar = document.getElementById('btn-eliminar-imagen-equipo') as HTMLButtonElement;
+        
+        if (eq.imagen_url && preview) {
+          preview.innerHTML = `
+            <div style="position:relative; display:inline-block;">
+              <img src="${eq.imagen_url}" alt="Equipo" style="max-width:200px; max-height:150px; border-radius:6px; object-fit:cover; border:2px solid #d1d5db;">
+              <button type="button" id="btn-quitar-imagen-equipo" style="position:absolute; top:-8px; right:-8px; background:#ef4444; color:#fff; border:none; border-radius:50%; width:24px; height:24px; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:bold;" title="Quitar imagen">&times;</button>
+            </div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:8px;">Haz clic para cambiar la imagen</div>
+          `;
+          if (btnEliminar) btnEliminar.style.display = 'block';
+          
+          // Agregar evento al botón quitar
+          document.getElementById('btn-quitar-imagen-equipo')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const imagenInput = document.getElementById('equipo-imagen-input') as HTMLInputElement;
+            if (imagenInput) imagenInput.value = '';
+            if (preview) {
+              preview.innerHTML = `
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom:8px; margin-left:auto; margin-right:auto; display:block;">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                <div style="font-size:13px; color:#64748b; font-weight:500;">Haz clic para subir imagen del equipo</div>
+                <div style="font-size:11px; color:#94a3b8; margin-top:4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+              `;
+            }
+          });
+        } else if (preview) {
+          preview.innerHTML = `
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom:8px; margin-left:auto; margin-right:auto; display:block;">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <div style="font-size:13px; color:#64748b; font-weight:500;">Haz clic para subir imagen del equipo</div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+          `;
+          if (btnEliminar) btnEliminar.style.display = 'none';
+        }
+
         document.getElementById('modal-equipo-titulo')!.textContent = 'Editar Equipo';
         document.getElementById('modal-equipo')!.style.display = 'block';
       } catch (error) {
@@ -1445,6 +1507,23 @@ function limpiarFormEquipo() {
   (document.getElementById('equipo-encargado') as HTMLInputElement).value = '';
   (document.getElementById('equipo-responsable') as HTMLInputElement).value = '';
   (document.getElementById('equipo-contacto') as HTMLInputElement).value = '';
+  (document.getElementById('equipo-imagen-input') as HTMLInputElement).value = '';
+  
+  const preview = document.getElementById('preview-imagen-equipo-zona');
+  if (preview) {
+    preview.innerHTML = `
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom:8px; margin-left:auto; margin-right:auto; display:block;">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+        <polyline points="21 15 16 10 5 21"></polyline>
+      </svg>
+      <div style="font-size:13px; color:#64748b; font-weight:500;">Haz clic para subir imagen del equipo</div>
+      <div style="font-size:11px; color:#94a3b8; margin-top:4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+    `;
+  }
+  
+  const btnEliminar = document.getElementById('btn-eliminar-imagen-equipo') as HTMLButtonElement;
+  if (btnEliminar) btnEliminar.style.display = 'none';
 }
 
 export function initMantenimientoEvents() {
@@ -1562,12 +1641,28 @@ function initGestionEquiposEvents() {
     }
 
     try {
+      let equipoId: number;
+      
       if (editId) {
         await equipoService.update(Number(editId), data);
+        equipoId = Number(editId);
         mostrarToast('success', 'Equipo actualizado', 'Los datos fueron guardados correctamente');
       } else {
-        await equipoService.create(data);
+        const resp = await equipoService.create(data);
+        equipoId = resp.data.id;
         mostrarToast('success', 'Equipo creado', 'El equipo fue registrado correctamente');
+      }
+
+      // Subir imagen si existe archivo seleccionado
+      const imagenInput = document.getElementById('equipo-imagen-input') as HTMLInputElement;
+      if (imagenInput?.files?.length) {
+        const file = imagenInput.files[0];
+        try {
+          await equipoService.subirImagen(equipoId, file);
+          mostrarToast('success', 'Imagen subida', 'La imagen fue guardada correctamente');
+        } catch (imgError) {
+          mostrarToast('warning', 'Imagen no subida', 'El equipo se guardó pero hubo error al subir la imagen');
+        }
       }
 
       if (modal) modal.style.display = 'none';
@@ -1577,6 +1672,71 @@ function initGestionEquiposEvents() {
       mostrarToast('error', 'Error', String(msg));
     }
   });
+
+  // ── Manejo de carga de imagen ────────────────────────
+  const zonaImagen = document.getElementById('zona-imagen-equipo');
+  const inputImagen = document.getElementById('equipo-imagen-input') as HTMLInputElement;
+  
+  if (zonaImagen && inputImagen) {
+    // Hacer la zona clickeable
+    zonaImagen.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).id === 'btn-quitar-imagen-equipo') return;
+      inputImagen.click();
+    });
+
+    // Evento de cambio de archivo
+    inputImagen.addEventListener('change', () => {
+      const file = inputImagen.files?.[0];
+      const preview = document.getElementById('preview-imagen-equipo-zona');
+      const previewContainer = document.getElementById('equipo-imagen-preview');
+
+      if (!file || !preview) return;
+
+      // Validar tamaño
+      const maxSize = 5 * 1024 * 1024;
+      if (file.size > maxSize) {
+        mostrarToast('error', 'Archivo muy grande', 'La imagen no debe superar 5MB');
+        inputImagen.value = '';
+        return;
+      }
+
+      // Validar tipo
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        mostrarToast('error', 'Formato no válido', 'Solo se aceptan JPG, PNG o WebP');
+        inputImagen.value = '';
+        return;
+      }
+
+      // Mostrar preview
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        preview.innerHTML = `
+          <div style="position:relative; display:inline-block;">
+            <img src="${ev.target?.result}" alt="Preview" style="max-width:200px; max-height:150px; border-radius:6px; object-fit:cover; border:2px solid #2563eb;">
+            <button type="button" id="btn-quitar-imagen-equipo" style="position:absolute; top:-8px; right:-8px; background:#ef4444; color:#fff; border:none; border-radius:50%; width:24px; height:24px; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:bold;" title="Quitar imagen">&times;</button>
+          </div>
+          <div style="font-size:11px; color:#94a3b8; margin-top:8px;">Haz clic para cambiar la imagen</div>
+        `;
+
+        // Evento de botón quitar
+        document.getElementById('btn-quitar-imagen-equipo')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          inputImagen.value = '';
+          preview.innerHTML = `
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom:8px; margin-left:auto; margin-right:auto; display:block;">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <div style="font-size:13px; color:#64748b; font-weight:500;">Haz clic para subir imagen del equipo</div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">JPG, PNG o WEBP • Máx. 5MB</div>
+          `;
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
 
   // Confirmar desactivar
   document.getElementById('btn-confirmar-desactivar')?.addEventListener('click', async () => {
