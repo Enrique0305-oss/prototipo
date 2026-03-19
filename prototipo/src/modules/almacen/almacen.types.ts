@@ -55,6 +55,8 @@ export interface Equipo {
   estado_garantia: EstadoGarantia;
   proximo_mantenimiento?: string;
   fecha_vencimiento_garantia?: string;
+  imagen?: string;
+  imagen_url?: string;
 }
 
 export interface RegistroMantenimiento {

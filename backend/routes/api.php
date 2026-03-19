@@ -33,6 +33,7 @@ use App\Http\Controllers\API\ProveedorController;
 use App\Http\Controllers\API\SalidaProgramacionController;
 use App\Http\Controllers\API\OrdenCompraController;
 use App\Http\Controllers\API\PersonalController;
+use App\Http\Controllers\API\InventarioAjusteController;
 
 // Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
@@ -128,6 +129,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/equipos', [EquipoController::class, 'store']);
     Route::put('/equipos/{id}', [EquipoController::class, 'update']);
     Route::delete('/equipos/{id}', [EquipoController::class, 'destroy']);
+    Route::post('/equipos/{id}/imagen', [EquipoController::class, 'subirImagen']);
+    Route::delete('/equipos/{id}/imagen', [EquipoController::class, 'eliminarImagen']);
 
     // para los productos :v
     Route::get('/productos/estadisticas/resumen', [ProductoController::class, 'estadisticas']);
@@ -259,6 +262,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/kardex/producto/{idProducto}', [KardexController::class, 'porProducto']);
     Route::get('/kardex', [KardexController::class, 'index']);
     Route::post('/kardex', [KardexController::class, 'store']);
+
+    // Ajustes de inventario (auditables)
+    Route::get('/inventario-ajustes', [InventarioAjusteController::class, 'index']);
+    Route::post('/inventario-ajustes', [InventarioAjusteController::class, 'store']);
 
     // Programación de Servicios
     Route::get('/programacion-servicio/estadisticas/resumen', [ProgramacionServicioController::class, 'estadisticas']);

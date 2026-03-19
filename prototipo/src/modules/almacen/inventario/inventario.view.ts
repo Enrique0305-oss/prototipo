@@ -2,6 +2,7 @@ import { productoService } from '../../../services/productoService';
 import { categoriaService } from '../../../services/categoriaService';
 import { mostrarToast } from '../../../shared/toast';
 import { kardexService, type KardexMovimiento } from '../../../services/kardexService';
+import { inventarioAjusteService, type InventarioAjuste } from '../../../services/inventarioAjusteService';
 import type { Producto, EstadisticasProductos, Categoria } from '../../../core/api/types';
 
 // Estado global para el módulo de inventario
@@ -235,8 +236,170 @@ export function renderKardexTab() {
   `;
 }
 
+// Vista de Ajuste de Inventario (Tab 3)
+export function renderAjustesInventarioTab() {
+  return `
+    <div id="ajuste-inv-root" style="display:grid; grid-template-columns:1fr; gap:16px;">
+      <div>
+        <h3 style="margin:0; font-size:18px; color:#1f2937;">Ajuste de Inventario</h3>
+        <p style="margin:4px 0 0; font-size:13px; color:#64748b;">Modifica stock actual y consulta historial auditado de ajustes.</p>
+      </div>
+
+      <div style="display:flex; gap:8px; border-bottom:1px solid #e5e7eb; padding-bottom:8px;">
+        <button id="btn-tab-ajuste-form" type="button" style="padding:8px 14px; border:1px solid #2563eb; background:#2563eb; color:#fff; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+          Ajustar Stock
+        </button>
+        <button id="btn-tab-ajuste-historial" type="button" style="padding:8px 14px; border:1px solid #d1d5db; background:#fff; color:#475569; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+          Historial de Ajustes
+        </button>
+      </div>
+
+      <div id="tab-ajuste-form" class="table-container" style="padding:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
+          <h3 style="margin:0; font-size:16px; color:#1f2937;">Ajustar Stock Actual</h3>
+          <div class="op-search-box" style="max-width:420px; width:100%;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" id="ajuste-inv-search" placeholder="Buscar producto por descripción o SKU..." class="op-search-input">
+          </div>
+        </div>
+
+        <table class="op-table">
+          <thead>
+            <tr>
+              <th>PRODUCTO</th>
+              <th>CATEGORÍA</th>
+              <th>STOCK ACTUAL</th>
+              <th>STOCK SEGURIDAD</th>
+              <th>ACCIÓN</th>
+            </tr>
+          </thead>
+          <tbody id="ajuste-inv-productos-body">
+            <tr>
+              <td colspan="5" style="text-align:center; padding:32px; color:#94a3b8;">Cargando productos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="tab-ajuste-historial" class="table-container" style="padding:20px; display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
+          <h3 style="margin:0; font-size:16px; color:#1f2937;">Historial de Ajustes</h3>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="date" id="ajuste-inv-fecha-desde" class="op-filter-select" title="Desde">
+            <input type="date" id="ajuste-inv-fecha-hasta" class="op-filter-select" title="Hasta">
+            <button class="btn-primary" id="btn-filtrar-ajustes" style="padding:8px 14px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+              Filtrar
+            </button>
+          </div>
+        </div>
+
+        <table class="op-table">
+          <thead>
+            <tr>
+              <th>FECHA</th>
+              <th>PRODUCTO</th>
+              <th>TIPO</th>
+              <th>STOCK ANT.</th>
+              <th>STOCK NUEVO</th>
+              <th>DIFERENCIA</th>
+              <th>MOTIVO</th>
+              <th>REFERENCIA</th>
+              <th>USUARIO</th>
+            </tr>
+          </thead>
+          <tbody id="ajuste-inv-historial-body">
+            <tr>
+              <td colspan="9" style="text-align:center; padding:32px; color:#94a3b8;">Cargando historial...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="modal-ajuste-inventario" class="modal-overlay" style="display:none;">
+      <div class="modal-container" style="max-width:560px;">
+        <div class="modal-header">
+          <h2>Ajuste de Inventario</h2>
+          <button class="modal-close" id="btn-cerrar-ajuste-inv">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <form id="form-ajuste-inventario" class="modal-body">
+          <input type="hidden" id="ajuste-inv-id-producto">
+          <div class="form-group">
+            <label>Producto</label>
+            <input type="text" id="ajuste-inv-producto" class="form-input" readonly>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="form-group">
+              <label>Stock actual</label>
+              <input type="number" id="ajuste-inv-stock-actual" class="form-input" readonly>
+            </div>
+            <div class="form-group">
+              <label>Stock nuevo *</label>
+              <input type="number" id="ajuste-inv-stock-nuevo" class="form-input" min="0" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Motivo *</label>
+            <select id="ajuste-inv-motivo" class="form-input" required>
+              <option value="">Seleccionar motivo</option>
+              <option value="Conteo físico">Conteo físico</option>
+              <option value="Merma">Merma</option>
+              <option value="Regularización">Regularización</option>
+              <option value="Devolución interna">Devolución interna</option>
+              <option value="Corrección administrativa">Corrección administrativa</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Observación</label>
+            <textarea id="ajuste-inv-observacion" class="form-input" rows="3" placeholder="Detalle del ajuste (opcional)"></textarea>
+          </div>
+          <div style="padding:10px 12px; border-radius:8px; background:#fff7ed; color:#9a3412; font-size:12px; border:1px solid #fed7aa;">
+            Este cambio actualiza stock inmediatamente y quedará registrado en Kardex como Entrada/Salida con referencia Ajuste de Inventario.
+          </div>
+          <div class="modal-footer" style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button type="button" class="btn-secondary" id="btn-cancelar-ajuste-inv">Cancelar</button>
+            <button type="submit" class="btn-primary">Guardar Ajuste</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="modal-confirmar-ajuste-inv" class="modal-overlay" style="display:none;">
+      <div class="modal-container" style="max-width:480px;">
+        <div class="modal-header">
+          <h2>Confirmar Ajuste</h2>
+          <button class="modal-close" id="btn-cerrar-confirm-ajuste-inv">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p id="confirm-ajuste-inv-mensaje" style="margin:0; font-size:15px; color:#1f2937; line-height:1.5;"></p>
+          <div class="modal-footer" style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button type="button" class="btn-secondary" id="btn-cancelar-confirm-ajuste-inv">Cancelar</button>
+            <button type="button" class="btn-primary" id="btn-aceptar-confirm-ajuste-inv">Aceptar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // Estado local de Kardex
 let kardexData: KardexMovimiento[] = [];
+let ajusteInvProductos: Producto[] = [];
+let ajusteInvHistorial: InventarioAjuste[] = [];
 
 export async function initKardexEvents() {
   // Cargar estadísticas y movimientos en paralelo
@@ -346,6 +509,310 @@ function renderKardexRows(movimientos: KardexMovimiento[]) {
 
   const infoEl = document.getElementById('kardex-pagination-info');
   if (infoEl) infoEl.textContent = `Mostrando ${movimientos.length} movimiento${movimientos.length !== 1 ? 's' : ''}`;
+}
+
+export async function initAjustesInventarioEvents() {
+  const root = document.getElementById('ajuste-inv-root') as HTMLElement | null;
+  if (!root) return;
+  if (root.dataset.initialized === '1') return;
+  root.dataset.initialized = '1';
+
+  await Promise.all([
+    cargarProductosAjusteInventario(),
+    cargarHistorialAjustesInventario(),
+  ]);
+
+  const tabForm = document.getElementById('tab-ajuste-form') as HTMLElement;
+  const tabHistorial = document.getElementById('tab-ajuste-historial') as HTMLElement;
+  const btnTabForm = document.getElementById('btn-tab-ajuste-form') as HTMLButtonElement;
+  const btnTabHistorial = document.getElementById('btn-tab-ajuste-historial') as HTMLButtonElement;
+
+  const activarTabAjuste = (tab: 'form' | 'historial') => {
+    const formActiva = tab === 'form';
+    if (tabForm) tabForm.style.display = formActiva ? 'block' : 'none';
+    if (tabHistorial) tabHistorial.style.display = formActiva ? 'none' : 'block';
+
+    if (btnTabForm) {
+      btnTabForm.style.background = formActiva ? '#2563eb' : '#fff';
+      btnTabForm.style.color = formActiva ? '#fff' : '#475569';
+      btnTabForm.style.borderColor = formActiva ? '#2563eb' : '#d1d5db';
+    }
+
+    if (btnTabHistorial) {
+      btnTabHistorial.style.background = !formActiva ? '#2563eb' : '#fff';
+      btnTabHistorial.style.color = !formActiva ? '#fff' : '#475569';
+      btnTabHistorial.style.borderColor = !formActiva ? '#2563eb' : '#d1d5db';
+    }
+  };
+
+  btnTabForm?.addEventListener('click', () => activarTabAjuste('form'));
+  btnTabHistorial?.addEventListener('click', () => activarTabAjuste('historial'));
+
+  // Estado inicial: formulario de ajuste
+  activarTabAjuste('form');
+
+  const searchInput = document.getElementById('ajuste-inv-search') as HTMLInputElement;
+  if (searchInput) {
+    let searchTimer: number;
+    searchInput.addEventListener('input', () => {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => {
+        renderProductosAjusteInventario(searchInput.value.trim());
+      }, 300);
+    });
+  }
+
+  document.getElementById('btn-filtrar-ajustes')?.addEventListener('click', async () => {
+    await cargarHistorialAjustesInventario();
+  });
+
+  const modal = document.getElementById('modal-ajuste-inventario');
+  document.getElementById('btn-cerrar-ajuste-inv')?.addEventListener('click', () => {
+    if (modal) modal.style.display = 'none';
+  });
+  document.getElementById('btn-cancelar-ajuste-inv')?.addEventListener('click', () => {
+    if (modal) modal.style.display = 'none';
+  });
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  });
+
+  document.getElementById('form-ajuste-inventario')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const idProducto = Number((document.getElementById('ajuste-inv-id-producto') as HTMLInputElement).value);
+    const stockActual = Number((document.getElementById('ajuste-inv-stock-actual') as HTMLInputElement).value);
+    const stockNuevo = Number((document.getElementById('ajuste-inv-stock-nuevo') as HTMLInputElement).value);
+    const motivo = (document.getElementById('ajuste-inv-motivo') as HTMLSelectElement).value;
+    const observacion = (document.getElementById('ajuste-inv-observacion') as HTMLTextAreaElement).value.trim();
+    const submitBtn = (e.currentTarget as HTMLFormElement).querySelector('button[type="submit"]') as HTMLButtonElement | null;
+
+    if (!idProducto || !motivo || Number.isNaN(stockNuevo) || stockNuevo < 0) {
+      mostrarToast('warning', 'Atención', 'Complete los campos obligatorios del ajuste');
+      return;
+    }
+
+    if (stockNuevo === stockActual) {
+      mostrarToast('warning', 'Sin cambios', 'El stock nuevo debe ser diferente al stock actual');
+      return;
+    }
+
+    const tipo = stockNuevo > stockActual ? 'Entrada' : 'Salida';
+    const diferencia = Math.abs(stockNuevo - stockActual);
+    const confirmar = await confirmarAjusteInventario(tipo, diferencia);
+    if (!confirmar) return;
+
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Guardando...';
+      }
+
+      await inventarioAjusteService.crear({
+        id_producto: idProducto,
+        stock_nuevo: stockNuevo,
+        motivo,
+        observacion: observacion || undefined,
+      });
+
+      mostrarToast('success', 'Ajuste registrado', 'El stock fue actualizado y auditado correctamente');
+
+      if (modal) modal.style.display = 'none';
+      (document.getElementById('form-ajuste-inventario') as HTMLFormElement).reset();
+
+      await Promise.all([
+        cargarProductosAjusteInventario(),
+        cargarHistorialAjustesInventario(),
+      ]);
+    } catch (error: any) {
+      const message = error?.message || error?.data?.message || 'Error al registrar ajuste de inventario';
+      mostrarToast('error', 'Error', String(message));
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Guardar Ajuste';
+      }
+    }
+  });
+}
+
+function confirmarAjusteInventario(tipo: 'Entrada' | 'Salida', diferencia: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('modal-confirmar-ajuste-inv');
+    const mensaje = document.getElementById('confirm-ajuste-inv-mensaje');
+    const btnAceptar = document.getElementById('btn-aceptar-confirm-ajuste-inv') as HTMLButtonElement | null;
+    const btnCancelar = document.getElementById('btn-cancelar-confirm-ajuste-inv') as HTMLButtonElement | null;
+    const btnCerrar = document.getElementById('btn-cerrar-confirm-ajuste-inv') as HTMLButtonElement | null;
+
+    if (!modal || !mensaje || !btnAceptar || !btnCancelar || !btnCerrar) {
+      resolve(true);
+      return;
+    }
+
+    mensaje.textContent = `Se registrará un ajuste de ${tipo} por ${diferencia} unidad(es). ¿Desea continuar?`;
+    modal.style.display = 'flex';
+
+    const cerrar = (ok: boolean) => {
+      modal.style.display = 'none';
+      btnAceptar.onclick = null;
+      btnCancelar.onclick = null;
+      btnCerrar.onclick = null;
+      modal.onclick = null;
+      resolve(ok);
+    };
+
+    btnAceptar.onclick = () => cerrar(true);
+    btnCancelar.onclick = () => cerrar(false);
+    btnCerrar.onclick = () => cerrar(false);
+    modal.onclick = (e) => {
+      if (e.target === modal) cerrar(false);
+    };
+  });
+}
+
+async function cargarProductosAjusteInventario() {
+  const tbody = document.getElementById('ajuste-inv-productos-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:28px; color:#94a3b8;">Cargando productos...</td></tr>';
+
+  try {
+    const response = await productoService.getAll({ estado: 'Activo' } as any);
+    ajusteInvProductos = response?.data || [];
+    const search = (document.getElementById('ajuste-inv-search') as HTMLInputElement)?.value || '';
+    renderProductosAjusteInventario(search);
+  } catch (error) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:28px; color:#dc2626;">Error al cargar productos</td></tr>';
+  }
+}
+
+function renderProductosAjusteInventario(searchText = '') {
+  const tbody = document.getElementById('ajuste-inv-productos-body');
+  if (!tbody) return;
+
+  const term = searchText.trim().toLowerCase();
+  const filtrados = !term
+    ? ajusteInvProductos
+    : ajusteInvProductos.filter((p) => {
+        const sku = (p.sku || '').toLowerCase();
+        const desc = (p.descripcion || '').toLowerCase();
+        return sku.includes(term) || desc.includes(term);
+      });
+
+  if (!filtrados.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:28px; color:#64748b;">No se encontraron productos para ajustar</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtrados.map((producto) => {
+    const stock = producto.inventario?.cantidad_disponible || 0;
+    const seguridad = producto.inventario?.stock_seguridad || 0;
+    return `
+      <tr>
+        <td>
+          <div style="font-weight:600; color:#1f2937;">${producto.descripcion}</div>
+          <div style="font-size:12px; color:#94a3b8;">SKU: ${producto.sku || 'N/A'}</div>
+        </td>
+        <td>${producto.categoria?.nombre || 'Sin categoría'}</td>
+        <td><strong>${stock}</strong></td>
+        <td>${seguridad}</td>
+        <td>
+          <button class="btn-primary btn-abrir-ajuste-inv" data-producto-id="${producto.id}" style="padding:7px 12px; font-size:12px;">
+            Ajustar stock
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  document.querySelectorAll('.btn-abrir-ajuste-inv').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = Number((btn as HTMLButtonElement).dataset.productoId);
+      abrirModalAjusteInventario(id);
+    });
+  });
+}
+
+function abrirModalAjusteInventario(idProducto: number) {
+  const producto = ajusteInvProductos.find((p) => p.id === idProducto);
+  if (!producto) {
+    mostrarToast('error', 'Error', 'Producto no encontrado');
+    return;
+  }
+
+  const stockActual = producto.inventario?.cantidad_disponible || 0;
+
+  (document.getElementById('ajuste-inv-id-producto') as HTMLInputElement).value = String(idProducto);
+  (document.getElementById('ajuste-inv-producto') as HTMLInputElement).value = producto.descripcion;
+  (document.getElementById('ajuste-inv-stock-actual') as HTMLInputElement).value = String(stockActual);
+  (document.getElementById('ajuste-inv-stock-nuevo') as HTMLInputElement).value = String(stockActual);
+  (document.getElementById('ajuste-inv-motivo') as HTMLSelectElement).value = '';
+  (document.getElementById('ajuste-inv-observacion') as HTMLTextAreaElement).value = '';
+
+  const modal = document.getElementById('modal-ajuste-inventario');
+  if (modal) modal.style.display = 'flex';
+}
+
+async function cargarHistorialAjustesInventario() {
+  const tbody = document.getElementById('ajuste-inv-historial-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:28px; color:#94a3b8;">Cargando historial...</td></tr>';
+
+  const fechaDesde = (document.getElementById('ajuste-inv-fecha-desde') as HTMLInputElement)?.value || '';
+  const fechaHasta = (document.getElementById('ajuste-inv-fecha-hasta') as HTMLInputElement)?.value || '';
+
+  try {
+    const response = await inventarioAjusteService.getAll({
+      fecha_desde: fechaDesde || undefined,
+      fecha_hasta: fechaHasta || undefined,
+    });
+
+    ajusteInvHistorial = response?.data || [];
+    renderHistorialAjustesInventario();
+  } catch (error) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:28px; color:#dc2626;">Error al cargar historial</td></tr>';
+  }
+}
+
+function renderHistorialAjustesInventario() {
+  const tbody = document.getElementById('ajuste-inv-historial-body');
+  if (!tbody) return;
+
+  if (!ajusteInvHistorial.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:28px; color:#64748b;">No hay ajustes registrados</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = ajusteInvHistorial.map((item) => {
+    const fecha = new Date(item.fecha_ajuste).toLocaleString('es-PE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const esEntrada = item.tipo_ajuste === 'Entrada';
+    const badge = esEntrada
+      ? '<span class="badge green">Entrada</span>'
+      : '<span class="badge orange">Salida</span>';
+    const diffClass = esEntrada ? 'color:#16a34a;' : 'color:#dc2626;';
+    const diffSign = esEntrada ? '+' : '-';
+
+    return `
+      <tr>
+        <td>${fecha}</td>
+        <td>${item.producto}</td>
+        <td>${badge}</td>
+        <td>${item.stock_anterior}</td>
+        <td>${item.stock_nuevo}</td>
+        <td style="font-weight:700; ${diffClass}">${diffSign}${Math.abs(item.diferencia)}</td>
+        <td>${item.motivo}</td>
+        <td>${item.referencia}</td>
+        <td>${item.usuario}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // Vista de Categorías (Tab 3)
@@ -789,8 +1256,6 @@ export function initCategoriasEvents() {
 
 // Función principal que maneja los tabs
 export function renderAlmacenInventario() {
-  const activeTab = 'productos'; 
-  
   return `
     <div class="page-header-with-breadcrumb">
       <div class="breadcrumb">Gestión de Inventario</div>

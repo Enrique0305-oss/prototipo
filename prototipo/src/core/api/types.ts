@@ -249,6 +249,8 @@ export interface Equipo {
   responsable: string;
   contacto: number;
   estado: 'Activo' | 'Inactivo';
+  imagen?: string;
+  imagen_url?: string;
 }
 
 export interface EquipoFilters extends FilterParams {

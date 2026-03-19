@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Equipo;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Validator;
 
 class EquipoController extends Controller
 {
@@ -207,5 +210,95 @@ class EquipoController extends Controller
                 'message' => 'Error al desactivar el equipo: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Subir o actualizar imagen de un equipo
+     */
+    public function subirImagen(Request $request, $id): JsonResponse
+    {
+        // 1. BUSCAR EQUIPO
+        $equipo = Equipo::find($id);
+
+        if (!$equipo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Equipo no encontrado'
+            ], 404);
+        }
+
+        // 2. VALIDAR IMAGEN
+        $validator = Validator::make($request->all(), [
+            'imagen' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
+        ], [
+            'imagen.required' => 'La imagen es requerida',
+            'imagen.image' => 'El archivo debe ser una imagen',
+            'imagen.mimes' => 'Solo se aceptan formatos: jpeg, jpg, png, webp',
+            'imagen.max' => 'La imagen no debe superar los 5MB',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // 3. ELIMINAR IMAGEN ANTERIOR SI EXISTE
+        if ($equipo->imagen && Storage::disk('public')->exists($equipo->imagen)) {
+            Storage::disk('public')->delete($equipo->imagen);
+        }
+
+        // 4. CREAR CARPETA DINÁMICAMENTE POR MARCA
+        $tipoEquipo = Str::slug($equipo->marca, '-');
+        $carpeta = "equipos/{$tipoEquipo}";
+
+        // 5. GENERAR NOMBRE ÚNICO DEL ARCHIVO
+        $extension = $request->file('imagen')->getClientOriginalExtension();
+        $nombreArchivo = Str::slug($equipo->descripcion) . '-' . $equipo->id . '.' . $extension;
+
+        // 6. GUARDAR EN STORAGE (public disk)
+        $ruta = $request->file('imagen')->storeAs($carpeta, $nombreArchivo, 'public');
+
+        // 7. GUARDAR RUTA EN BASE DE DATOS
+        $equipo->update(['imagen' => $ruta]);
+
+        // 8. RETORNAR RESPUESTA
+        return response()->json([
+            'success' => true,
+            'message' => 'Imagen subida exitosamente',
+            'data' => [
+                'imagen' => $ruta,
+                'imagen_url' => asset('storage/' . $ruta),
+            ]
+        ]);
+    }
+
+    /**
+     * Eliminar imagen de un equipo
+     */
+    public function eliminarImagen($id): JsonResponse
+    {
+        $equipo = Equipo::find($id);
+
+        if (!$equipo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Equipo no encontrado'
+            ], 404);
+        }
+
+        if ($equipo->imagen) {
+            if (Storage::disk('public')->exists($equipo->imagen)) {
+                Storage::disk('public')->delete($equipo->imagen);
+            }
+            $equipo->update(['imagen' => null]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Imagen eliminada exitosamente'
+        ]);
     }
 }

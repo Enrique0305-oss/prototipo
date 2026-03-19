@@ -39,4 +39,17 @@ export const equipoService = {
   delete: async (id: number) => {
     return apiClient.delete<ApiResponse<null>>(`/equipos/${id}`);
   },
+
+  subirImagen: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('imagen', file);
+    return apiClient.postFormData<ApiResponse<{
+      imagen: string;
+      imagen_url: string;
+    }>>(`/equipos/${id}/imagen`, formData);
+  },
+
+  eliminarImagen: async (id: number) => {
+    return apiClient.delete<ApiResponse<null>>(`/equipos/${id}/imagen`);
+  },
 };
