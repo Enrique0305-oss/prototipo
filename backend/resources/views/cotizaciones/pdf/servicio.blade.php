@@ -226,85 +226,42 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @php
-                        $recetaItems = $cotizacion->receta_servicio ?? [];
-                        $agrupados = [];
-                        
-                        // Agrupar por equipo
-                        foreach ($recetaItems as $item) {
-                            $key = ($item['id_equipo'] ?? 0) . '-' . ($item['id_cliente_planta'] ?? 0) . '-' . ($item['id_cliente_planta_area'] ?? 0);
-                            if (!isset($agrupados[$key])) {
-                                $agrupados[$key] = [
-                                    'equipo' => $item['equipo_descripcion'] ?? 'Sin equipo',
-                                    'servicio_id' => $item['id_servicio'] ?? null,
-                                    'planta_id' => $item['id_cliente_planta'] ?? null,
-                                    'area_id' => $item['id_cliente_planta_area'] ?? null,
-                                    'productos' => []
-                                ];
-                            }
-                            $agrupados[$key]['productos'][] = $item;
-                        }
-                        
-                        // Si no hay receta, usar detalles
-                        if (count($agrupados) === 0) {
-                            foreach ($cotizacion->detalles as $detalle) {
-                                if (!$detalle->servicio) continue;
-                                $key = 'detalle-' . $detalle->id;
-                                if (!isset($agrupados[$key])) {
-                                    $agrupados[$key] = [
-                                        'equipo' => 'Sin especificar',
-                                        'servicio_id' => $detalle->id_servicio,
-                                        'planta_id' => $detalle->id_cliente_planta,
-                                        'area_id' => $detalle->id_cliente_planta_area,
-                                        'productos' => [],
-                                        'detalle' => $detalle
-                                    ];
-                                }
-                                $agrupados[$key]['productos'][] = $detalle;
-                            }
-                        }
-                    @endphp
-                    
-                    @foreach($agrupados as $grupo)
+                    @foreach($cotizacion->detalles as $detalle)
                         @php
-                            $servicio = null;
-                            $planta = null;
+                            $servicio = $detalle->servicio;
+                            $planta = $cotizacion->cliente->plantas()->find($detalle->id_cliente_planta);
                             $area = null;
+                            if ($planta) {
+                                $area = $planta->areasActivas()->find($detalle->id_cliente_planta_area) ?? $planta->areas()->find($detalle->id_cliente_planta_area);
+                            }
+                            $frecuencia = $detalle->frecuencia_sugerida ?? '';
                             
-                            // Obtener información del servicio
-                            if (isset($grupo['detalle'])) {
-                                $servicio = $grupo['detalle']->servicio;
-                                $planta = $cotizacion->cliente->plantas()->find($grupo['planta_id']);
-                                if ($planta) {
-                                    $area = $planta->areasActivas()->find($grupo['area_id']) ?? $planta->areas()->find($grupo['area_id']);
+                            // Obtener productos asociados a este detalle
+                            $productosDetalle = [];
+                            if ($cotizacion->receta_servicio) {
+                                foreach ($cotizacion->receta_servicio as $receta) {
+                                    if (($receta['id_servicio'] ?? null) == $detalle->id_servicio) {
+                                        $productosDetalle[] = $receta;
+                                    }
                                 }
-                                $frecuencia = $grupo['detalle']->frecuencia_sugerida ?? '';
-                            } else {
-                                // Buscar servicio por id_servicio en receta
-                                $servicio = \App\Models\Servicio::find($grupo['servicio_id']);
-                                $planta = $cotizacion->cliente->plantas()->find($grupo['planta_id']);
-                                if ($planta) {
-                                    $area = $planta->areasActivas()->find($grupo['area_id']) ?? $planta->areas()->find($grupo['area_id']);
-                                }
-                                // Obtener frecuencia del primer detalle que coincida
-                                $detalleCoincidencia = $cotizacion->detalles->firstWhere('id_servicio', $grupo['servicio_id']);
-                                $frecuencia = $detalleCoincidencia?->frecuencia_sugerida ?? '';
                             }
                         @endphp
                         <tr>
                             <td style="font-weight: 600;">
-                                {{ $servicio?->nombre ?? 'N/A' }}
+                                {{ $servicio?->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}
                             </td>
                             <td>
-                                {{ $grupo['equipo'] }}<br>
-                                @foreach($grupo['productos'] as $prod)
-                                    @if(is_array($prod))
+                                @if(count($productosDetalle) > 0)
+                                    @foreach($productosDetalle as $prod)
                                         @php
                                             $producto = \App\Models\Producto::find($prod['id_producto'] ?? null);
+                                            $equipo = $prod['equipo_descripcion'] ?? 'Sin equipo';
                                         @endphp
-                                        <small>{{ $producto?->descripcion ?? 'Producto no encontrado' }}</small><br>
-                                    @endif
-                                @endforeach
+                                        <small>{{ $equipo }}: {{ $producto?->descripcion ?? 'Producto no encontrado' }}</small><br>
+                                    @endforeach
+                                @else
+                                    Sin productos especificados
+                                @endif
                             </td>
                             <td>
                                 @if($planta)
