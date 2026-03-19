@@ -105,6 +105,7 @@ class CotizacionController extends Controller
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
             'propuesta_tecnica' => 'nullable|string',
+            'receta_servicio' => 'nullable|array',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
             'detalles.*.id_producto' => 'nullable|exists:productos,id',
@@ -114,6 +115,8 @@ class CotizacionController extends Controller
             'detalles.*.precio_unitario' => 'required|numeric|min:0',
             'detalles.*.frecuencia_sugerida' => 'nullable|string',
             'detalles.*.modalidad_sugerida' => 'nullable|string',
+            'detalles.*.op_tecnicos' => 'nullable|string|max:255',
+            'detalles.*.supervisor' => 'nullable|string|max:255',
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
             'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
         ]);
@@ -144,7 +147,7 @@ class CotizacionController extends Controller
                 'id_cliente' => $validated['id_cliente'],
                 'id_multicim' => $validated['id_multicim'],
                 'fecha_emision' => now(),
-                'id_personal_creador' => auth()->id() ?? 1,
+                'id_personal_creador' => $request->user()?->id ?? 1,
                 'estado' => 'Pendiente',
                 'tipo_cotizacion' => $validated['tipo_cotizacion'],
                 'incluye_igv' => $incluyeIgv,
@@ -153,6 +156,7 @@ class CotizacionController extends Controller
                 'total' => $total,
                 'observaciones' => $observaciones,
                 'propuesta_tecnica' => $validated['propuesta_tecnica'] ?? null,
+                'receta_servicio' => $validated['receta_servicio'] ?? null,
             ]);
 
             // Crear detalles
@@ -167,6 +171,8 @@ class CotizacionController extends Controller
                     'precio_unitario' => $detalle['precio_unitario'],
                     'frecuencia_sugerida' => $detalle['frecuencia_sugerida'] ?? null,
                     'modalidad_sugerida' => $detalle['modalidad_sugerida'] ?? null,
+                    'op_tecnicos' => $detalle['op_tecnicos'] ?? null,
+                    'supervisor' => $detalle['supervisor'] ?? null,
                     'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
                     'id_cliente_planta_area' => $detalle['id_cliente_planta_area'] ?? null,
                 ]);
@@ -316,8 +322,16 @@ class CotizacionController extends Controller
      */
     public function generarPDF($id, Request $request)
     {
-        $cotizacion = Cotizacion::with(['cliente', 'empresa', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'creador'])
-                                ->find($id);
+        $cotizacion = Cotizacion::with([
+            'cliente', 
+            'cliente.plantas',
+            'cliente.plantas.areas',
+            'empresa', 
+            'detalles.servicio', 
+            'detalles.producto', 
+            'detalles.catalogoCapAud', 
+            'creador'
+        ])->find($id);
 
         if (!$cotizacion) {
             return response()->json([
@@ -326,7 +340,14 @@ class CotizacionController extends Controller
             ], 404);
         }
 
-        $pdf = Pdf::loadView('CotizacionPDF', compact('cotizacion'))
+        $pdfView = match ($cotizacion->tipo_cotizacion) {
+            'Servicio' => 'cotizaciones.pdf.servicio',
+            'Producto' => 'cotizaciones.pdf.producto',
+            'Capacitacion' => 'cotizaciones.pdf.capacitacion',
+            default => 'CotizacionPDF',
+        };
+
+        $pdf = Pdf::loadView($pdfView, compact('cotizacion'))
                   ->setPaper('a4', 'portrait');
 
         // Si se pasa parámetro descargar=true, descarga automáticamente
@@ -336,5 +357,34 @@ class CotizacionController extends Controller
         }
 
         return $pdf->stream('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
+    }
+
+    /**
+     * Actualizar receta de servicio en una cotización
+     */
+    public function updateReceta(Request $request, $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'receta_servicio' => 'required|array'
+        ]);
+
+        $cotizacion = Cotizacion::find($id);
+
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        }
+
+        $cotizacion->update([
+            'receta_servicio' => $validated['receta_servicio']
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Receta de servicio actualizada exitosamente',
+            'data' => $cotizacion
+        ]);
     }
 }

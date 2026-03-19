@@ -51,4 +51,8 @@ export const cotizacionService = {
     const defaultFilename = filename || `cotizacion_${id}.pdf`;
     return apiClient.downloadFile(`/cotizaciones/${id}/pdf`, defaultFilename);
   },
+
+  updateReceta: async (id: number, receta_servicio: any[]) => {
+    return apiClient.patch<ApiResponse<Cotizacion>>(`/cotizaciones/${id}/receta`, { receta_servicio });
+  },
 };

@@ -72,6 +72,8 @@ export interface DetalleCotizacion {
   subtotal?: number;
   frecuencia_sugerida?: string | null;
   modalidad_sugerida?: string | null;
+  op_tecnicos?: string | null;
+  supervisor?: string | null;
   servicio?: any;
   producto?: any;
 }

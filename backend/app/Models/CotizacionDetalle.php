@@ -21,7 +21,9 @@ class CotizacionDetalle extends Model
         'cantidad',
         'precio_unitario',
         'frecuencia_sugerida',
-        'modalidad_sugerida'
+        'modalidad_sugerida',
+        'op_tecnicos',
+        'supervisor'
     ];
 
     protected $casts = [

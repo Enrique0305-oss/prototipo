@@ -710,6 +710,10 @@
                         <th>Cantidad</th>
                         <th>Unidad</th>
                         <th>Precio Unitario</th>
+                        @if($cotizacion->tipo_cotizacion === 'Capacitacion')
+                            <th>OP Técnicos</th>
+                            <th>Supervisor</th>
+                        @endif
                         <th>Subtotal</th>
                     </tr>
                 </thead>
@@ -750,6 +754,10 @@
                         <td class="text-center">{{ $detalle->cantidad }}</td>
                         <td class="text-center">UND</td>
                         <td class="text-right">S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
+                        @if($cotizacion->tipo_cotizacion === 'Capacitacion')
+                            <td class="text-center">{{ $detalle->op_tecnicos ?? '—' }}</td>
+                            <td class="text-center">{{ $detalle->supervisor ?? '—' }}</td>
+                        @endif
                         <td class="text-right"><strong>S/ {{ number_format($detalle->cantidad * $detalle->precio_unitario, 2) }}</strong></td>
                     </tr>
                     @endforeach

@@ -70,6 +70,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/cotizaciones/{id}', [CotizacionController::class, 'show']);
     Route::post('/cotizaciones', [CotizacionController::class, 'store']);
     Route::patch('/cotizaciones/{id}/estado', [CotizacionController::class, 'updateEstado']);
+    Route::patch('/cotizaciones/{id}/receta', [CotizacionController::class, 'updateReceta']);
     Route::delete('/cotizaciones/{id}', [CotizacionController::class, 'destroy']);
     Route::get('/cotizaciones/{id}/pdf', [CotizacionController::class, 'generarPDF']);
 

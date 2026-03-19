@@ -7,6 +7,7 @@ import { equipoService } from '../../../services/equipoService';
 import { authService } from '../../auth/auth.service';
 import { mostrarToast } from '../../../shared/toast';
 import { clienteService } from '../../../services/clienteService';
+import { cotizacionService } from '../../../services/cotizacionService';
 
 let odsListData: any[] = [];
 let cotizacionesDisponibles: any[] = [];
@@ -15,9 +16,10 @@ let incluyeIgv = true;
 let contadorLineasSrv = 0;
 let productosDisponiblesODS: any[] = [];
 let equiposDisponiblesODS: any[] = [];
-let odsProductoRows: { id_producto: number; cantidad: number; observacion: string; stock?: number; id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
+let odsProductoRows: { id_servicio?: number; id_equipo?: number | null; equipo_descripcion?: string; id_producto: number; cantidad: number; observacion: string; stock?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
 let odsEquipoRows: { id_equipo: number; observacion: string; id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
 let plantasClienteDataODS: any[] = [];
+let recetaServicioODS: any[] = [];
 
 export function renderComercialOrdenesServicio() {
   return `
@@ -547,9 +549,64 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     });
 
     calcularTotalCosto();
+
+    // Cargar receta desde cotización si existe
+    await cargarRecetaDesdeCotizacion(cotizacionId);
   } catch (e) {
     console.error('Error cargando datos de cotizacion:', e);
     mostrarToast('error', 'Error', 'No se pudieron cargar los datos de la cotizacion');
+  }
+}
+
+async function cargarRecetaDesdeCotizacion(cotizacionId: number) {
+  try {
+    const res = await cotizacionService.getById(cotizacionId);
+    const raw = res.data || res;
+    const cotizacion = (raw as any).data || raw;
+
+    // Verificar si tiene receta_servicio almacenada
+    if (!cotizacion.receta_servicio || !Array.isArray(cotizacion.receta_servicio) || cotizacion.receta_servicio.length === 0) {
+      recetaServicioODS = [];
+      return;
+    }
+
+    // Guardar receta en variable
+    recetaServicioODS = cotizacion.receta_servicio;
+
+    // Cargar productos y equipos disponibles
+    await cargarProductosDisponiblesODS();
+    await cargarEquiposDisponiblesODS();
+
+    // Limpiar productos y equipos actuales
+    odsProductoRows = [];
+    odsEquipoRows = [];
+
+    // Cargar cada producto de la receta
+    recetaServicioODS.forEach((item: any) => {
+      if (item.id_producto && item.cantidad && item.cantidad > 0) {
+        odsProductoRows.push({
+          id_producto: Number(item.id_producto),
+          cantidad: Number(item.cantidad),
+          observacion: item.observacion || '',
+          id_servicio: item.id_servicio || undefined,
+          id_cliente_planta: item.id_cliente_planta || null,
+          id_cliente_planta_area: item.id_cliente_planta_area || null,
+          id_equipo: item.id_equipo || null,
+          equipo_descripcion: item.equipo_descripcion || '',
+        });
+      }
+    });
+
+    // Renderizar productos
+    renderProductosODS();
+
+    if (odsProductoRows.length > 0) {
+      mostrarToast('success', 'Receta cargada', `Se cargaron ${odsProductoRows.length} producto(s) desde la receta de servicio de la cotización`);
+    }
+  } catch (error) {
+    console.error('Error cargando receta desde cotización:', error);
+    // No mostrar error si falla, puede ser que la cotización no tenga receta
+    recetaServicioODS = [];
   }
 }
 
@@ -816,6 +873,22 @@ function getGroupKey(r: { id_servicio?: number; id_cliente_planta?: number | nul
   return `${r.id_servicio || 0}-${r.id_cliente_planta || 0}-${r.id_cliente_planta_area || 0}`;
 }
 
+function getODSGroupKey(r: { id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null; id_equipo?: number | null }): string {
+  return `${r.id_servicio || 0}-${r.id_cliente_planta || 0}-${r.id_cliente_planta_area || 0}-${r.id_equipo || 0}`;
+}
+
+function getODSGroupLabel(row: { id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null; equipo_descripcion?: string }): string {
+  const servicioNombre = getServiceName(row.id_servicio);
+  const plantaNombre = getPlantaName(row.id_cliente_planta);
+  const areaNombre = getAreaName(row.id_cliente_planta, row.id_cliente_planta_area);
+  const equipoNombre = row.equipo_descripcion || 'Sin equipo';
+  const partes = [servicioNombre];
+  if (plantaNombre) partes.push(plantaNombre);
+  if (areaNombre) partes.push(areaNombre);
+  partes.push(equipoNombre);
+  return partes.join(' → ');
+}
+
 function parseGroupKey(groupKey: string): { idServicio: number; idPlanta: number | null; idArea: number | null } {
   const [idServicioRaw, idPlantaRaw, idAreaRaw] = groupKey.split('-').map(v => Number(v || 0));
   return {
@@ -845,54 +918,42 @@ function renderProductosODS() {
   if (!tbody) return;
 
   if (odsProductoRows.length === 0) {
-    const groupsFromDetalle = getGroupOrderFromDetalleODS();
-    if (groupsFromDetalle.length === 0) {
-      tbody.innerHTML = '';
-      if (emptyEl) emptyEl.style.display = 'block';
-      return;
-    }
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
   }
+
   if (emptyEl) emptyEl.style.display = 'none';
 
-  // Agrupar por servicio+planta+area manteniendo orden
-  const groupOrder = getGroupOrderFromDetalleODS();
+  // Agrupar por servicio+planta+area+equipo (INCLUYENDO EQUIPO)
+  const groupOrder: string[] = [];
   odsProductoRows.forEach(r => {
-    const key = getGroupKey(r);
+    const key = getODSGroupKey(r);
     if (!groupOrder.includes(key)) groupOrder.push(key);
   });
 
   let html = '';
   groupOrder.forEach(groupKey => {
-    const rows = odsProductoRows.filter(r => getGroupKey(r) === groupKey);
-    const parsed = parseGroupKey(groupKey);
+    const rows = odsProductoRows.filter(r => getODSGroupKey(r) === groupKey);
+    if (rows.length === 0) return;
+    
     const first = rows[0];
-    const srvId = first?.id_servicio || parsed.idServicio || 0;
-    const idPlanta = first?.id_cliente_planta ?? parsed.idPlanta;
-    const idArea = first?.id_cliente_planta_area ?? parsed.idArea;
-    const hasGroup = srvId > 0 || !!idPlanta;
+    const groupLabel = getODSGroupLabel(first);
 
-    if (hasGroup) {
-      const groupLabel = getGroupLabel(srvId, idPlanta, idArea);
-      html += `<tr class="ods-srv-header"><td colspan="5" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          <span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-            ${groupLabel}
-          </span>
-          <button type="button" class="btn-secondary ods-prod-add-group" data-group-key="${groupKey}" style="font-size:11px;padding:2px 8px;line-height:1.3;">
-            + Añadir producto
-          </button>
-        </div>
-      </td></tr>`;
-    } else if (groupOrder.length > 1) {
-      html += `<tr class="ods-srv-header"><td colspan="5" style="background:#f8fafc;padding:6px 10px;font-size:12px;font-weight:600;color:#64748b;border-bottom:2px solid #e2e8f0;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-        Generales</td></tr>`;
-    }
-    if (rows.length === 0) {
-      html += `<tr><td colspan="5" style="text-align:center;color:#94a3b8;font-size:12px;padding:8px;">Sin productos para este bloque</td></tr>`;
-      return;
-    }
+    // Header azul con botón de eliminar grupo
+    html += `<tr class="ods-equipo-header">
+      <td colspan="4" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+        ${groupLabel}
+      </td>
+      <td style="background:#eef2ff;text-align:right;padding:6px 10px;border-bottom:2px solid #c7d2fe;">
+        <button type="button" class="btn-eliminar-ods-grupo" data-group-key="${groupKey}" style="background:none;border:none;cursor:pointer;color:#ef4444;padding:4px;" title="Eliminar equipo y sus productos">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        </button>
+      </td>
+    </tr>`;
+
+    // Filas de productos
     rows.forEach(r => {
       const idx = odsProductoRows.indexOf(r);
       const stock = getStockProducto(r.id_producto);
@@ -902,7 +963,7 @@ function renderProductosODS() {
         <td style="text-align:center;"><input type="number" class="os-input os-input-sm ods-prod-cant" data-idx="${idx}" value="${r.cantidad}" min="0.01" step="0.01" style="width:80px;text-align:center;"></td>
         <td style="text-align:center;${stockColor}" class="ods-prod-stock" data-idx="${idx}">${stock}</td>
         <td><input type="text" class="os-input os-input-sm ods-prod-obs" data-idx="${idx}" value="${r.observacion || ''}" placeholder="Opcional" maxlength="200"></td>
-        <td style="text-align:center;"><button type="button" class="btn-icon ods-prod-remove" data-idx="${idx}" style="color:#ef4444;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
+        <td style="text-align:center;"><button type="button" class="btn-icon ods-prod-remove" data-idx="${idx}" style="color:#ef4444;" title="Eliminar producto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
       </tr>`;
     });
   });
@@ -912,14 +973,18 @@ function renderProductosODS() {
 }
 
 function bindProductosODSEvents() {
-  document.querySelectorAll('.ods-prod-add-group').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const groupKey = (e.currentTarget as HTMLElement).dataset.groupKey || '0-0-0';
-      const group = parseGroupKey(groupKey);
-      await cargarProductosDisponiblesODS();
-      agregarProductoODS(0, 1, '', group.idServicio, group.idPlanta, group.idArea);
+  // Eliminar grupo completo (cascada)
+  document.querySelectorAll('.btn-eliminar-ods-grupo').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const groupKey = (e.currentTarget as HTMLElement).dataset.groupKey || '';
+      if (!groupKey) return;
+      odsProductoRows = odsProductoRows.filter(r => getODSGroupKey(r) !== groupKey);
+      renderProductosODS();
+      mostrarToast('success', 'Equipo eliminado', 'Se eliminó el equipo y sus productos');
     });
   });
+
+  // Cambiar producto
   document.querySelectorAll('.ods-prod-select').forEach(sel => {
     sel.addEventListener('change', (e) => {
       const idx = Number((e.target as HTMLSelectElement).dataset.idx);
@@ -934,6 +999,8 @@ function bindProductosODSEvents() {
       }
     });
   });
+
+  // Cambiar cantidad
   document.querySelectorAll('.ods-prod-cant').forEach(inp => {
     inp.addEventListener('input', (e) => {
       const idx = Number((e.target as HTMLInputElement).dataset.idx);
@@ -947,12 +1014,16 @@ function bindProductosODSEvents() {
       }
     });
   });
+
+  // Cambiar observación
   document.querySelectorAll('.ods-prod-obs').forEach(inp => {
     inp.addEventListener('input', (e) => {
       const idx = Number((e.target as HTMLInputElement).dataset.idx);
       odsProductoRows[idx].observacion = (e.target as HTMLInputElement).value;
     });
   });
+
+  // Eliminar producto individual
   document.querySelectorAll('.ods-prod-remove').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const idx = Number((e.currentTarget as HTMLElement).dataset.idx);
