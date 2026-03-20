@@ -456,6 +456,23 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
   incluyeIgv = true;
   contadorLineas = 0;
 
+  // Sección especial para técnicos/supervisor SOLO para Servicio
+  const seccionLimpiezaCisternas = tipoFijo === 'Servicio' ? `
+    <div id="seccion-limpieza-cisternas" style="display:none;margin-bottom:24px;padding:16px 20px;background:#f1f5f9;border-radius:8px;">
+      <div style="font-weight:600;margin-bottom:10px;color:#2563eb;">Datos de Operarios para LIMPIEZA DE CISTERNAS Y RESERVORIOS</div>
+      <div style="display:flex;gap:24px;align-items:center;">
+        <div>
+          <label for="input-op-tecnicos" style="font-size:13px;font-weight:500;">Operarios Técnicos</label>
+          <input type="number" min="0" id="input-op-tecnicos" class="input" style="width:80px;margin-left:8px;" value="0">
+        </div>
+        <div>
+          <label for="input-supervisor" style="font-size:13px;font-weight:500;">Supervisor</label>
+          <input type="number" min="0" id="input-supervisor" class="input" style="width:80px;margin-left:8px;" value="0">
+        </div>
+      </div>
+    </div>
+  ` : '';
+
   panelEl.innerHTML = `
     <div class="form-card" style="background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
       <form id="form-cotizacion">
@@ -543,6 +560,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
         </div>
 
         <div class="form-section" style="margin-bottom: 24px;">
+          ${seccionLimpiezaCisternas}
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
             <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Detalle de Cotización</h3>
             <button type="button" class="btn-secondary" id="btn-agregar-linea" ${tipoFijo ? '' : 'disabled'} style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:${tipoFijo ? 'pointer' : 'not-allowed'};opacity:${tipoFijo ? '1' : '0.6'};font-size:13px;font-weight:600;color:#475569;">
@@ -561,7 +579,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
                   <th style="width: 11%;">Precio Unit.</th>
                   <th style="width: 11%;">Frecuencia</th>
                   <th style="width: 10%;">Modalidad</th>
-                  ${tipoFijo === 'Capacitacion' ? '<th style="width: 12%;">OP Técnicos</th><th style="width: 12%;">Supervisor</th>' : ''}
+                  <!-- Eliminado: técnicos/supervisor de capacitación -->
                   <th style="width: 9%;">Subtotal</th>
                   <th style="width: 3%;"></th>
                 </tr>
@@ -978,6 +996,54 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
       });
       renderRecetaServicio(panelEl);
     });
+
+    // Función para mostrar/ocultar sección de limpieza de cisternas
+    const actualizarSeccionLimpiezaCisternas = () => {
+      const seccion = panelEl.querySelector('#seccion-limpieza-cisternas') as HTMLElement;
+      if (!seccion) return;
+
+      const tbody = panelEl.querySelector('#detalle-cotizacion-body') as HTMLElement;
+      if (!tbody) return;
+
+      const filas = tbody.querySelectorAll('tr');
+      let tieneLimpiezaCisternas = false;
+
+      filas.forEach(fila => {
+        const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
+        if (itemSelect) {
+          const selectedOption = itemSelect.options[itemSelect.selectedIndex];
+          const servicioNombre = selectedOption?.textContent?.trim() || '';
+          if (servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS Y RESERVORIOS') ||
+              servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS') ||
+              servicioNombre.toUpperCase().includes('LIMPIEZA DE RESERVORIOS')) {
+            tieneLimpiezaCisternas = true;
+          }
+        }
+      }); 
+
+      seccion.style.display = tieneLimpiezaCisternas ? 'block' : 'none';
+    };
+
+    // Event listener para cambios en el detalle
+    panelEl.addEventListener('change', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('item-select')) {
+        actualizarSeccionLimpiezaCisternas();
+      }
+    });
+
+    // También verificar cuando se agrega una nueva línea
+    panelEl.querySelector('#btn-agregar-linea')?.addEventListener('click', () => {
+      setTimeout(actualizarSeccionLimpiezaCisternas, 100); // Pequeño delay para que se renderice la nueva fila
+    });
+
+    // Verificar cuando se elimina una línea
+    panelEl.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('btn-eliminar-linea')) {
+        setTimeout(actualizarSeccionLimpiezaCisternas, 100);
+      }
+    });
   }
 
 
@@ -1165,14 +1231,7 @@ function agregarLineaDetalle() {
           <option value="Hibrido">Híbrido</option>
         </select>
       </td>
-      ${esCapacitacion ? `
-      <td>
-        <input type="text" class="op-tecnicos-input" placeholder="Ej: 2 técnicos" style="${inputStyle}">
-      </td>
-      <td>
-        <input type="text" class="supervisor-input" placeholder="Nombre supervisor" style="${inputStyle}">
-      </td>
-      ` : ''}
+      <!-- Eliminado: técnicos/supervisor de capacitación -->
       <td>
         <strong class="subtotal-linea" style="font-size:13px;">S/ 0.00</strong>
       </td>
@@ -1199,6 +1258,11 @@ function agregarLineaDetalle() {
         if (precioInput) precioInput.value = precio;
       }
       calcularSubtotalLinea(lineaId);
+      // Lógica para mostrar/ocultar sección limpieza cisternas
+      const panelEl = getActivePanelElement();
+      if (panelEl && panelEl.querySelector('#seccion-limpieza-cisternas')) {
+        actualizarSeccionLimpiezaCisternas(panelEl);
+      }
     });
 
     // Cascading: planta → áreas dentro de la fila
@@ -1214,8 +1278,43 @@ function agregarLineaDetalle() {
     fila.querySelector('.btn-eliminar-linea')?.addEventListener('click', () => {
       fila.remove();
       calcularTotales();
+      // Lógica para mostrar/ocultar sección limpieza cisternas
+      const panelEl = getActivePanelElement();
+      if (panelEl && panelEl.querySelector('#seccion-limpieza-cisternas')) {
+        actualizarSeccionLimpiezaCisternas(panelEl);
+      }
     });
+    // Lógica para mostrar/ocultar sección limpieza cisternas al agregar línea
+    const panelEl = getActivePanelElement();
+    if (panelEl && panelEl.querySelector('#seccion-limpieza-cisternas')) {
+      actualizarSeccionLimpiezaCisternas(panelEl);
+    }
   }
+}
+
+// Función para mostrar/ocultar la sección de limpieza de cisternas
+function actualizarSeccionLimpiezaCisternas(panelEl: HTMLElement) {
+  const seccion = panelEl.querySelector('#seccion-limpieza-cisternas') as HTMLElement;
+  if (!seccion) return;
+  const tbody = panelEl.querySelector('#detalle-cotizacion-body') as HTMLElement;
+  if (!tbody) return;
+  const filas = tbody.querySelectorAll('tr');
+  let tieneLimpiezaCisternas = false;
+  filas.forEach(fila => {
+    const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
+    if (itemSelect) {
+      const selectedOption = itemSelect.options[itemSelect.selectedIndex];
+      const servicioNombre = selectedOption?.textContent?.trim() || '';
+      if (
+        servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS Y RESERVORIOS') ||
+        servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS') ||
+        servicioNombre.toUpperCase().includes('LIMPIEZA DE RESERVORIOS')
+      ) {
+        tieneLimpiezaCisternas = true;
+      }
+    }
+  });
+  seccion.style.display = tieneLimpiezaCisternas ? 'block' : 'none';
 }
 
 function calcularSubtotalLinea(lineaId: string) {
