@@ -198,11 +198,31 @@
                         </tr>
                     </table>
 
-                    <div style="margin-bottom: 10px; text-align: left;">
-                        <strong style="font-size: 13px;">- PERSONAL ASIGNADO:</strong>
-                    </div>
+                    @php
+                        $detalleLimpieza = $cotizacion->detalles->first(function($detalle) {
+                            return $detalle->servicio && $detalle->servicio->nombre === 'LIMPIEZA DE CISTERNAS Y RESERVORIOS';
+                        });
+                    @endphp
+
+                    @if($detalleLimpieza)
+                        <div style="margin-top: 15px;  text-align: left;">
+                            <strong style="font-size: 13px;">- PERSONAL ASIGNADO</strong>
+                            <table style="margin: 10px auto; border-collapse: collapse; min-width: 200px;">
+                                <tr>
+                                    <th style="border: 1px solid #ccc; padding: 6px 16px; background: #f1f5f9;">Operarios Técnicos</th>
+                                    <th style="border: 1px solid #ccc; padding: 6px 16px; background: #f1f5f9;">Supervisor</th>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #ccc; padding: 6px 16px;">{{ $detalleLimpieza->op_tecnicos ?? 0 }}</td>
+                                    <td style="border: 1px solid #ccc; padding: 6px 16px;">{{ $detalleLimpieza->supervisor ?? 0 }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    @endif
                 </div>
+                <div class="page-break"></div>
             @endif
+            
             <div class="proposal-text" style="margin-bottom: 20px;">
                 @if($cotizacion->propuesta_tecnica)
                     {!! $cotizacion->propuesta_tecnica !!}

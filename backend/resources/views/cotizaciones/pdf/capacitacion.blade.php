@@ -12,10 +12,7 @@
 </head>
 <body>
     <header>
-        @php
-            $headerLogo = ($cotizacion->id_multicim ?? 1) == 2 ? 'logo-orden.png' : 'logo-calidad.png';
-        @endphp
-        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/' . $headerLogo))) }}" class="logo-small">
+            <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" class="logo-small">
     </header>
     <footer>
         <a href="http://www.qsciconsulting.com" class="footer-link">www.qsciconsulting.com</a>
@@ -27,7 +24,7 @@
             <table>
                 <tr>
                     <td class="logo-qsci">
-                        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/' . $headerLogo))) }}" alt="QSCI">
+                        <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" class="logo-small">
                     </td>
                     <td class="logo-encabezado">
                         <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/encabezado.png'))) }}" alt="QSCI Group">
@@ -39,13 +36,13 @@
         
         <div class="separator"></div>
         
-        <!-- NÃšMERO DE DOCUMENTO -->
+        <!-- NÚMERO DE DOCUMENTO -->
         <div class="document-number">
-            <strong>DOCUMENTO NÂ°:</strong> <span>{{ $cotizacion->numero_cotizacion }}</span>
-            <div class="document-date">Fecha de emisiÃ³n: {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->format('d/m/Y') }}</div>
+            <strong>DOCUMENTO N°:</strong> <span>{{ $cotizacion->numero_cotizacion }}</span>
+            <div class="document-date">Fecha de emisión: {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->format('d/m/Y') }}</div>
         </div>
         
-        <!-- INFORMACIÃ“N DEL CLIENTE -->
+        <!-- INFORMACIÓN DEL CLIENTE -->
         <div class="intro-section">
             <div class="client-info-list">
                 <div class="info-item">
@@ -54,7 +51,7 @@
                 </div>
 
                 <div class="info-item">
-                    <span class="label">AtenciÃ³n:</span>
+                    <span class="label">Atención:</span>
                     <span class="value">{{ $cotizacion->cliente->nombre_empresa }}</span>
                 </div>
 
@@ -64,7 +61,7 @@
                 </div>
 
                 <div class="info-item">
-                    <span class="label">DirecciÃ³n:</span>
+                    <span class="label">Dirección:</span>
                     <span class="value">{{ $cotizacion->cliente->direccion ?? 'No registrada' }}</span>
                 </div>
             </div>
@@ -74,35 +71,38 @@
                     Nos es grato enviarle nuestra siguiente propuesta comercial de 
                     <span class="highlight-service">
                         @php
-                            // 1. lista de nombres de servicios o manuales
-                            $serviciosColeccion = $cotizacion->detalles
+                            // 1. lista de nombres de capacitaciones o manuales
+                            $capacitacionesColeccion = $cotizacion->detalles
                                 ->map(function($d) {
-                                    return $d->id_servicio && $d->servicio ? $d->servicio->nombre : $d->descripcion_manual;
+                                    return $d->id_catalogo_cap_aud && $d->catalogoCapAud ? $d->catalogoCapAud->nombre : $d->descripcion_manual;
                                 })
                                 ->filter()
                                 ->unique();
 
-                            $cantidad = $serviciosColeccion->count();
+                            $cantidad = $capacitacionesColeccion->count();
                             
-                            // 2. logica de cuando se seleccione mas servicios
-                            if ($cantidad > 1) {
-                                // Si hay mÃ¡s de 2, ponemos el nombre general
+                            // 2. logica de cuando se seleccione mas capacitaciones
+                            if ($cantidad > 3) {
+                                // Si hay más de 3, ponemos el nombre general
+                                $textoMostrar = "muchas capacitaciones";
+                            } elseif ($cantidad > 1) {
+                                // Si hay 2 o 3, ponemos el nombre general
                                 $textoMostrar = "servicio de Control de plagas";
                             } else {
-                                // Si hay 1 o 2, los listamos separados por coma
-                                $textoMostrar = $serviciosColeccion->implode(', ');
+                                // Si hay 1, lo listamos
+                                $textoMostrar = $capacitacionesColeccion->implode(', ');
                             }
                         @endphp
                         
-                        {{ $textoMostrar ?: 'AsesorÃ­a y Servicios Especializados' }}
+                        {{ $textoMostrar ?: 'Asesoría y Servicios Especializados' }}
                     </span>.
                 </p>
                 <p>
-                    Nuestro servicio estÃ¡ inspirado en vuestra empresa y queremos acompaÃ±arlos en el 
+                    Nuestro servicio está inspirado en vuestra empresa y queremos acompañarlos en el 
                     cumplimiento de sus objetivos y alcance de la excelencia.
                 </p>
                 <p style="margin-top: 20px;">
-                    Quedo a su entera disposiciÃ³n para cualquier consulta.
+                    Quedo a su entera disposición para cualquier consulta.
                 </p>
             </div>
 
@@ -130,7 +130,7 @@
                         E-mail: {{ $cotizacion->creador->correo  }}
                     </p>
                     <p>
-                        NÃºmero: {{ $cotizacion->creador->celular  }}
+                        Número: {{ $cotizacion->creador->celular  }}
                     </p>
                 </div>
             </div>
@@ -147,85 +147,52 @@
         <!-- PÃGINA DE PROPUESTA TÃ‰CNICA -->
         <div class="contenido-desplazado">
             
-            <!-- NÃšMERO DE PROPUESTA Y FECHA -->
+            <!-- NÚMERO DE PROPUESTA Y FECHA -->
             <div class="propuesta-numero">
-                NÃšMERO DE PROPUESTA &ndash; {{ $cotizacion->numero_cotizacion }}
+                NÚMERO DE PROPUESTA &ndash; {{ $cotizacion->numero_cotizacion }}
             </div>
             <div class="propuesta-fecha">
                 {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->isoFormat('D [de] MMMM [de] YYYY') }}
             </div>
 
-            <!-- I. PROPUESTA TÃ‰CNICA -->
+            <!-- I. PROPUESTA TÉCNICA -->
             <div class="seccion-titulo">
-                <span class="seccion-titulo-num">I.</span> PROPUESTA TÃ‰CNICA
+                <span class="seccion-titulo-num">I.</span> PROPUESTA TÉCNICA
             </div>
             <div class="seccion-descripcion">
-                Presentamos a su consideraciÃ³n la oferta econÃ³mica, a continuaciÃ³n, definiremos los componentes que hacen parte del alcance de la propuesta.
+                Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.
             </div>
 
             <!-- II. ESPECIFICACIONES DEL SERVICIO -->
             <div class="seccion-titulo">
-                <span class="seccion-titulo-num">II.</span> SOBRE LOS SERVICIOS BRINDADOS
+                <span class="seccion-titulo-num">II.</span> ESPECIFICACIONES DEL SERVICIO
             </div>
             <div class="seccion-descripcion">
-                    A continuaciÃ³n, se detallarÃ¡n la lista de actividades incluidas en el servicio.
+                    A continuación, se detallarán la lista de actividades incluidas en el servicio.
             </div>
 
-            {{-- 2. SECCIÃ“N DINÃMICA DE IMÃGENES CUANDOS SEA SERVICIO DE LIMPIEZA --}}
-            @if($mostrarSeccionEspecial)
-                <div style="margin-top: 15px; text-align: center;">
-                    <div style="margin-bottom: 10px; text-align: left;">
-                        <strong style="font-size: 13px;">â€¢ SERVICIO PARA PRESTAR:</strong>
-                        <p style="margin: 5px 0 15px 15px; font-size: 14px; color: #333;">LIMPIEZA DE RESERVORIO DE AGUA</p>
-                        
-                        <strong style="font-size: 13px;">â€¢ PROCEDIMIENTO DEL SERVICIO:</strong>
-                    </div>
-
-                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-                        <tr>
-                            <td style="width: 33%; padding: 5px;">
-                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_1.png') }}" style="width: 100%; border: 1px solid #ddd;">
-                            </td>
-                            <td style="width: 33%; padding: 5px;">
-                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_2.png') }}" style="width: 100%; border: 1px solid #ddd;">
-                            </td>
-                            <td style="width: 33%; padding: 5px;">
-                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_3.png') }}" style="width: 100%; border: 1px solid #ddd;">
-                            </td>
-                        </tr>
-                    </table>
-
-                    <div style="margin-bottom: 10px; text-align: left;">
-                        <strong style="font-size: 13px;">â€¢ PERSONAL ASIGNADO:</strong>
-                    </div>
-                </div>
-            @endif
             <div class="proposal-text" style="margin-bottom: 20px;">
                 @if($cotizacion->propuesta_tecnica)
                     {!! $cotizacion->propuesta_tecnica !!}
                 @else
-                    <p>Presentamos a su consideraciÃ³n la oferta econÃ³mica, a continuaciÃ³n, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
+                    <p>Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
                 @endif
             </div>
 
-            <!-- III. PROPUESTA ECONÃ“MICA -->
+            <!-- III. PROPUESTA ECONÓMICA -->
             <div class="seccion-titulo">
-                <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÃ“MICA
+                <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÓMICA
             </div>
             <div class="seccion-descripcion">
-                    El siguiente cuadro muestra la respectiva cotizaciÃ³n por el servicio brindado:
+                    El siguiente cuadro muestra la respectiva cotización por el servicio brindado:
             </div>
-            <div class="products-title">Detalle de Productos/Servicios</div>
             <table class="products-table">
                 <thead>
                     <tr>
-                        <th>CÃ³digo</th>
-                        <th style="width: 40%;">DescripciÃ³n</th>
+                        <th>Código</th>
+                        <th style="width: 40%;">Descripción</th>
                         <th>Cantidad</th>
-                        <th>Unidad</th>
                         <th>Precio Unitario</th>
-                        <th>OP TÃ©cnicos</th>
-                        <th>Supervisor</th>
                         <th>Subtotal</th>
                     </tr>
                 </thead>
@@ -248,10 +215,7 @@
                             @endif
                         </td>
                         <td class="text-center">{{ $detalle->cantidad }}</td>
-                        <td class="text-center">UND</td>
                         <td class="text-right">S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
-                        <td class="text-center">{{ $detalle->op_tecnicos ?? 'â€”' }}</td>
-                        <td class="text-center">{{ $detalle->supervisor ?? 'â€”' }}</td>
                         <td class="text-right"><strong>S/ {{ number_format($detalle->cantidad * $detalle->precio_unitario, 2) }}</strong></td>
                     </tr>
                     @endforeach
@@ -269,7 +233,8 @@
                         <td class="label">IGV (18%):</td>
                         <td class="value">S/ {{ number_format($cotizacion->igv ?? 0, 2) }}</td>
                     </tr>
-                    <tr class="total-row">
+                    <!-- para volver al fondo azul<tr class="total-row" -->
+                    <tr>
                         <td class="label">TOTAL GENERAL:</td>
                         <td class="value">S/ {{ number_format($cotizacion->total ?? 0, 2) }}</td>
                     </tr>
@@ -280,9 +245,9 @@
             <div style="margin-top: 15px; padding: 12px 16px; border: 2px solid {{ $cotizacion->incluye_igv ? '#6CB52D' : '#dc3545' }}; border-radius: 4px; background-color: {{ $cotizacion->incluye_igv ? '#f0f9e8' : '#fff3f3' }};">
                 <strong style="color: {{ $cotizacion->incluye_igv ? '#2E4A7C' : '#dc3545' }}; font-size: 12px;">
                     @if($cotizacion->incluye_igv)
-                        Esta cotizaciÃ³n INCLUYE IGV (18%)
+                        Esta cotización INCLUYE IGV (18%)
                     @else
-                        Esta cotizaciÃ³n NO incluye IGV
+                        Esta cotización NO incluye IGV
                     @endif
                 </strong>
                 @if($cotizacion->observaciones)
@@ -295,7 +260,7 @@
             <!-- SECCIÃ“N DE PAGOS -->
             <div class="payment-section">
                 <p class="payment-header-text">Condiciones de pago:</p>
-                <p style="font-size: 12px; margin-bottom: 5px;"> - InformaciÃ³n de pago: Cuenta BCP</p>
+                <p style="font-size: 12px; margin-bottom: 5px;"> - Información de pago: Cuenta BCP</p>
                 
                 <table class="payment-table">
                     <tr>
@@ -303,7 +268,7 @@
                         <td>{{ $cotizacion->empresa->cuenta_bcp }}</td>
                     </tr>
                     <tr>
-                        <td class="label-cell">CÃ³digo de cuenta interbancario</td>
+                        <td class="label-cell">Código de cuenta interbancario</td>
                         <td>{{ $cotizacion->empresa->codigo_interbancario_bcp }}</td>
                     </tr>
                     <tr>
@@ -323,6 +288,39 @@
                         <td>{{ $cotizacion->empresa->codigo_interbancario_nacion }}</td>
                     </tr>
                 </table>
+            </div>
+
+            <!-- SECCIÓN DE FIRMAS -->
+            <div class="issued-container">
+                <div class="proporsal-text">
+                    Atentamente,
+                </div> <br>
+                <div class="issued-name">
+                    {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
+                </div>
+                <div class="issued-position">
+                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                </div>
+                <div class="signature-logos">
+                    <table>
+                        <tr>
+                            <td style="text-align: left;">
+                                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-calidad.png'))) }}" class="img-signature">
+                            </td>
+                            <td style="text-align: right;">
+                                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/logo-orden.png'))) }}" class="img-signature">
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="proposal-text">
+                    <p>
+                        E-mail: {{ $cotizacion->creador->correo  }}
+                    </p>
+                    <p>
+                        Número: {{ $cotizacion->creador->celular  }}
+                    </p>
+                </div>
             </div>
         </div>
         
