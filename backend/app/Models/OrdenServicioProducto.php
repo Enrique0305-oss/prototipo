@@ -14,6 +14,7 @@ class OrdenServicioProducto extends Model
         'id_servicio',
         'id_cliente_planta',
         'id_cliente_planta_area',
+        'id_equipo',
         'id_producto',
         'cantidad',
         'observacion',
@@ -46,5 +47,10 @@ class OrdenServicioProducto extends Model
     public function area()
     {
         return $this->belongsTo(ClientePlantaArea::class, 'id_cliente_planta_area');
+    }
+
+    public function equipo()
+    {
+        return $this->belongsTo(Equipo::class, 'id_equipo');
     }
 }

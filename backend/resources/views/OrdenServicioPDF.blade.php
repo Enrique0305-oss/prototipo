@@ -175,7 +175,7 @@
         </table>
         @endif
 
-        {{-- Tabla 2: Productos + Equipos combinados por Área --}}
+        {{-- Tabla 2: Materiales agrupados por Área y Equipo --}}
         @php
             // Agrupar productos de esta planta por área
             $prodsPorArea = $productosPlanta->groupBy(function($p) {
@@ -201,9 +201,9 @@
                 <tr class="bg-blue">
                     <th style="width: 8%;">N&ordm;</th>
                     <th style="width: 17%;">&Aacute;REA</th>
+                    <th style="width: 25%;">EQUIPO</th>
                     <th style="width: 35%;">PRODUCTOS / MATERIALES</th>
                     <th style="width: 15%;">CANTIDAD</th>
-                    <th style="width: 25%;">EQUIPO</th>
                 </tr>
             </thead>
             <tbody>
@@ -213,23 +213,57 @@
                         $numArea++;
                         $prodsArea = $prodsPorArea->get($areaId, collect())->values();
                         $eqsArea = $eqsPorArea->get($areaId, collect())->values();
-                        $maxFilas = max($prodsArea->count(), $eqsArea->count(), 1);
+                        $equipoIds = collect()
+                            ->merge($prodsArea->pluck('id_equipo')->map(fn($id) => $id ?? 0))
+                            ->merge($eqsArea->pluck('id_equipo')->map(fn($id) => $id ?? 0))
+                            ->unique()
+                            ->values();
+                        if ($equipoIds->count() === 0) {
+                            $equipoIds = collect([0]);
+                        }
 
                         // Obtener nombre del área
                         $areaObj = $prodsArea->first()?->area ?? $eqsArea->first()?->area;
                         $areaNombre = $areaObj->nombre ?? ($areaId > 0 ? "Área #$areaId" : 'GENERAL');
+
+                        $filasPorEquipo = $equipoIds->map(function($equipoId) use ($prodsArea) {
+                            $cantidad = $prodsArea->filter(fn($p) => (($p->id_equipo ?? 0) == $equipoId))->count();
+                            return max($cantidad, 1);
+                        });
+                        $totalFilasArea = max($filasPorEquipo->sum(), 1);
+                        $renderizoCabeceraArea = false;
                     @endphp
-                    @for($i = 0; $i < $maxFilas; $i++)
-                        <tr>
-                            @if($i === 0)
-                                <td class="text-center" style="vertical-align: middle;" @if($maxFilas > 1) rowspan="{{ $maxFilas }}" @endif>{{ $numArea }}</td>
-                                <td style="vertical-align: middle; font-weight: 600;" @if($maxFilas > 1) rowspan="{{ $maxFilas }}" @endif>{{ mb_strtoupper($areaNombre) }}</td>
-                            @endif
-                            <td>{{ isset($prodsArea[$i]) ? mb_strtoupper($prodsArea[$i]->producto->descripcion ?? '') : '' }}</td>
-                            <td class="text-center">{{ isset($prodsArea[$i]) ? $prodsArea[$i]->cantidad : '' }}</td>
-                            <td>{{ isset($eqsArea[$i]) ? mb_strtoupper($eqsArea[$i]->equipo->descripcion ?? '') : '' }}</td>
-                        </tr>
-                    @endfor
+                    @foreach($equipoIds as $equipoId)
+                        @php
+                            $prodsEquipo = $prodsArea->filter(fn($p) => (($p->id_equipo ?? 0) == $equipoId))->values();
+                            $filasEquipo = max($prodsEquipo->count(), 1);
+                            $eqObj = $eqsArea->first(fn($e) => (($e->id_equipo ?? 0) == $equipoId));
+                            $equipoNombre = $eqObj?->equipo?->descripcion
+                                ?? $prodsEquipo->first()?->equipo?->descripcion
+                                ?? ($equipoId > 0 ? "Equipo #$equipoId" : 'SIN EQUIPO');
+                        @endphp
+                        @for($i = 0; $i < $filasEquipo; $i++)
+                            @php $prod = $prodsEquipo[$i] ?? null; @endphp
+                            <tr>
+                                @if(!$renderizoCabeceraArea)
+                                    <td class="text-center" style="vertical-align: middle;" @if($totalFilasArea > 1) rowspan="{{ $totalFilasArea }}" @endif>{{ $numArea }}</td>
+                                    <td style="vertical-align: middle; font-weight: 600;" @if($totalFilasArea > 1) rowspan="{{ $totalFilasArea }}" @endif>{{ mb_strtoupper($areaNombre) }}</td>
+                                    @php $renderizoCabeceraArea = true; @endphp
+                                @endif
+
+                                @if($i === 0)
+                                    <td style="vertical-align: middle;" @if($filasEquipo > 1) rowspan="{{ $filasEquipo }}" @endif>{{ mb_strtoupper($equipoNombre) }}</td>
+                                @endif
+
+                                <td>{{ $prod ? mb_strtoupper($prod->producto->descripcion ?? '') : '' }}</td>
+                                <td class="text-center">
+                                    @if($prod)
+                                        {{ number_format((float) $prod->cantidad, 2) }}{{ !empty($prod->producto->unidad) ? ' ' . mb_strtoupper($prod->producto->unidad) : '' }}
+                                    @endif
+                                </td>
+                            </tr>
+                        @endfor
+                    @endforeach
                 @endforeach
             </tbody>
         </table>
@@ -274,28 +308,64 @@
         @endif
 
         @php
-            $maxFilasGen = max($productosGenerales->count(), $equiposGenerales->count(), 1);
             $prodsGen = $productosGenerales->values();
             $eqsGen = $equiposGenerales->values();
+            $equipoIdsGen = collect()
+                ->merge($prodsGen->pluck('id_equipo')->map(fn($id) => $id ?? 0))
+                ->merge($eqsGen->pluck('id_equipo')->map(fn($id) => $id ?? 0))
+                ->unique()
+                ->values();
+            if ($equipoIdsGen->count() === 0) {
+                $equipoIdsGen = collect([0]);
+            }
+            $filasTotalGen = $equipoIdsGen->map(function($equipoId) use ($prodsGen) {
+                $cantidad = $prodsGen->filter(fn($p) => (($p->id_equipo ?? 0) == $equipoId))->count();
+                return max($cantidad, 1);
+            })->sum();
+            $renderizoCabeceraGeneral = false;
         @endphp
         <table style="margin-top: 8px;">
             <thead>
                 <tr class="bg-blue">
                     <th style="width: 8%;">N&ordm;</th>
-                    <th style="width: 42%;">PRODUCTOS / MATERIALES</th>
-                    <th style="width: 15%;">CANTIDAD</th>
+                    <th style="width: 17%;">&Aacute;REA</th>
                     <th style="width: 35%;">EQUIPO</th>
+                    <th style="width: 25%;">PRODUCTOS / MATERIALES</th>
+                    <th style="width: 15%;">CANTIDAD</th>
                 </tr>
             </thead>
             <tbody>
-                @for($i = 0; $i < $maxFilasGen; $i++)
-                <tr>
-                    <td class="text-center">{{ $i + 1 }}</td>
-                    <td>{{ isset($prodsGen[$i]) ? mb_strtoupper($prodsGen[$i]->producto->descripcion ?? '') : '' }}</td>
-                    <td class="text-center">{{ isset($prodsGen[$i]) ? $prodsGen[$i]->cantidad : '' }}</td>
-                    <td>{{ isset($eqsGen[$i]) ? mb_strtoupper($eqsGen[$i]->equipo->descripcion ?? '') : '' }}</td>
-                </tr>
-                @endfor
+                @foreach($equipoIdsGen as $equipoId)
+                    @php
+                        $prodsEquipoGen = $prodsGen->filter(fn($p) => (($p->id_equipo ?? 0) == $equipoId))->values();
+                        $filasEquipoGen = max($prodsEquipoGen->count(), 1);
+                        $eqObjGen = $eqsGen->first(fn($e) => (($e->id_equipo ?? 0) == $equipoId));
+                        $equipoNombreGen = $eqObjGen?->equipo?->descripcion
+                            ?? $prodsEquipoGen->first()?->equipo?->descripcion
+                            ?? ($equipoId > 0 ? "Equipo #$equipoId" : 'SIN EQUIPO');
+                    @endphp
+                    @for($i = 0; $i < $filasEquipoGen; $i++)
+                        @php $prod = $prodsEquipoGen[$i] ?? null; @endphp
+                        <tr>
+                            @if(!$renderizoCabeceraGeneral)
+                                <td class="text-center" style="vertical-align: middle;" @if($filasTotalGen > 1) rowspan="{{ $filasTotalGen }}" @endif>1</td>
+                                <td style="vertical-align: middle; font-weight: 600;" @if($filasTotalGen > 1) rowspan="{{ $filasTotalGen }}" @endif>GENERAL</td>
+                                @php $renderizoCabeceraGeneral = true; @endphp
+                            @endif
+
+                            @if($i === 0)
+                                <td style="vertical-align: middle;" @if($filasEquipoGen > 1) rowspan="{{ $filasEquipoGen }}" @endif>{{ mb_strtoupper($equipoNombreGen) }}</td>
+                            @endif
+
+                            <td>{{ $prod ? mb_strtoupper($prod->producto->descripcion ?? '') : '' }}</td>
+                            <td class="text-center">
+                                @if($prod)
+                                    {{ number_format((float) $prod->cantidad, 2) }}{{ !empty($prod->producto->unidad) ? ' ' . mb_strtoupper($prod->producto->unidad) : '' }}
+                                @endif
+                            </td>
+                        </tr>
+                    @endfor
+                @endforeach
             </tbody>
         </table>
     @endif

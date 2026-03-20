@@ -17,6 +17,7 @@ let currentFilters = {
 
 const UNIDAD_OPTIONS = [
   'Litros',
+  'Mililitros',
   'Kilogramos',
   'Unidades',
   'Unidad',

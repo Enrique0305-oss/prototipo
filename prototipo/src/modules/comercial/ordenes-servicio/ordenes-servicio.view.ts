@@ -17,7 +17,7 @@ let contadorLineasSrv = 0;
 let productosDisponiblesODS: any[] = [];
 let equiposDisponiblesODS: any[] = [];
 let odsProductoRows: { id_servicio?: number; id_equipo?: number | null; equipo_descripcion?: string; id_producto: number; cantidad: number; observacion: string; stock?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
-let odsEquipoRows: { id_equipo: number; observacion: string; id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
+let odsEquipoRows: { id_equipo: number; observacion: string; equipo_descripcion?: string; id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
 let plantasClienteDataODS: any[] = [];
 let recetaServicioODS: any[] = [];
 
@@ -244,6 +244,10 @@ export function renderComercialOrdenesServicio() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
                   Cargar Receta
                 </button>
+                <button type="button" class="btn-secondary" id="btn-agregar-equipo-ods" style="font-size:12px;padding:4px 10px;" title="Agregar equipo por servicio/planta/área">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Agregar Equipo
+                </button>
                 <button type="button" class="btn-secondary" id="btn-agregar-producto-ods" style="font-size:12px;padding:4px 10px;">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   Agregar Producto
@@ -266,35 +270,6 @@ export function renderComercialOrdenesServicio() {
             </div>
             <div id="ods-productos-empty" style="text-align:center;padding:12px;color:#94a3b8;font-size:13px;">
               Sin productos. Use "Cargar Receta" o "Agregar Producto".
-            </div>
-          </div>
-
-          <!-- Equipos -->
-          <div class="os-section">
-            <div class="os-section-header">
-              <h3 class="os-section-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-                Equipos
-              </h3>
-              <button type="button" class="btn-secondary" id="btn-agregar-equipo-ods" style="font-size:12px;padding:4px 10px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                Agregar Equipo
-              </button>
-            </div>
-            <div class="os-table-wrapper">
-              <table class="os-table">
-                <thead>
-                  <tr>
-                    <th style="width:50%;">Equipo</th>
-                    <th style="width:40%;">Observación</th>
-                    <th style="width:10%;"></th>
-                  </tr>
-                </thead>
-                <tbody id="ods-equipos-body"></tbody>
-              </table>
-            </div>
-            <div id="ods-equipos-empty" style="text-align:center;padding:12px;color:#94a3b8;font-size:13px;">
-              Sin equipos asignados.
             </div>
           </div>
 
@@ -343,6 +318,30 @@ export function renderComercialOrdenesServicio() {
         <div class="modal-footer">
           <button class="btn-secondary" id="modal-ods-eliminar-cancelar">Cancelar</button>
           <button class="btn-primary" id="modal-ods-eliminar-confirmar" style="background:#ef4444;">Eliminar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-ods-agregar-equipo" style="display:none;">
+      <div class="modal-container" style="max-width:520px;">
+        <div class="modal-header">
+          <h2>Agregar Equipo</h2>
+          <button class="modal-close" id="modal-ods-agregar-equipo-cerrar">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="os-field" style="margin-bottom:12px;">
+            <label>Bloque Servicio / Planta / Área <span style="color:#ef4444">*</span></label>
+            <select id="ods-agregar-equipo-grupo" class="os-input"></select>
+          </div>
+          <div class="os-field" style="margin-bottom:8px;">
+            <label>Equipo <span style="color:#ef4444">*</span></label>
+            <select id="ods-agregar-equipo-id" class="os-input"></select>
+          </div>
+          <p style="font-size:12px;color:#64748b;margin:0;">Se creará el grupo y se intentarán cargar los productos de receta asociados a ese equipo.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-ods-agregar-equipo-cancelar">Cancelar</button>
+          <button class="btn-primary" id="modal-ods-agregar-equipo-confirmar">Agregar</button>
         </div>
       </div>
     </div>
@@ -595,10 +594,27 @@ async function cargarRecetaDesdeCotizacion(cotizacionId: number) {
           equipo_descripcion: item.equipo_descripcion || '',
         });
       }
+
+      if (item.id_equipo && !odsEquipoRows.find(r =>
+        r.id_equipo === Number(item.id_equipo) &&
+        (r.id_servicio || 0) === (Number(item.id_servicio) || 0) &&
+        (r.id_cliente_planta || null) === (item.id_cliente_planta || null) &&
+        (r.id_cliente_planta_area || null) === (item.id_cliente_planta_area || null)
+      )) {
+        odsEquipoRows.push({
+          id_equipo: Number(item.id_equipo),
+          observacion: '',
+          equipo_descripcion: item.equipo_descripcion || '',
+          id_servicio: Number(item.id_servicio) || undefined,
+          id_cliente_planta: item.id_cliente_planta || null,
+          id_cliente_planta_area: item.id_cliente_planta_area || null,
+        });
+      }
     });
 
     // Renderizar productos
     renderProductosODS();
+    renderEquiposODS();
 
     if (odsProductoRows.length > 0) {
       mostrarToast('success', 'Receta cargada', `Se cargaron ${odsProductoRows.length} producto(s) desde la receta de servicio de la cotización`);
@@ -829,6 +845,12 @@ function getStockProducto(idProducto: number): number {
   return p?.inventario?.cantidad_disponible ?? p?.cantidad_disponible ?? 0;
 }
 
+function getEquipoName(idEquipo?: number | null): string {
+  if (!idEquipo) return '';
+  const equipo = equiposDisponiblesODS.find((eq: any) => eq.id === idEquipo);
+  return equipo?.descripcion || `Equipo #${idEquipo}`;
+}
+
 function getServiceName(idServicio?: number): string {
   if (!idServicio) return '';
   const srv = serviciosDisponibles.find(s => s.id === idServicio);
@@ -877,11 +899,11 @@ function getODSGroupKey(r: { id_servicio?: number; id_cliente_planta?: number | 
   return `${r.id_servicio || 0}-${r.id_cliente_planta || 0}-${r.id_cliente_planta_area || 0}-${r.id_equipo || 0}`;
 }
 
-function getODSGroupLabel(row: { id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null; equipo_descripcion?: string }): string {
+function getODSGroupLabel(row: { id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null; id_equipo?: number | null; equipo_descripcion?: string }): string {
   const servicioNombre = getServiceName(row.id_servicio);
   const plantaNombre = getPlantaName(row.id_cliente_planta);
   const areaNombre = getAreaName(row.id_cliente_planta, row.id_cliente_planta_area);
-  const equipoNombre = row.equipo_descripcion || 'Sin equipo';
+  const equipoNombre = row.equipo_descripcion || getEquipoName(row.id_equipo) || 'Sin equipo';
   const partes = [servicioNombre];
   if (plantaNombre) partes.push(plantaNombre);
   if (areaNombre) partes.push(areaNombre);
@@ -896,6 +918,122 @@ function parseGroupKey(groupKey: string): { idServicio: number; idPlanta: number
     idPlanta: idPlantaRaw || null,
     idArea: idAreaRaw || null,
   };
+}
+
+function parseODSGroupKey(groupKey: string): { idServicio: number; idPlanta: number | null; idArea: number | null; idEquipo: number | null } {
+  const [idServicioRaw, idPlantaRaw, idAreaRaw, idEquipoRaw] = groupKey.split('-').map(v => Number(v || 0));
+  return {
+    idServicio: idServicioRaw || 0,
+    idPlanta: idPlantaRaw || null,
+    idArea: idAreaRaw || null,
+    idEquipo: idEquipoRaw || null,
+  };
+}
+
+async function abrirModalAgregarEquipoODS() {
+  const modal = document.getElementById('modal-ods-agregar-equipo') as HTMLElement;
+  const selGrupo = document.getElementById('ods-agregar-equipo-grupo') as HTMLSelectElement;
+  const selEquipo = document.getElementById('ods-agregar-equipo-id') as HTMLSelectElement;
+  if (!modal || !selGrupo || !selEquipo) return;
+
+  const groups = getGroupOrderFromDetalleODS();
+  if (groups.length === 0) {
+    mostrarToast('error', 'Sin servicios', 'Primero agregue una línea de servicio con planta/área');
+    return;
+  }
+
+  await cargarEquiposDisponiblesODS();
+
+  selGrupo.innerHTML = groups.map((key) => {
+    const p = parseGroupKey(key);
+    return `<option value="${key}">${getGroupLabel(p.idServicio, p.idPlanta, p.idArea)}</option>`;
+  }).join('');
+
+  selEquipo.innerHTML = '<option value="">Seleccione equipo...</option>' + equiposDisponiblesODS.map((eq: any) => {
+    return `<option value="${eq.id}">${eq.descripcion}</option>`;
+  }).join('');
+
+  modal.style.display = 'flex';
+}
+
+function cerrarModalAgregarEquipoODS() {
+  const modal = document.getElementById('modal-ods-agregar-equipo') as HTMLElement;
+  if (modal) modal.style.display = 'none';
+}
+
+async function confirmarAgregarEquipoODS() {
+  const selGrupo = document.getElementById('ods-agregar-equipo-grupo') as HTMLSelectElement;
+  const selEquipo = document.getElementById('ods-agregar-equipo-id') as HTMLSelectElement;
+  if (!selGrupo || !selEquipo) return;
+
+  const groupKey = selGrupo.value;
+  const idEquipo = Number(selEquipo.value || 0);
+  if (!groupKey) {
+    mostrarToast('error', 'Dato requerido', 'Seleccione un bloque de servicio');
+    return;
+  }
+  if (!idEquipo) {
+    mostrarToast('error', 'Dato requerido', 'Seleccione un equipo');
+    return;
+  }
+
+  const { idServicio, idPlanta, idArea } = parseGroupKey(groupKey);
+  const equipoDesc = getEquipoName(idEquipo);
+
+  const existeEquipo = odsEquipoRows.some((r) =>
+    r.id_equipo === idEquipo &&
+    (r.id_servicio || 0) === idServicio &&
+    (r.id_cliente_planta || 0) === (idPlanta || 0) &&
+    (r.id_cliente_planta_area || 0) === (idArea || 0)
+  );
+
+  if (!existeEquipo) {
+    odsEquipoRows.push({
+      id_equipo: idEquipo,
+      observacion: '',
+      equipo_descripcion: equipoDesc,
+      id_servicio: idServicio,
+      id_cliente_planta: idPlanta,
+      id_cliente_planta_area: idArea,
+    });
+  }
+
+  try {
+    const res = await servicioService.getProductos(idServicio);
+    const raw = res.data || res;
+    const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
+    items
+      .filter((item: any) => Number(item.id_equipo || 0) === idEquipo)
+      .forEach((item: any) => {
+        const existeProd = odsProductoRows.find((r) =>
+          r.id_producto === Number(item.id_producto) &&
+          (r.id_servicio || 0) === idServicio &&
+          (r.id_cliente_planta || 0) === (idPlanta || 0) &&
+          (r.id_cliente_planta_area || 0) === (idArea || 0) &&
+          (r.id_equipo || 0) === idEquipo
+        );
+        if (existeProd) {
+          existeProd.cantidad += Number(item.cantidad_default || 0);
+          return;
+        }
+        odsProductoRows.push({
+          id_producto: Number(item.id_producto || 0),
+          cantidad: Number(item.cantidad_default || 1),
+          observacion: item.observacion || '',
+          id_servicio: idServicio,
+          id_cliente_planta: idPlanta,
+          id_cliente_planta_area: idArea,
+          id_equipo: idEquipo,
+          equipo_descripcion: item.equipo_descripcion || equipoDesc,
+        });
+      });
+  } catch (e) {
+    console.error('Error cargando receta por equipo:', e);
+  }
+
+  renderProductosODS();
+  cerrarModalAgregarEquipoODS();
+  mostrarToast('success', 'Equipo agregado', 'Ahora puede añadir productos al grupo creado');
 }
 
 function getGroupOrderFromDetalleODS(): string[] {
@@ -917,7 +1055,7 @@ function renderProductosODS() {
   const emptyEl = document.getElementById('ods-productos-empty');
   if (!tbody) return;
 
-  if (odsProductoRows.length === 0) {
+  if (odsProductoRows.length === 0 && odsEquipoRows.length === 0) {
     tbody.innerHTML = '';
     if (emptyEl) emptyEl.style.display = 'block';
     return;
@@ -931,20 +1069,42 @@ function renderProductosODS() {
     const key = getODSGroupKey(r);
     if (!groupOrder.includes(key)) groupOrder.push(key);
   });
+  odsEquipoRows.forEach(r => {
+    const key = getODSGroupKey({
+      id_servicio: r.id_servicio,
+      id_cliente_planta: r.id_cliente_planta,
+      id_cliente_planta_area: r.id_cliente_planta_area,
+      id_equipo: r.id_equipo,
+    });
+    if (!groupOrder.includes(key)) groupOrder.push(key);
+  });
 
   let html = '';
   groupOrder.forEach(groupKey => {
     const rows = odsProductoRows.filter(r => getODSGroupKey(r) === groupKey);
-    if (rows.length === 0) return;
-    
-    const first = rows[0];
+    const fromEquipo = odsEquipoRows.find((e) => getODSGroupKey({
+      id_servicio: e.id_servicio,
+      id_cliente_planta: e.id_cliente_planta,
+      id_cliente_planta_area: e.id_cliente_planta_area,
+      id_equipo: e.id_equipo,
+    }) === groupKey);
+    const first = rows[0] || {
+      id_servicio: fromEquipo?.id_servicio,
+      id_cliente_planta: fromEquipo?.id_cliente_planta,
+      id_cliente_planta_area: fromEquipo?.id_cliente_planta_area,
+      id_equipo: fromEquipo?.id_equipo,
+      equipo_descripcion: fromEquipo?.equipo_descripcion,
+    };
     const groupLabel = getODSGroupLabel(first);
 
     // Header azul con botón de eliminar grupo
     html += `<tr class="ods-equipo-header">
-      <td colspan="4" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
+      <td colspan="3" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
         ${groupLabel}
+      </td>
+      <td style="background:#eef2ff;text-align:right;padding:6px 10px;border-bottom:2px solid #c7d2fe;">
+        <button type="button" class="btn-secondary btn-agregar-producto-grupo" data-group-key="${groupKey}" style="font-size:11px;padding:2px 8px;line-height:1.3;">+ Añadir producto</button>
       </td>
       <td style="background:#eef2ff;text-align:right;padding:6px 10px;border-bottom:2px solid #c7d2fe;">
         <button type="button" class="btn-eliminar-ods-grupo" data-group-key="${groupKey}" style="background:none;border:none;cursor:pointer;color:#ef4444;padding:4px;" title="Eliminar equipo y sus productos">
@@ -952,6 +1112,11 @@ function renderProductosODS() {
         </button>
       </td>
     </tr>`;
+
+    if (rows.length === 0) {
+      html += `<tr><td colspan="5" style="text-align:center;color:#94a3b8;font-size:12px;padding:8px;">Sin productos para este equipo. Use "Añadir producto".</td></tr>`;
+      return;
+    }
 
     // Filas de productos
     rows.forEach(r => {
@@ -973,13 +1138,33 @@ function renderProductosODS() {
 }
 
 function bindProductosODSEvents() {
+  document.querySelectorAll('.btn-agregar-producto-grupo').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const groupKey = (e.currentTarget as HTMLElement).dataset.groupKey || '';
+      if (!groupKey) return;
+      const g = parseODSGroupKey(groupKey);
+      await cargarProductosDisponiblesODS();
+      agregarProductoODS(0, 1, '', g.idServicio, g.idPlanta, g.idArea, g.idEquipo);
+    });
+  });
+
   // Eliminar grupo completo (cascada)
   document.querySelectorAll('.btn-eliminar-ods-grupo').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const groupKey = (e.currentTarget as HTMLElement).dataset.groupKey || '';
       if (!groupKey) return;
+      const groupToDelete = odsProductoRows.find(r => getODSGroupKey(r) === groupKey);
+      const parsed = parseODSGroupKey(groupKey);
       odsProductoRows = odsProductoRows.filter(r => getODSGroupKey(r) !== groupKey);
+      const idEquipo = groupToDelete?.id_equipo || parsed.idEquipo;
+      odsEquipoRows = odsEquipoRows.filter((r) => !(
+        r.id_equipo === idEquipo &&
+        (r.id_servicio || 0) === (groupToDelete?.id_servicio || parsed.idServicio || 0) &&
+        (r.id_cliente_planta || 0) === (groupToDelete?.id_cliente_planta || parsed.idPlanta || 0) &&
+        (r.id_cliente_planta_area || 0) === (groupToDelete?.id_cliente_planta_area || parsed.idArea || 0)
+      ));
       renderProductosODS();
+      renderEquiposODS();
       mostrarToast('success', 'Equipo eliminado', 'Se eliminó el equipo y sus productos');
     });
   });
@@ -1040,6 +1225,7 @@ function agregarProductoODS(
   idServicio: number = 0,
   idPlanta: number | null = null,
   idArea: number | null = null,
+  idEquipo: number | null = null,
 ) {
   odsProductoRows.push({
     id_producto: idProducto,
@@ -1048,6 +1234,8 @@ function agregarProductoODS(
     id_servicio: idServicio || undefined,
     id_cliente_planta: idPlanta,
     id_cliente_planta_area: idArea,
+    id_equipo: idEquipo,
+    equipo_descripcion: getEquipoName(idEquipo),
   });
   renderProductosODS();
 }
@@ -1093,12 +1281,13 @@ async function cargarRecetaDesdeServicios() {
       const raw = res.data || res;
       const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
       items.forEach((item: any) => {
-        // Verificar si ya existe este producto para la misma combinación servicio+planta+área
+        // Verificar si ya existe este producto para la misma combinación servicio+planta+área+equipo
         const existing = odsProductoRows.find(r =>
           r.id_producto === item.id_producto &&
           (r.id_servicio || 0) === linea.id &&
           (r.id_cliente_planta || null) === linea.idPlanta &&
-          (r.id_cliente_planta_area || null) === linea.idArea
+          (r.id_cliente_planta_area || null) === linea.idArea &&
+          (r.id_equipo || 0) === (item.id_equipo || 0)
         );
         if (existing) {
           existing.cantidad += Number(item.cantidad_default);
@@ -1110,6 +1299,8 @@ async function cargarRecetaDesdeServicios() {
             id_servicio: linea.id,
             id_cliente_planta: linea.idPlanta,
             id_cliente_planta_area: linea.idArea,
+            id_equipo: item.id_equipo || null,
+            equipo_descripcion: item.equipo_descripcion || '',
           });
         }
         // Agregar equipo si existe y no está duplicado para esta combinación
@@ -1122,6 +1313,7 @@ async function cargarRecetaDesdeServicios() {
           odsEquipoRows.push({
             id_equipo: item.id_equipo,
             observacion: '',
+            equipo_descripcion: item.equipo_descripcion || '',
             id_servicio: linea.id,
             id_cliente_planta: linea.idPlanta,
             id_cliente_planta_area: linea.idArea,
@@ -1237,7 +1429,26 @@ function bindEquiposODSEvents() {
   document.querySelectorAll('.ods-equipo-select').forEach(sel => {
     sel.addEventListener('change', (e) => {
       const idx = Number((e.target as HTMLSelectElement).dataset.idx);
-      odsEquipoRows[idx].id_equipo = Number((e.target as HTMLSelectElement).value);
+      const nuevoIdEquipo = Number((e.target as HTMLSelectElement).value);
+      const row = odsEquipoRows[idx];
+      const oldIdEquipo = row?.id_equipo || 0;
+      if (!row) return;
+
+      odsProductoRows.forEach((p) => {
+        if (
+          (p.id_equipo || 0) === oldIdEquipo &&
+          (p.id_servicio || 0) === (row.id_servicio || 0) &&
+          (p.id_cliente_planta || 0) === (row.id_cliente_planta || 0) &&
+          (p.id_cliente_planta_area || 0) === (row.id_cliente_planta_area || 0)
+        ) {
+          p.id_equipo = nuevoIdEquipo || null;
+          p.equipo_descripcion = getEquipoName(nuevoIdEquipo);
+        }
+      });
+
+      row.id_equipo = nuevoIdEquipo;
+      row.equipo_descripcion = getEquipoName(nuevoIdEquipo);
+      renderProductosODS();
     });
   });
   document.querySelectorAll('.ods-equipo-obs').forEach(inp => {
@@ -1249,7 +1460,17 @@ function bindEquiposODSEvents() {
   document.querySelectorAll('.ods-equipo-remove').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const idx = Number((e.currentTarget as HTMLElement).dataset.idx);
+      const equipo = odsEquipoRows[idx];
       odsEquipoRows.splice(idx, 1);
+      if (equipo) {
+        odsProductoRows = odsProductoRows.filter((p) => !(
+          (p.id_equipo || 0) === (equipo.id_equipo || 0) &&
+          (p.id_servicio || 0) === (equipo.id_servicio || 0) &&
+          (p.id_cliente_planta || 0) === (equipo.id_cliente_planta || 0) &&
+          (p.id_cliente_planta_area || 0) === (equipo.id_cliente_planta_area || 0)
+        ));
+      }
+      renderProductosODS();
       renderEquiposODS();
     });
   });
@@ -1265,6 +1486,7 @@ function agregarEquipoODS(
   odsEquipoRows.push({
     id_equipo: idEquipo,
     observacion,
+    equipo_descripcion: getEquipoName(idEquipo),
     id_servicio: idServicio || undefined,
     id_cliente_planta: idPlanta,
     id_cliente_planta_area: idArea,
@@ -1398,6 +1620,8 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
       id_servicio: p.id_servicio || 0,
       id_cliente_planta: p.id_cliente_planta || null,
       id_cliente_planta_area: p.id_cliente_planta_area || null,
+      id_equipo: p.id_equipo || null,
+      equipo_descripcion: p.equipo?.descripcion || '',
     }));
     renderProductosODS();
 
@@ -1406,6 +1630,7 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
     odsEquipoRows = equipos.map((e: any) => ({
       id_equipo: e.id_equipo,
       observacion: e.observacion || '',
+      equipo_descripcion: e.equipo?.descripcion || '',
       id_servicio: e.id_servicio || 0,
       id_cliente_planta: e.id_cliente_planta || null,
       id_cliente_planta_area: e.id_cliente_planta_area || null,
@@ -1537,7 +1762,7 @@ async function guardarODS() {
     detalles,
     productos: odsProductoRows
       .filter(r => r.id_producto > 0 && r.cantidad > 0)
-      .map(r => ({ id_producto: r.id_producto, cantidad: r.cantidad, observacion: r.observacion || null, id_servicio: r.id_servicio || null, id_cliente_planta: r.id_cliente_planta || null, id_cliente_planta_area: r.id_cliente_planta_area || null })),
+      .map(r => ({ id_producto: r.id_producto, cantidad: r.cantidad, observacion: r.observacion || null, id_servicio: r.id_servicio || null, id_cliente_planta: r.id_cliente_planta || null, id_cliente_planta_area: r.id_cliente_planta_area || null, id_equipo: r.id_equipo || null })),
     equipos: odsEquipoRows
       .filter(r => r.id_equipo > 0)
       .map(r => ({ id_equipo: r.id_equipo, observacion: r.observacion || null, id_servicio: r.id_servicio || null, id_cliente_planta: r.id_cliente_planta || null, id_cliente_planta_area: r.id_cliente_planta_area || null })),
@@ -1652,12 +1877,13 @@ export function initOrdenesServicioEvents() {
     agregarProductoODS();
   });
   document.getElementById('btn-cargar-receta-ods')?.addEventListener('click', cargarRecetaDesdeServicios);
+  document.getElementById('btn-agregar-equipo-ods')?.addEventListener('click', abrirModalAgregarEquipoODS);
 
-  // Equipos ODS
-  document.getElementById('btn-agregar-equipo-ods')?.addEventListener('click', async () => {
-    await cargarEquiposDisponiblesODS();
-    agregarEquipoODS();
-  });
+  // Modal agregar equipo
+  const modalAddEq = document.getElementById('modal-ods-agregar-equipo') as HTMLElement;
+  document.getElementById('modal-ods-agregar-equipo-cerrar')?.addEventListener('click', () => { if (modalAddEq) modalAddEq.style.display = 'none'; });
+  document.getElementById('modal-ods-agregar-equipo-cancelar')?.addEventListener('click', () => { if (modalAddEq) modalAddEq.style.display = 'none'; });
+  document.getElementById('modal-ods-agregar-equipo-confirmar')?.addEventListener('click', confirmarAgregarEquipoODS);
 
   // Modal eliminar
   const modalElim = document.getElementById('modal-ods-eliminar') as HTMLElement;

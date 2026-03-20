@@ -217,6 +217,7 @@ class OrdenServicioController extends Controller
             'productos.*.id_servicio' => 'nullable|integer|exists:servicios,id',
             'productos.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
             'productos.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'productos.*.id_equipo' => 'nullable|integer|exists:equipo,id',
             'equipos' => 'sometimes|array',
             'equipos.*.id_equipo' => 'required_with:equipos|integer|exists:equipo,id',
             'equipos.*.observacion' => 'nullable|string|max:255',
@@ -293,6 +294,7 @@ class OrdenServicioController extends Controller
                         'id_servicio' => $prod['id_servicio'] ?? null,
                         'id_cliente_planta' => $prod['id_cliente_planta'] ?? null,
                         'id_cliente_planta_area' => $prod['id_cliente_planta_area'] ?? null,
+                        'id_equipo' => $prod['id_equipo'] ?? null,
                         'id_producto' => $prod['id_producto'],
                         'cantidad' => $prod['cantidad'],
                         'observacion' => $prod['observacion'] ?? null,
@@ -317,7 +319,7 @@ class OrdenServicioController extends Controller
             DB::commit();
 
             // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
 
             return response()->json([
                 'success' => true,
@@ -352,6 +354,7 @@ class OrdenServicioController extends Controller
             'productos.servicio',
             'productos.planta',
             'productos.area',
+            'productos.equipo',
             'equipos.equipo',
             'equipos.servicio',
             'equipos.planta',
@@ -407,6 +410,7 @@ class OrdenServicioController extends Controller
             'productos.*.id_servicio' => 'nullable|integer|exists:servicios,id',
             'productos.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
             'productos.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'productos.*.id_equipo' => 'nullable|integer|exists:equipo,id',
             'equipos' => 'sometimes|array',
             'equipos.*.id_equipo' => 'required_with:equipos|integer|exists:equipo,id',
             'equipos.*.observacion' => 'nullable|string|max:255',
@@ -484,6 +488,7 @@ class OrdenServicioController extends Controller
                         'id_servicio' => $prod['id_servicio'] ?? null,
                         'id_cliente_planta' => $prod['id_cliente_planta'] ?? null,
                         'id_cliente_planta_area' => $prod['id_cliente_planta_area'] ?? null,
+                        'id_equipo' => $prod['id_equipo'] ?? null,
                         'id_producto' => $prod['id_producto'],
                         'cantidad' => $prod['cantidad'],
                         'observacion' => $prod['observacion'] ?? null,
@@ -510,7 +515,7 @@ class OrdenServicioController extends Controller
 
             DB::commit();
 
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
 
             return response()->json([
                 'success' => true,
@@ -600,7 +605,7 @@ class OrdenServicioController extends Controller
             'cliente', 
             'detalles.servicio', 'detalles.planta', 'detalles.area', 
             'emisor', 'cotizacion', 
-            'productos.producto', 'productos.planta', 'productos.area',
+            'productos.producto', 'productos.planta', 'productos.area', 'productos.equipo',
             'equipos.equipo', 'equipos.planta', 'equipos.area'
         ])->findOrFail($id);
         
