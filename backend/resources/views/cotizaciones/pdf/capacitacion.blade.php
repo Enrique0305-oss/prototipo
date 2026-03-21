@@ -170,6 +170,22 @@
             <div class="seccion-descripcion">
                     A continuación, se detallarán la lista de actividades incluidas en el servicio.
             </div>
+            <div class="issued-name">
+                &nbsp;&nbsp;&nbsp;&nbsp;2.1 Objetivos
+            </div>
+
+            <div class="issued-name">
+                &nbsp;&nbsp;&nbsp;&nbsp;2.2 Actividades <br><br>
+
+                <div style="margin-left: 40px; font-weight: normal;">
+                    <strong>2.2.1 Capacitaciones:</strong>
+                    El equipo de QSCI Consulting brindará capacitaciones actualizadas al público asistente.
+                    <br><br>Esta capacitación está diseñada para ser cubierta de la siguiente manera.
+                </div>
+            </div> <br>
+            <div class="payment-header-text">
+                EQUIPO DE ASESORES LÍDERES- QSCI GROUP
+            </div>
 
             <div class="proposal-text" style="margin-bottom: 20px;">
                 @if($cotizacion->propuesta_tecnica)
@@ -179,12 +195,14 @@
                 @endif
             </div>
 
+            
+
             <!-- III. PROPUESTA ECONÓMICA -->
             <div class="seccion-titulo">
                 <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÓMICA
             </div>
             <div class="seccion-descripcion">
-                    El siguiente cuadro muestra la respectiva cotización por el servicio brindado:
+                    El siguiente cuadro muestra la respectiva cotización por el servicio de capacitación:
             </div>
             <table class="products-table">
                 <thead>
@@ -261,11 +279,11 @@
             <div class="payment-section">
                 <p class="payment-header-text">Condiciones de pago</p>
                 <ul>
-                    <li style="font-size: 12px; margin-bottom: 5px;">La factura por concepto será de acuerdo a la Orden de la Compra o Servicio enviada previamente.</li>
-                    <li style="font-size: 12px; margin-bottom: 5px;">Crédito 30 días, luego de haber sido realizada la Capacitación.</li>
+                    <li style="font-size: 13px; margin-bottom: 5px;">La factura por concepto será de acuerdo a la Orden de la Compra o Servicio enviada previamente.</li>
+                    <li style="font-size: 13px; margin-bottom: 5px;">Crédito 30 días, luego de haber sido realizada la Capacitación.</li>
                 </ul>
-                <p class="payment-header-text">Condiciones de pago:</p>
-                <p style="font-size: 12px; margin-bottom: 5px;"> - Información de pago: Cuenta BCP</p>
+                <p class="payment-header-text">Información de pago:</p>
+                <p style="font-size: 13px; margin-bottom: 5px;"> - Información de pago: Cuenta BCP</p>
                 
                 <table class="payment-table">
                     <tr>
@@ -296,16 +314,16 @@
 
                 <p class="payment-header-text">Valor Agregado</p>
                 <ul>
-                    <li style="font-size: 12px; margin-bottom: 5px;">Capacitaciones certificadas a nombre de QSCI COnsulting y del COlegio de Biólogos del Perú Región Lima VII</li>
-                    <li style="font-size: 12px; margin-bottom: 5px;">Personal calificado con experiencia certificada en Calidad e Inocuidad Alimentaria</li>
+                    <li style="font-size: 13px; margin-bottom: 5px;">Capacitaciones certificadas a nombre de QSCI COnsulting y del COlegio de Biólogos del Perú Región Lima VII</li>
+                    <li style="font-size: 13px; margin-bottom: 5px;">Personal calificado con experiencia certificada en Calidad e Inocuidad Alimentaria</li>
                 </ul>
 
                 <p class="payment-header-text">Consideraciones</p>
                 <ul>
-                    <li style="font-size: 12px; margin-bottom: 5px;">
+                    <li style="font-size: 13px; margin-bottom: 5px;">
                         En caso exista la necesidad de reprogramar el servicio por parte del cliente, se debrá comunicar con una anticipación
                         mínima de 48 horas respecto a la fecha previamente acordada, a fin de evitar la emisión de cualquier cargo.</li>
-                    <li style="font-size: 12px; margin-bottom: 5px;">
+                    <li style="font-size: 13px; margin-bottom: 5px;">
                         Es importante que el cliente nos brinde información adicional según se requiera para una adecuada capacitación.</li>
                 </ul>
             </div>
@@ -341,7 +359,15 @@
                         Número: {{ $cotizacion->creador->celular  }}
                     </p>
                 </div>
+            </div> <br><br>
+
+            <!-- IMAGEN FINAL -->
+            <div class="seccion-titulo">
+                <span class="seccion-titulo-num">IV.</span> METODOLOGÍA DE CAPACITACIÓN
+                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/met_capa.png'))) }}" alt="Imagen Final">
+
             </div>
+
         </div>
         
     </div>

@@ -195,7 +195,7 @@
         .seccion-descripcion {
             font-size: 13px;
             line-height: 1.6;
-            color: #333;
+            color: #0a0a0a;
             text-align: justify;
             margin-bottom: 15px;
         }
