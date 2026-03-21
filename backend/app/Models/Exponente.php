@@ -13,6 +13,7 @@ class Exponente extends Model
     protected $fillable = [
         'nombre',
         'apellidos',
+        'presentacion',
         'especialidad',
         'profesion',
         'telefono',

@@ -261,7 +261,11 @@
                             if ($cotizacion->receta_servicio) {
                                 foreach ($cotizacion->receta_servicio as $receta) {
                                     if (($receta['id_servicio'] ?? null) == $detalle->id_servicio) {
-                                        $productosDetalle[] = $receta;
+
+                                        $equipo = $receta['equipo_descripcion'] ?? 'Sin equipo';
+
+                                        // evitar repetidos
+                                        $productosDetalle[$equipo] = $equipo;
                                     }
                                 }
                             }
@@ -272,17 +276,23 @@
                             </td>
                             <td>
                                 @if(count($productosDetalle) > 0)
-                                    @foreach($productosDetalle as $prod)
+                                    @foreach($productosDetalle as $equipo)
+                                        <small>{{ $equipo }}</small><br>
+                                    @endforeach
+                                @else
+                                    Sin productos especificados
+                                @endif
+                            </td>
+
+                            <!-- POR SI SE REQUIERE DE NUEVO EQUIPO Y PRODUCTO @foreach($productosDetalle as $prod)
                                         @php
                                             $producto = \App\Models\Producto::find($prod['id_producto'] ?? null);
                                             $equipo = $prod['equipo_descripcion'] ?? 'Sin equipo';
                                         @endphp
                                         <small>{{ $equipo }}: {{ $producto?->descripcion ?? 'Producto no encontrado' }}</small><br>
                                     @endforeach
-                                @else
-                                    Sin productos especificados
-                                @endif
-                            </td>
+                                 -->
+                                 
                             <td>
                                 @if($planta)
                                     <strong>{{ $planta->nombre }}</strong>

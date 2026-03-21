@@ -17,6 +17,7 @@ class ExponenteController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('nombre', 'like', "%{$search}%")
                   ->orWhere('apellidos', 'like', "%{$search}%")
+                  ->orwhere('presentacion', 'like', "%{$search}%")
                   ->orWhere('especialidad', 'like', "%{$search}%")
                   ->orWhere('profesion', 'like', "%{$search}%")
                   ->orWhere('institucion', 'like', "%{$search}%");
@@ -40,6 +41,7 @@ class ExponenteController extends Controller
         $validated = $request->validate([
             'nombre' => 'required|string|max:100',
             'apellidos' => 'required|string|max:100',
+            'presentacion' => 'nullable|string',
             'especialidad' => 'nullable|string|max:200',
             'profesion' => 'nullable|string|max:200',
             'telefono' => 'nullable|string|max:20',
@@ -74,6 +76,7 @@ class ExponenteController extends Controller
         $validated = $request->validate([
             'nombre' => 'sometimes|required|string|max:100',
             'apellidos' => 'sometimes|required|string|max:100',
+            'presentacion' => 'nullable|string',
             'especialidad' => 'nullable|string|max:200',
             'profesion' => 'nullable|string|max:200',
             'telefono' => 'nullable|string|max:20',

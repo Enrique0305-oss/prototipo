@@ -11,6 +11,7 @@ export interface Exponente {
   institucion: string | null;
   notas: string | null;
   estado: 'Activo' | 'Inactivo';
+  presentacion: string | null;
 }
 
 export const exponenteService = {

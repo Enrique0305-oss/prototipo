@@ -231,6 +231,10 @@ function abrirModal(exp: Exponente | null) {
           <input type="text" name="profesion" class="exp-input" value="${exp?.profesion || ''}" placeholder="Ej: Ingeniero Ambiental">
         </div>
       </div>
+      <div class="exp-form-group exp-col-2">
+        <label>Presentación</label>
+        <textarea name="presentacion" class="exp-input" rows="7" placeholder="Escribe una breve presentación del exponente...">${exp?.presentacion || ''}</textarea>
+      </div>
       <div class="exp-form-section-title" style="margin-top:16px;">Contacto</div>
       <div class="exp-form-row">
         <div class="exp-form-group">
