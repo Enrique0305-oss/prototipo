@@ -31,7 +31,7 @@ export interface InsumoProgamacion {
   id_producto: number;
   cantidad_asignada: number;
   cantidad_utilizada?: number;
-  estado: 'Asignado' | 'Entregado' | 'Utilizado';
+  estado: 'Asignado' | 'Entregado' | 'Utilizado' | 'Devuelto';
   producto?: {
     id: number;
     descripcion: string;
@@ -40,6 +40,15 @@ export interface InsumoProgamacion {
       cantidad_disponible: number;
     };
   };
+}
+
+export interface RegistrarDevolucionPayload {
+  id_programacion: number;
+  insumos: {
+    id_producto: number;
+    cantidad_devuelta: number;
+  }[];
+  observacion?: string;
 }
 
 export interface ConfirmarSalidaPayload {
@@ -77,5 +86,21 @@ export const salidasProgramacionService = {
     fecha_hasta?: string;
   }) => {
     return apiClient.get<{ success: boolean; data: ProgramacionPendiente[] }>('/almacen/salidas-programacion/historial', { params });
+  },
+
+  // Ver detalle para devolución de materiales entregados
+  getDetalleDevolucion: async (id: number) => {
+    return apiClient.get<{ success: boolean; data: ProgramacionPendiente }>(`/almacen/salidas-programacion/${id}/devolucion`);
+  },
+
+  // Registrar devolución al almacén
+  registrarDevolucion: async (data: RegistrarDevolucionPayload) => {
+    return apiClient.post<{ success: boolean; message: string }>('/almacen/salidas-programacion/devolver', data);
+  },
+
+  // Descargar acta PDF de entrega de materiales
+  downloadActaEntrega: async (idProgramacion: number) => {
+    const filename = `Acta_Entrega_Programacion_${idProgramacion}.pdf`;
+    return apiClient.downloadFile(`/almacen/salidas-programacion/${idProgramacion}/pdf-entrega`, filename);
   },
 };

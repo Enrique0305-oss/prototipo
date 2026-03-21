@@ -284,7 +284,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/almacen/salidas-programacion/pendientes', [SalidaProgramacionController::class, 'getPendientes']);
     Route::get('/almacen/salidas-programacion/historial', [SalidaProgramacionController::class, 'getHistorial']);
     Route::get('/almacen/salidas-programacion/{id}', [SalidaProgramacionController::class, 'getDetalle']);
+    Route::get('/almacen/salidas-programacion/{id}/devolucion', [SalidaProgramacionController::class, 'getDetalleDevolucion']);
+    Route::get('/almacen/salidas-programacion/{id}/pdf-entrega', [SalidaProgramacionController::class, 'generarPdfEntrega']);
     Route::post('/almacen/salidas-programacion/confirmar', [SalidaProgramacionController::class, 'confirmarSalida']);
+    Route::post('/almacen/salidas-programacion/devolver', [SalidaProgramacionController::class, 'registrarDevolucion']);
 
     // Proveedores
     Route::get('/proveedores', [ProveedorController::class, 'index']);
