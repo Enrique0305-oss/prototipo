@@ -259,6 +259,11 @@
 
             <!-- SECCIÃ“N DE PAGOS -->
             <div class="payment-section">
+                <p class="payment-header-text">Condiciones de pago</p>
+                <ul>
+                    <li style="font-size: 12px; margin-bottom: 5px;">La factura por concepto será de acuerdo a la Orden de la Compra o Servicio enviada previamente.</li>
+                    <li style="font-size: 12px; margin-bottom: 5px;">Crédito 30 días, luego de haber sido realizada la Capacitación.</li>
+                </ul>
                 <p class="payment-header-text">Condiciones de pago:</p>
                 <p style="font-size: 12px; margin-bottom: 5px;"> - Información de pago: Cuenta BCP</p>
                 
@@ -280,14 +285,29 @@
                         <td>{{ $cotizacion->empresa->ruc }}</td>
                     </tr>
                     <tr>
-                        <td class="label-cell">Banco de la NaciÃ³n Cuenta de DetracciÃ³n</td>
+                        <td class="label-cell">Banco de la Nación Cuenta de Detraccián</td>
                         <td>{{ $cotizacion->empresa->banco_nacion }}</td>
                     </tr>
                     <tr>
-                        <td class="label-cell">CÃ³digo de Cuenta Interbancario (DetracciÃ³n)</td>
+                        <td class="label-cell">Código de Cuenta Interbancario (Detraccián)</td>
                         <td>{{ $cotizacion->empresa->codigo_interbancario_nacion }}</td>
                     </tr>
                 </table>
+
+                <p class="payment-header-text">Valor Agregado</p>
+                <ul>
+                    <li style="font-size: 12px; margin-bottom: 5px;">Capacitaciones certificadas a nombre de QSCI COnsulting y del COlegio de Biólogos del Perú Región Lima VII</li>
+                    <li style="font-size: 12px; margin-bottom: 5px;">Personal calificado con experiencia certificada en Calidad e Inocuidad Alimentaria</li>
+                </ul>
+
+                <p class="payment-header-text">Consideraciones</p>
+                <ul>
+                    <li style="font-size: 12px; margin-bottom: 5px;">
+                        En caso exista la necesidad de reprogramar el servicio por parte del cliente, se debrá comunicar con una anticipación
+                        mínima de 48 horas respecto a la fecha previamente acordada, a fin de evitar la emisión de cualquier cargo.</li>
+                    <li style="font-size: 12px; margin-bottom: 5px;">
+                        Es importante que el cliente nos brinde información adicional según se requiera para una adecuada capacitación.</li>
+                </ul>
             </div>
 
             <!-- SECCIÓN DE FIRMAS -->
