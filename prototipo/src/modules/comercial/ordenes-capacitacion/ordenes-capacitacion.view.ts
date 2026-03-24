@@ -268,6 +268,7 @@ export function renderComercialOrdenesCapacitacion() {
                   <option value="Presencial">Presencial</option>
                   <option value="Virtual">Virtual</option>
                   <option value="Híbrido">Híbrido</option>
+                  <option value="Asíncrona">Asíncrona</option>
                 </select>
               </div>
               <div class="oc-field">
@@ -718,6 +719,15 @@ function abrirModalNuevoExponente() {
 
 async function cargarDatosCotizacion(cotizacionId: number) {
   try {
+    const toDateInput = (value: any): string => {
+      if (!value) return '';
+      const s = String(value).trim();
+      if (!s) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const match = s.match(/^(\d{4}-\d{2}-\d{2})/);
+      return match ? match[1] : '';
+    };
+
     const res = await ordenCapacitacionService.getDesdeCotizacion(cotizacionId);
     const raw = res.data || res;
     const data = (raw as any).data || raw;
@@ -785,7 +795,7 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     }
 
     // Auto-llenar fecha aceptación con fecha emisión de cotización
-    (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value = data.cotizacion?.fecha_emision || '';
+    (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value = toDateInput(data.cotizacion?.fecha_emision);
 
     // Auto-llenar campos de capacitación desde el detalle
     if (data.detalles && data.detalles.length > 0) {
@@ -793,10 +803,10 @@ async function cargarDatosCotizacion(cotizacionId: number) {
       const detalleCap = data.detalles.find((d: any) => {
         const tipo = String(d.tipo || '').toLowerCase();
         return tipo === 'capacitación' || tipo === 'capacitacion';
-      }) || data.detalles[0];
+      }) || data.detalles.find((d: any) => !!d.fecha_servicio) || data.detalles[0];
       (document.getElementById('oc-horas-capacitacion') as HTMLInputElement).value = detalleCap.horas_capacitacion || '';
       (document.getElementById('oc-num-participantes') as HTMLInputElement).value = detalleCap.num_participantes || '';
-      (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = detalleCap.fecha_servicio || '';
+      (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = toDateInput(detalleCap.fecha_servicio);
     }
 
     // Auto-llenar costo

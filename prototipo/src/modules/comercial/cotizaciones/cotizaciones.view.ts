@@ -459,7 +459,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
   // Sección especial para técnicos/supervisor SOLO para Servicio
   const seccionLimpiezaCisternas = tipoFijo === 'Servicio' ? `
     <div id="seccion-limpieza-cisternas" style="display:none;margin-bottom:24px;padding:16px 20px;background:#f1f5f9;border-radius:8px;">
-      <div style="font-weight:600;margin-bottom:10px;color:#2563eb;">Datos de Operarios para LIMPIEZA DE CISTERNAS Y RESERVORIOS</div>
+      <div style="font-weight:600;margin-bottom:10px;color:#2563eb;">Datos de Operarios para LIMPIEZA DE CISTERNAS, RESERVORIOS Y TRAMPA DE GRASA</div>
       <div style="display:flex;gap:24px;align-items:center;">
         <div>
           <label for="input-op-tecnicos" style="font-size:13px;font-weight:500;">Operarios Técnicos</label>
@@ -1017,7 +1017,8 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           const servicioNombre = selectedOption?.textContent?.trim() || '';
           if (servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS Y RESERVORIOS') ||
               servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS') ||
-              servicioNombre.toUpperCase().includes('LIMPIEZA DE RESERVORIOS')) {
+              servicioNombre.toUpperCase().includes('LIMPIEZA DE RESERVORIOS') ||
+              servicioNombre.toUpperCase().includes('LIMPIEZA DE TRAMPA DE GRASA')) {
             tieneLimpiezaCisternas = true;
           }
         }
@@ -1222,6 +1223,7 @@ function agregarLineaDetalle(tipo?: string) {
           <option value="Presencial">Presencial</option>
           <option value="Virtual">Virtual</option>
           <option value="Hibrido">Híbrido</option>
+          <option value="Asíncrona">Asíncrona</option>
         </select>
       </td>
       ${tipo === 'Capacitacion' ? `
@@ -1312,7 +1314,8 @@ function actualizarSeccionLimpiezaCisternas(panelEl: HTMLElement) {
       if (
         servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS Y RESERVORIOS') ||
         servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS') ||
-        servicioNombre.toUpperCase().includes('LIMPIEZA DE RESERVORIOS')
+        servicioNombre.toUpperCase().includes('LIMPIEZA DE RESERVORIOS') ||
+        servicioNombre.toUpperCase().includes('LIMPIEZA DE TRAMPA DE GRASA')
       ) {
         tieneLimpiezaCisternas = true;
       }
@@ -1593,6 +1596,15 @@ async function guardarCotizacion(tipoFijo?: string) {
     return;
   }
 
+  const seccionLimpieza = panelActivoElement.querySelector('#seccion-limpieza-cisternas') as HTMLElement | null;
+  const seccionLimpiezaVisible = !!seccionLimpieza && seccionLimpieza.style.display !== 'none';
+  const opTecnicosGlobal = seccionLimpiezaVisible
+    ? ((seccionLimpieza.querySelector('#input-op-tecnicos') as HTMLInputElement | null)?.value?.trim() || null)
+    : null;
+  const supervisorGlobal = seccionLimpiezaVisible
+    ? ((seccionLimpieza.querySelector('#input-supervisor') as HTMLInputElement | null)?.value?.trim() || null)
+    : null;
+
   const detalles: any[] = [];
   lineas.forEach(linea => {
     const itemSelect = linea.querySelector('.item-select') as HTMLSelectElement;
@@ -1601,8 +1613,8 @@ async function guardarCotizacion(tipoFijo?: string) {
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
     const frecuencia = (linea.querySelector('.frecuencia-input') as HTMLSelectElement)?.value || null;
     const modalidad = (linea.querySelector('.modalidad-input') as HTMLSelectElement)?.value || null;
-    const opTecnicos = (linea.querySelector('.op-tecnicos-input') as HTMLInputElement | null)?.value?.trim() || null;
-    const supervisor = (linea.querySelector('.supervisor-input') as HTMLInputElement | null)?.value?.trim() || null;
+    const opTecnicos = opTecnicosGlobal;
+    const supervisor = supervisorGlobal;
     const plantaVal = parseInt((linea.querySelector('.planta-input') as HTMLSelectElement)?.value || '0') || null;
     const areaVal = parseInt((linea.querySelector('.area-input') as HTMLSelectElement)?.value || '0') || null;
     const horasCapacitacion = tipoCotizacion === 'Capacitacion' ? parseFloat((linea.querySelector('.horas-input') as HTMLInputElement)?.value || '0') : null;

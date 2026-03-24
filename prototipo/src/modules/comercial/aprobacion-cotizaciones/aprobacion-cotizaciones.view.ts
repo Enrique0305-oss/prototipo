@@ -186,7 +186,7 @@ function getFilteredCotizaciones(): any[] {
   const search = (document.getElementById('aprob-search') as HTMLInputElement)?.value?.trim().toLowerCase() || '';
   const estadoFilter = (document.getElementById('aprob-filter-estado') as HTMLSelectElement)?.value || '';
 
-  return allCotizaciones.filter(c => {
+  const filtered = allCotizaciones.filter(c => {
     // Tab filter
     if (activeTab !== 'Todas' && c.tipo !== activeTab) return false;
     // Estado filter
@@ -197,6 +197,19 @@ function getFilteredCotizaciones(): any[] {
       if (!haystack.includes(search)) return false;
     }
     return true;
+  });
+
+  // Ordenar de más reciente a más antiguo.
+  // 1) fecha_emision desc
+  // 2) id desc (desempate cuando comparten la misma fecha)
+  return filtered.sort((a, b) => {
+    const fa = Date.parse(a?.fecha_emision || '') || 0;
+    const fb = Date.parse(b?.fecha_emision || '') || 0;
+    if (fb !== fa) return fb - fa;
+
+    const ida = Number(a?.id || 0);
+    const idb = Number(b?.id || 0);
+    return idb - ida;
   });
 }
 

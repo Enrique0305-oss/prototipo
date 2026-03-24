@@ -134,14 +134,22 @@
         </div>
         <div class="page-break"></div>
     
-        <!-- CONDICIONAL CUANDO SEA UN SERVICIO DE LIMPIEZA RESERVORIOS -->
+        <!-- CONDICIONAL CUANDO SEA UN SERVICIO DE LIMPIEZA RESERVORIOS O TRAMPA DE GRASA -->
         @php
-            $mostrarSeccionEspecial = $cotizacion->detalles->contains(function($detalle) {
-                // Verifica que el servicio no sea nulo y que el nombre coincida exactamente
-                return $detalle->servicio && $detalle->servicio->nombre === 'LIMPIEZA DE CISTERNAS Y RESERVORIOS';
+            $serviciosEspeciales = ['LIMPIEZA DE CISTERNAS Y RESERVORIOS', 'LIMPIEZA DE TRAMPA DE GRASA'];
+            $mostrarSeccionEspecial = $cotizacion->detalles->contains(function($detalle) use ($serviciosEspeciales) {
+                // Verifica que el servicio no sea nulo y que el nombre coincida con servicios especiales
+                return $detalle->servicio && in_array($detalle->servicio->nombre, $serviciosEspeciales);
+            });
+            $mostrarServicioFosfina = $cotizacion->detalles->contains(function($detalle) {
+                return $detalle->servicio && stripos($detalle->servicio->nombre, 'FOSFINA') !== false;
+            });
+            $detalleFosfina = $cotizacion->detalles->first(function($detalle) {
+                return $detalle->servicio && stripos($detalle->servicio->nombre, 'FOSFINA') !== false;
             });
             $totalServicios = $cotizacion->detalles->count();
             $esSoloLimpieza = ($mostrarSeccionEspecial && $totalServicios === 1);
+            $esSoloFosfina = ($mostrarServicioFosfina && $totalServicios === 1);
         @endphp
         <!-- PÃGINA DE PROPUESTA TÃ‰CNICA -->
         <div class="contenido-desplazado">
@@ -177,39 +185,77 @@
             {{-- 2. SECCIÃ“N DINÃMICA DE IMÃGENES CUANDOS SEA SERVICIO DE LIMPIEZA --}}
             @if($mostrarSeccionEspecial)
                 <div style="margin-top: 15px; text-align: center;">
+                    @php
+                        // Definir servicios especiales localmente para este bloque
+                        $serviciosEspecialesLocal = ['LIMPIEZA DE CISTERNAS Y RESERVORIOS', 'LIMPIEZA DE TRAMPA DE GRASA'];
+                        
+                        // Obtener el detalle de limpieza
+                        $detalleLimpieza = $cotizacion->detalles->first(function($detalle) use ($serviciosEspecialesLocal) {
+                            return $detalle->servicio && in_array($detalle->servicio->nombre, $serviciosEspecialesLocal);
+                        });
+                        
+                        // Detectar qué tipo de servicio especial se está mostrando
+                        $tipoLimpieza = null;
+                        if ($detalleLimpieza && $detalleLimpieza->servicio) {
+                            $nombreServicio = $detalleLimpieza->servicio->nombre;
+                            if (stripos($nombreServicio, 'TRAMPA DE GRASA') !== false) {
+                                $tipoLimpieza = 'trampa_grasa';
+                            } else {
+                                $tipoLimpieza = 'cisternas_reservorios';
+                            }
+                        }
+                    @endphp
+
                     <div style="margin-bottom: 10px; text-align: left;">
                         <strong style="font-size: 13px;">- SERVICIO PARA PRESTAR:</strong>
-                        <p style="margin: 5px 0 15px 15px; font-size: 14px; color: #333;">LIMPIEZA DE RESERVORIO DE AGUA</p>
+                        @if($tipoLimpieza === 'trampa_grasa')
+                            <p style="margin: 5px 0 15px 15px; font-size: 14px; color: #333;">LIMPIEZA DE TRAMPA DE GRASA</p>
+                        @else
+                            <p style="margin: 5px 0 15px 15px; font-size: 14px; color: #333;">LIMPIEZA DE RESERVORIO DE AGUA</p>
+                        @endif
                         
                         <strong style="font-size: 13px;">- PROCEDIMIENTO DEL SERVICIO:</strong>
                     </div>
 
-                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-                        <tr>
-                            <td style="width: 33%; padding: 5px;">
-                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_1.png') }}" style="width: 100%; border: 1px solid #ddd;">
-                            </td>
-                            <td style="width: 33%; padding: 5px;">
-                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_2.png') }}" style="width: 100%; border: 1px solid #ddd;">
-                            </td>
-                            <td style="width: 33%; padding: 5px;">
-                                <img src="{{ public_path('images/limpieza_reservorios/limpieza_3.png') }}" style="width: 100%; border: 1px solid #ddd;">
-                            </td>
-                        </tr>
-                    </table>
-
-                    @php
-                        $detalleLimpieza = $cotizacion->detalles->first(function($detalle) {
-                            return $detalle->servicio && $detalle->servicio->nombre === 'LIMPIEZA DE CISTERNAS Y RESERVORIOS';
-                        });
-                    @endphp
+                    @if($tipoLimpieza === 'trampa_grasa')
+                        {{-- Imágenes para LIMPIEZA DE TRAMPA DE GRASA --}}
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr>
+                                <td style="width: 50%; padding: 5px;">
+                                    <img src="{{ public_path('images/limpieza_trampa_grasa/trampa_grasa_1.png') }}" style="width: 100%; border: 1px solid #ddd;">
+                                </td>
+                                <td style="width: 50%; padding: 5px;">
+                                    <img src="{{ public_path('images/limpieza_trampa_grasa/trampa_grasa_2.png') }}" style="width: 100%; border: 1px solid #ddd;">
+                                </td>
+                            </tr>
+                        </table>
+                    @else
+                        {{-- Imágenes para LIMPIEZA DE CISTERNAS Y RESERVORIOS --}}
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr>
+                                <td style="width: 33%; padding: 5px;">
+                                    <img src="{{ public_path('images/limpieza_reservorios/limpieza_1.png') }}" style="width: 100%; border: 1px solid #ddd;">
+                                </td>
+                                <td style="width: 33%; padding: 5px;">
+                                    <img src="{{ public_path('images/limpieza_reservorios/limpieza_2.png') }}" style="width: 100%; border: 1px solid #ddd;">
+                                </td>
+                                <td style="width: 33%; padding: 5px;">
+                                    <img src="{{ public_path('images/limpieza_reservorios/limpieza_3.png') }}" style="width: 100%; border: 1px solid #ddd;">
+                                </td>
+                            </tr>
+                        </table>
+                    @endif
 
                     @if($detalleLimpieza)
                         <div style="margin-top: 15px;  text-align: left;">
-                            <strong style="font-size: 13px;">- PERSONAL ASIGNADO</strong>
+                            @if($tipoLimpieza === 'trampa_grasa')
+                                <strong style="font-size: 13px;">2.2 PERSONAL ASIGNADO</strong>
+                            @else
+                                <strong style="font-size: 13px;">- PERSONAL ASIGNADO</strong>
+                            @endif
                             <table style="margin: 10px auto; border-collapse: collapse; min-width: 200px;">
                                 <tr>
-                                    <th style="border: 1px solid #ccc; padding: 6px 16px; background: #f1f5f9;">Operarios Técnicos</th>
+                                    <th style="border: 1px solid #ccc; padding: 6px 16px; background: #f1f5f9;">Operario Técnico</th>
                                     <th style="border: 1px solid #ccc; padding: 6px 16px; background: #f1f5f9;">Supervisor</th>
                                 </tr>
                                 <tr>
@@ -217,6 +263,9 @@
                                     <td style="border: 1px solid #ccc; padding: 6px 16px;">{{ $detalleLimpieza->supervisor ?? 0 }}</td>
                                 </tr>
                             </table>
+                            @if($tipoLimpieza === 'trampa_grasa')
+                                <p style="margin-top: 10px; margin-bottom: 10px; font-size: 12px; color: #666; text-align: left;">La cantidad de operarios variará según la complejidad del trabajo.</p>
+                            @endif
                         </div>
                     @endif
                 </div>
@@ -231,85 +280,177 @@
                 @endif
             </div>
 
-            <!-- II.1 CONTROL INTEGRADO DE PLAGAS -->
-            <div class="proposal-text">
-                <span class="seccion-titulo-num">2.1</span> Control Integrado de Plagas
-                <p>2.1.1. El siguiente cuadro detalla actividades encaminadas de los servicios </p>
-            </div>
-            <table class="products-table" style="margin-bottom: 20px;">
-                <thead>
-                    <tr>
-                        <th>ACTIVIDAD</th>
-                        <th>TRATAMIENTO</th>
-                        <th>ÁREA</th>
-                        <th>FRECUENCIA</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($cotizacion->detalles as $detalle)
-                        @php
-                            $servicio = $detalle->servicio;
-                            $planta = $cotizacion->cliente->plantas()->find($detalle->id_cliente_planta);
-                            $area = null;
-                            if ($planta) {
-                                $area = $planta->areasActivas()->find($detalle->id_cliente_planta_area) ?? $planta->areas()->find($detalle->id_cliente_planta_area);
+            @if($mostrarServicioFosfina)
+                @php
+                    $frecuenciaFosfina = $detalleFosfina?->frecuencia_sugerida ?? 'A solicitud';
+                    $cantidadFosfina = $detalleFosfina?->cantidad ?? 1;
+                    $tratamientoFosfina = $detalleFosfina?->servicio?->nombre ?? 'DESINSECTACIÓN QUÍMICA CON FOSFINA';
+                    $productosFosfina = 'EN GENERAL';
+
+                    if ($cotizacion->receta_servicio && count($cotizacion->receta_servicio) > 0) {
+                        $nombresProductos = [];
+                        foreach ($cotizacion->receta_servicio as $receta) {
+                            if (!empty($receta['producto_descripcion'])) {
+                                $nombresProductos[] = $receta['producto_descripcion'];
                             }
-                            $frecuencia = $detalle->frecuencia_sugerida ?? '';
-                            
-                            // Obtener productos asociados a este detalle
-                            $productosDetalle = [];
-                            if ($cotizacion->receta_servicio) {
-                                foreach ($cotizacion->receta_servicio as $receta) {
-                                    if (($receta['id_servicio'] ?? null) == $detalle->id_servicio) {
+                        }
+                        $nombresProductos = array_values(array_unique($nombresProductos));
+                        if (count($nombresProductos) > 0) {
+                            $productosFosfina = implode(', ', $nombresProductos);
+                        }
+                    }
+                @endphp
 
-                                        $equipo = $receta['equipo_descripcion'] ?? 'Sin equipo';
+                <div class="proposal-text">
+                    <span class="seccion-titulo-num">1.1</span> ESPECIFICACIONES DEL SERVICIO
+                    <p>El siguiente cuadro detalla actividades incluidas en el servicio de desinsectación química con fosfina.</p>
+                </div>
+                <table class="products-table" style="margin-bottom: 20px; max-width: 480px;">
+                    <tbody>
+                        <tr>
+                            <th style="width: 42%;">ACTIVIDAD</th>
+                            <td style="text-align: center; font-weight: 600;">GASIFICACIÓN</td>
+                        </tr>
+                        <tr>
+                            <th>TRATAMIENTO</th>
+                            <td style="text-align: center;">{{ $tratamientoFosfina }}</td>
+                        </tr>
+                        <tr>
+                            <th>FRECUENCIA</th>
+                            <td style="text-align: center;">{{ $frecuenciaFosfina }}</td>
+                        </tr>
+                        <tr>
+                            <th>CANTIDAD</th>
+                            <td style="text-align: center;">{{ $cantidadFosfina }}</td>
+                        </tr>
+                        <tr>
+                            <th>PRODUCTOS</th>
+                            <td style="text-align: center;">{{ $productosFosfina }}</td>
+                        </tr>
+                    </tbody>
+                </table>
 
-                                        // evitar repetidos
-                                        $productosDetalle[$equipo] = $equipo;
+                <div class="proporsal-text">
+                    <span class="seccion-titulo-num">1.1.1</span> Documentación
+                    <p>Realizamos nuestras actividades bajo estándares de calidad, inocuidad y seguridad, por tanto, contamos con la siguiente documentación que es entregada al cliente:</p>
+                    <ul>
+                        <li>Ficha de Servicio</li>
+                        <li>Informe técnico de las actividades</li>
+                    </ul>
+                </div>
+                <div class="proporsal-text">
+                    <span class="seccion-titulo-num">1.1.2</span> Salud Ocupacional
+                    <p>Nuestro personal se presenta en sus instalaciones con la copia del SCTR vigente, además de contar con:</p>
+                    <ul>
+                        <li>Exámenes Médicos Ocupacionales</li>
+                        <li>Programa de Seguridad y Salud en el trabajo</li>
+                        <li>Capacitación en Manejo Integrado de Plagas</li>
+                        <li>Capacitación en BPM</li>
+                    </ul>
+                </div>
+            @else
+                <!-- II.1 CONTROL INTEGRADO DE PLAGAS -->
+                <div class="proposal-text">
+                    <span class="seccion-titulo-num">2.1</span> Control Integrado de Plagas
+                    <p>2.1.1. El siguiente cuadro detalla actividades encaminadas de los servicios </p>
+                </div>
+                <table class="products-table" style="margin-bottom: 20px;">
+                    <thead>
+                        <tr>
+                            <th>ACTIVIDAD</th>
+                            <th>TRATAMIENTO</th>
+                            <th>ÁREA</th>
+                            <th>FRECUENCIA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($cotizacion->detalles as $detalle)
+                            @php
+                                $servicio = $detalle->servicio;
+                                $planta = $cotizacion->cliente->plantas()->find($detalle->id_cliente_planta);
+                                $area = null;
+                                if ($planta) {
+                                    $area = $planta->areasActivas()->find($detalle->id_cliente_planta_area) ?? $planta->areas()->find($detalle->id_cliente_planta_area);
+                                }
+                                $frecuencia = $detalle->frecuencia_sugerida ?? '';
+                                
+                                // Obtener tratamiento asociado a este detalle.
+                                // Reglas:
+                                // 1) Mostrar equipo si existe.
+                                // 2) Si no hay equipo, mostrar dispositivo explícito.
+                                // 3) Si no hay ambos, usar producto SOLO si su categoría es Dispositivos.
+                                // 4) Si no hay dato válido, no mostrar texto de relleno.
+                                $productosDetalle = [];
+                                if ($cotizacion->receta_servicio) {
+                                    foreach ($cotizacion->receta_servicio as $receta) {
+                                        if (($receta['id_servicio'] ?? null) == $detalle->id_servicio) {
+                                            $equipo = trim((string)($receta['equipo_descripcion'] ?? ''));
+                                            $dispositivo = trim((string)($receta['dispositivo_descripcion'] ?? ''));
+                                            $idProductoReceta = $receta['id_producto'] ?? null;
+
+                                            $dispositivoPorCategoria = '';
+                                            if (!empty($idProductoReceta)) {
+                                                $prodReceta = \App\Models\Producto::with('categoria')->find($idProductoReceta);
+                                                if ($prodReceta && $prodReceta->categoria && stripos($prodReceta->categoria->nombre, 'dispositivo') !== false) {
+                                                    $dispositivoPorCategoria = trim((string)($prodReceta->descripcion ?? ''));
+                                                }
+                                            }
+
+                                            $tratamiento = '';
+                                            if ($equipo !== '' && strcasecmp($equipo, 'Sin equipo') !== 0) {
+                                                $tratamiento = $equipo;
+                                            } elseif ($dispositivo !== '' && strcasecmp($dispositivo, 'Sin dispositivo') !== 0) {
+                                                $tratamiento = $dispositivo;
+                                            } elseif ($dispositivoPorCategoria !== '') {
+                                                $tratamiento = $dispositivoPorCategoria;
+                                            }
+
+                                            // evitar repetidos y vacíos
+                                            if ($tratamiento !== '') {
+                                                $productosDetalle[$tratamiento] = $tratamiento;
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                        @endphp
-                        <tr>
-                            <td style="font-weight: 600;">
-                                {{ $servicio?->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}
-                            </td>
-                            <td>
-                                @if(count($productosDetalle) > 0)
-                                    @foreach($productosDetalle as $equipo)
-                                        <small>{{ $equipo }}</small><br>
-                                    @endforeach
-                                @else
-                                    Sin productos especificados
-                                @endif
-                            </td>
-
-                            <!-- POR SI SE REQUIERE DE NUEVO EQUIPO Y PRODUCTO @foreach($productosDetalle as $prod)
-                                        @php
-                                            $producto = \App\Models\Producto::find($prod['id_producto'] ?? null);
-                                            $equipo = $prod['equipo_descripcion'] ?? 'Sin equipo';
-                                        @endphp
-                                        <small>{{ $equipo }}: {{ $producto?->descripcion ?? 'Producto no encontrado' }}</small><br>
-                                    @endforeach
-                                 -->
-                                 
-                            <td>
-                                @if($planta)
-                                    <strong>{{ $planta->nombre }}</strong>
-                                    @if($area)
-                                        <br><small>({{ $area->nombre }})</small>
+                            @endphp
+                            <tr>
+                                <td style="font-weight: 600;">
+                                    {{ $servicio?->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}
+                                </td>
+                                <td>
+                                    @if(count($productosDetalle) > 0)
+                                        @foreach($productosDetalle as $equipo)
+                                            <small>{{ $equipo }}</small><br>
+                                        @endforeach
                                     @endif
-                                @else
-                                    Por especificar
-                                @endif
-                            </td>
-                            <td style="text-align: center;">
-                                {{ $frecuencia ?: 'A solicitud' }}
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                                </td>
+
+                                <!-- POR SI SE REQUIERE DE NUEVO EQUIPO Y PRODUCTO @foreach($productosDetalle as $prod)
+                                            @php
+                                                $producto = \App\Models\Producto::find($prod['id_producto'] ?? null);
+                                                $equipo = $prod['equipo_descripcion'] ?? 'Sin equipo';
+                                            @endphp
+                                            <small>{{ $equipo }}: {{ $producto?->descripcion ?? 'Producto no encontrado' }}</small><br>
+                                        @endforeach
+                                     -->
+                                     
+                                <td>
+                                    @if($planta)
+                                        <strong>{{ $planta->nombre }}</strong>
+                                        @if($area)
+                                            <br><small>({{ $area->nombre }})</small>
+                                        @endif
+                                    @else
+                                        Por especificar
+                                    @endif
+                                </td>
+                                <td style="text-align: center;">
+                                    {{ $frecuencia ?: 'A solicitud' }}
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
 
             <!-- II.2 PRODUCTOS QUIMICOS DISPONIBLES -->
             @php
@@ -370,61 +511,163 @@
                 </table>
             @endif
 
-            <div class="proporsal-text">
-                <span class="seccion-titulo-num">2.1.3</span> Documentación 
-                @if($esSoloLimpieza)
-                    <p>Relizamos nuestras actividades bajo estándares de BRC Foods Ver.9, 
-                        AIB y FSSC 22000 por tanto, contamos con la siguiente documentación 
-                        que es entregada al cliente:</p>
+                <div class="proporsal-text">
+                    <span class="seccion-titulo-num">2.1.3</span> Documentación 
+                    @if($esSoloLimpieza)
+                        <p>Relizamos nuestras actividades bajo estándares de BRC Foods Ver.9, 
+                            AIB y FSSC 22000 por tanto, contamos con la siguiente documentación 
+                            que es entregada al cliente:</p>
+                            <ul>
+                                <li>Ficha de Servicio</li>
+                                <li>Certificado de Saneamiento Ambiental</li>
+                                <li>Informe técnico de las actividades</li>
+                            </ul>
+                    @else
+                        <p>Relizamos nuestras actividades bajo estándares de BRC Foods Ver.9, 
+                            AIB y FSSC 22000 por tanto, contamos con la siguiente documentación 
+                            que es entregada al cliente:</p>
+                            <ul>
+                                <li>Ficha de Servicio</li>
+                                <li>Certificado de Saneamiento Ambiental</li>
+                                <li>Informe técnico de las actividades</li>
+                                <li>Fichas técnicas de los productos</li>
+                                <li>Soporte Programa Manejo Integrado de Plagas</li>
+                                <li>Evaluación de riesgo de los establicimientos dentro del programa MIP 
+                                    con soporte bibliográfico</li>
+                                <li>Procedimiento General MIP y procedimiento de actividades específicas</li>
+                                <li>Registros de monitoreo por plaga objetivo</li>
+                                <li>Sabana de planes de acción bajo el estándar de inspecciones DIGESA y auditorias 
+                                    Internacionales</li>
+                                <li>Informe detallado con indicadores</li>
+                            </ul>
+                    @endif
+                </div>
+                <div class="proporsal-text">
+                    <span class="seccion-titulo-num">2.1.4</span> Salud Ocupacional 
+                    @if($esSoloLimpieza)
+                        <p>Nuestro personal se presenta en sus instalaciones con la copia del SCTR vigente, 
+                            además de contar con:</p>
                         <ul>
-                            <li>Ficha de Servicio</li>
-                            <li>Certificado de Saneamiento Ambiental</li>
-                            <li>Informe técnico de las actividades</li>
+                            <li>Exámenes Médicos Ocupacionales</li>
+                            <li>Programa de Seguridad y Salud en el trabajo</li>
+                            <li>Capacitación en Manejo Integrado de Plagas</li>
+                            <li>Capacitación en BPM</li>
                         </ul>
-                @else
-                    <p>Relizamos nuestras actividades bajo estándares de BRC Foods Ver.9, 
-                        AIB y FSSC 22000 por tanto, contamos con la siguiente documentación 
-                        que es entregada al cliente:</p>
+                    @else
+                        <p>Nuestro personal se presenta en sus instalaciones con la copia del SCTR vigente, 
+                            además de contar con:</p>
                         <ul>
-                            <li>Ficha de Servicio</li>
-                            <li>Certificado de Saneamiento Ambiental</li>
-                            <li>Informe técnico de las actividades</li>
-                            <li>Fichas técnicas de los productos</li>
-                            <li>Soporte Programa Manejo Integrado de Plagas</li>
-                            <li>Evaluación de riesgo de los establicimientos dentro del programa MIP 
-                                con soporte bibliográfico</li>
-                            <li>Procedimiento General MIP y procedimiento de actividades específicas</li>
-                            <li>Registros de monitoreo por plaga objetivo</li>
-                            <li>Sabana de planes de acción bajo el estándar de inspecciones DIGESA y auditorias 
-                                Internacionales</li>
-                            <li>Informe detallado con indicadores</li>
+                            <li>Programa de Seguridad y Salud en el trabajo</li>
+                            <li>Exámenes de ETAS</li>
+                            <li>Capacitación en Manejo Integrado de Plagas</li>
+                            <li>Capacitación en Auditorías Internos en BRC Foods Ver.9</li>
+                            <li>Capacitación en Manipulación de Productos Químicos</li>
+                            <li>Capacitación en BPM</li>
                         </ul>
+                    @endif
+                </div>
+
+                @php
+                    $equiposDispositivosPorServicio = [];
+
+                    if ($cotizacion->receta_servicio && count($cotizacion->receta_servicio) > 0) {
+                        foreach ($cotizacion->detalles as $detalle) {
+                            if (!$detalle->id_servicio) {
+                                continue;
+                            }
+
+                            $idServicio = $detalle->id_servicio;
+                            $nombreServicio = $detalle->servicio?->nombre ?? $detalle->descripcion_manual ?? 'SERVICIO';
+
+                            if (!isset($equiposDispositivosPorServicio[$idServicio])) {
+                                $equiposDispositivosPorServicio[$idServicio] = [
+                                    'servicio' => $nombreServicio,
+                                    'items' => [],
+                                ];
+                            }
+
+                            foreach ($cotizacion->receta_servicio as $receta) {
+                                if (($receta['id_servicio'] ?? null) != $idServicio) {
+                                    continue;
+                                }
+
+                                $idEquipo = $receta['id_equipo'] ?? null;
+                                if (!empty($idEquipo)) {
+                                    $equipo = \App\Models\Equipo::find($idEquipo);
+                                    if ($equipo) {
+                                        $keyEquipo = 'EQ-' . $equipo->id;
+                                        if (!isset($equiposDispositivosPorServicio[$idServicio]['items'][$keyEquipo])) {
+                                            $equiposDispositivosPorServicio[$idServicio]['items'][$keyEquipo] = [
+                                                'nombre' => $equipo->descripcion,
+                                                'imagen' => $equipo->imagen ? storage_path('app/public/' . ltrim($equipo->imagen, '/')) : null,
+                                            ];
+                                        }
+                                    }
+                                }
+
+                                $idProducto = $receta['id_producto'] ?? null;
+                                if (!empty($idProducto)) {
+                                    $producto = \App\Models\Producto::with('categoria')->find($idProducto);
+                                    if ($producto && $producto->categoria && stripos($producto->categoria->nombre, 'dispositivo') !== false) {
+                                        $keyProducto = 'PR-' . $producto->id;
+                                        if (!isset($equiposDispositivosPorServicio[$idServicio]['items'][$keyProducto])) {
+                                            $equiposDispositivosPorServicio[$idServicio]['items'][$keyProducto] = [
+                                                'nombre' => $producto->descripcion,
+                                                'imagen' => $producto->imagen ? storage_path('app/public/' . ltrim($producto->imagen, '/')) : null,
+                                            ];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    $equiposDispositivosPorServicio = array_values(array_filter($equiposDispositivosPorServicio, function ($grupo) {
+                        return count($grupo['items']) > 0;
+                    }));
+                @endphp
+
+                @if(count($equiposDispositivosPorServicio) > 0)
+                    <div class="proporsal-text">
+                        <span class="seccion-titulo-num">2.1.5</span> EQUIPOS Y DISPOSITIVOS PARA EL DESARROLLO DE LAS ACTIVIDADES:
+                    </div>
+
+                    @foreach($equiposDispositivosPorServicio as $idx => $grupo)
+                        @php
+                            $letra = chr(65 + ($idx % 26));
+                            $items = array_values($grupo['items']);
+                            $filas = array_chunk($items, 3);
+                        @endphp
+
+                        <div style="font-size: 13px; font-weight: 700; margin: 8px 0 8px 0;">{{ $letra }}) {{ strtoupper($grupo['servicio']) }}</div>
+
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+                            @foreach($filas as $fila)
+                                <tr>
+                                    @foreach($fila as $item)
+                                        <td style="width: 33.33%; border: 1px solid #333; text-align: center; vertical-align: middle; padding: 6px; height: 110px;">
+                                            @if(!empty($item['imagen']) && file_exists($item['imagen']))
+                                                <img src="{{ $item['imagen'] }}" style="max-width: 100%; max-height: 95px;">
+                                            @endif
+                                        </td>
+                                    @endforeach
+                                    @for($i = count($fila); $i < 3; $i++)
+                                        <td style="width: 33.33%; border: 1px solid #333;"></td>
+                                    @endfor
+                                </tr>
+                                <tr>
+                                    @foreach($fila as $item)
+                                        <td style="border: 1px solid #333; font-size: 11px; font-weight: 600; padding: 3px 5px; text-transform: uppercase;">{{ $item['nombre'] }}</td>
+                                    @endforeach
+                                    @for($i = count($fila); $i < 3; $i++)
+                                        <td style="border: 1px solid #333;"></td>
+                                    @endfor
+                                </tr>
+                            @endforeach
+                        </table>
+                    @endforeach
                 @endif
-            </div>
-            <div class="proporsal-text">
-                <span class="seccion-titulo-num">2.1.4</span> Salud Ocupacional 
-                @if($esSoloLimpieza)
-                    <p>Nuestro personal se presenta en sus instalaciones con la copia del SCTR vigente, 
-                        además de contar con:</p>
-                    <ul>
-                        <li>Exámenes Médicos Ocupacionales</li>
-                        <li>Programa de Seguridad y Salud en el trabajo</li>
-                        <li>Capacitación en Manejo Integrado de Plagas</li>
-                        <li>Capacitación en BPM</li>
-                    </ul>
-                @else
-                    <p>Nuestro personal se presenta en sus instalaciones con la copia del SCTR vigente, 
-                        además de contar con:</p>
-                    <ul>
-                        <li>Programa de Seguridad y Salud en el trabajo</li>
-                        <li>Exámenes de ETAS</li>
-                        <li>Capacitación en Manejo Integrado de Plagas</li>
-                        <li>Capacitación en Auditorías Internos en BRC Foods Ver.9</li>
-                        <li>Capacitación en Manipulación de Productos Químicos</li>
-                        <li>Capacitación en BPM</li>
-                    </ul>
-                @endif
-            </div>
+            @endif
 
              <!-- III. PROPUESTA ECONÓMICA -->
 
@@ -438,25 +681,39 @@
             <table class="products-table">
                 <thead>
                     <tr>
-                        <th style="width: 50%;">SERVICIO</th>
-                        <th style="width: 25%;">FRECUENCIA</th>
-                        <th style="width: 25%;">PRECIO</th>
+                        @if($mostrarServicioFosfina)
+                            <th style="width: 60%;">SERVICIO</th>
+                            <th style="width: 40%;">COSTO (S/.)</th>
+                        @else
+                            <th style="width: 50%;">SERVICIO</th>
+                            <th style="width: 25%;">FRECUENCIA</th>
+                            <th style="width: 25%;">PRECIO</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($cotizacion->detalles as $detalle)
-                    <tr>
-                        <td>
-                            <strong>{{ $detalle->servicio->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}</strong>
-                        </td>
-                        <td style="text-align: center;">
-                            {{ $detalle->frecuencia_sugerida ?? 'A solicitud' }}
-                        </td>
-                        <td style="text-align: right;">
-                            <strong>S/ {{ number_format($detalle->precio_unitario, 2) }}</strong>
-                        </td>
-                    </tr>
-                    @endforeach
+                    @if($esSoloFosfina && $detalleFosfina)
+                        <tr>
+                            <td style="text-align: center; font-weight: 700;">SERVICIO DE GASIFICACIÓN</td>
+                            <td style="text-align: center;"><strong>S/ {{ number_format($cotizacion->subtotal ?? ($detalleFosfina->precio_unitario ?? 0), 2) }}</strong></td>
+                        </tr>
+                    @else
+                        @foreach($cotizacion->detalles as $detalle)
+                        <tr>
+                            <td>
+                                <strong>{{ $detalle->servicio->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}</strong>
+                            </td>
+                            @if(!$mostrarServicioFosfina)
+                                <td style="text-align: center;">
+                                    {{ $detalle->frecuencia_sugerida ?? 'A solicitud' }}
+                                </td>
+                            @endif
+                            <td style="text-align: right;">
+                                <strong>S/ {{ number_format($detalle->precio_unitario, 2) }}</strong>
+                            </td>
+                        </tr>
+                        @endforeach
+                    @endif
                 </tbody>
             </table>
             
@@ -528,7 +785,13 @@
 
                 <p class="payment-header-text" style="font-size: 14px; margin-bottom: 5px;">IV CONSIDERACIONES</p>
                 <ul>
-                    @if($esSoloLimpieza)
+                    @if($esSoloFosfina)
+                        <li>La actividad se debe programar con al menos 48 horas para disponer del recurso técnico y humano para el desarrollo de la actividad.</li>
+                        <li>El cliente debe contar con un espacio libre de tránsito y sin tránsito de personal para realizar la actividad de gasificación.</li>
+                        <li>El tiempo mínimo de gasificación del producto será de 72 horas.</li>
+                        <li>Se requiere realizar inspección previa para verificar las condiciones e identificar cualquier situación de riesgo para implementar los controles apropiados.</li>
+                        <li>Vigencia de la oferta: 15 días.</li>
+                    @elseif($esSoloLimpieza)
                         <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
                         la actividad</li>
                         <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
