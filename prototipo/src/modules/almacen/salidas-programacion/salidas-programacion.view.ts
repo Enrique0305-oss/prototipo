@@ -203,6 +203,7 @@ async function cargarHistorial() {
 
     contenedor.innerHTML = renderTablaHistorial();
     renderPaginacion(historialData.length);
+    enlazarEventosHistorial();
   } catch (error) {
     console.error('Error cargando historial:', error);
     contenedor.innerHTML = '<div class="sp-error">Error al cargar historial</div>';
@@ -285,6 +286,7 @@ function renderTablaHistorial(): string {
             <th>TÉCNICO</th>
             <th>MATERIALES</th>
             <th>ESTADO</th>
+            <th>ACCIONES</th>
           </tr>
         </thead>
         <tbody>
@@ -293,6 +295,9 @@ function renderTablaHistorial(): string {
             const servicio = p.servicio?.nombre || 'Servicio';
             const tecnico = p.tecnico ? `${p.tecnico.nombre} ${p.tecnico.apellidos}` : '—';
             const materialesCount = p.insumos?.length || 0;
+            const todoDevuelto = (p.insumos || []).every(i => (i.cantidad_utilizada || 0) === 0);
+            const estadoTexto = todoDevuelto ? 'Devuelto' : 'Entregado';
+            const claseEstado = todoDevuelto ? 'prov-badge-pendiente' : 'prov-badge-recibido';
 
             return `
               <tr>
@@ -301,7 +306,22 @@ function renderTablaHistorial(): string {
                 <td>${servicio}</td>
                 <td>${tecnico}</td>
                 <td>${materialesCount} producto(s)</td>
-                <td><span class="prov-badge prov-badge-recibido">Entregado</span></td>
+                <td><span class="prov-badge ${claseEstado}">${estadoTexto}</span></td>
+                <td>
+                  <div class="sp-actions-cell">
+                    <button class="prov-btn-icon-sm sp-btn-pdf-entrega" data-prog-id-pdf="${p.id}" title="Descargar Acta de Entrega" style="color:#7c3aed;border-color:#ddd6fe;">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
+                    </button>
+                    ${todoDevuelto ? '' : `
+                    <button class="prov-btn-icon-sm sp-btn-devolucion" data-prog-id-devol="${p.id}" title="Registrar Devolución" style="color:#0ea5e9;border-color:#bae6fd;">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 14 4 9 9 4"></polyline>
+                        <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                      </svg>
+                    </button>
+                    `}
+                  </div>
+                </td>
               </tr>
             `;
           }).join('')}
@@ -390,6 +410,7 @@ function rerenderTablaActual() {
   } else {
     contenedor.innerHTML = renderTablaHistorial();
     renderPaginacion(historialData.length);
+    enlazarEventosHistorial();
   }
 }
 
@@ -409,10 +430,35 @@ function enlazarEventosPendientes() {
   });
 }
 
+function enlazarEventosHistorial() {
+  document.querySelectorAll('[data-prog-id-pdf]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const id = parseInt((e.currentTarget as HTMLElement).dataset.progIdPdf || '0');
+      if (!id) return;
+      try {
+        await salidasProgramacionService.downloadActaEntrega(id);
+      } catch (err) {
+        console.error('Error descargando acta:', err);
+        mostrarToast('error', 'Error', 'No se pudo descargar el acta de entrega');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-prog-id-devol]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const id = parseInt((e.currentTarget as HTMLElement).dataset.progIdDevol || '0');
+      if (id) await abrirModalDevolucion(id);
+    });
+  });
+}
+
 async function abrirModalConfirmar(idProgramacion: number) {
   const modal = document.getElementById('modalConfirmarSalida');
   const body = document.getElementById('modalConfirmarSalidaBody');
+  const title = document.querySelector('#modalConfirmarSalida .prov-modal-header h2') as HTMLElement;
   if (!modal || !body) return;
+
+  if (title) title.textContent = 'Confirmar Salida de Materiales';
 
   body.innerHTML = '<div class="sp-loading">Cargando detalles...</div>';
   modal.style.display = 'flex';
@@ -508,6 +554,111 @@ async function abrirModalConfirmar(idProgramacion: number) {
   }
 }
 
+async function abrirModalDevolucion(idProgramacion: number) {
+  const modal = document.getElementById('modalConfirmarSalida');
+  const body = document.getElementById('modalConfirmarSalidaBody');
+  const title = document.querySelector('#modalConfirmarSalida .prov-modal-header h2') as HTMLElement;
+  if (!modal || !body) return;
+
+  if (title) title.textContent = 'Registrar Devolución de Materiales';
+  body.innerHTML = '<div class="sp-loading">Cargando detalle de entrega...</div>';
+  modal.style.display = 'flex';
+
+  try {
+    const res = await salidasProgramacionService.getDetalleDevolucion(idProgramacion);
+    const prog = res.data;
+    if (!prog) {
+      body.innerHTML = '<div class="sp-error">No se encontró la programación</div>';
+      return;
+    }
+
+    const cliente = prog.orden_servicio?.cliente?.nombre_empresa || prog.orden_servicio?.cliente?.persona_contacto || '—';
+    const servicio = prog.servicio?.nombre || 'Servicio';
+    const tecnico = prog.tecnico ? `${prog.tecnico.nombre} ${prog.tecnico.apellidos}` : '—';
+
+    const insumosConSaldo = (prog.insumos || []).filter(i => (i.cantidad_utilizada || 0) > 0);
+    if (insumosConSaldo.length === 0) {
+      body.innerHTML = `
+        <div class="sp-empty" style="padding:20px 0;">No hay materiales entregados pendientes de devolución.</div>
+        <div class="prov-modal-footer">
+          <button class="prov-btn-secondary" id="btnCancelarConfirmacion">Cerrar</button>
+        </div>
+      `;
+      document.getElementById('btnCancelarConfirmacion')?.addEventListener('click', cerrarModalConfirmar);
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="sp-info-grid">
+        <div class="sp-info-item"><strong>Cliente: </strong><span>${cliente}</span></div>
+        <div class="sp-info-item"><strong>Servicio: </strong><span>${servicio}</span></div>
+        <div class="sp-info-item"><strong>Fecha: </strong><span>${formatFecha(prog.fecha_programada)}${prog.hora_inicio ? ' ' + prog.hora_inicio.substring(0, 5) : ''}</span></div>
+        <div class="sp-info-item"><strong>Técnico: </strong><span>${tecnico}</span></div>
+      </div>
+
+      <div class="sp-materiales-title">Materiales a Devolver</div>
+      <div class="sp-materiales-table">
+        <table class="prov-detail-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Entregado</th>
+              <th>Devolver</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${insumosConSaldo.map((ins: InsumoProgamacion, idx: number) => {
+              const entregado = ins.cantidad_utilizada || 0;
+              return `
+                <tr>
+                  <td>${ins.producto?.descripcion || 'Producto'}</td>
+                  <td>${entregado} ${ins.producto?.unidad_medida || ''}</td>
+                  <td>
+                    <input
+                      type="number"
+                      class="prov-input-sm cantidad-devolver"
+                      data-idx="${idx}"
+                      data-id-producto="${ins.id_producto}"
+                      value="0"
+                      min="0"
+                      max="${entregado}"
+                      style="width:80px;"
+                    >
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sp-obs-group">
+        <label>Observación (Opcional)</label>
+        <textarea id="observacionDevolucion" class="prov-input" rows="2" placeholder="Observaciones sobre la devolución..."></textarea>
+      </div>
+
+      <div class="prov-modal-footer">
+        <button class="prov-btn-secondary" id="btnCancelarConfirmacion">Cancelar</button>
+        <button class="prov-btn-success" id="btnRegistrarDevolucion" data-prog-id="${prog.id}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 14 4 9 9 4"></polyline>
+            <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+          </svg>
+          Registrar Devolución
+        </button>
+      </div>
+    `;
+
+    document.getElementById('btnCancelarConfirmacion')?.addEventListener('click', cerrarModalConfirmar);
+    document.getElementById('btnCerrarModalSalida')?.addEventListener('click', cerrarModalConfirmar);
+    document.getElementById('spModalOverlay')?.addEventListener('click', cerrarModalConfirmar);
+    document.getElementById('btnRegistrarDevolucion')?.addEventListener('click', registrarDevolucion);
+  } catch (error) {
+    console.error('Error cargando detalle devolución:', error);
+    body.innerHTML = '<div class="sp-error">Error al cargar detalles de devolución</div>';
+  }
+}
+
 function cerrarModalConfirmar() {
   const modal = document.getElementById('modalConfirmarSalida');
   if (modal) modal.style.display = 'none';
@@ -544,13 +695,20 @@ async function confirmarEntrega(e: Event) {
   btn.textContent = 'Procesando...';
 
   try {
-    await salidasProgramacionService.confirmarSalida({
+    const res = await salidasProgramacionService.confirmarSalida({
       id_programacion: idProg,
       insumos,
       observacion,
     });
 
     mostrarToast('success', 'Entrega Confirmada', 'Los materiales se han entregado y registrado en Kardex');
+    try {
+      const idPdf = (res as any)?.data?.id_programacion || idProg;
+      await salidasProgramacionService.downloadActaEntrega(idPdf);
+    } catch (pdfErr) {
+      console.error('No se pudo descargar el PDF de entrega:', pdfErr);
+      mostrarToast('warning', 'PDF', 'La entrega se confirmó, pero no se pudo descargar el acta');
+    }
     cerrarModalConfirmar();
     await cargarPendientes();
   } catch (error: any) {
@@ -558,6 +716,54 @@ async function confirmarEntrega(e: Event) {
     mostrarToast('error', 'Error', error.response?.data?.message || 'No se pudo confirmar la salida');
     btn.disabled = false;
     btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Confirmar Entrega';
+  }
+}
+
+async function registrarDevolucion(e: Event) {
+  const btn = e.currentTarget as HTMLButtonElement;
+  const idProg = parseInt(btn.dataset.progId || '0');
+  if (!idProg) return;
+
+  const inputsCantidad = document.querySelectorAll('.cantidad-devolver') as NodeListOf<HTMLInputElement>;
+  const insumos = Array.from(inputsCantidad).map(input => ({
+    id_producto: parseInt(input.dataset.idProducto || '0'),
+    cantidad_devuelta: parseInt(input.value || '0'),
+  }));
+
+  const observacion = (document.getElementById('observacionDevolucion') as HTMLTextAreaElement)?.value || '';
+
+  if (insumos.every(i => i.cantidad_devuelta === 0)) {
+    mostrarToast('warning', 'Advertencia', 'Debe registrar devolución en al menos un producto');
+    return;
+  }
+
+  const ok = await confirmarAccion({
+    titulo: 'Registrar Devolución',
+    mensaje: '¿Confirmar la devolución de estos materiales? Se repondrá stock y se registrará en Kardex.',
+    tipo: 'warning',
+    textoConfirmar: 'Sí, Registrar',
+  });
+
+  if (!ok) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Procesando...';
+
+  try {
+    await salidasProgramacionService.registrarDevolucion({
+      id_programacion: idProg,
+      insumos,
+      observacion,
+    });
+
+    mostrarToast('success', 'Devolución Registrada', 'La devolución fue registrada y el stock actualizado');
+    cerrarModalConfirmar();
+    await cargarHistorial();
+  } catch (error: any) {
+    console.error('Error registrando devolución:', error);
+    mostrarToast('error', 'Error', error.response?.data?.message || 'No se pudo registrar la devolución');
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg> Registrar Devolución';
   }
 }
 

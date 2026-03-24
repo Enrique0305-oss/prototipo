@@ -165,6 +165,10 @@ class SalidaProgramacionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Salida confirmada exitosamente. Materiales entregados y registrados en Kardex.',
+                'data' => [
+                    'id_programacion' => $idProgramacion,
+                    'pdf_entrega_url' => url("/api/v1/almacen/salidas-programacion/{$idProgramacion}/pdf-entrega"),
+                ],
             ]);
 
         } catch (\Exception $e) {
@@ -186,12 +190,12 @@ class SalidaProgramacionController extends Controller
             'servicio',
             'tecnico',
             'insumos' => function ($q) {
-                $q->where('estado', 'Entregado');
+                $q->whereIn('estado', ['Entregado', 'Devuelto']);
             },
             'insumos.producto',
         ])
         ->whereHas('insumos', function ($q) {
-            $q->where('estado', 'Entregado');
+            $q->whereIn('estado', ['Entregado', 'Devuelto']);
         });
 
         // Filtro por rango de fechas (opcional)
@@ -209,5 +213,168 @@ class SalidaProgramacionController extends Controller
             'success' => true,
             'data' => $programaciones,
         ]);
+    }
+
+    /**
+     * Ver detalle de una programación para registrar devoluciones
+     * Trae insumos entregados o parcialmente devueltos
+     */
+    public function getDetalleDevolucion($id)
+    {
+        $prog = ProgramacionServicio::with([
+            'ordenServicio.cliente',
+            'servicio',
+            'tecnico',
+            'insumos' => function ($q) {
+                $q->whereIn('estado', ['Entregado', 'Devuelto']);
+            },
+            'insumos.producto',
+        ])->find($id);
+
+        if (!$prog) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programación no encontrada',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $prog,
+        ]);
+    }
+
+    /**
+     * Registrar devolución de materiales entregados
+     * Registra entrada en Kardex y repone stock
+     */
+    public function registrarDevolucion(Request $request)
+    {
+        $validated = $request->validate([
+            'id_programacion' => 'required|integer|exists:programacion_servicio,id',
+            'insumos' => 'required|array|min:1',
+            'insumos.*.id_producto' => 'required|integer|exists:productos,id',
+            'insumos.*.cantidad_devuelta' => 'required|integer|min:0',
+            'observacion' => 'nullable|string|max:500',
+        ]);
+
+        $idProgramacion = $validated['id_programacion'];
+        $insumosDevueltos = $validated['insumos'];
+        $observacion = $validated['observacion'] ?? '';
+        $idUsuario = $request->user()?->id;
+
+        if (collect($insumosDevueltos)->every(fn($i) => (int)($i['cantidad_devuelta'] ?? 0) === 0)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debe devolver al menos un producto',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $insumosProg = ProgramacionInsumo::where('id_programacion', $idProgramacion)
+                ->whereIn('estado', ['Entregado', 'Devuelto'])
+                ->get()
+                ->keyBy('id_producto');
+
+            if ($insumosProg->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta programación no tiene insumos entregados para devolver',
+                ], 422);
+            }
+
+            foreach ($insumosDevueltos as $item) {
+                $idProducto = $item['id_producto'];
+                $cantidadDevuelta = (int) $item['cantidad_devuelta'];
+
+                if ($cantidadDevuelta <= 0) {
+                    continue;
+                }
+
+                $insumo = $insumosProg->get($idProducto);
+                if (!$insumo) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "El producto #{$idProducto} no está entregado en esta programación",
+                    ], 422);
+                }
+
+                $cantidadPendienteDevolver = (int) ($insumo->cantidad_utilizada ?? 0);
+                if ($cantidadPendienteDevolver <= 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "El producto #{$idProducto} ya no tiene saldo para devolución",
+                    ], 422);
+                }
+
+                if ($cantidadDevuelta > $cantidadPendienteDevolver) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "La devolución del producto #{$idProducto} excede lo entregado",
+                    ], 422);
+                }
+
+                Kardex::registrarMovimiento([
+                    'id_producto' => $idProducto,
+                    'tipo_movimiento' => 'Entrada',
+                    'cantidad' => $cantidadDevuelta,
+                    'motivo' => 'Devolución Programación',
+                    'referencia' => "PROG-{$idProgramacion}",
+                    'id_referencia' => $idProgramacion,
+                    'id_usuario' => $idUsuario,
+                    'observacion' => "Devolución registrada por almacén. {$observacion}",
+                ]);
+
+                $saldo = $cantidadPendienteDevolver - $cantidadDevuelta;
+                $insumo->cantidad_utilizada = $saldo;
+                $insumo->estado = $saldo === 0 ? 'Devuelto' : 'Entregado';
+                $insumo->save();
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Devolución registrada exitosamente. Stock actualizado en Kardex.',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al registrar devolución: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Generar PDF de acta de entrega de materiales por programación
+     */
+    public function generarPdfEntrega($id)
+    {
+        $prog = ProgramacionServicio::with([
+            'ordenServicio.cliente',
+            'servicio',
+            'tecnico',
+            'planta',
+            'area',
+            'insumos' => function ($q) {
+                $q->whereIn('estado', ['Entregado', 'Utilizado', 'Devuelto']);
+            },
+            'insumos.producto',
+        ])->findOrFail($id);
+
+        $insumos = $prog->insumos->filter(function ($ins) {
+            return (int)($ins->cantidad_utilizada ?? 0) > 0 || in_array($ins->estado, ['Entregado', 'Utilizado']);
+        })->values();
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('SalidaProgramacionPDF', [
+            'prog' => $prog,
+            'insumos' => $insumos,
+        ]);
+
+        $pdf->setPaper('a4', 'portrait');
+
+        return $pdf->stream('Acta_Entrega_Programacion_' . $prog->id . '.pdf');
     }
 }
