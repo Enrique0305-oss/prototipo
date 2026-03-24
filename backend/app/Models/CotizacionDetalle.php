@@ -23,12 +23,18 @@ class CotizacionDetalle extends Model
         'frecuencia_sugerida',
         'modalidad_sugerida',
         'op_tecnicos',
-        'supervisor'
+        'supervisor',
+        'horas_capacitacion',
+        'num_participantes',
+        'fecha_servicio'
     ];
 
     protected $casts = [
         'cantidad' => 'integer',
         'precio_unitario' => 'decimal:2',
+        'horas_capacitacion' => 'decimal:2',
+        'num_participantes' => 'integer',
+        'fecha_servicio' => 'date',
     ];
 
     // Relaciones

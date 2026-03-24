@@ -174,19 +174,6 @@
                 &nbsp;&nbsp;&nbsp;&nbsp;2.1 Objetivos
             </div>
 
-            <div class="issued-name">
-                &nbsp;&nbsp;&nbsp;&nbsp;2.2 Actividades <br><br>
-
-                <div style="margin-left: 40px; font-weight: normal;">
-                    <strong>2.2.1 Capacitaciones:</strong>
-                    El equipo de QSCI Consulting brindará capacitaciones actualizadas al público asistente.
-                    <br><br>Esta capacitación está diseñada para ser cubierta de la siguiente manera.
-                </div>
-            </div> <br>
-            <div class="payment-header-text">
-                EQUIPO DE ASESORES LÍDERES- QSCI GROUP
-            </div>
-
             <div class="proposal-text" style="margin-bottom: 20px;">
                 @if($cotizacion->propuesta_tecnica)
                     {!! $cotizacion->propuesta_tecnica !!}
@@ -195,7 +182,30 @@
                 @endif
             </div>
 
-            
+            @php
+                $detalleCap = $cotizacion->detalles->firstWhere('tipo', 'Capacitacion')
+                    ?? $cotizacion->detalles->firstWhere('tipo', 'Capacitación')
+                    ?? $cotizacion->detalles->first();
+            @endphp
+            <div class="issued-name">
+                &nbsp;&nbsp;&nbsp;&nbsp;2.2 Actividades <br><br>
+
+                <div style="margin-left: 40px; font-weight: normal;">
+                    <strong>2.2.1 Capacitaciones:</strong>
+                    El equipo de QSCI Consulting brindará capacitaciones actualizadas al público asistente.
+                    <br><br>Esta capacitación está diseñada para ser cubierta de la siguiente manera.
+                </div>
+            </div>
+            <div style="margin-left: 40px; font-size:13px; color:#334155; margin-top:12px;">
+                <p style="margin:3px 0;"><strong>Fecha Tentativa de Servicio:</strong> {{ $detalleCap?->fecha_servicio ? \Carbon\Carbon::parse($detalleCap->fecha_servicio)->format('d/m/Y') : 'N/A' }}</p>
+                <p style="margin:3px 0;"><strong>Horas de Capacitación:</strong> {{ $detalleCap?->horas_capacitacion ? $detalleCap->horas_capacitacion . ' hrs' : 'N/A' }}</p>
+                <p style="margin:3px 0;"><strong>Número de Participantes:</strong> {{ $detalleCap?->num_participantes ?? 'N/A' }}</p>
+                <p style="margin:3px 0;"><strong>Modalidad:</strong> {{ $detalleCap?->modalidad_sugerida ?? 'N/A' }}</p>
+            </div>
+            <br>
+            <div class="payment-header-text">
+                EQUIPO DE ASESORES LÍDERES- QSCI GROUP
+            </div>
 
             <!-- III. PROPUESTA ECONÓMICA -->
             <div class="seccion-titulo">

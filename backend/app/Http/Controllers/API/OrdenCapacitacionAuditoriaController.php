@@ -174,6 +174,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'precio_unitario' => $d->precio_unitario,
                 'modalidad_sugerida' => $d->modalidad_sugerida,
                 'duracion_horas' => $d->catalogoCapAud ? $d->catalogoCapAud->duracion_horas : null,
+                'horas_capacitacion' => $d->horas_capacitacion,
+                'num_participantes' => $d->num_participantes,
+                'fecha_servicio' => $d->fecha_servicio,
             ];
         });
 
@@ -258,6 +261,19 @@ class OrdenCapacitacionAuditoriaController extends Controller
 
         if ($cotizacion->ordenCapacitacionAuditoria) {
             return response()->json(['success' => false, 'message' => 'Esta cotización ya tiene una orden'], 400);
+        }
+
+        // Copiar fecha emisión a fecha aceptación si no viene
+        $validated['fecha_aceptacion'] = $validated['fecha_aceptacion'] ?? $cotizacion->fecha_emision->format('Y-m-d');
+
+        // Copiar datos desde el primer detalle de cotización cuando falte algo
+        $detalle = $cotizacion->detalles->first();
+        if ($detalle) {
+            if (empty($validated['fecha_servicio'])) {
+                $validated['fecha_servicio'] = $detalle->fecha_servicio ?? $cotizacion->fecha_emision->format('Y-m-d');
+            }
+            $validated['horas_capacitacion'] = $validated['horas_capacitacion'] ?? $detalle->horas_capacitacion;
+            $validated['num_participantes'] = $validated['num_participantes'] ?? $detalle->num_participantes;
         }
 
         try {

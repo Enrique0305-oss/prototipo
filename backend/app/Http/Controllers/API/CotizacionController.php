@@ -119,6 +119,9 @@ class CotizacionController extends Controller
             'detalles.*.supervisor' => 'nullable|string|max:255',
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
             'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'detalles.*.horas_capacitacion' => 'nullable|numeric|min:0',
+            'detalles.*.num_participantes' => 'nullable|integer|min:1',
+            'detalles.*.fecha_servicio' => 'nullable|date',
         ]);
 
         DB::beginTransaction();
@@ -175,6 +178,9 @@ class CotizacionController extends Controller
                     'supervisor' => $detalle['supervisor'] ?? null,
                     'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
                     'id_cliente_planta_area' => $detalle['id_cliente_planta_area'] ?? null,
+                    'horas_capacitacion' => $detalle['horas_capacitacion'] ?? null,
+                    'num_participantes' => $detalle['num_participantes'] ?? null,
+                    'fecha_servicio' => $detalle['fecha_servicio'] ?? null,
                 ]);
             }
 

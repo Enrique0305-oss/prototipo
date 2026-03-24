@@ -784,6 +784,21 @@ async function cargarDatosCotizacion(cotizacionId: number) {
       if (modalidadSelect) modalidadSelect.value = mapped;
     }
 
+    // Auto-llenar fecha aceptación con fecha emisión de cotización
+    (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).value = data.cotizacion?.fecha_emision || '';
+
+    // Auto-llenar campos de capacitación desde el detalle
+    if (data.detalles && data.detalles.length > 0) {
+      // Buscar el detalle de capacitación con o sin acento en el tipo, o usar el primero
+      const detalleCap = data.detalles.find((d: any) => {
+        const tipo = String(d.tipo || '').toLowerCase();
+        return tipo === 'capacitación' || tipo === 'capacitacion';
+      }) || data.detalles[0];
+      (document.getElementById('oc-horas-capacitacion') as HTMLInputElement).value = detalleCap.horas_capacitacion || '';
+      (document.getElementById('oc-num-participantes') as HTMLInputElement).value = detalleCap.num_participantes || '';
+      (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = detalleCap.fecha_servicio || '';
+    }
+
     // Auto-llenar costo
     (document.getElementById('oc-costo') as HTMLInputElement).value = Number(data.costo_total || 0).toFixed(2);
     calcularDesgloseOC();

@@ -539,7 +539,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 
         <div class="propuesta-tecnica-container" style="margin-bottom: 25px; background: #fff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Propuesta Técnica (Objetivos y Actividades)</h3>
+                <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Propuesta Técnica (Objetivos)</h3>
                 <button type="button" id="btn-toggle-propuesta" style="font-size: 12px; padding: 5px 10px; cursor: pointer; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px;">
                     Mostrar/Ocultar Editor
                 </button>
@@ -579,6 +579,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
                   <th style="width: 11%;">Precio Unit.</th>
                   <th style="width: 11%;">Frecuencia</th>
                   <th style="width: 10%;">Modalidad</th>
+                  ${tipoFijo === 'Capacitacion' ? '<th style="width: 8%;">Horas</th><th style="width: 8%;">Participantes</th><th style="width: 10%;">Fecha Servicio</th>' : ''}
                   <!-- Eliminado: técnicos/supervisor de capacitación -->
                   <th style="width: 9%;">Subtotal</th>
                   <th style="width: 3%;"></th>
@@ -970,7 +971,8 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 
   panelEl.querySelector('#btn-agregar-linea')?.addEventListener('click', () => {
     console.log('[FORM] 📍 Click en agregar línea - tabActivo:', tabActivo, 'panel:', panelEl.id);
-    agregarLineaDetalle();
+    const tipo = (panelEl.querySelector('#cot-tipo') as HTMLSelectElement)?.value;
+    agregarLineaDetalle(tipo);
   });
 
   if (tipoFijo === 'Servicio') {
@@ -1122,7 +1124,7 @@ function getActivePanelElement(): HTMLElement | null {
   return document.getElementById(`cotiz-panel-${tabActivo}`) as HTMLElement | null;
 }
 
-function agregarLineaDetalle() {
+function agregarLineaDetalle(tipo?: string) {
   console.log('[LINE] Iniciando agregarLineaDetalle...');
   
   // Encontrar el panel activo (el que está visible)
@@ -1134,17 +1136,9 @@ function agregarLineaDetalle() {
   }
   
   const tbody = panelActivoElement.querySelector('#detalle-cotizacion-body');
-  const tipoSelect = panelActivoElement.querySelector('#cot-tipo') as HTMLSelectElement;
-  const tipo = tipoSelect?.value;
 
-  console.log('[LINE] tbody encontrado:', !!tbody, 'tipoSelect encontrado:', !!tipoSelect, 'dentro de panel:', panelActivoElement.id);
-  console.log('[LINE] ⚠️ CRÍTICO - tipoSelect ID:', tipoSelect?.id, 'tipoSelect.value:', tipo);
-  
-  // Log del elemento completo
-  if (tipoSelect) {
-    console.log('[LINE] tipoSelect.tagName:', tipoSelect.tagName, 'type:', tipoSelect.type);
-    console.log('[LINE] tipoSelect.innerHTML:', tipoSelect.innerHTML);
-  }
+  console.log('[LINE] tbody encontrado:', !!tbody, 'dentro de panel:', panelActivoElement.id);
+  console.log('[LINE] ⚠️ CRÍTICO - tipo:', tipo);
 
   if (!tipo) {
     console.log('[LINE] ❌ Tipo no seleccionado');
@@ -1177,7 +1171,6 @@ function agregarLineaDetalle() {
 
   const inputStyle = 'width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;';
   const selectStyle = inputStyle;
-  const esCapacitacion = tipo === 'Capacitacion';
   const {
     disabledCantidad,
     disabledCantidadStyle,
@@ -1231,6 +1224,17 @@ function agregarLineaDetalle() {
           <option value="Hibrido">Híbrido</option>
         </select>
       </td>
+      ${tipo === 'Capacitacion' ? `
+      <td>
+        <input type="number" class="horas-input" value="0" min="0" step="0.5" style="${inputStyle}">
+      </td>
+      <td>
+        <input type="number" class="participantes-input" value="1" min="1" style="${inputStyle}">
+      </td>
+      <td>
+        <input type="date" class="fecha-servicio-input" style="${inputStyle}">
+      </td>
+      ` : ''}
       <!-- Eliminado: técnicos/supervisor de capacitación -->
       <td>
         <strong class="subtotal-linea" style="font-size:13px;">S/ 0.00</strong>
@@ -1601,6 +1605,9 @@ async function guardarCotizacion(tipoFijo?: string) {
     const supervisor = (linea.querySelector('.supervisor-input') as HTMLInputElement | null)?.value?.trim() || null;
     const plantaVal = parseInt((linea.querySelector('.planta-input') as HTMLSelectElement)?.value || '0') || null;
     const areaVal = parseInt((linea.querySelector('.area-input') as HTMLSelectElement)?.value || '0') || null;
+    const horasCapacitacion = tipoCotizacion === 'Capacitacion' ? parseFloat((linea.querySelector('.horas-input') as HTMLInputElement)?.value || '0') : null;
+    const numParticipantes = tipoCotizacion === 'Capacitacion' ? parseInt((linea.querySelector('.participantes-input') as HTMLInputElement)?.value || '1') : null;
+    const fechaServicio = tipoCotizacion === 'Capacitacion' ? (linea.querySelector('.fecha-servicio-input') as HTMLInputElement)?.value || null : null;
 
     const {
       id_servicio,
@@ -1620,6 +1627,9 @@ async function guardarCotizacion(tipoFijo?: string) {
       supervisor,
       id_cliente_planta: plantaVal,
       id_cliente_planta_area: areaVal,
+      horas_capacitacion: horasCapacitacion,
+      num_participantes: numParticipantes,
+      fecha_servicio: fechaServicio,
     });
   });
 
