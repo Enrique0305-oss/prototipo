@@ -240,10 +240,6 @@ export function renderComercialOrdenesServicio() {
                 Productos / Materiales
               </h3>
               <div style="display:flex;gap:8px;">
-                <button type="button" class="btn-secondary" id="btn-cargar-receta-ods" style="font-size:12px;padding:4px 10px;" title="Cargar materiales de la receta de los servicios seleccionados">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
-                  Cargar Receta
-                </button>
                 <button type="button" class="btn-secondary" id="btn-agregar-equipo-ods" style="font-size:12px;padding:4px 10px;" title="Agregar equipo por servicio/planta/área">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   Agregar Equipo
@@ -269,7 +265,7 @@ export function renderComercialOrdenesServicio() {
               </table>
             </div>
             <div id="ods-productos-empty" style="text-align:center;padding:12px;color:#94a3b8;font-size:13px;">
-              Sin productos. Use "Cargar Receta" o "Agregar Producto".
+              Sin productos. Use "Agregar Equipo" o "Agregar Producto".
             </div>
           </div>
 
@@ -1654,7 +1650,6 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
     const btnGuardar = document.getElementById('modal-ods-guardar') as HTMLElement;
     const btnCancelar = document.getElementById('modal-ods-cancelar') as HTMLElement;
     const btnAgregarSrv = document.getElementById('btn-agregar-linea-servicio') as HTMLElement;
-    const btnCargarReceta = document.getElementById('btn-cargar-receta-ods') as HTMLElement;
     const btnAgregarProd = document.getElementById('btn-agregar-producto-ods') as HTMLElement;
     const btnAgregarEquipo = document.getElementById('btn-agregar-equipo-ods') as HTMLElement;
 
@@ -1662,7 +1657,6 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
       btnGuardar.style.display = 'none';           // Quitamos botón Guardar
       btnCancelar.textContent = 'Salir';           // Cambiamos Cancelar por Salir
       if (btnAgregarSrv) btnAgregarSrv.style.display = 'none'; // Quitamos botón agregar servicio
-      if (btnCargarReceta) btnCargarReceta.style.display = 'none';
       if (btnAgregarProd) btnAgregarProd.style.display = 'none';
       if (btnAgregarEquipo) btnAgregarEquipo.style.display = 'none';
       
@@ -1677,7 +1671,6 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
       btnGuardar.textContent = 'Actualizar Orden'; // Texto de edición
       btnCancelar.textContent = 'Cancelar';
       if (btnAgregarSrv) btnAgregarSrv.style.display = 'flex';
-      if (btnCargarReceta) btnCargarReceta.style.display = 'flex';
       if (btnAgregarProd) btnAgregarProd.style.display = 'flex';
       if (btnAgregarEquipo) btnAgregarEquipo.style.display = 'flex';
     }
@@ -1876,7 +1869,6 @@ export function initOrdenesServicioEvents() {
     await cargarProductosDisponiblesODS();
     agregarProductoODS();
   });
-  document.getElementById('btn-cargar-receta-ods')?.addEventListener('click', cargarRecetaDesdeServicios);
   document.getElementById('btn-agregar-equipo-ods')?.addEventListener('click', abrirModalAgregarEquipoODS);
 
   // Modal agregar equipo

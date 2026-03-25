@@ -77,7 +77,7 @@
                 NÚMERO DE PROPUESTA &ndash; {{ $cotizacion->numero_cotizacion }}
             </div>
             <div class="propuesta-fecha">
-                {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->isoFormat('D [de] MMMM [de] YYYY') }}
+                {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->locale('es')->translatedFormat('j \\d\\e F \\d\\e Y') }}
             </div> -->
 
             <!-- III. PROPUESTA ECONÃ“MICA -->

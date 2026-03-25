@@ -106,6 +106,8 @@ class CotizacionController extends Controller
             'observaciones' => 'nullable|string',
             'propuesta_tecnica' => 'nullable|string',
             'receta_servicio' => 'nullable|array',
+            'exponentes_ids' => 'nullable|array',
+            'exponentes_ids.*' => 'integer|exists:exponentes,id',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
             'detalles.*.id_producto' => 'nullable|exists:productos,id',
@@ -160,6 +162,7 @@ class CotizacionController extends Controller
                 'observaciones' => $observaciones,
                 'propuesta_tecnica' => $validated['propuesta_tecnica'] ?? null,
                 'receta_servicio' => $validated['receta_servicio'] ?? null,
+                'exponentes_ids' => $validated['exponentes_ids'] ?? null,
             ]);
 
             // Crear detalles
@@ -197,6 +200,124 @@ class CotizacionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al crear la cotización: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualizar una cotización existente
+     */
+    public function update(Request $request, $id): JsonResponse
+    {
+        $cotizacion = Cotizacion::find($id);
+
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'id_cliente' => 'required|exists:cliente,id',
+            'id_multicim' => 'required|exists:multicim,id',
+            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion',
+            'fecha_emision' => 'nullable|date',
+            'incluye_igv' => 'sometimes|boolean',
+            'observaciones' => 'nullable|string',
+            'propuesta_tecnica' => 'nullable|string',
+            'receta_servicio' => 'nullable|array',
+            'exponentes_ids' => 'nullable|array',
+            'exponentes_ids.*' => 'integer|exists:exponentes,id',
+            'detalles' => 'required|array|min:1',
+            'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
+            'detalles.*.id_producto' => 'nullable|exists:productos,id',
+            'detalles.*.id_catalogo_cap_aud' => 'nullable|exists:catalogo_capacitacion_auditoria,id',
+            'detalles.*.descripcion_manual' => 'nullable|string',
+            'detalles.*.cantidad' => 'required|integer|min:1',
+            'detalles.*.precio_unitario' => 'required|numeric|min:0',
+            'detalles.*.frecuencia_sugerida' => 'nullable|string',
+            'detalles.*.modalidad_sugerida' => 'nullable|string',
+            'detalles.*.op_tecnicos' => 'nullable|string|max:255',
+            'detalles.*.supervisor' => 'nullable|string|max:255',
+            'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
+            'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'detalles.*.horas_capacitacion' => 'nullable|numeric|min:0',
+            'detalles.*.num_participantes' => 'nullable|integer|min:1',
+            'detalles.*.fecha_servicio' => 'nullable|date',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // Recalcular totales desde los detalles enviados
+            $subtotal = 0;
+            foreach ($validated['detalles'] as $detalle) {
+                $subtotal += $detalle['cantidad'] * $detalle['precio_unitario'];
+            }
+
+            $incluyeIgv = $validated['incluye_igv'] ?? true;
+            $igv = $incluyeIgv ? round($subtotal * 0.18, 2) : 0;
+            $total = $subtotal + $igv;
+
+            // Observación automática si no incluye IGV
+            $observaciones = $validated['observaciones'] ?? null;
+            if (!$incluyeIgv && empty($observaciones)) {
+                $observaciones = 'Esta cotización no incluye IGV.';
+            } elseif (!$incluyeIgv && $observaciones) {
+                $observaciones = $observaciones . ' | Nota: Esta cotización no incluye IGV.';
+            }
+
+            // Actualizar cabecera
+            $cotizacion->update([
+                'id_cliente' => $validated['id_cliente'],
+                'id_multicim' => $validated['id_multicim'],
+                'fecha_emision' => $validated['fecha_emision'] ?? $cotizacion->fecha_emision,
+                'tipo_cotizacion' => $validated['tipo_cotizacion'],
+                'incluye_igv' => $incluyeIgv,
+                'subtotal' => $subtotal,
+                'igv' => $igv,
+                'total' => $total,
+                'observaciones' => $observaciones,
+                'propuesta_tecnica' => $validated['propuesta_tecnica'] ?? null,
+                'receta_servicio' => $validated['receta_servicio'] ?? null,
+                'exponentes_ids' => $validated['exponentes_ids'] ?? null,
+            ]);
+
+            // Reemplazar detalles
+            $cotizacion->detalles()->delete();
+            foreach ($validated['detalles'] as $detalle) {
+                CotizacionDetalle::create([
+                    'id_cotizacion' => $cotizacion->id,
+                    'id_servicio' => $detalle['id_servicio'] ?? null,
+                    'id_producto' => $detalle['id_producto'] ?? null,
+                    'id_catalogo_cap_aud' => $detalle['id_catalogo_cap_aud'] ?? null,
+                    'descripcion_manual' => $detalle['descripcion_manual'] ?? null,
+                    'cantidad' => $detalle['cantidad'],
+                    'precio_unitario' => $detalle['precio_unitario'],
+                    'frecuencia_sugerida' => $detalle['frecuencia_sugerida'] ?? null,
+                    'modalidad_sugerida' => $detalle['modalidad_sugerida'] ?? null,
+                    'op_tecnicos' => $detalle['op_tecnicos'] ?? null,
+                    'supervisor' => $detalle['supervisor'] ?? null,
+                    'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
+                    'id_cliente_planta_area' => $detalle['id_cliente_planta_area'] ?? null,
+                    'horas_capacitacion' => $detalle['horas_capacitacion'] ?? null,
+                    'num_participantes' => $detalle['num_participantes'] ?? null,
+                    'fecha_servicio' => $detalle['fecha_servicio'] ?? null,
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cotización actualizada exitosamente',
+                'data' => $cotizacion->load('detalles', 'empresa')
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar la cotización: ' . $e->getMessage()
             ], 500);
         }
     }

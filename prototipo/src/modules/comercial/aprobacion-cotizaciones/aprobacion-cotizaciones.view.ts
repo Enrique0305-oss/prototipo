@@ -5,6 +5,7 @@ import { mostrarToast } from '../../../shared/toast';
 
 let allCotizaciones: any[] = [];
 let activeTab = 'Todas';
+const COTIZACION_EDIT_SESSION_KEY = 'cotizacion_edit_id';
 
 const TIPOS_TAB = [
   { key: 'Todas', label: 'Todas', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>' },
@@ -326,6 +327,9 @@ function renderTabla() {
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
             ' PDF' +
           '</button>' +
+          '<button class="aprob-btn-edit btn-editar-cotiz" data-id="' + c.id + '" title="Editar cotización">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>' +
+          '</button>' +
           '<button class="aprob-btn-view btn-ver-detalle" data-id="' + c.id + '" title="Ver detalle">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' +
           '</button>' +
@@ -376,6 +380,52 @@ function bindAccionesTabla() {
       await abrirDetalle(id);
     });
   });
+
+  // Editar cotización
+  document.querySelectorAll('.btn-editar-cotiz').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = Number((btn as HTMLElement).dataset.id);
+      if (!id) return;
+      irAEdicionCotizacion(id);
+    });
+  });
+}
+
+function irAEdicionCotizacion(id: number) {
+  sessionStorage.setItem(COTIZACION_EDIT_SESSION_KEY, String(id));
+
+  const abrirSubmenuCotizaciones = () => {
+    const subCotizaciones = document.querySelector('.submenu-item[data-submenu="Cotizaciones"]') as HTMLButtonElement | null;
+    if (!subCotizaciones) return false;
+    subCotizaciones.click();
+    return true;
+  };
+
+  if (abrirSubmenuCotizaciones()) {
+    return;
+  }
+
+  const comercialBtn = document.querySelector('.nav-item[data-menu="Comercial"]') as HTMLButtonElement | null;
+  if (!comercialBtn) {
+    mostrarToast('warning', 'Navegación', 'No se pudo abrir el módulo de Cotizaciones');
+    return;
+  }
+
+  comercialBtn.click();
+
+  let intentos = 0;
+  const timer = setInterval(() => {
+    intentos += 1;
+    if (abrirSubmenuCotizaciones()) {
+      clearInterval(timer);
+      return;
+    }
+
+    if (intentos >= 20) {
+      clearInterval(timer);
+      mostrarToast('warning', 'Navegación', 'No se encontró el acceso a Cotizaciones');
+    }
+  }, 100);
 }
 
 // ========================================

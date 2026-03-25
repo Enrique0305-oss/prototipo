@@ -24,7 +24,8 @@ class Cotizacion extends Model
         'total',
         'observaciones',
         'propuesta_tecnica',
-        'receta_servicio'
+        'receta_servicio',
+        'exponentes_ids'
     ];
 
     protected $casts = [
@@ -33,7 +34,8 @@ class Cotizacion extends Model
         'subtotal' => 'decimal:2',
         'igv' => 'decimal:2',
         'total' => 'decimal:2',
-        'receta_servicio' => 'array'
+        'receta_servicio' => 'array',
+        'exponentes_ids' => 'array'
     ];
 
     // Relaciones

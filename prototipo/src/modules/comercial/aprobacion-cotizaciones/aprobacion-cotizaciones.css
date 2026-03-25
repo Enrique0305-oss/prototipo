@@ -340,6 +340,23 @@
   border-color: #94a3b8;
 }
 
+.aprob-btn-edit {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .15s;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.aprob-btn-edit:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
 .aprob-btn-view {
   display: inline-flex;
   align-items: center;

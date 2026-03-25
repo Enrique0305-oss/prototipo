@@ -7,6 +7,35 @@ import type {
   EstadisticasCotizaciones,
 } from '../core/api/types';
 
+type CotizacionPayload = {
+  id_cliente: number;
+  id_multicim: number;
+  tipo_cotizacion: string;
+  fecha_emision?: string;
+  incluye_igv?: boolean;
+  observaciones?: string;
+  propuesta_tecnica?: string;
+  receta_servicio?: any[] | null;
+  exponentes_ids?: number[] | null;
+  detalles: Array<{
+    id_servicio?: number | null;
+    id_producto?: number | null;
+    id_catalogo_cap_aud?: number | null;
+    descripcion_manual?: string | null;
+    cantidad: number;
+    precio_unitario: number;
+    frecuencia_sugerida?: string | null;
+    modalidad_sugerida?: string | null;
+    op_tecnicos?: string | null;
+    supervisor?: string | null;
+    id_cliente_planta?: number | null;
+    id_cliente_planta_area?: number | null;
+    horas_capacitacion?: number | null;
+    num_participantes?: number | null;
+    fecha_servicio?: string | null;
+  }>;
+};
+
 export const cotizacionService = {
 
   getAll: async (filters?: CotizacionFilters & PaginationParams) => {
@@ -17,22 +46,12 @@ export const cotizacionService = {
     return apiClient.get<ApiResponse<EstadisticasCotizaciones>>('/cotizaciones/estadisticas/resumen');
   },
 
-  create: async (data: {
-    id_cliente: number;
-    tipo_cotizacion: string;
-    incluye_igv?: boolean;
-    observaciones?: string;
-    detalles: Array<{
-      id_servicio?: number | null;
-      id_producto?: number | null;
-      descripcion_manual?: string | null;
-      cantidad: number;
-      precio_unitario: number;
-      frecuencia_sugerida?: string | null;
-      modalidad_sugerida?: string | null;
-    }>;
-  }) => {
+  create: async (data: CotizacionPayload) => {
     return apiClient.post<ApiResponse<Cotizacion>>('/cotizaciones', data);
+  },
+
+  update: async (id: number, data: CotizacionPayload) => {
+    return apiClient.put<ApiResponse<Cotizacion>>(`/cotizaciones/${id}`, data);
   },
 
   getById: async (id: number) => {

@@ -4,6 +4,7 @@ import { clienteService } from '../../../services/clienteService';
 import { productoService } from '../../../services/productoService';
 import { servicioService } from '../../../services/servicioService';
 import { catalogoCapAudService } from '../../../services/catalogoCapAudService';
+import { exponenteService, type Exponente } from '../../../services/exponenteService';
 import { mostrarToast } from '../../../shared/toast';
 import type { Cotizacion, EstadisticasCotizaciones } from '../../../core/api/types';
 import { getCotizacionTipoAdapter, TAB_TO_TIPO } from './tipos';
@@ -59,6 +60,10 @@ let tabActivo = 'historial';
 const tabsInicializados: Record<string, boolean> = { servicio: false, producto: false, capacitacion: false };
 let quillKeydownController: AbortController | null = null;
 let formularioLoadController: AbortController | null = null;  // Para evitar condiciones de carrera
+let cotizacionEditandoId: number | null = null;
+let cotizacionEditandoTipo: string | null = null;
+let cotizacionEditandoNumero = '';
+const COTIZACION_EDIT_SESSION_KEY = 'cotizacion_edit_id';
 
 type RecetaServicioRow = {
   id_servicio: number;
@@ -72,6 +77,234 @@ type RecetaServicioRow = {
 };
 
 let recetaServicioRows: RecetaServicioRow[] = [];
+let exponentesData: Exponente[] = [];
+let selectedExponentesCotizacion: { id: number; nombre: string }[] = [];
+
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+function normalizarDiaNombre(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function construirFrecuenciaDiasHtml(lineaId: string): string {
+  const checks = DIAS_SEMANA.map(dia => {
+    return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#475569;"><input type="checkbox" class="frecuencia-dia-checkbox" value="${dia}"> ${dia.substring(0, 3)}</label>`;
+  }).join('');
+
+  return `<div class="frecuencia-dias-wrap" data-linea="${lineaId}" style="display:none;margin-top:6px;padding:6px;border:1px dashed #cbd5e1;border-radius:6px;background:#f8fafc;">
+    <div style="font-size:11px;color:#64748b;margin-bottom:4px;">Seleccione días</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">${checks}</div>
+  </div>`;
+}
+
+function limpiarFrecuenciaDias(fila: HTMLElement) {
+  fila.querySelectorAll('.frecuencia-dia-checkbox').forEach((el) => {
+    (el as HTMLInputElement).checked = false;
+  });
+}
+
+function actualizarUIFrecuenciaDias(fila: HTMLElement) {
+  const frecuenciaSelect = fila.querySelector('.frecuencia-input') as HTMLSelectElement | null;
+  const wrap = fila.querySelector('.frecuencia-dias-wrap') as HTMLElement | null;
+  if (!frecuenciaSelect || !wrap) return;
+
+  const mostrar = frecuenciaSelect.value === 'Días de la semana';
+  wrap.style.display = mostrar ? 'block' : 'none';
+  if (!mostrar) {
+    limpiarFrecuenciaDias(fila);
+  }
+}
+
+function frecuenciaSugeridaDesdeFila(fila: HTMLElement): string | null {
+  const frecuenciaSelect = fila.querySelector('.frecuencia-input') as HTMLSelectElement | null;
+  if (!frecuenciaSelect || !frecuenciaSelect.value) return null;
+
+  if (frecuenciaSelect.value !== 'Días de la semana') {
+    return frecuenciaSelect.value;
+  }
+
+  const dias = Array.from(fila.querySelectorAll('.frecuencia-dia-checkbox'))
+    .filter((el) => (el as HTMLInputElement).checked)
+    .map((el) => (el as HTMLInputElement).value);
+
+  if (dias.length === 0) {
+    return '__INVALID__';
+  }
+
+  const textoDias = dias.join(', ');
+  const etiquetaDias = dias.length === 1 ? 'día' : 'días';
+  return `${dias.length} ${etiquetaDias} a la semana (${textoDias})`;
+}
+
+function setFrecuenciaDiasDesdeTexto(fila: HTMLElement, frecuenciaTexto: string) {
+  if (!frecuenciaTexto) return;
+
+  const frecuenciaSelect = fila.querySelector('.frecuencia-input') as HTMLSelectElement | null;
+  if (!frecuenciaSelect) return;
+
+  const texto = frecuenciaTexto.trim();
+
+  const extraerDiasDesdeTexto = (raw: string): string[] => {
+    const found: string[] = [];
+    const normalizedRaw = normalizarDiaNombre(raw);
+
+    DIAS_SEMANA.forEach((dia) => {
+      const normDia = normalizarDiaNombre(dia);
+      if (new RegExp(`\\b${normDia}\\b`, 'i').test(normalizedRaw)) {
+        found.push(dia);
+      }
+    });
+
+    return found;
+  };
+
+  const diasDetectadosEnTexto = extraerDiasDesdeTexto(texto);
+  const esDiasSemana = diasDetectadosEnTexto.length > 0 || /semana/i.test(texto);
+  if (esDiasSemana) {
+    frecuenciaSelect.value = 'Días de la semana';
+  } else {
+    frecuenciaSelect.value = texto;
+  }
+
+  actualizarUIFrecuenciaDias(fila);
+  if (!esDiasSemana) return;
+
+  const diasEnTexto = (() => {
+    const m = texto.match(/\(([^)]+)\)/);
+    if (m?.[1]) return m[1].split(',').map(d => d.trim()).filter(Boolean);
+
+    if (diasDetectadosEnTexto.length > 0) {
+      return diasDetectadosEnTexto;
+    }
+
+    const split = texto.split(':');
+    if (split[1]) return split[1].split(',').map(d => d.trim()).filter(Boolean);
+
+    const splitGuion = texto.split('-');
+    if (splitGuion[1]) return splitGuion[1].split(',').map(d => d.trim()).filter(Boolean);
+
+    return [];
+  })();
+
+  const diasNorm = new Set(diasEnTexto.map(normalizarDiaNombre));
+  fila.querySelectorAll('.frecuencia-dia-checkbox').forEach((el) => {
+    const chk = el as HTMLInputElement;
+    chk.checked = diasNorm.has(normalizarDiaNombre(chk.value));
+  });
+}
+
+function renderExponenteTagsCotizacion(panelEl: HTMLElement) {
+  const container = panelEl.querySelector('#cot-exponentes-tags') as HTMLElement | null;
+  if (!container) return;
+
+  if (selectedExponentesCotizacion.length === 0) {
+    container.innerHTML = '<span style="color:#94a3b8;font-size:13px;">Ningún exponente seleccionado</span>';
+    return;
+  }
+
+  container.innerHTML = selectedExponentesCotizacion.map((e) => {
+    return '<span style="display:inline-flex;align-items:center;gap:4px;background:#fef3c7;color:#92400e;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:500;">'
+      + e.nombre
+      + ' <button type="button" class="btn-remove-exponente-cotiz" data-id="' + e.id + '" style="background:none;border:none;cursor:pointer;color:#92400e;font-size:16px;line-height:1;padding:0 2px;font-weight:700;">&times;</button>'
+      + '</span>';
+  }).join('');
+
+  container.querySelectorAll('.btn-remove-exponente-cotiz').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = Number((btn as HTMLElement).dataset.id || '0');
+      selectedExponentesCotizacion = selectedExponentesCotizacion.filter((e) => e.id !== id);
+      renderExponenteTagsCotizacion(panelEl);
+      actualizarSelectorExponentesCotizacion(panelEl);
+    });
+  });
+}
+
+function actualizarSelectorExponentesCotizacion(panelEl: HTMLElement) {
+  const select = panelEl.querySelector('#cot-exponente-selector') as HTMLSelectElement | null;
+  if (!select) return;
+
+  selectedExponentesCotizacion = selectedExponentesCotizacion.map((tag) => {
+    const full = exponentesData.find((e) => e.id === tag.id);
+    if (!full) return tag;
+    const nombre = [full.nombre, full.apellidos].filter(Boolean).join(' ').trim();
+    return { ...tag, nombre: nombre || tag.nombre };
+  });
+
+  const selectedIds = selectedExponentesCotizacion.map((e) => e.id);
+  const disponibles = exponentesData.filter((e) => !selectedIds.includes(e.id));
+
+  select.innerHTML = '<option value="">+ Agregar exponente...</option>'
+    + disponibles.map((e) => {
+      const nombre = [e.nombre, e.apellidos].filter(Boolean).join(' ').trim();
+      return '<option value="' + e.id + '">' + nombre + ' — ' + (e.especialidad || '') + '</option>';
+    }).join('');
+}
+
+async function cargarDropdownExponentesCotizacion(panelEl: HTMLElement) {
+  const select = panelEl.querySelector('#cot-exponente-selector') as HTMLSelectElement | null;
+  if (!select) return;
+
+  try {
+    const res = await exponenteService.getAll({ estado: 'Activo' });
+    const raw = (res as any).data || res;
+    exponentesData = Array.isArray(raw) ? raw : (raw as any).data || [];
+    actualizarSelectorExponentesCotizacion(panelEl);
+  } catch (e) {
+    console.error('Error cargando exponentes en cotización:', e);
+    select.innerHTML = '<option value="">Error al cargar</option>';
+  }
+}
+
+function initSelectorExponentesCotizacion(panelEl: HTMLElement) {
+  const select = panelEl.querySelector('#cot-exponente-selector') as HTMLSelectElement | null;
+  if (!select) return;
+
+  select.addEventListener('change', () => {
+    const id = Number(select.value || '0');
+    if (!id) return;
+
+    const exponente = exponentesData.find((e) => e.id === id);
+    if (!exponente) return;
+
+    const nombre = [exponente.nombre, exponente.apellidos].filter(Boolean).join(' ').trim();
+    if (!selectedExponentesCotizacion.some((e) => e.id === id)) {
+      selectedExponentesCotizacion.push({ id, nombre });
+    }
+
+    select.value = '';
+    renderExponenteTagsCotizacion(panelEl);
+    actualizarSelectorExponentesCotizacion(panelEl);
+  });
+}
+
+function aplicarDatosCapacitacionGlobalALinea(fila: HTMLElement, panelEl: HTMLElement) {
+  void fila;
+  void panelEl;
+}
+
+function aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl: HTMLElement) {
+  panelEl.querySelectorAll('#detalle-cotizacion-body tr').forEach((linea) => {
+    aplicarDatosCapacitacionGlobalALinea(linea as HTMLElement, panelEl);
+  });
+}
+
+function getGuardarButtonHtml(esEdicion: boolean): string {
+  if (esEdicion) {
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg> Actualizar Cotización';
+  }
+
+  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Guardar Cotización';
+}
+
+function resetEditarCotizacionState() {
+  cotizacionEditandoId = null;
+  cotizacionEditandoTipo = null;
+  cotizacionEditandoNumero = '';
+}
 
 //  RENDER PRINCIPAL 
 export function renderComercialCotizaciones(): string {
@@ -259,7 +492,10 @@ function renderizarTabla() {
         <td><strong>${total}</strong></td>
         <td>
           <div class="action-buttons">
-            <button class="action-btn-icon edit" data-action="pdf-cotiz" data-id="${cot.id}" title="Descargar PDF">
+            <button class="action-btn-icon edit" data-action="edit-cotiz" data-id="${cot.id}" title="Editar cotización">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+            </button>
+            <button class="action-btn-icon" style="color:#0ea5e9;" data-action="pdf-cotiz" data-id="${cot.id}" title="Descargar PDF">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
             </button>
           </div>
@@ -455,6 +691,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
   const hoy = new Date().toISOString().split('T')[0];
   incluyeIgv = true;
   contadorLineas = 0;
+  const esModoEdicion = cotizacionEditandoId !== null;
 
   // Sección especial para técnicos/supervisor SOLO para Servicio
   const seccionLimpiezaCisternas = tipoFijo === 'Servicio' ? `
@@ -473,6 +710,37 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     </div>
   ` : '';
 
+  const seccionExponentesCapacitacion = tipoFijo === 'Capacitacion' ? `
+    <div class="form-section" style="margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
+        <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Asignar Exponente(s)</h3>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(320px,2fr) repeat(3,minmax(140px,1fr));gap:12px;align-items:end;">
+        <div class="form-group">
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Exponente(s) <span style="color:#ef4444">*</span></label>
+          <div id="cot-exponentes-container" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;min-height:44px;background:#fff;">
+            <div id="cot-exponentes-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+            <select id="cot-exponente-selector" class="form-control" style="border:none;padding:4px 0;margin:0;box-shadow:none;width:100%;">
+              <option value="">+ Agregar exponente...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Fecha Servicio</label>
+          <input type="date" id="cot-cap-fecha-servicio" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+        </div>
+        <div class="form-group">
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Horas</label>
+          <input type="number" id="cot-cap-horas" class="form-control" value="0" min="0" step="0.5" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+        </div>
+        <div class="form-group">
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Participantes</label>
+          <input type="number" id="cot-cap-participantes" class="form-control" value="1" min="1" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+        </div>
+      </div>
+    </div>
+  ` : '';
+
   panelEl.innerHTML = `
     <div class="form-card" style="background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
       <form id="form-cotizacion">
@@ -481,7 +749,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
             <div class="form-group">
               <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">N° Cotización</label>
-              <input type="text" class="form-control" value="${numeroCotizacion || 'Generando...'}" readonly style="background: #f1f5f9; color: #1e293b; font-weight: 600; width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+              <input type="text" id="cot-numero" class="form-control" value="${numeroCotizacion || 'Generando...'}" readonly style="background: #f1f5f9; color: #1e293b; font-weight: 600; width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
             </div>
             <div class="form-group">
               <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Fecha de Emisión</label>
@@ -559,6 +827,8 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
             </div>
         </div>
 
+          ${seccionExponentesCapacitacion}
+
         <div class="form-section" style="margin-bottom: 24px;">
           ${seccionLimpiezaCisternas}
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
@@ -579,7 +849,6 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
                   <th style="width: 11%;">Precio Unit.</th>
                   <th style="width: 11%;">Frecuencia</th>
                   <th style="width: 10%;">Modalidad</th>
-                  ${tipoFijo === 'Capacitacion' ? '<th style="width: 8%;">Horas</th><th style="width: 8%;">Participantes</th><th style="width: 10%;">Fecha Servicio</th>' : ''}
                   <!-- Eliminado: técnicos/supervisor de capacitación -->
                   <th style="width: 9%;">Subtotal</th>
                   <th style="width: 3%;"></th>
@@ -642,11 +911,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
         <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
           <button type="button" class="btn-secondary" id="btn-cancelar-cotiz" style="padding:10px 24px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#475569;">Cancelar</button>
           <button type="submit" class="btn-primary" id="btn-guardar-cotiz" style="display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-              <polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline>
-            </svg>
-            Guardar Cotización
+            ${getGuardarButtonHtml(esModoEdicion)}
           </button>
         </div>
       </form>
@@ -854,6 +1119,12 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 
   // Eventos del formulario
   panelEl.querySelector('#btn-cancelar-cotiz')?.addEventListener('click', () => {
+    if (cotizacionEditandoId) {
+      resetEditarCotizacionState();
+      cerrarFormulario();
+      return;
+    }
+
     if (tipoFijo) {
       abrirFormularioCotizacion(tipoFijo);
     } else {
@@ -975,6 +1246,23 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     agregarLineaDetalle(tipo);
   });
 
+  if (tipoFijo === 'Capacitacion') {
+    selectedExponentesCotizacion = [];
+    renderExponenteTagsCotizacion(panelEl);
+    await cargarDropdownExponentesCotizacion(panelEl);
+    initSelectorExponentesCotizacion(panelEl);
+
+    panelEl.querySelector('#cot-cap-fecha-servicio')?.addEventListener('change', () => {
+      aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl);
+    });
+    panelEl.querySelector('#cot-cap-horas')?.addEventListener('input', () => {
+      aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl);
+    });
+    panelEl.querySelector('#cot-cap-participantes')?.addEventListener('input', () => {
+      aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl);
+    });
+  }
+
   if (tipoFijo === 'Servicio') {
     recetaServicioRows = [];
     renderRecetaServicio(panelEl);
@@ -1063,6 +1351,22 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 }
 
 function cerrarFormulario() {
+  resetEditarCotizacionState();
+  selectedExponentesCotizacion = [];
+  contadorLineas = 0;
+  recetaServicioRows = [];
+  incluyeIgv = true;
+
+  // Forzar recarga limpia de formularios cuando se vuelva a ingresar.
+  tabsInicializados.servicio = false;
+  tabsInicializados.producto = false;
+  tabsInicializados.capacitacion = false;
+
+  ['servicio', 'producto', 'capacitacion'].forEach(p => {
+    const formContainer = document.getElementById(`cotiz-form-${p}`);
+    if (formContainer) formContainer.innerHTML = '';
+  });
+
   ['servicio', 'producto', 'capacitacion'].forEach(p => {
     const panel = document.getElementById(`cotiz-panel-${p}`);
     if (panel) panel.style.display = 'none';
@@ -1093,6 +1397,12 @@ async function cargarPlantasCliente(idCliente: number) {
   document.querySelectorAll('#detalle-cotizacion-body .area-input').forEach(sel => {
     (sel as HTMLSelectElement).innerHTML = '<option value="">— Sin área —</option>';
   });
+  document.querySelectorAll('#detalle-cotizacion-body .area-input-multi').forEach(sel => {
+    (sel as HTMLSelectElement).innerHTML = '';
+  });
+  document.querySelectorAll('#detalle-cotizacion-body tr').forEach((row) => {
+    bindAreaMultiInteractions(row as HTMLElement);
+  });
 }
 
 function getPlantaOptions(): string {
@@ -1101,11 +1411,80 @@ function getPlantaOptions(): string {
     .map((p: any) => `<option value="${p.id}">${p.nombre}</option>`).join('');
 }
 
-function getAreaOptions(idPlanta: number): string {
+function getAreaOptions(idPlanta: number, includePlaceholder = true): string {
   const planta = plantasClienteData.find((p: any) => p.id === idPlanta);
   const areas = (planta?.areas_activas || planta?.areas || []).filter((a: any) => a.estado === 'Activo');
-  return '<option value="">— Sin área —</option>' + areas
+  const base = includePlaceholder ? '<option value="">— Sin área —</option>' : '';
+  return base + areas
     .map((a: any) => `<option value="${a.id}">${a.nombre}</option>`).join('');
+}
+
+function getAreaIdsFromRow(row: Element, tipoCotizacion: string): number[] {
+  if (tipoCotizacion === 'Servicio') {
+    const multi = row.querySelector('.area-input-multi') as HTMLSelectElement | null;
+    if (!multi) return [];
+    return Array.from(multi.selectedOptions)
+      .map((opt) => parseInt(opt.value || '0', 10))
+      .filter((id) => id > 0);
+  }
+
+  const single = row.querySelector('.area-input') as HTMLSelectElement | null;
+  const id = parseInt(single?.value || '0', 10);
+  return id > 0 ? [id] : [];
+}
+
+function actualizarResumenAreasFila(fila: HTMLElement) {
+  const multi = fila.querySelector('.area-input-multi') as HTMLSelectElement | null;
+  const resumen = fila.querySelector('.area-multi-summary') as HTMLElement | null;
+  if (!multi || !resumen) return;
+
+  const seleccionadas = Array.from(multi.selectedOptions)
+    .map(opt => opt.text.trim())
+    .filter(Boolean);
+
+  if (seleccionadas.length === 0) {
+    resumen.textContent = 'Sin áreas seleccionadas';
+    resumen.style.color = '#94a3b8';
+    return;
+  }
+
+  resumen.style.color = '#334155';
+  if (seleccionadas.length <= 2) {
+    resumen.textContent = seleccionadas.join(', ');
+    return;
+  }
+
+  resumen.textContent = `${seleccionadas.length} áreas seleccionadas: ${seleccionadas.slice(0, 2).join(', ')}...`;
+}
+
+function bindAreaMultiInteractions(fila: HTMLElement) {
+  const multi = fila.querySelector('.area-input-multi') as HTMLSelectElement | null;
+  if (!multi) return;
+
+  if (!(multi as any)._areaMultiBound) {
+    multi.addEventListener('change', () => actualizarResumenAreasFila(fila));
+    (multi as any)._areaMultiBound = true;
+  }
+
+  const btnAll = fila.querySelector('.area-select-all') as HTMLButtonElement | null;
+  if (btnAll && !(btnAll as any)._areaMultiBound) {
+    btnAll.addEventListener('click', () => {
+      Array.from(multi.options).forEach((opt) => { opt.selected = true; });
+      actualizarResumenAreasFila(fila);
+    });
+    (btnAll as any)._areaMultiBound = true;
+  }
+
+  const btnClear = fila.querySelector('.area-clear-all') as HTMLButtonElement | null;
+  if (btnClear && !(btnClear as any)._areaMultiBound) {
+    btnClear.addEventListener('click', () => {
+      Array.from(multi.options).forEach((opt) => { opt.selected = false; });
+      actualizarResumenAreasFila(fila);
+    });
+    (btnClear as any)._areaMultiBound = true;
+  }
+
+  actualizarResumenAreasFila(fila);
 }
 
 function getActivePanelElement(): HTMLElement | null {
@@ -1123,6 +1502,230 @@ function getActivePanelElement(): HTMLElement | null {
   // Fallback: usar tabActivo
   console.log('[UTIL] ⚠️ No se encontró panel visible, usando tabActivo:', tabActivo);
   return document.getElementById(`cotiz-panel-${tabActivo}`) as HTMLElement | null;
+}
+
+function getTabKeyByTipo(tipo: string): string | null {
+  for (const [tabKey, tabTipo] of Object.entries(TAB_TO_TIPO)) {
+    if (tabTipo === tipo) return tabKey;
+  }
+  return null;
+}
+
+function getDetalleItemValue(detalle: any): string {
+  if (detalle?.id_servicio) return `s-${detalle.id_servicio}`;
+  if (detalle?.id_producto) return `p-${detalle.id_producto}`;
+  if (detalle?.id_catalogo_cap_aud) return `c-${detalle.id_catalogo_cap_aud}`;
+  return '';
+}
+
+function activarTabCotizacion(tabKey: string) {
+  document.querySelectorAll('.cotiz-tab').forEach(t => {
+    const el = t as HTMLElement;
+    const isActive = el.dataset.tab === tabKey;
+    el.style.borderBottomColor = isActive ? '#2563eb' : 'transparent';
+    el.style.color = isActive ? '#2563eb' : '#64748b';
+    el.style.fontWeight = isActive ? '600' : '500';
+  });
+
+  ['historial', 'servicio', 'producto', 'capacitacion'].forEach(p => {
+    const panel = document.getElementById(`cotiz-panel-${p}`);
+    if (panel) panel.style.display = (p === tabKey) ? 'block' : 'none';
+  });
+
+  tabActivo = tabKey;
+}
+
+async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
+  const tipo = cotizacion?.tipo_cotizacion || cotizacion?.tipo;
+  const detalles = Array.isArray(cotizacion?.detalles) ? cotizacion.detalles : [];
+
+  const numeroInput = panelEl.querySelector('#cot-numero') as HTMLInputElement | null;
+  if (numeroInput) {
+    numeroInput.value = cotizacion?.numero_cotizacion || cotizacion?.numero || '';
+  }
+
+  const fechaInput = panelEl.querySelector('#cot-fecha') as HTMLInputElement | null;
+  if (fechaInput && cotizacion?.fecha_emision) {
+    fechaInput.value = String(cotizacion.fecha_emision).split('T')[0];
+  }
+
+  const tipoInput = panelEl.querySelector('#cot-tipo') as HTMLInputElement | HTMLSelectElement | null;
+  if (tipoInput && tipo) {
+    tipoInput.value = tipo;
+  }
+
+  const clienteId = Number(cotizacion?.id_cliente || cotizacion?.cliente?.id || 0);
+  const clienteNombre = cotizacion?.cliente?.nombre_empresa || cotizacion?.cliente_nombre || '';
+  const clienteRuc = cotizacion?.cliente?.ruc || '';
+  const clienteLabel = [clienteNombre, clienteRuc].filter(Boolean).join(' - ');
+
+  const clienteHidden = panelEl.querySelector('#cot-cliente') as HTMLInputElement | null;
+  const clienteSearch = panelEl.querySelector('#cot-cliente-search') as HTMLInputElement | null;
+  if (clienteHidden) clienteHidden.value = clienteId ? String(clienteId) : '';
+  if (clienteSearch) clienteSearch.value = clienteLabel;
+
+  if (clienteId) {
+    await cargarPlantasCliente(clienteId);
+  }
+
+  const multicimSelect = panelEl.querySelector('#cot-multicim') as HTMLSelectElement | null;
+  if (multicimSelect && cotizacion?.id_multicim) {
+    multicimSelect.value = String(cotizacion.id_multicim);
+  }
+
+  const incluye = cotizacion?.incluye_igv !== false;
+  incluyeIgv = incluye;
+  const igvSelect = panelEl.querySelector('#cot-igv') as HTMLSelectElement | null;
+  if (igvSelect) {
+    igvSelect.value = incluye ? '1' : '0';
+  }
+  const igvRow = panelEl.querySelector('#igv-row') as HTMLElement | null;
+  if (igvRow) {
+    igvRow.style.display = incluye ? 'flex' : 'none';
+  }
+
+  const observacionesInput = panelEl.querySelector('#cot-observaciones') as HTMLInputElement | null;
+  if (observacionesInput) {
+    observacionesInput.value = cotizacion?.observaciones || '';
+  }
+
+  if (tipo === 'Capacitacion') {
+    const expRaw = Array.isArray(cotizacion?.exponentes) ? cotizacion.exponentes : [];
+    const expIdsRaw = Array.isArray(cotizacion?.exponentes_ids) ? cotizacion.exponentes_ids : [];
+    selectedExponentesCotizacion = expRaw
+      .map((e: any) => {
+        const id = Number(e?.id || 0);
+        const nombre = [e?.nombre, e?.apellidos].filter(Boolean).join(' ').trim();
+        return id > 0 ? { id, nombre: nombre || `Exponente ${id}` } : null;
+      })
+      .filter(Boolean) as { id: number; nombre: string }[];
+
+    if (selectedExponentesCotizacion.length === 0 && expIdsRaw.length > 0) {
+      selectedExponentesCotizacion = expIdsRaw
+        .map((id: any) => Number(id || 0))
+        .filter((id: number) => id > 0)
+        .map((id: number) => ({ id, nombre: `Exponente ${id}` }));
+    }
+
+    renderExponenteTagsCotizacion(panelEl);
+    actualizarSelectorExponentesCotizacion(panelEl);
+    renderExponenteTagsCotizacion(panelEl);
+
+    const primerDetalleCap = detalles.find((d: any) => d?.id_catalogo_cap_aud || d?.horas_capacitacion || d?.num_participantes || d?.fecha_servicio) || detalles[0];
+    const fechaGlobalInput = panelEl.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null;
+    const horasGlobalInput = panelEl.querySelector('#cot-cap-horas') as HTMLInputElement | null;
+    const participantesGlobalInput = panelEl.querySelector('#cot-cap-participantes') as HTMLInputElement | null;
+
+    if (fechaGlobalInput) {
+      fechaGlobalInput.value = primerDetalleCap?.fecha_servicio ? String(primerDetalleCap.fecha_servicio).split('T')[0] : '';
+    }
+    if (horasGlobalInput) {
+      horasGlobalInput.value = String(primerDetalleCap?.horas_capacitacion ?? 0);
+    }
+    if (participantesGlobalInput) {
+      participantesGlobalInput.value = String(primerDetalleCap?.num_participantes ?? 1);
+    }
+  }
+
+  if (quillInstance) {
+    quillInstance.root.innerHTML = cotizacion?.propuesta_tecnica || '';
+  }
+
+  const tbody = panelEl.querySelector('#detalle-cotizacion-body') as HTMLElement | null;
+  if (!tbody || !tipo) return;
+
+  tbody.innerHTML = '';
+  contadorLineas = 0;
+
+  const opTecnicosDetalle = detalles.find((d: any) => d?.op_tecnicos)?.op_tecnicos || '';
+  const supervisorDetalle = detalles.find((d: any) => d?.supervisor)?.supervisor || '';
+
+  for (const detalle of detalles) {
+    agregarLineaDetalle(tipo);
+    const fila = tbody.lastElementChild as HTMLElement | null;
+    if (!fila) continue;
+
+    const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement | null;
+    const itemValue = getDetalleItemValue(detalle);
+    if (itemSelect && itemValue) {
+      itemSelect.value = itemValue;
+      itemSelect.dispatchEvent(new Event('change'));
+    }
+
+    const cantidadInput = fila.querySelector('.cantidad-input') as HTMLInputElement | null;
+    if (cantidadInput) cantidadInput.value = String(detalle?.cantidad ?? 1);
+
+    const precioInput = fila.querySelector('.precio-input') as HTMLInputElement | null;
+    if (precioInput) precioInput.value = String(detalle?.precio_unitario ?? 0);
+
+    const plantaSelect = fila.querySelector('.planta-input') as HTMLSelectElement | null;
+    if (plantaSelect) {
+      const plantaVal = detalle?.id_cliente_planta ? String(detalle.id_cliente_planta) : '';
+      plantaSelect.value = plantaVal;
+      plantaSelect.dispatchEvent(new Event('change'));
+    }
+
+    const areaSelect = fila.querySelector('.area-input') as HTMLSelectElement | null;
+    const areaMultiSelect = fila.querySelector('.area-input-multi') as HTMLSelectElement | null;
+    if (areaSelect) {
+      areaSelect.value = detalle?.id_cliente_planta_area ? String(detalle.id_cliente_planta_area) : '';
+    }
+    if (areaMultiSelect && detalle?.id_cliente_planta_area) {
+      Array.from(areaMultiSelect.options).forEach((opt) => {
+        opt.selected = Number(opt.value) === Number(detalle.id_cliente_planta_area);
+      });
+      actualizarResumenAreasFila(fila);
+    }
+
+    const frecuenciaSelect = fila.querySelector('.frecuencia-input') as HTMLSelectElement | null;
+    if (frecuenciaSelect) {
+      setFrecuenciaDiasDesdeTexto(fila, detalle?.frecuencia_sugerida || '');
+    }
+
+    const modalidadSelect = fila.querySelector('.modalidad-input') as HTMLSelectElement | null;
+    if (modalidadSelect) {
+      modalidadSelect.value = detalle?.modalidad_sugerida || '';
+    }
+
+    calcularSubtotalLinea(fila.id);
+  }
+
+  if (tipo === 'Capacitacion') {
+    aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl);
+  }
+
+  if (tipo === 'Servicio') {
+    const seccionLimpieza = panelEl.querySelector('#seccion-limpieza-cisternas') as HTMLElement | null;
+    if (seccionLimpieza) {
+      const opInput = seccionLimpieza.querySelector('#input-op-tecnicos') as HTMLInputElement | null;
+      const supInput = seccionLimpieza.querySelector('#input-supervisor') as HTMLInputElement | null;
+      if (opInput) opInput.value = String(opTecnicosDetalle || 0);
+      if (supInput) supInput.value = String(supervisorDetalle || 0);
+    }
+
+    recetaServicioRows = Array.isArray(cotizacion?.receta_servicio)
+      ? cotizacion.receta_servicio.map((row: any) => ({
+          id_servicio: Number(row?.id_servicio || 0),
+          id_equipo: row?.id_equipo ? Number(row.id_equipo) : null,
+          equipo_descripcion: row?.equipo_descripcion || '',
+          id_producto: Number(row?.id_producto || 0),
+          cantidad: Number(row?.cantidad || 0),
+          observacion: row?.observacion || '',
+          id_cliente_planta: row?.id_cliente_planta ? Number(row.id_cliente_planta) : null,
+          id_cliente_planta_area: row?.id_cliente_planta_area ? Number(row.id_cliente_planta_area) : null,
+        }))
+      : [];
+
+    renderRecetaServicio(panelEl);
+    actualizarSeccionLimpiezaCisternas(panelEl);
+  }
+
+  calcularTotales();
+
+  const submitBtn = panelEl.querySelector('#btn-guardar-cotiz') as HTMLButtonElement | null;
+  if (submitBtn) {
+    submitBtn.innerHTML = getGuardarButtonHtml(true);
+  }
 }
 
 function agregarLineaDetalle(tipo?: string) {
@@ -1194,9 +1797,21 @@ function agregarLineaDetalle(tipo?: string) {
         </select>
       </td>
       <td>
-        <select class="area-input" style="${selectStyle}">
-          <option value="">— Sin área —</option>
-        </select>
+        ${tipo === 'Servicio'
+          ? `<div class="area-multi-wrapper" style="display:flex;flex-direction:column;gap:4px;">
+               <select class="area-input-multi" multiple style="${selectStyle}min-height:88px;">
+                 ${''}
+               </select>
+               <div style="display:flex;gap:6px;">
+                 <button type="button" class="area-select-all" style="padding:2px 8px;border:1px solid #cbd5e1;background:#fff;border-radius:999px;font-size:11px;color:#475569;cursor:pointer;">Todas</button>
+                 <button type="button" class="area-clear-all" style="padding:2px 8px;border:1px solid #cbd5e1;background:#fff;border-radius:999px;font-size:11px;color:#475569;cursor:pointer;">Limpiar</button>
+               </div>
+               <small style="display:block;color:#64748b;font-size:11px;">Use Ctrl para selección manual múltiple</small>
+               <small class="area-multi-summary" style="display:block;font-size:11px;">Sin áreas seleccionadas</small>
+             </div>`
+          : `<select class="area-input" style="${selectStyle}">
+               <option value="">— Sin área —</option>
+             </select>`}
       </td>
       <td>
         <input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}${disabledCantidadStyle}" ${disabledCantidad}>
@@ -1216,6 +1831,7 @@ function agregarLineaDetalle(tipo?: string) {
           <option value="Semestral">Semestral</option>
           <option value="Anual">Anual</option>
         </select>
+        ${construirFrecuenciaDiasHtml(lineaId)}
       </td>
       <td>
         <select class="modalidad-input" style="${selectStyle}${disabledModalidadStyle}" ${disabledModalidad}>
@@ -1226,17 +1842,6 @@ function agregarLineaDetalle(tipo?: string) {
           <option value="Asíncrona">Asíncrona</option>
         </select>
       </td>
-      ${tipo === 'Capacitacion' ? `
-      <td>
-        <input type="number" class="horas-input" value="0" min="0" step="0.5" style="${inputStyle}">
-      </td>
-      <td>
-        <input type="number" class="participantes-input" value="1" min="1" style="${inputStyle}">
-      </td>
-      <td>
-        <input type="date" class="fecha-servicio-input" style="${inputStyle}">
-      </td>
-      ` : ''}
       <!-- Eliminado: técnicos/supervisor de capacitación -->
       <td>
         <strong class="subtotal-linea" style="font-size:13px;">S/ 0.00</strong>
@@ -1253,6 +1858,13 @@ function agregarLineaDetalle(tipo?: string) {
     tbody.insertAdjacentHTML('beforeend', nuevaLinea);
 
     const fila = document.getElementById(lineaId)!;
+
+    if (tipo === 'Capacitacion') {
+      const panelCap = getActivePanelElement();
+      if (panelCap) {
+        aplicarDatosCapacitacionGlobalALinea(fila, panelCap);
+      }
+    }
 
     // Auto-llenar precio al seleccionar item
     const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
@@ -1274,9 +1886,27 @@ function agregarLineaDetalle(tipo?: string) {
     // Cascading: planta → áreas dentro de la fila
     const plantaSelect = fila.querySelector('.planta-input') as HTMLSelectElement;
     plantaSelect?.addEventListener('change', () => {
-      const areaSelect = fila.querySelector('.area-input') as HTMLSelectElement;
+      const areaSelect = fila.querySelector('.area-input') as HTMLSelectElement | null;
+      const areaMultiSelect = fila.querySelector('.area-input-multi') as HTMLSelectElement | null;
       const pid = parseInt(plantaSelect.value || '0');
-      if (areaSelect) areaSelect.innerHTML = pid ? getAreaOptions(pid) : '<option value="">— Sin área —</option>';
+      if (areaSelect) areaSelect.innerHTML = pid ? getAreaOptions(pid, true) : '<option value="">— Sin área —</option>';
+      if (areaMultiSelect) {
+        areaMultiSelect.innerHTML = pid ? getAreaOptions(pid, false) : '';
+        bindAreaMultiInteractions(fila);
+      }
+    });
+
+    bindAreaMultiInteractions(fila);
+
+    const frecuenciaSelect = fila.querySelector('.frecuencia-input') as HTMLSelectElement | null;
+    frecuenciaSelect?.addEventListener('change', () => actualizarUIFrecuenciaDias(fila));
+
+    fila.querySelectorAll('.frecuencia-dia-checkbox').forEach((el) => {
+      el.addEventListener('change', () => {
+        if ((fila.querySelector('.frecuencia-input') as HTMLSelectElement | null)?.value !== 'Días de la semana') {
+          (el as HTMLInputElement).checked = false;
+        }
+      });
     });
 
     fila.querySelector('.cantidad-input')?.addEventListener('input', () => calcularSubtotalLinea(lineaId));
@@ -1383,17 +2013,22 @@ function getServiceLineGroups(panelEl: HTMLElement): Array<{ idServicio: number;
     if (!idServicio) return;
 
     const plantaSel = row.querySelector('.planta-input') as HTMLSelectElement;
-    const areaSel = row.querySelector('.area-input') as HTMLSelectElement;
+    const areaSel = row.querySelector('.area-input') as HTMLSelectElement | null;
+    const areaMultiSel = row.querySelector('.area-input-multi') as HTMLSelectElement | null;
     const idPlanta = parseInt(plantaSel?.value || '0', 10) || null;
-    const idArea = parseInt(areaSel?.value || '0', 10) || null;
     const servicioNombre = itemSel.options[itemSel.selectedIndex]?.text || `Servicio #${idServicio}`;
     const plantaNombre = (plantaSel && plantaSel.selectedIndex > 0) ? (plantaSel.options[plantaSel.selectedIndex]?.text || '') : '';
-    const areaNombre = (areaSel && areaSel.selectedIndex > 0) ? (areaSel.options[areaSel.selectedIndex]?.text || '') : '';
+    const selectedAreas = areaMultiSel
+      ? Array.from(areaMultiSel.selectedOptions).map(opt => ({ idArea: parseInt(opt.value || '0', 10) || null, areaNombre: opt.text || '' }))
+      : [{ idArea: parseInt(areaSel?.value || '0', 10) || null, areaNombre: (areaSel && areaSel.selectedIndex > 0) ? (areaSel.options[areaSel.selectedIndex]?.text || '') : '' }];
 
-    const key = `${idServicio}-${idPlanta || 0}-${idArea || 0}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    groups.push({ idServicio, idPlanta, idArea, servicioNombre, plantaNombre, areaNombre });
+    const areasParaProcesar = selectedAreas.length > 0 ? selectedAreas : [{ idArea: null, areaNombre: '' }];
+    areasParaProcesar.forEach(({ idArea, areaNombre }) => {
+      const key = `${idServicio}-${idPlanta || 0}-${idArea || 0}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      groups.push({ idServicio, idPlanta, idArea, servicioNombre, plantaNombre, areaNombre });
+    });
   });
   return groups;
 }
@@ -1568,6 +2203,7 @@ async function guardarCotizacion(tipoFijo?: string) {
   
   const multicimId = parseInt((panelActivoElement.querySelector('#cot-multicim') as HTMLSelectElement)?.value || '0');
   const clienteId = parseInt((panelActivoElement.querySelector('#cot-cliente') as HTMLInputElement)?.value || '0');
+  const fechaEmision = (panelActivoElement.querySelector('#cot-fecha') as HTMLInputElement)?.value || '';
   const tipoCotizacion = (panelActivoElement.querySelector('#cot-tipo') as HTMLSelectElement)?.value;
   const observaciones = (panelActivoElement.querySelector('#cot-observaciones') as HTMLInputElement)?.value?.trim();  
   const propuestaHtml = quillInstance ? quillInstance.root.innerHTML : '';
@@ -1581,6 +2217,11 @@ async function guardarCotizacion(tipoFijo?: string) {
 
   if (!clienteId || !tipoCotizacion) {
     mostrarToast('warning', 'Campos obligatorios', 'Seleccione cliente y tipo de cotización');
+    return;
+  }
+
+  if (tipoCotizacion === 'Capacitacion' && selectedExponentesCotizacion.length === 0) {
+    mostrarToast('warning', 'Campo obligatorio', 'Seleccione al menos un exponente para la cotización de capacitación');
     return;
   }
 
@@ -1605,21 +2246,36 @@ async function guardarCotizacion(tipoFijo?: string) {
     ? ((seccionLimpieza.querySelector('#input-supervisor') as HTMLInputElement | null)?.value?.trim() || null)
     : null;
 
+  const horasCapacitacionGlobal = tipoCotizacion === 'Capacitacion'
+    ? parseFloat((panelActivoElement.querySelector('#cot-cap-horas') as HTMLInputElement | null)?.value || '0')
+    : null;
+  const numParticipantesGlobal = tipoCotizacion === 'Capacitacion'
+    ? parseInt((panelActivoElement.querySelector('#cot-cap-participantes') as HTMLInputElement | null)?.value || '1', 10)
+    : null;
+  const fechaServicioGlobal = tipoCotizacion === 'Capacitacion'
+    ? ((panelActivoElement.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null)?.value || null)
+    : null;
+
   const detalles: any[] = [];
+  let frecuenciaDiasInvalida = false;
   lineas.forEach(linea => {
     const itemSelect = linea.querySelector('.item-select') as HTMLSelectElement;
     const itemValue = itemSelect?.value || '';
     const cantidad = parseInt((linea.querySelector('.cantidad-input') as HTMLInputElement)?.value || '1');
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
-    const frecuencia = (linea.querySelector('.frecuencia-input') as HTMLSelectElement)?.value || null;
+    const frecuenciaRaw = frecuenciaSugeridaDesdeFila(linea as HTMLElement);
+    if (frecuenciaRaw === '__INVALID__') {
+      frecuenciaDiasInvalida = true;
+    }
+    const frecuencia = frecuenciaRaw && frecuenciaRaw !== '__INVALID__' ? frecuenciaRaw : null;
     const modalidad = (linea.querySelector('.modalidad-input') as HTMLSelectElement)?.value || null;
     const opTecnicos = opTecnicosGlobal;
     const supervisor = supervisorGlobal;
     const plantaVal = parseInt((linea.querySelector('.planta-input') as HTMLSelectElement)?.value || '0') || null;
-    const areaVal = parseInt((linea.querySelector('.area-input') as HTMLSelectElement)?.value || '0') || null;
-    const horasCapacitacion = tipoCotizacion === 'Capacitacion' ? parseFloat((linea.querySelector('.horas-input') as HTMLInputElement)?.value || '0') : null;
-    const numParticipantes = tipoCotizacion === 'Capacitacion' ? parseInt((linea.querySelector('.participantes-input') as HTMLInputElement)?.value || '1') : null;
-    const fechaServicio = tipoCotizacion === 'Capacitacion' ? (linea.querySelector('.fecha-servicio-input') as HTMLInputElement)?.value || null : null;
+    const areaIds = getAreaIdsFromRow(linea, tipoCotizacion);
+    const horasCapacitacion = tipoCotizacion === 'Capacitacion' ? horasCapacitacionGlobal : null;
+    const numParticipantes = tipoCotizacion === 'Capacitacion' ? numParticipantesGlobal : null;
+    const fechaServicio = tipoCotizacion === 'Capacitacion' ? fechaServicioGlobal : null;
 
     const {
       id_servicio,
@@ -1627,61 +2283,85 @@ async function guardarCotizacion(tipoFijo?: string) {
       id_catalogo_cap_aud,
     } = tipoAdapter.parseSelectedItem(itemValue);
 
-    detalles.push({
-      id_servicio,
-      id_producto,
-      id_catalogo_cap_aud,
-      cantidad,
-      precio_unitario: precio,
-      frecuencia_sugerida: frecuencia,
-      modalidad_sugerida: modalidad,
-      op_tecnicos: opTecnicos,
-      supervisor,
-      id_cliente_planta: plantaVal,
-      id_cliente_planta_area: areaVal,
-      horas_capacitacion: horasCapacitacion,
-      num_participantes: numParticipantes,
-      fecha_servicio: fechaServicio,
+    const areasExpandibles = (tipoCotizacion === 'Servicio' && areaIds.length > 0) ? areaIds : [null];
+    areasExpandibles.forEach((areaVal) => {
+      detalles.push({
+        id_servicio,
+        id_producto,
+        id_catalogo_cap_aud,
+        cantidad,
+        precio_unitario: precio,
+        frecuencia_sugerida: frecuencia,
+        modalidad_sugerida: modalidad,
+        op_tecnicos: opTecnicos,
+        supervisor,
+        id_cliente_planta: plantaVal,
+        id_cliente_planta_area: areaVal,
+        horas_capacitacion: horasCapacitacion,
+        num_participantes: numParticipantes,
+        fecha_servicio: fechaServicio,
+      });
     });
   });
+
+  if (frecuenciaDiasInvalida) {
+    mostrarToast('warning', 'Frecuencia incompleta', 'Si selecciona "Días de la semana", debe marcar al menos un día.');
+    return;
+  }
 
   const data = {
     id_multicim: multicimId,
     id_cliente: clienteId,
     tipo_cotizacion: tipoCotizacion,
+    fecha_emision: fechaEmision || undefined,
     incluye_igv: incluyeIgv,
     observaciones: observaciones || undefined,
     propuesta_tecnica: propuestaHtml,
     receta_servicio: tipoCotizacion === 'Servicio' && recetaServicioRows.length > 0 ? recetaServicioRows : null,
+    exponentes_ids: tipoCotizacion === 'Capacitacion'
+      ? selectedExponentesCotizacion.map((e) => e.id)
+      : null,
     detalles
   };
 
-  const submitBtn = document.getElementById('btn-guardar-cotiz') as HTMLButtonElement;
+  const submitBtn = panelActivoElement.querySelector('#btn-guardar-cotiz') as HTMLButtonElement | null;
+  const esEdicion = cotizacionEditandoId !== null && cotizacionEditandoTipo === tipoCotizacion;
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Guardando...'; }
 
   try {
-    const response = await cotizacionService.create(data);
+    const response = esEdicion
+      ? await cotizacionService.update(Number(cotizacionEditandoId), data)
+      : await cotizacionService.create(data);
+
     if (response.success !== false) {
-      mostrarToast('success', 'Cotización creada', 'La cotización fue registrada exitosamente');
+      mostrarToast(
+        'success',
+        esEdicion ? 'Cotización actualizada' : 'Cotización creada',
+        esEdicion
+          ? `Se actualizó correctamente ${cotizacionEditandoNumero || `#${cotizacionEditandoId}`}`
+          : 'La cotización fue registrada exitosamente',
+      );
 
-      // Generar PDF automáticamente
-      const nuevaId = response.data?.id;
-      if (nuevaId) {
-        mostrarToast('success', 'PDF', 'Generando PDF de la cotización...');
-        try {
-          await cotizacionService.downloadPDF(nuevaId);
-        } catch (e) {
-          console.error('Error generando PDF:', e);
-        }
-
-        // Guardar receta de servicio si tipo es Servicio y hay receta
-        if (tipoCotizacion === 'Servicio' && recetaServicioRows.length > 0) {
+      if (!esEdicion) {
+        // Generar PDF automáticamente al crear
+        const nuevaId = response.data?.id;
+        if (nuevaId) {
+          mostrarToast('success', 'PDF', 'Generando PDF de la cotización...');
           try {
-            await cotizacionService.updateReceta(nuevaId, recetaServicioRows);
-            mostrarToast('success', 'Receta guardada', 'La receta de servicio fue almacenada correctamente');
+            await cotizacionService.downloadPDF(nuevaId);
           } catch (e) {
-            console.error('Error guardando receta:', e);
-            mostrarToast('warning', 'Aviso', 'La cotización se guardó pero la receta no pudo almacenarse');
+            console.error('Error generando PDF:', e);
+          }
+
+          // Guardar receta de servicio si tipo es Servicio y hay receta
+          if (tipoCotizacion === 'Servicio' && recetaServicioRows.length > 0) {
+            try {
+              await cotizacionService.updateReceta(nuevaId, recetaServicioRows);
+              mostrarToast('success', 'Receta guardada', 'La receta de servicio fue almacenada correctamente');
+            } catch (e) {
+              console.error('Error guardando receta:', e);
+              mostrarToast('warning', 'Aviso', 'La cotización se guardó pero la receta no pudo almacenarse');
+            }
           }
         }
       }
@@ -1697,15 +2377,18 @@ async function guardarCotizacion(tipoFijo?: string) {
           }
         });
       }
-      
-      if (tipoFijo) {
+
+      if (esEdicion) {
+        resetEditarCotizacionState();
+        cerrarFormulario();
+      } else if (tipoFijo) {
         await abrirFormularioCotizacion(tipoFijo);
       } else {
         cerrarFormulario();
       }
     }
   } catch (error: any) {
-    let msg = 'Error al crear la cotización';
+    let msg = esEdicion ? 'Error al actualizar la cotización' : 'Error al crear la cotización';
     if (error.data?.errors) {
       msg = Object.entries(error.data.errors).map(([f, m]: [string, any]) => `${f}: ${Array.isArray(m) ? m.join(', ') : m}`).join('\n');
     } else if (error.data?.message) {
@@ -1715,7 +2398,7 @@ async function guardarCotizacion(tipoFijo?: string) {
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Guardar Cotización`;
+      submitBtn.innerHTML = getGuardarButtonHtml(cotizacionEditandoId !== null);
     }
   }
 }
@@ -1727,6 +2410,53 @@ async function descargarPDF(id: number) {
     await cotizacionService.downloadPDF(id);
   } catch (error) {
     mostrarToast('error', 'Error', 'No se pudo descargar el PDF');
+  }
+}
+
+async function editarCotizacion(id: number) {
+  try {
+    const res = await cotizacionService.getById(id);
+    const cotizacion = (res as any).data || res;
+    const tipo = cotizacion?.tipo_cotizacion || cotizacion?.tipo;
+    const tabKey = getTabKeyByTipo(tipo);
+
+    if (!tabKey || !tipo) {
+      mostrarToast('error', 'Error', 'No se pudo identificar el tipo de cotización para editar');
+      return;
+    }
+
+    cotizacionEditandoId = id;
+    cotizacionEditandoTipo = tipo;
+    cotizacionEditandoNumero = cotizacion?.numero_cotizacion || cotizacion?.numero || `#${id}`;
+
+    if (formularioLoadController) {
+      try {
+        (formularioLoadController as AbortController).abort();
+      } catch (err) {
+        console.warn('[EDIT] Error al abortar carga anterior:', err);
+      }
+    }
+    formularioLoadController = new AbortController();
+
+    tabsInicializados[tabKey] = false;
+    activarTabCotizacion(tabKey);
+    await abrirFormularioCotizacion(tipo);
+    tabsInicializados[tabKey] = true;
+
+    const panel = document.getElementById(`cotiz-panel-${tabKey}`) as HTMLElement | null;
+    if (!panel || !panel.querySelector('#form-cotizacion')) {
+      mostrarToast('error', 'Error', 'No se pudo abrir el formulario de edición');
+      resetEditarCotizacionState();
+      return;
+    }
+
+    await poblarFormularioEdicion(panel, cotizacion);
+    mostrarToast('success', 'Modo edición', `Editando ${cotizacionEditandoNumero}`);
+  } catch (error: any) {
+    console.error('Error cargando cotización para edición:', error);
+    const msg = error?.data?.message || 'No se pudo cargar la cotización para editar';
+    mostrarToast('error', 'Error', msg);
+    resetEditarCotizacionState();
   }
 }
 
@@ -1760,6 +2490,7 @@ export function initCotizacionesEvents() {
         tabsInicializados.servicio = false;
         tabsInicializados.producto = false;
         tabsInicializados.capacitacion = false;
+        resetEditarCotizacionState();
         console.log('[TABS] 🔄 Regresando a Historial - Flags resetados');
       }
       
@@ -1838,7 +2569,16 @@ export function initCotizacionesEvents() {
     if (!id) return;
 
     switch (action) {
+      case 'edit-cotiz': editarCotizacion(id); break;
       case 'pdf-cotiz': descargarPDF(id); break;
     }
   });
+
+  const pendingEditId = parseInt(sessionStorage.getItem(COTIZACION_EDIT_SESSION_KEY) || '0', 10);
+  if (pendingEditId > 0) {
+    sessionStorage.removeItem(COTIZACION_EDIT_SESSION_KEY);
+    setTimeout(() => {
+      void editarCotizacion(pendingEditId);
+    }, 50);
+  }
 }

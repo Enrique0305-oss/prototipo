@@ -159,7 +159,7 @@
                 NÚMERO DE PROPUESTA &ndash; {{ $cotizacion->numero_cotizacion }}
             </div>
             <div class="propuesta-fecha">
-                {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->isoFormat('D [de] MMMM [de] YYYY') }}
+                {{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->locale('es')->translatedFormat('j \\d\\e F \\d\\e Y') }}
             </div>
 
             <!-- I. PROPUESTA TÉCNICA -->
@@ -282,7 +282,19 @@
 
             @if($mostrarServicioFosfina)
                 @php
-                    $frecuenciaFosfina = $detalleFosfina?->frecuencia_sugerida ?? 'A solicitud';
+                    $frecuenciaFosfinaRaw = trim((string)($detalleFosfina?->frecuencia_sugerida ?? ''));
+                    $frecuenciaFosfina = $frecuenciaFosfinaRaw !== '' ? $frecuenciaFosfinaRaw : 'A solicitud';
+                    if ($frecuenciaFosfinaRaw !== '') {
+                        if (preg_match('/\(([^)]+)\)/u', $frecuenciaFosfinaRaw, $m)) {
+                            $dias = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
+                            if (count($dias) > 0) {
+                                $frecuenciaFosfina = count($dias) . ' ' . (count($dias) === 1 ? 'día' : 'días') . ' a la semana';
+                            }
+                        } elseif (preg_match('/^(\d+)\s*d[ií]a(?:s)?\s+a\s+la\s+semana/iu', $frecuenciaFosfinaRaw, $m2)) {
+                            $n = (int)$m2[1];
+                            $frecuenciaFosfina = $n . ' ' . ($n === 1 ? 'día' : 'días') . ' a la semana';
+                        }
+                    }
                     $cantidadFosfina = $detalleFosfina?->cantidad ?? 1;
                     $tratamientoFosfina = $detalleFosfina?->servicio?->nombre ?? 'DESINSECTACIÓN QUÍMICA CON FOSFINA';
                     $productosFosfina = 'EN GENERAL';
@@ -372,7 +384,19 @@
                                 if ($planta) {
                                     $area = $planta->areasActivas()->find($detalle->id_cliente_planta_area) ?? $planta->areas()->find($detalle->id_cliente_planta_area);
                                 }
-                                $frecuencia = $detalle->frecuencia_sugerida ?? '';
+                                $frecuenciaRaw = trim((string)($detalle->frecuencia_sugerida ?? ''));
+                                $frecuencia = $frecuenciaRaw;
+                                if ($frecuenciaRaw !== '') {
+                                    if (preg_match('/\(([^)]+)\)/u', $frecuenciaRaw, $m)) {
+                                        $dias = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
+                                        if (count($dias) > 0) {
+                                            $frecuencia = count($dias) . ' ' . (count($dias) === 1 ? 'día' : 'días') . ' a la semana';
+                                        }
+                                    } elseif (preg_match('/^(\d+)\s*d[ií]a(?:s)?\s+a\s+la\s+semana/iu', $frecuenciaRaw, $m2)) {
+                                        $n = (int)$m2[1];
+                                        $frecuencia = $n . ' ' . ($n === 1 ? 'día' : 'días') . ' a la semana';
+                                    }
+                                }
                                 
                                 // Obtener tratamiento asociado a este detalle.
                                 // Reglas:
@@ -380,34 +404,58 @@
                                 // 2) Si no hay equipo, mostrar dispositivo explícito.
                                 // 3) Si no hay ambos, usar producto SOLO si su categoría es Dispositivos.
                                 // 4) Si no hay dato válido, no mostrar texto de relleno.
-                                $productosDetalle = [];
+                                $tratamientosDetalle = [];
                                 if ($cotizacion->receta_servicio) {
                                     foreach ($cotizacion->receta_servicio as $receta) {
                                         if (($receta['id_servicio'] ?? null) == $detalle->id_servicio) {
                                             $equipo = trim((string)($receta['equipo_descripcion'] ?? ''));
                                             $dispositivo = trim((string)($receta['dispositivo_descripcion'] ?? ''));
                                             $idProductoReceta = $receta['id_producto'] ?? null;
+                                            $cantidadReceta = is_numeric($receta['cantidad'] ?? null) ? (float)$receta['cantidad'] : 0;
 
                                             $dispositivoPorCategoria = '';
+                                            $unidadReceta = trim((string)($receta['unidad'] ?? ''));
                                             if (!empty($idProductoReceta)) {
                                                 $prodReceta = \App\Models\Producto::with('categoria')->find($idProductoReceta);
+                                                if ($unidadReceta === '') {
+                                                    $unidadReceta = trim((string)($prodReceta->unidad ?? ''));
+                                                }
                                                 if ($prodReceta && $prodReceta->categoria && stripos($prodReceta->categoria->nombre, 'dispositivo') !== false) {
                                                     $dispositivoPorCategoria = trim((string)($prodReceta->descripcion ?? ''));
                                                 }
                                             }
 
+                                            if ($unidadReceta === '') {
+                                                $unidadReceta = 'Und.';
+                                            }
+
                                             $tratamiento = '';
+                                            $esDispositivo = false;
                                             if ($equipo !== '' && strcasecmp($equipo, 'Sin equipo') !== 0) {
                                                 $tratamiento = $equipo;
                                             } elseif ($dispositivo !== '' && strcasecmp($dispositivo, 'Sin dispositivo') !== 0) {
                                                 $tratamiento = $dispositivo;
+                                                $esDispositivo = true;
                                             } elseif ($dispositivoPorCategoria !== '') {
                                                 $tratamiento = $dispositivoPorCategoria;
+                                                $esDispositivo = true;
                                             }
 
                                             // evitar repetidos y vacíos
                                             if ($tratamiento !== '') {
-                                                $productosDetalle[$tratamiento] = $tratamiento;
+                                                $key = strtolower($tratamiento . '|' . ($esDispositivo ? $unidadReceta : 'equipo'));
+                                                if (!isset($tratamientosDetalle[$key])) {
+                                                    $tratamientosDetalle[$key] = [
+                                                        'nombre' => $tratamiento,
+                                                        'cantidad' => 0,
+                                                        'unidad' => $unidadReceta,
+                                                        'mostrar_cantidad' => $esDispositivo,
+                                                    ];
+                                                }
+
+                                                if ($esDispositivo) {
+                                                    $tratamientosDetalle[$key]['cantidad'] += $cantidadReceta;
+                                                }
                                             }
                                         }
                                     }
@@ -418,21 +466,17 @@
                                     {{ $servicio?->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}
                                 </td>
                                 <td>
-                                    @if(count($productosDetalle) > 0)
-                                        @foreach($productosDetalle as $equipo)
-                                            <small>{{ $equipo }}</small><br>
+                                    @if(count($tratamientosDetalle) > 0)
+                                        @foreach($tratamientosDetalle as $item)
+                                            <small>
+                                                {{ $item['nombre'] }}
+                                                @if($item['mostrar_cantidad'] ?? false)
+                                                    - {{ rtrim(rtrim(number_format($item['cantidad'] ?? 0, 2, '.', ''), '0'), '.') }} {{ $item['unidad'] }}
+                                                @endif
+                                            </small><br>
                                         @endforeach
                                     @endif
                                 </td>
-
-                                <!-- POR SI SE REQUIERE DE NUEVO EQUIPO Y PRODUCTO @foreach($productosDetalle as $prod)
-                                            @php
-                                                $producto = \App\Models\Producto::find($prod['id_producto'] ?? null);
-                                                $equipo = $prod['equipo_descripcion'] ?? 'Sin equipo';
-                                            @endphp
-                                            <small>{{ $equipo }}: {{ $producto?->descripcion ?? 'Producto no encontrado' }}</small><br>
-                                        @endforeach
-                                     -->
                                      
                                 <td>
                                     @if($planta)

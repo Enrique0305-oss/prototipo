@@ -26,6 +26,7 @@ import { renderComercialOrdenesProducto, initOrdenesProductoEvents } from './mod
 import { renderComercialOrdenesCapacitacion, initOrdenesCapacitacionEvents } from './modules/comercial/ordenes-capacitacion/ordenes-capacitacion.view'
 import { renderComercialConversiones } from './modules/comercial/conversiones/conversiones.view'
 import { renderAprobacionCotizaciones, initAprobacionCotizacionesEvents } from './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.view'
+import './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.css'
 import { renderComercialExponentes, initExponentesEvents } from './modules/comercial/exponentes/exponentes.view'
 // Finanzas
 import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
