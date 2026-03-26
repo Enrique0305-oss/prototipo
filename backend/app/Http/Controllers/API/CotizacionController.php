@@ -77,7 +77,7 @@ class CotizacionController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $cotizacion = Cotizacion::with(['cliente', 'creador', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'detalles.planta', 'detalles.area'])
+        $cotizacion = Cotizacion::with(['cliente', 'creador', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'detalles.planta', 'detalles.area', 'beneficios.catalogoCapAud'])
                                 ->find($id);
 
         if (!$cotizacion) {
@@ -108,6 +108,13 @@ class CotizacionController extends Controller
             'receta_servicio' => 'nullable|array',
             'exponentes_ids' => 'nullable|array',
             'exponentes_ids.*' => 'integer|exists:exponentes,id',
+            'beneficios_servicio' => 'nullable|array',
+            'beneficios_servicio.*.id_catalogo_cap_aud' => 'nullable|integer|exists:catalogo_capacitacion_auditoria,id',
+            'beneficios_servicio.*.nombre_beneficio' => 'required_with:beneficios_servicio|string|max:255',
+            'beneficios_servicio.*.modalidad_sugerida' => 'nullable|string|max:80',
+            'beneficios_servicio.*.horas_capacitacion' => 'nullable|numeric|min:0',
+            'beneficios_servicio.*.precio_referencial' => 'nullable|numeric|min:0',
+            'beneficios_servicio.*.observacion' => 'nullable|string|max:255',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
             'detalles.*.id_producto' => 'nullable|exists:productos,id',
@@ -187,6 +194,21 @@ class CotizacionController extends Controller
                 ]);
             }
 
+            if (($validated['tipo_cotizacion'] ?? '') === 'Servicio') {
+                $beneficios = $validated['beneficios_servicio'] ?? [];
+                foreach ($beneficios as $i => $beneficio) {
+                    $cotizacion->beneficios()->create([
+                        'id_catalogo_cap_aud' => $beneficio['id_catalogo_cap_aud'] ?? null,
+                        'nombre_beneficio' => $beneficio['nombre_beneficio'],
+                        'modalidad_sugerida' => $beneficio['modalidad_sugerida'] ?? null,
+                        'horas_capacitacion' => $beneficio['horas_capacitacion'] ?? null,
+                        'precio_referencial' => $beneficio['precio_referencial'] ?? 0,
+                        'observacion' => $beneficio['observacion'] ?? null,
+                        'orden' => $i + 1,
+                    ]);
+                }
+            }
+
             DB::commit();
 
             return response()->json([
@@ -229,6 +251,13 @@ class CotizacionController extends Controller
             'receta_servicio' => 'nullable|array',
             'exponentes_ids' => 'nullable|array',
             'exponentes_ids.*' => 'integer|exists:exponentes,id',
+            'beneficios_servicio' => 'nullable|array',
+            'beneficios_servicio.*.id_catalogo_cap_aud' => 'nullable|integer|exists:catalogo_capacitacion_auditoria,id',
+            'beneficios_servicio.*.nombre_beneficio' => 'required_with:beneficios_servicio|string|max:255',
+            'beneficios_servicio.*.modalidad_sugerida' => 'nullable|string|max:80',
+            'beneficios_servicio.*.horas_capacitacion' => 'nullable|numeric|min:0',
+            'beneficios_servicio.*.precio_referencial' => 'nullable|numeric|min:0',
+            'beneficios_servicio.*.observacion' => 'nullable|string|max:255',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
             'detalles.*.id_producto' => 'nullable|exists:productos,id',
@@ -304,6 +333,22 @@ class CotizacionController extends Controller
                     'num_participantes' => $detalle['num_participantes'] ?? null,
                     'fecha_servicio' => $detalle['fecha_servicio'] ?? null,
                 ]);
+            }
+
+            $cotizacion->beneficios()->delete();
+            if (($validated['tipo_cotizacion'] ?? '') === 'Servicio') {
+                $beneficios = $validated['beneficios_servicio'] ?? [];
+                foreach ($beneficios as $i => $beneficio) {
+                    $cotizacion->beneficios()->create([
+                        'id_catalogo_cap_aud' => $beneficio['id_catalogo_cap_aud'] ?? null,
+                        'nombre_beneficio' => $beneficio['nombre_beneficio'],
+                        'modalidad_sugerida' => $beneficio['modalidad_sugerida'] ?? null,
+                        'horas_capacitacion' => $beneficio['horas_capacitacion'] ?? null,
+                        'precio_referencial' => $beneficio['precio_referencial'] ?? 0,
+                        'observacion' => $beneficio['observacion'] ?? null,
+                        'orden' => $i + 1,
+                    ]);
+                }
             }
 
             DB::commit();
@@ -457,7 +502,8 @@ class CotizacionController extends Controller
             'detalles.servicio', 
             'detalles.producto', 
             'detalles.catalogoCapAud', 
-            'creador'
+            'creador',
+            'beneficios.catalogoCapAud'
         ])->find($id);
 
         if (!$cotizacion) {

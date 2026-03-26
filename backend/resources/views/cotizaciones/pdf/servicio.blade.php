@@ -280,6 +280,8 @@
                 @endif
             </div>
 
+            
+
             @if($mostrarServicioFosfina)
                 @php
                     $frecuenciaFosfinaRaw = trim((string)($detalleFosfina?->frecuencia_sugerida ?? ''));
@@ -794,6 +796,28 @@
                     </p>
                 @endif
             </div>
+            
+            @if(isset($cotizacion->beneficios) && $cotizacion->beneficios->count() > 0)
+                <div style="margin-top: 10px; margin-bottom: 12px; font-weight: 700; text-decoration: underline; font-size: 16px;">BENEFICIOS</div>
+                <table class="products-table" style="margin-bottom: 12px; width: 100%;">
+                    <thead>
+                        <tr>
+                            <th style="width: 66%;">SERVICIO</th>
+                            <th style="width: 17%; text-align:center;">TIEMPO</th>
+                            <th style="width: 17%; text-align:center;">PRECIO S/.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($cotizacion->beneficios as $beneficio)
+                            <tr>
+                                <td>{{ $beneficio->nombre_beneficio }}@if($beneficio->modalidad_sugerida) (modalidad {{ strtolower($beneficio->modalidad_sugerida) }})@endif</td>
+                                <td style="text-align:center;">{{ $beneficio->horas_capacitacion ? rtrim(rtrim(number_format((float)$beneficio->horas_capacitacion, 2, '.', ''), '0'), '.') . ' HORAS' : '-' }}</td>
+                                <td style="text-align:center;">GRATIS</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
 
             <!-- SECCIÃ“N DE PAGOS -->
             <div class="payment-section">

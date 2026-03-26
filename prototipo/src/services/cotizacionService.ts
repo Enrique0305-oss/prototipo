@@ -17,6 +17,14 @@ type CotizacionPayload = {
   propuesta_tecnica?: string;
   receta_servicio?: any[] | null;
   exponentes_ids?: number[] | null;
+  beneficios_servicio?: Array<{
+    id_catalogo_cap_aud?: number | null;
+    nombre_beneficio: string;
+    modalidad_sugerida?: string | null;
+    horas_capacitacion?: number | null;
+    precio_referencial?: number | null;
+    observacion?: string | null;
+  }> | null;
   detalles: Array<{
     id_servicio?: number | null;
     id_producto?: number | null;

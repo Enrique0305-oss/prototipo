@@ -59,6 +59,11 @@ class Cotizacion extends Model
         return $this->hasMany(CotizacionDetalle::class, 'id_cotizacion');
     }
 
+    public function beneficios()
+    {
+        return $this->hasMany(CotizacionBeneficio::class, 'id_cotizacion')->orderBy('orden');
+    }
+
     public function ordenServicio()
     {
         return $this->hasOne(OrdenServicio::class, 'id_cotizacion');

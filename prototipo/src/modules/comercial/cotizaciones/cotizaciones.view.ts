@@ -77,6 +77,15 @@ type RecetaServicioRow = {
 };
 
 let recetaServicioRows: RecetaServicioRow[] = [];
+type BeneficioServicioRow = {
+  id_catalogo_cap_aud: number | null;
+  nombre_beneficio: string;
+  modalidad_sugerida: string | null;
+  horas_capacitacion: number | null;
+  precio_referencial: number;
+  observacion: string;
+};
+let beneficiosServicioRows: BeneficioServicioRow[] = [];
 let exponentesData: Exponente[] = [];
 let selectedExponentesCotizacion: { id: number; nombre: string }[] = [];
 
@@ -289,6 +298,129 @@ function aplicarDatosCapacitacionGlobalALinea(fila: HTMLElement, panelEl: HTMLEl
 function aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl: HTMLElement) {
   panelEl.querySelectorAll('#detalle-cotizacion-body tr').forEach((linea) => {
     aplicarDatosCapacitacionGlobalALinea(linea as HTMLElement, panelEl);
+  });
+}
+
+function getCatalogoCapacitacionOptions(selectedId: number | null): string {
+  const catalogo = (window as any).__catalogoCapAudData || [];
+  const rows = catalogo.filter((c: any) => String(c?.tipo || '').toLowerCase().includes('capacit'));
+  let opts = '<option value="">Seleccione capacitación...</option>';
+  rows.forEach((c: any) => {
+    const sel = Number(c.id) === Number(selectedId || 0) ? 'selected' : '';
+    opts += `<option value="${c.id}" ${sel} data-nombre="${String(c.nombre || '').replace(/"/g, '&quot;')}" data-horas="${Number(c.duracion_horas || 0)}">${c.nombre}</option>`;
+  });
+  return opts;
+}
+
+function renderBeneficiosServicio(panelEl: HTMLElement) {
+  const wrap = panelEl.querySelector('#beneficios-servicio-wrap') as HTMLElement | null;
+  const tbody = panelEl.querySelector('#beneficios-servicio-body') as HTMLElement | null;
+  const empty = panelEl.querySelector('#beneficios-servicio-empty') as HTMLElement | null;
+  const chk = panelEl.querySelector('#chk-beneficios-servicio') as HTMLInputElement | null;
+  if (!wrap || !tbody || !empty || !chk) return;
+
+  wrap.style.display = chk.checked ? 'block' : 'none';
+  if (!chk.checked) return;
+
+  if (beneficiosServicioRows.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = beneficiosServicioRows.map((b, idx) => {
+    return `<tr>
+      <td style="padding:8px;border-bottom:1px solid #eef2f7;">${b.nombre_beneficio || '-'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eef2f7;">${b.modalidad_sugerida || '-'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eef2f7;text-align:center;">${b.horas_capacitacion ?? '-'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eef2f7;">GRATIS</td>
+      <td style="padding:8px;border-bottom:1px solid #eef2f7;text-align:center;">
+        <button type="button" class="btn-del-beneficio" data-idx="${idx}" style="background:none;border:none;cursor:pointer;color:#ef4444;">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  wrap.querySelectorAll('.btn-del-beneficio').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const idx = Number((e.currentTarget as HTMLButtonElement).dataset.idx || '-1');
+      if (idx < 0 || !beneficiosServicioRows[idx]) return;
+      beneficiosServicioRows.splice(idx, 1);
+      renderBeneficiosServicio(panelEl);
+    });
+  });
+}
+
+function abrirModalBeneficioServicio(panelEl: HTMLElement) {
+  let overlay = document.getElementById('cotiz-beneficios-modal-overlay') as HTMLElement | null;
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement('div');
+  overlay.id = 'cotiz-beneficios-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:12000;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;width:680px;max-width:95vw;max-height:90vh;overflow:auto;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.2);">
+      <h3 style="margin:0 0 12px;font-size:18px;color:#1e293b;">Agregar beneficio de capacitación</h3>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;align-items:end;">
+        <div>
+          <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;">Capacitación</label>
+          <select id="benef-cat" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">${getCatalogoCapacitacionOptions(null)}</select>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;">Modalidad</label>
+          <select id="benef-mod" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">
+            <option value="">Seleccione...</option>
+            <option value="Presencial">Presencial</option>
+            <option value="Virtual">Virtual</option>
+            <option value="Híbrido">Híbrido</option>
+            <option value="Asíncrona">Asíncrona</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;">Horas</label>
+          <input id="benef-hrs" type="number" min="0" step="0.5" value="0" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;" />
+        </div>
+      </div>
+      <div style="margin-top:10px;">
+        <label style="display:block;font-size:12px;color:#475569;margin-bottom:4px;">Observación</label>
+        <input id="benef-obs" type="text" maxlength="255" placeholder="Opcional" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;" />
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+        <button id="benef-cancel" type="button" style="padding:8px 14px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#475569;">Cancelar</button>
+        <button id="benef-add" type="button" style="padding:8px 14px;border:none;border-radius:8px;background:#2563eb;color:#fff;">Agregar beneficio</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const sel = overlay.querySelector('#benef-cat') as HTMLSelectElement;
+  const hrs = overlay.querySelector('#benef-hrs') as HTMLInputElement;
+  sel?.addEventListener('change', () => {
+    const opt = sel.options[sel.selectedIndex];
+    const horas = Number(opt?.dataset?.horas || 0);
+    if (horas > 0) hrs.value = String(horas);
+  });
+
+  overlay.querySelector('#benef-cancel')?.addEventListener('click', () => overlay?.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay?.remove(); });
+  overlay.querySelector('#benef-add')?.addEventListener('click', () => {
+    const id = Number((overlay?.querySelector('#benef-cat') as HTMLSelectElement).value || '0');
+    const opt = (overlay?.querySelector('#benef-cat') as HTMLSelectElement).selectedOptions[0];
+    const nombre = String(opt?.dataset?.nombre || opt?.text || '').trim();
+    if (!id || !nombre) {
+      mostrarToast('warning', 'Dato requerido', 'Seleccione una capacitación para el beneficio');
+      return;
+    }
+    beneficiosServicioRows.push({
+      id_catalogo_cap_aud: id,
+      nombre_beneficio: nombre,
+      modalidad_sugerida: (overlay?.querySelector('#benef-mod') as HTMLSelectElement).value || null,
+      horas_capacitacion: parseFloat((overlay?.querySelector('#benef-hrs') as HTMLInputElement).value || '0') || 0,
+      precio_referencial: 0,
+      observacion: (overlay?.querySelector('#benef-obs') as HTMLInputElement).value || '',
+    });
+    renderBeneficiosServicio(panelEl);
+    overlay?.remove();
   });
 }
 
@@ -891,6 +1023,35 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
         </div>
         ` : ''}
 
+        ${tipoFijo === 'Servicio' ? `
+        <div class="form-section" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;padding:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#334155;font-weight:600;cursor:pointer;">
+              <input type="checkbox" id="chk-beneficios-servicio" style="width:16px;height:16px;">
+              Incluir beneficios (capacitaciones gratis)
+            </label>
+            <button type="button" id="btn-gestionar-beneficios" class="btn-secondary" style="padding:6px 10px;font-size:12px;display:none;">Gestionar beneficios</button>
+          </div>
+          <div id="beneficios-servicio-wrap" style="display:none;margin-top:10px;">
+            <div class="table-container" style="max-height:260px;overflow:auto;">
+              <table class="data-table" style="min-width:700px;">
+                <thead>
+                  <tr>
+                    <th>Capacitación</th>
+                    <th>Modalidad</th>
+                    <th style="text-align:center;">Tiempo</th>
+                    <th>Precio</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="beneficios-servicio-body"></tbody>
+              </table>
+            </div>
+            <div id="beneficios-servicio-empty" style="text-align:center;padding:10px;color:#94a3b8;font-size:12px;">Sin beneficios registrados.</div>
+          </div>
+        </div>
+        ` : ''}
+
         <div class="form-section" style="margin-bottom: 24px;">
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
             <div style="display: flex; justify-content: space-between; width: 280px;">
@@ -1265,7 +1426,17 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 
   if (tipoFijo === 'Servicio') {
     recetaServicioRows = [];
+    beneficiosServicioRows = [];
     renderRecetaServicio(panelEl);
+    renderBeneficiosServicio(panelEl);
+
+    const chkBenef = panelEl.querySelector('#chk-beneficios-servicio') as HTMLInputElement | null;
+    const btnGestBenef = panelEl.querySelector('#btn-gestionar-beneficios') as HTMLButtonElement | null;
+    chkBenef?.addEventListener('change', () => {
+      if (btnGestBenef) btnGestBenef.style.display = chkBenef.checked ? 'inline-flex' : 'none';
+      renderBeneficiosServicio(panelEl);
+    });
+    btnGestBenef?.addEventListener('click', () => abrirModalBeneficioServicio(panelEl));
 
     panelEl.querySelector('#btn-cargar-receta-servicio')?.addEventListener('click', () => {
       void cargarRecetaServicioDesdeDetalle(panelEl);
@@ -1715,6 +1886,22 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
           id_cliente_planta_area: row?.id_cliente_planta_area ? Number(row.id_cliente_planta_area) : null,
         }))
       : [];
+
+    const beneficiosRaw = Array.isArray(cotizacion?.beneficios) ? cotizacion.beneficios : [];
+    beneficiosServicioRows = beneficiosRaw.map((b: any) => ({
+      id_catalogo_cap_aud: b?.id_catalogo_cap_aud ? Number(b.id_catalogo_cap_aud) : null,
+      nombre_beneficio: b?.nombre_beneficio || b?.catalogo_cap_aud?.nombre || 'Beneficio',
+      modalidad_sugerida: b?.modalidad_sugerida || null,
+      horas_capacitacion: b?.horas_capacitacion !== null && b?.horas_capacitacion !== undefined ? Number(b.horas_capacitacion) : null,
+      precio_referencial: Number(b?.precio_referencial || 0),
+      observacion: b?.observacion || '',
+    }));
+
+    const chkBenef = panelEl.querySelector('#chk-beneficios-servicio') as HTMLInputElement | null;
+    const btnGestBenef = panelEl.querySelector('#btn-gestionar-beneficios') as HTMLButtonElement | null;
+    if (chkBenef) chkBenef.checked = beneficiosServicioRows.length > 0;
+    if (btnGestBenef) btnGestBenef.style.display = (chkBenef?.checked ? 'inline-flex' : 'none');
+    renderBeneficiosServicio(panelEl);
 
     renderRecetaServicio(panelEl);
     actualizarSeccionLimpiezaCisternas(panelEl);
@@ -2220,6 +2407,14 @@ async function guardarCotizacion(tipoFijo?: string) {
     return;
   }
 
+  if (tipoCotizacion === 'Servicio') {
+    const chkBenef = panelActivoElement.querySelector('#chk-beneficios-servicio') as HTMLInputElement | null;
+    if (chkBenef?.checked && beneficiosServicioRows.length === 0) {
+      mostrarToast('warning', 'Beneficios incompletos', 'Activó beneficios, pero aún no agregó ninguna capacitación gratuita.');
+      return;
+    }
+  }
+
   if (tipoCotizacion === 'Capacitacion' && selectedExponentesCotizacion.length === 0) {
     mostrarToast('warning', 'Campo obligatorio', 'Seleccione al menos un exponente para la cotización de capacitación');
     return;
@@ -2318,6 +2513,19 @@ async function guardarCotizacion(tipoFijo?: string) {
     observaciones: observaciones || undefined,
     propuesta_tecnica: propuestaHtml,
     receta_servicio: tipoCotizacion === 'Servicio' && recetaServicioRows.length > 0 ? recetaServicioRows : null,
+    beneficios_servicio: (() => {
+      if (tipoCotizacion !== 'Servicio') return null;
+      const chkBenef = panelActivoElement.querySelector('#chk-beneficios-servicio') as HTMLInputElement | null;
+      if (!chkBenef?.checked) return null;
+      return beneficiosServicioRows.map((b) => ({
+        id_catalogo_cap_aud: b.id_catalogo_cap_aud,
+        nombre_beneficio: b.nombre_beneficio,
+        modalidad_sugerida: b.modalidad_sugerida,
+        horas_capacitacion: b.horas_capacitacion,
+        precio_referencial: 0,
+        observacion: b.observacion || null,
+      }));
+    })(),
     exponentes_ids: tipoCotizacion === 'Capacitacion'
       ? selectedExponentesCotizacion.map((e) => e.id)
       : null,
