@@ -1046,7 +1046,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
             </div>
           </div>
           <div style="font-size:12px;color:#64748b;margin-bottom:8px;">Cargue la receta según los servicios seleccionados y ajuste productos según criterio del cliente.</div>
-          <div class="table-container" style="max-height:320px;overflow:auto;">
+          <div class="table-container" style="max-height:620px;overflow:auto;">
             <table class="data-table" style="min-width: 900px;">
               <thead>
                 <tr>
