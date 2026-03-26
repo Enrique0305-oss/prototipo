@@ -955,7 +955,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 
             <div id="editor-wrapper" style="display: none;">
                 <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Use el editor para dar formato a los objetivos y actividades tal cual aparecerán en el PDF.</p>
-                <div id="editor-propuesta" style="height: 600px; background: #fff;"></div>
+                <div id="editor-propuesta" style="height: 200px; background: #fff;"></div>
             </div>
         </div>
 
