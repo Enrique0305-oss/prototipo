@@ -26,7 +26,10 @@ class CotizacionDetalle extends Model
         'supervisor',
         'horas_capacitacion',
         'num_participantes',
-        'fecha_servicio'
+        'fecha_servicio',
+        'medida_tanque',
+        'fosfina_producto',
+        'fosfina_cantidad'
     ];
 
     protected $casts = [

@@ -297,22 +297,13 @@
                             $frecuenciaFosfina = $n . ' ' . ($n === 1 ? 'día' : 'días') . ' a la semana';
                         }
                     }
-                    $cantidadFosfina = $detalleFosfina?->cantidad ?? 1;
+                    $cantidadFosfina = trim((string)($detalleFosfina?->fosfina_cantidad ?? ''));
                     $tratamientoFosfina = $detalleFosfina?->servicio?->nombre ?? 'DESINSECTACIÓN QUÍMICA CON FOSFINA';
-                    $productosFosfina = 'EN GENERAL';
+                    $productosFosfina = trim((string)($detalleFosfina?->fosfina_producto ?? ''));
+                    $medidaTanqueFosfina = trim((string)($detalleFosfina?->medida_tanque ?? ''));
+                    if ($productosFosfina === '') { $productosFosfina = '—'; }
+                    if ($cantidadFosfina === '') { $cantidadFosfina = '—'; }
 
-                    if ($cotizacion->receta_servicio && count($cotizacion->receta_servicio) > 0) {
-                        $nombresProductos = [];
-                        foreach ($cotizacion->receta_servicio as $receta) {
-                            if (!empty($receta['producto_descripcion'])) {
-                                $nombresProductos[] = $receta['producto_descripcion'];
-                            }
-                        }
-                        $nombresProductos = array_values(array_unique($nombresProductos));
-                        if (count($nombresProductos) > 0) {
-                            $productosFosfina = implode(', ', $nombresProductos);
-                        }
-                    }
                 @endphp
 
                 <div class="proposal-text">
@@ -341,6 +332,10 @@
                             <th>PRODUCTOS</th>
                             <td style="text-align: center;">{{ $productosFosfina }}</td>
                         </tr>
+                        <tr>
+                            <th>MEDIDA TANQUE</th>
+                            <td style="text-align: center;">{{ $medidaTanqueFosfina !== '' ? $medidaTanqueFosfina . ' m³ ' : '—' }}</td>
+                        </tr>
                     </tbody>
                 </table>
 
@@ -368,11 +363,28 @@
                     <span class="seccion-titulo-num">2.1</span> Control Integrado de Plagas
                     <p>2.1.1. El siguiente cuadro detalla actividades encaminadas de los servicios </p>
                 </div>
+                @php
+                    $hayDetalleCisternaReservorio = $cotizacion->detalles->contains(function($detalle) {
+                        $nombre = mb_strtoupper((string)($detalle->servicio->nombre ?? ''));
+                        return str_contains($nombre, 'LIMPIEZA DE CISTERNAS Y RESERVORIOS');
+                    });
+                    $hayDetalleTrampaGrasa = $cotizacion->detalles->contains(function($detalle) {
+                        $nombre = mb_strtoupper((string)($detalle->servicio->nombre ?? ''));
+                        return str_contains($nombre, 'LIMPIEZA DE TRAMPA DE GRASA');
+                    });
+                @endphp
                 <table class="products-table" style="margin-bottom: 20px;">
                     <thead>
                         <tr>
                             <th>ACTIVIDAD</th>
-                            <th>TRATAMIENTO</th>
+                            @if($hayDetalleCisternaReservorio)
+                                <th>TRATAMIENTO</th>
+                                <th>MEDIDA</th>
+                            @elseif($hayDetalleTrampaGrasa)
+                                <th>MEDIDA</th>
+                            @else
+                                <th>TRATAMIENTO</th>
+                            @endif
                             <th>ÁREA</th>
                             <th>FRECUENCIA</th>
                         </tr>
@@ -462,23 +474,50 @@
                                         }
                                     }
                                 }
-                            @endphp
+                                $nombreServicioDetalle = mb_strtoupper((string)($servicio?->nombre ?? ''));
+                                $esDetalleTrampaGrasa = str_contains($nombreServicioDetalle, 'LIMPIEZA DE TRAMPA DE GRASA');
+                                $medidaDetalle = trim((string)($detalle->medida_tanque ?? '' ));
+                            @endphp 
                             <tr>
                                 <td style="font-weight: 600;">
                                     {{ $servicio?->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}
                                 </td>
-                                <td>
-                                    @if(count($tratamientosDetalle) > 0)
-                                        @foreach($tratamientosDetalle as $item)
-                                            <small>
-                                                {{ $item['nombre'] }}
-                                                @if($item['mostrar_cantidad'] ?? false)
-                                                    - {{ rtrim(rtrim(number_format($item['cantidad'] ?? 0, 2, '.', ''), '0'), '.') }} {{ $item['unidad'] }}
-                                                @endif
-                                            </small><br>
-                                        @endforeach
-                                    @endif
-                                </td>
+                                @if($hayDetalleCisternaReservorio)
+                                    <td>
+                                        @if($esDetalleTrampaGrasa)
+                                            —
+                                        @elseif(count($tratamientosDetalle) > 0)
+                                            @foreach($tratamientosDetalle as $item)
+                                                <small>
+                                                    {{ $item['nombre'] }}
+                                                    @if($item['mostrar_cantidad'] ?? false)
+                                                        - {{ rtrim(rtrim(number_format($item['cantidad'] ?? 0, 2, '.', ''), '0'), '.') }} {{ $item['unidad'] }}
+                                                    @endif
+                                                </small><br>
+                                            @endforeach
+                                        @endif
+                                    </td>  
+                                    <td style="text-align: center;">
+                                        {{ $medidaDetalle !== '' ? $medidaDetalle . ' m³ ' : '—' }}
+                                    </td>
+                                @elseif($hayDetalleTrampaGrasa)
+                                    <td style="text-align: center;">
+                                        {{ $medidaDetalle !== '' ? $medidaDetalle . ' m³ ' : '—' }}
+                                    </td>
+                                @else
+                                    <td>
+                                        @if(count($tratamientosDetalle) > 0)
+                                            @foreach($tratamientosDetalle as $item)
+                                                <small>
+                                                    {{ $item['nombre'] }}
+                                                    @if($item['mostrar_cantidad'] ?? false)
+                                                        - {{ rtrim(rtrim(number_format($item['cantidad'] ?? 0, 2, '.', ''), '0'), '.') }} {{ $item['unidad'] }}
+                                                    @endif
+                                                </small><br>
+                                            @endforeach
+                                        @endif
+                                    </td>
+                                @endif
                                      
                                 <td>
                                     @if($planta)

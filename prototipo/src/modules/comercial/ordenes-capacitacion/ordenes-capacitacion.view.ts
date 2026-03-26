@@ -732,6 +732,9 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     const raw = res.data || res;
     const data = (raw as any).data || raw;
 
+    // Reiniciar exponentes al cambiar de cotización y luego precargar los de la cotización elegida
+    selectedExponentes = [];
+
     // Auto-llenar cliente
     (document.getElementById('oc-cliente-nombre') as HTMLInputElement).value = data.cliente?.nombre_empresa || '';
     (document.getElementById('oc-cliente-id') as HTMLInputElement).value = String(data.cliente?.id || '');
@@ -782,13 +785,21 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     // Auto-llenar servicio
     if (data.servicio) {
       (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = data.servicio.nombre || '';
-      (document.getElementById('oc-servicio-id') as HTMLInputElement).value = String(data.servicio.id || '');
+      const servicioId = data.servicio.id_servicio ?? data.servicio.id ?? '';
+      (document.getElementById('oc-servicio-id') as HTMLInputElement).value = servicioId ? String(servicioId) : '';
     }
 
     // Auto-llenar modalidad sugerida
     if (data.servicio?.modalidad_sugerida) {
       const modalidadSelect = document.getElementById('oc-modalidad') as HTMLSelectElement;
-      const modalidadMap: any = { 'Presencial': 'Presencial', 'Virtual': 'Virtual', 'Hibrido': 'Híbrido', 'Híbrido': 'Híbrido' };
+      const modalidadMap: any = {
+        'Presencial': 'Presencial',
+        'Virtual': 'Virtual',
+        'Hibrido': 'Híbrido',
+        'Híbrido': 'Híbrido',
+        'Asincrona': 'Asíncrona',
+        'Asíncrona': 'Asíncrona',
+      };
       const mapped = modalidadMap[data.servicio.modalidad_sugerida] || data.servicio.modalidad_sugerida;
       // DB enum uses 'Híbrido'
       if (modalidadSelect) modalidadSelect.value = mapped;
@@ -808,6 +819,32 @@ async function cargarDatosCotizacion(cotizacionId: number) {
       (document.getElementById('oc-num-participantes') as HTMLInputElement).value = detalleCap.num_participantes || '';
       (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = toDateInput(detalleCap.fecha_servicio);
     }
+
+    // Auto-llenar exponentes desde cotización (prioriza datos completos; fallback por IDs)
+    const exponentesDesdeCotizacion = Array.isArray(data.exponentes) ? data.exponentes : [];
+    const exponenteIdsDesdeCotizacion = Array.isArray(data.cotizacion?.exponentes_ids) ? data.cotizacion.exponentes_ids : [];
+
+    if (exponentesDesdeCotizacion.length > 0) {
+      selectedExponentes = exponentesDesdeCotizacion
+        .map((e: any) => {
+          const nombreCompleto = String(((e.nombre || '') + ' ' + (e.apellidos || '')).trim());
+          return {
+            id: Number(e.id),
+            nombre: nombreCompleto || ('Exponente #' + String(e.id || '')),
+          };
+        })
+        .filter((e: any) => !!e.id);
+    } else if (exponenteIdsDesdeCotizacion.length > 0) {
+      selectedExponentes = exponenteIdsDesdeCotizacion
+        .map((id: any) => {
+          const exp = exponentesData.find((x) => x.id === Number(id));
+          const nombreCompleto = exp ? (exp.nombre + ' ' + (exp.apellidos || '')).trim() : ('Exponente #' + String(id));
+          return { id: Number(id), nombre: nombreCompleto };
+        })
+        .filter((e: any) => !!e.id);
+    }
+    renderExponenteTags();
+    actualizarSelectorExponentes();
 
     // Auto-llenar costo
     (document.getElementById('oc-costo') as HTMLInputElement).value = Number(data.costo_total || 0).toFixed(2);
@@ -1060,7 +1097,11 @@ async function guardarOC() {
     await Promise.all([cargarOrdenesCapacitacion(), cargarEstadisticasOC()]);
   } catch (e: any) {
     console.error('Error guardando OC:', e);
-    const msg = e?.data?.message || e?.message || 'No se pudo guardar la orden';
+    const validationErrors = e?.data?.errors;
+    const validationMsg = validationErrors && typeof validationErrors === 'object'
+      ? Object.values(validationErrors).flat().join(' | ')
+      : '';
+    const msg = validationMsg || e?.data?.message || e?.message || 'No se pudo guardar la orden';
     mostrarToast('error', 'Error', msg);
   }
 }

@@ -3,6 +3,7 @@ import { cotizacionService } from '../../../services/cotizacionService';
 import { clienteService } from '../../../services/clienteService';
 import { productoService } from '../../../services/productoService';
 import { servicioService } from '../../../services/servicioService';
+import { equipoService } from '../../../services/equipoService';
 import { catalogoCapAudService } from '../../../services/catalogoCapAudService';
 import { exponenteService, type Exponente } from '../../../services/exponenteService';
 import { mostrarToast } from '../../../shared/toast';
@@ -88,8 +89,23 @@ type BeneficioServicioRow = {
 let beneficiosServicioRows: BeneficioServicioRow[] = [];
 let exponentesData: Exponente[] = [];
 let selectedExponentesCotizacion: { id: number; nombre: string }[] = [];
+let equiposDisponiblesReceta: any[] = [];
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+function esServicioLimpiezaConMedida(nombreServicio: string): boolean {
+  const servicioUpper = (nombreServicio || '').toUpperCase();
+  return (
+    servicioUpper.includes('LIMPIEZA DE CISTERNAS Y RESERVORIOS')
+    || servicioUpper.includes('LIMPIEZA DE CISTERNAS')
+    || servicioUpper.includes('LIMPIEZA DE RESERVORIOS')
+    || servicioUpper.includes('LIMPIEZA DE TRAMPA DE GRASA')
+  );
+}
+
+function esServicioFosfina(nombreServicio: string): boolean {
+  return (nombreServicio || '').toUpperCase().includes('FOSFINA');
+}
 
 function normalizarDiaNombre(texto: string): string {
   return texto
@@ -828,8 +844,8 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
   // Sección especial para técnicos/supervisor SOLO para Servicio
   const seccionLimpiezaCisternas = tipoFijo === 'Servicio' ? `
     <div id="seccion-limpieza-cisternas" style="display:none;margin-bottom:24px;padding:16px 20px;background:#f1f5f9;border-radius:8px;">
-      <div style="font-weight:600;margin-bottom:10px;color:#2563eb;">Datos de Operarios para LIMPIEZA DE CISTERNAS, RESERVORIOS Y TRAMPA DE GRASA</div>
-      <div style="display:flex;gap:24px;align-items:center;">
+      <div style="font-weight:600;margin-bottom:10px;color:#2563eb;">Datos de Operación para Servicios Especiales</div>
+      <div id="bloque-limpieza-cisternas" style="display:none;gap:24px;align-items:center;margin-bottom:12px;">
         <div>
           <label for="input-op-tecnicos" style="font-size:13px;font-weight:500;">Operarios Técnicos</label>
           <input type="number" min="0" id="input-op-tecnicos" class="input" style="width:80px;margin-left:8px;" value="0">
@@ -837,6 +853,28 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
         <div>
           <label for="input-supervisor" style="font-size:13px;font-weight:500;">Supervisor</label>
           <input type="number" min="0" id="input-supervisor" class="input" style="width:80px;margin-left:8px;" value="0">
+        </div>
+        <div>
+          <label for="input-medida-tanque" style="font-size:13px;font-weight:500;">Medida</label>
+          <input type="text" id="input-medida-tanque" class="input" style="width:180px;margin-left:8px;" placeholder="Ej: 2m x 1.5m x 1m" value="">
+        </div>
+      </div>
+
+      <div id="bloque-fosfina" style="display:none;padding-top:10px;border-top:1px dashed #cbd5e1;">
+        <div style="font-size:13px;font-weight:600;color:#334155;margin-bottom:10px;">Datos para DESINSECTACIÓN QUÍMICA CON FOSFINA</div>
+        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+          <div>
+            <label for="input-producto-fosfina" style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Producto</label>
+            <input type="text" id="input-producto-fosfina" class="input" style="width:280px;" placeholder="Escriba producto" value="">
+          </div>
+          <div>
+            <label for="input-cantidad-fosfina" style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Cantidad</label>
+            <input type="text" id="input-cantidad-fosfina" class="input" style="width:120px;" placeholder="Ej: 1" value="">
+          </div>
+          <div>
+            <label for="input-medida-tanque-fosfina" style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Medida tanque</label>
+            <input type="text" id="input-medida-tanque-fosfina" class="input" style="width:200px;" placeholder="Ej: 10" value="">
+          </div>
         </div>
       </div>
     </div>
@@ -977,10 +1015,10 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
                   <th style="width: 20%;">Servicio/Producto</th>
                   <th style="width: 14%;">Planta</th>
                   <th style="width: 14%;">Área</th>
-                  <th style="width: 8%;">Cantidad</th>
+                  ${tipoFijo === 'Servicio' ? '' : '<th style="width: 8%;">Cantidad</th>'}
                   <th style="width: 11%;">Precio Unit.</th>
                   <th style="width: 11%;">Frecuencia</th>
-                  <th style="width: 10%;">Modalidad</th>
+                  ${tipoFijo === 'Servicio' ? '' : '<th style="width: 10%;">Modalidad</th>'}
                   <!-- Eliminado: técnicos/supervisor de capacitación -->
                   <th style="width: 9%;">Subtotal</th>
                   <th style="width: 3%;"></th>
@@ -996,6 +1034,9 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
             <h3 style="font-size: 15px; font-weight: 700; color: #334155; margin: 0;">Receta de Servicio (Equipos y Productos)</h3>
             <div style="display:flex;gap:8px;">
+              <button type="button" class="btn-secondary" id="btn-agregar-equipo-receta-servicio" style="padding:6px 10px;font-size:12px;" title="Agregar equipo por servicio/planta/área">
+                Agregar Equipo
+              </button>
               <button type="button" class="btn-secondary" id="btn-cargar-receta-servicio" style="padding:6px 10px;font-size:12px;">
                 Cargar Receta
               </button>
@@ -1019,7 +1060,31 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
               <tbody id="receta-servicio-body"></tbody>
             </table>
           </div>
-          <div id="receta-servicio-empty" style="text-align:center;padding:10px;color:#94a3b8;font-size:12px;">Sin productos de receta. Use "Cargar Receta" o "Agregar Producto".</div>
+          <div id="receta-servicio-empty" style="text-align:center;padding:10px;color:#94a3b8;font-size:12px;">Sin productos de receta. Use "Cargar Receta", "Agregar Equipo" o "Agregar Producto".</div>
+
+          <div id="modal-cot-receta-equipo" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10000;align-items:center;justify-content:center;">
+            <div style="background:#fff;border-radius:12px;width:min(520px,92vw);box-shadow:0 20px 40px rgba(15,23,42,.25);overflow:hidden;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e2e8f0;">
+                <h4 style="margin:0;font-size:16px;color:#0f172a;">Agregar Equipo</h4>
+                <button type="button" id="modal-cot-receta-equipo-cerrar" style="background:none;border:none;font-size:20px;line-height:1;color:#64748b;cursor:pointer;">&times;</button>
+              </div>
+              <div style="padding:16px;display:grid;gap:12px;">
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Bloque Servicio / Planta / Área <span style="color:#ef4444">*</span></label>
+                  <select id="cot-receta-equipo-grupo" class="form-control" style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;"></select>
+                </div>
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Equipo <span style="color:#ef4444">*</span></label>
+                  <select id="cot-receta-equipo-id" class="form-control" style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;"></select>
+                </div>
+                <p style="font-size:12px;color:#64748b;margin:0;">Se creará el grupo y se intentarán cargar los productos de receta asociados a ese equipo.</p>
+              </div>
+              <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #e2e8f0;background:#f8fafc;">
+                <button type="button" id="modal-cot-receta-equipo-cancelar" class="btn-secondary" style="padding:6px 10px;font-size:12px;">Cancelar</button>
+                <button type="button" id="modal-cot-receta-equipo-confirmar" class="btn-primary" style="padding:6px 10px;font-size:12px;">Agregar</button>
+              </div>
+            </div>
+          </div>
         </div>
         ` : ''}
 
@@ -1438,8 +1503,22 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     });
     btnGestBenef?.addEventListener('click', () => abrirModalBeneficioServicio(panelEl));
 
+    panelEl.querySelector('#btn-agregar-equipo-receta-servicio')?.addEventListener('click', () => {
+      void abrirModalAgregarEquipoReceta(panelEl);
+    });
+
     panelEl.querySelector('#btn-cargar-receta-servicio')?.addEventListener('click', () => {
       void cargarRecetaServicioDesdeDetalle(panelEl);
+    });
+
+    panelEl.querySelector('#modal-cot-receta-equipo-cerrar')?.addEventListener('click', () => {
+      cerrarModalAgregarEquipoReceta(panelEl);
+    });
+    panelEl.querySelector('#modal-cot-receta-equipo-cancelar')?.addEventListener('click', () => {
+      cerrarModalAgregarEquipoReceta(panelEl);
+    });
+    panelEl.querySelector('#modal-cot-receta-equipo-confirmar')?.addEventListener('click', () => {
+      void confirmarAgregarEquipoReceta(panelEl);
     });
 
     panelEl.querySelector('#btn-agregar-prod-receta-servicio')?.addEventListener('click', () => {
@@ -1458,32 +1537,38 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
       renderRecetaServicio(panelEl);
     });
 
-    // Función para mostrar/ocultar sección de limpieza de cisternas
+    // Función para mostrar/ocultar sección de servicios especiales
     const actualizarSeccionLimpiezaCisternas = () => {
       const seccion = panelEl.querySelector('#seccion-limpieza-cisternas') as HTMLElement;
       if (!seccion) return;
+
+      const bloqueLimpieza = panelEl.querySelector('#bloque-limpieza-cisternas') as HTMLElement | null;
+      const bloqueFosfina = panelEl.querySelector('#bloque-fosfina') as HTMLElement | null;
 
       const tbody = panelEl.querySelector('#detalle-cotizacion-body') as HTMLElement;
       if (!tbody) return;
 
       const filas = tbody.querySelectorAll('tr');
       let tieneLimpiezaCisternas = false;
+      let tieneFosfina = false;
 
       filas.forEach(fila => {
         const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
         if (itemSelect) {
           const selectedOption = itemSelect.options[itemSelect.selectedIndex];
           const servicioNombre = selectedOption?.textContent?.trim() || '';
-          if (servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS Y RESERVORIOS') ||
-              servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS') ||
-              servicioNombre.toUpperCase().includes('LIMPIEZA DE RESERVORIOS') ||
-              servicioNombre.toUpperCase().includes('LIMPIEZA DE TRAMPA DE GRASA')) {
+          if (esServicioLimpiezaConMedida(servicioNombre)) {
             tieneLimpiezaCisternas = true;
+          }
+          if (esServicioFosfina(servicioNombre)) {
+            tieneFosfina = true;
           }
         }
       }); 
 
-      seccion.style.display = tieneLimpiezaCisternas ? 'block' : 'none';
+      seccion.style.display = (tieneLimpiezaCisternas || tieneFosfina) ? 'block' : 'none';
+      if (bloqueLimpieza) bloqueLimpieza.style.display = tieneLimpiezaCisternas ? 'flex' : 'none';
+      if (bloqueFosfina) bloqueFosfina.style.display = tieneFosfina ? 'block' : 'none';
     };
 
     // Event listener para cambios en el detalle
@@ -1607,6 +1692,7 @@ function getAreaIdsFromRow(row: Element, tipoCotizacion: string): number[] {
 function actualizarResumenAreasFila(fila: HTMLElement) {
   const multi = fila.querySelector('.area-input-multi') as HTMLSelectElement | null;
   const resumen = fila.querySelector('.area-multi-summary') as HTMLElement | null;
+  const toggle = fila.querySelector('.area-picker-toggle') as HTMLButtonElement | null;
   if (!multi || !resumen) return;
 
   const seleccionadas = Array.from(multi.selectedOptions)
@@ -1614,18 +1700,58 @@ function actualizarResumenAreasFila(fila: HTMLElement) {
     .filter(Boolean);
 
   if (seleccionadas.length === 0) {
-    resumen.textContent = 'Sin áreas seleccionadas';
+    resumen.innerHTML = 'Sin áreas seleccionadas';
     resumen.style.color = '#94a3b8';
+    if (toggle) toggle.textContent = 'Seleccionar áreas';
     return;
   }
 
   resumen.style.color = '#334155';
-  if (seleccionadas.length <= 2) {
-    resumen.textContent = seleccionadas.join(', ');
+  if (toggle) toggle.textContent = `${seleccionadas.length} área(s)`;
+
+  const chips = seleccionadas.slice(0, 3).map((nombre) => {
+    return `<span style="display:inline-block;background:#ecfeff;color:#0f766e;border:1px solid #99f6e4;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`;
+  }).join('');
+
+  if (seleccionadas.length > 3) {
+    resumen.innerHTML = `${chips}<span style="font-size:11px;color:#64748b;">+${seleccionadas.length - 3} más</span>`;
     return;
   }
 
-  resumen.textContent = `${seleccionadas.length} áreas seleccionadas: ${seleccionadas.slice(0, 2).join(', ')}...`;
+  resumen.innerHTML = chips;
+}
+
+function renderAreaPickerOptions(fila: HTMLElement) {
+  const multi = fila.querySelector('.area-input-multi') as HTMLSelectElement | null;
+  const optionsWrap = fila.querySelector('.area-picker-options') as HTMLElement | null;
+  if (!multi || !optionsWrap) return;
+
+  if (multi.options.length === 0) {
+    optionsWrap.innerHTML = '<div style="padding:6px 0;color:#94a3b8;font-size:12px;">Primero seleccione una planta</div>';
+    return;
+  }
+
+  optionsWrap.innerHTML = Array.from(multi.options).map((opt, index) => {
+    return `<label style="display:flex;align-items:center;gap:7px;padding:4px 0;font-size:13px;color:#334155;cursor:pointer;">
+      <input type="checkbox" class="area-picker-check" data-index="${index}" ${opt.selected ? 'checked' : ''}>
+      <span>${opt.text}</span>
+    </label>`;
+  }).join('');
+
+  optionsWrap.querySelectorAll('.area-picker-check').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const idx = Number((e.currentTarget as HTMLInputElement).dataset.index || '-1');
+      if (idx < 0 || !multi.options[idx]) return;
+      multi.options[idx].selected = (e.currentTarget as HTMLInputElement).checked;
+      const t = (fila as any)._areaCloseTimer as number | undefined;
+      if (t) {
+        clearTimeout(t);
+        (fila as any)._areaCloseTimer = undefined;
+      }
+      actualizarResumenAreasFila(fila);
+    });
+  });
 }
 
 function bindAreaMultiInteractions(fila: HTMLElement) {
@@ -1637,10 +1763,71 @@ function bindAreaMultiInteractions(fila: HTMLElement) {
     (multi as any)._areaMultiBound = true;
   }
 
+  const panel = fila.querySelector('.area-picker-panel') as HTMLElement | null;
+  const toggle = fila.querySelector('.area-picker-toggle') as HTMLButtonElement | null;
+  const wrapper = fila.querySelector('.area-multi-wrapper') as HTMLElement | null;
+
+  const openPanel = () => {
+    if (!panel) return;
+    panel.style.display = 'block';
+    renderAreaPickerOptions(fila);
+  };
+
+  const closePanel = () => {
+    if (!panel) return;
+    panel.style.display = 'none';
+  };
+
+  const clearCloseTimer = () => {
+    const t = (fila as any)._areaCloseTimer as number | undefined;
+    if (t) {
+      clearTimeout(t);
+      (fila as any)._areaCloseTimer = undefined;
+    }
+  };
+
+  const scheduleClosePanel = () => {
+    clearCloseTimer();
+    (fila as any)._areaCloseTimer = setTimeout(() => {
+      closePanel();
+    }, 550);
+  };
+
+  if (toggle && panel && !(toggle as any)._areaMultiBound) {
+    toggle.addEventListener('click', () => {
+      const show = panel.style.display === 'none' || !panel.style.display;
+      if (show) {
+        openPanel();
+      } else {
+        closePanel();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!fila.contains(e.target as Node)) closePanel();
+    });
+
+    (toggle as any)._areaMultiBound = true;
+  }
+
+  if (wrapper && !(wrapper as any)._areaHoverBound) {
+    wrapper.addEventListener('mouseenter', () => {
+      clearCloseTimer();
+      openPanel();
+    });
+
+    wrapper.addEventListener('mouseleave', () => {
+      scheduleClosePanel();
+    });
+
+    (wrapper as any)._areaHoverBound = true;
+  }
+
   const btnAll = fila.querySelector('.area-select-all') as HTMLButtonElement | null;
   if (btnAll && !(btnAll as any)._areaMultiBound) {
     btnAll.addEventListener('click', () => {
       Array.from(multi.options).forEach((opt) => { opt.selected = true; });
+      renderAreaPickerOptions(fila);
       actualizarResumenAreasFila(fila);
     });
     (btnAll as any)._areaMultiBound = true;
@@ -1650,11 +1837,13 @@ function bindAreaMultiInteractions(fila: HTMLElement) {
   if (btnClear && !(btnClear as any)._areaMultiBound) {
     btnClear.addEventListener('click', () => {
       Array.from(multi.options).forEach((opt) => { opt.selected = false; });
+      renderAreaPickerOptions(fila);
       actualizarResumenAreasFila(fila);
     });
     (btnClear as any)._areaMultiBound = true;
   }
 
+  renderAreaPickerOptions(fila);
   actualizarResumenAreasFila(fila);
 }
 
@@ -1750,6 +1939,7 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
   if (igvSelect) {
     igvSelect.value = incluye ? '1' : '0';
   }
+
   const igvRow = panelEl.querySelector('#igv-row') as HTMLElement | null;
   if (igvRow) {
     igvRow.style.display = incluye ? 'flex' : 'none';
@@ -1810,6 +2000,11 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
 
   const opTecnicosDetalle = detalles.find((d: any) => d?.op_tecnicos)?.op_tecnicos || '';
   const supervisorDetalle = detalles.find((d: any) => d?.supervisor)?.supervisor || '';
+  const medidaTanqueDetalle = detalles.find((d: any) => d?.medida_tanque)?.medida_tanque || '';
+  const detalleFosfina = detalles.find((d: any) => {
+    const nombre = String(d?.servicio?.nombre || '').toUpperCase();
+    return nombre.includes('FOSFINA');
+  });
 
   for (const detalle of detalles) {
     agregarLineaDetalle(tipo);
@@ -1824,7 +2019,7 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
     }
 
     const cantidadInput = fila.querySelector('.cantidad-input') as HTMLInputElement | null;
-    if (cantidadInput) cantidadInput.value = String(detalle?.cantidad ?? 1);
+    if (cantidadInput) cantidadInput.value = String(tipo === 'Servicio' ? 1 : (detalle?.cantidad ?? 1));
 
     const precioInput = fila.querySelector('.precio-input') as HTMLInputElement | null;
     if (precioInput) precioInput.value = String(detalle?.precio_unitario ?? 0);
@@ -1845,6 +2040,7 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
       Array.from(areaMultiSelect.options).forEach((opt) => {
         opt.selected = Number(opt.value) === Number(detalle.id_cliente_planta_area);
       });
+      renderAreaPickerOptions(fila);
       actualizarResumenAreasFila(fila);
     }
 
@@ -1870,8 +2066,16 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
     if (seccionLimpieza) {
       const opInput = seccionLimpieza.querySelector('#input-op-tecnicos') as HTMLInputElement | null;
       const supInput = seccionLimpieza.querySelector('#input-supervisor') as HTMLInputElement | null;
+      const medidaInput = seccionLimpieza.querySelector('#input-medida-tanque') as HTMLInputElement | null;
+      const productoFosfinaInput = seccionLimpieza.querySelector('#input-producto-fosfina') as HTMLInputElement | null;
+      const cantidadFosfinaInput = seccionLimpieza.querySelector('#input-cantidad-fosfina') as HTMLInputElement | null;
+      const medidaFosfinaInput = seccionLimpieza.querySelector('#input-medida-tanque-fosfina') as HTMLInputElement | null;
       if (opInput) opInput.value = String(opTecnicosDetalle || 0);
       if (supInput) supInput.value = String(supervisorDetalle || 0);
+      if (medidaInput) medidaInput.value = String(medidaTanqueDetalle || '');
+      if (productoFosfinaInput) productoFosfinaInput.value = String(detalleFosfina?.fosfina_producto || '');
+      if (cantidadFosfinaInput) cantidadFosfinaInput.value = String(detalleFosfina?.fosfina_cantidad || '');
+      if (medidaFosfinaInput) medidaFosfinaInput.value = String(detalleFosfina?.medida_tanque || '');
     }
 
     recetaServicioRows = Array.isArray(cotizacion?.receta_servicio)
@@ -1985,24 +2189,30 @@ function agregarLineaDetalle(tipo?: string) {
       </td>
       <td>
         ${tipo === 'Servicio'
-          ? `<div class="area-multi-wrapper" style="display:flex;flex-direction:column;gap:4px;">
-               <select class="area-input-multi" multiple style="${selectStyle}min-height:88px;">
+          ? `<div class="area-multi-wrapper" style="display:flex;flex-direction:column;gap:6px;">
+               <select class="area-input-multi" multiple style="display:none;">
                  ${''}
                </select>
-               <div style="display:flex;gap:6px;">
+               <button type="button" class="area-picker-toggle" style="${selectStyle}text-align:left;display:flex;justify-content:space-between;align-items:center;background:#fff;">
+                 Seleccionar áreas
+                 <span style="color:#64748b;">▾</span>
+               </button>
+               <div class="area-picker-panel" style="display:none;position:static;background:#fff;border:1px solid #dbe3ef;border-radius:10px;padding:8px;box-shadow:0 4px 10px rgba(0,0,0,0.06);">
+                 <div class="area-picker-options" style="max-height:160px;overflow:auto;padding-right:4px;"></div>
+                 <div style="display:flex;gap:6px;margin-top:8px;">
                  <button type="button" class="area-select-all" style="padding:2px 8px;border:1px solid #cbd5e1;background:#fff;border-radius:999px;font-size:11px;color:#475569;cursor:pointer;">Todas</button>
                  <button type="button" class="area-clear-all" style="padding:2px 8px;border:1px solid #cbd5e1;background:#fff;border-radius:999px;font-size:11px;color:#475569;cursor:pointer;">Limpiar</button>
                </div>
-               <small style="display:block;color:#64748b;font-size:11px;">Use Ctrl para selección manual múltiple</small>
+               </div>
                <small class="area-multi-summary" style="display:block;font-size:11px;">Sin áreas seleccionadas</small>
              </div>`
           : `<select class="area-input" style="${selectStyle}">
                <option value="">— Sin área —</option>
              </select>`}
       </td>
-      <td>
-        <input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}${disabledCantidadStyle}" ${disabledCantidad}>
-      </td>
+      ${tipo === 'Servicio'
+        ? `<td style="display:none;"><input type="hidden" class="cantidad-input" value="1"></td>`
+        : `<td><input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}${disabledCantidadStyle}" ${disabledCantidad}></td>`}
       <td>
         <input type="number" class="precio-input" value="0.00" min="0" step="0.01" style="${inputStyle}">
       </td>
@@ -2020,7 +2230,9 @@ function agregarLineaDetalle(tipo?: string) {
         </select>
         ${construirFrecuenciaDiasHtml(lineaId)}
       </td>
-      <td>
+      ${tipo === 'Servicio'
+        ? `<td style="display:none;"><input type="hidden" class="modalidad-input" value=""></td>`
+        : `<td>
         <select class="modalidad-input" style="${selectStyle}${disabledModalidadStyle}" ${disabledModalidad}>
           <option value="">—</option>
           <option value="Presencial">Presencial</option>
@@ -2028,7 +2240,7 @@ function agregarLineaDetalle(tipo?: string) {
           <option value="Hibrido">Híbrido</option>
           <option value="Asíncrona">Asíncrona</option>
         </select>
-      </td>
+      </td>`}
       <!-- Eliminado: técnicos/supervisor de capacitación -->
       <td>
         <strong class="subtotal-linea" style="font-size:13px;">S/ 0.00</strong>
@@ -2119,26 +2331,29 @@ function agregarLineaDetalle(tipo?: string) {
 function actualizarSeccionLimpiezaCisternas(panelEl: HTMLElement) {
   const seccion = panelEl.querySelector('#seccion-limpieza-cisternas') as HTMLElement;
   if (!seccion) return;
+  const bloqueLimpieza = panelEl.querySelector('#bloque-limpieza-cisternas') as HTMLElement | null;
+  const bloqueFosfina = panelEl.querySelector('#bloque-fosfina') as HTMLElement | null;
   const tbody = panelEl.querySelector('#detalle-cotizacion-body') as HTMLElement;
   if (!tbody) return;
   const filas = tbody.querySelectorAll('tr');
   let tieneLimpiezaCisternas = false;
+  let tieneFosfina = false;
   filas.forEach(fila => {
     const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
     if (itemSelect) {
       const selectedOption = itemSelect.options[itemSelect.selectedIndex];
       const servicioNombre = selectedOption?.textContent?.trim() || '';
-      if (
-        servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS Y RESERVORIOS') ||
-        servicioNombre.toUpperCase().includes('LIMPIEZA DE CISTERNAS') ||
-        servicioNombre.toUpperCase().includes('LIMPIEZA DE RESERVORIOS') ||
-        servicioNombre.toUpperCase().includes('LIMPIEZA DE TRAMPA DE GRASA')
-      ) {
+      if (esServicioLimpiezaConMedida(servicioNombre)) {
         tieneLimpiezaCisternas = true;
+      }
+      if (esServicioFosfina(servicioNombre)) {
+        tieneFosfina = true;
       }
     }
   });
-  seccion.style.display = tieneLimpiezaCisternas ? 'block' : 'none';
+  seccion.style.display = (tieneLimpiezaCisternas || tieneFosfina) ? 'block' : 'none';
+  if (bloqueLimpieza) bloqueLimpieza.style.display = tieneLimpiezaCisternas ? 'flex' : 'none';
+  if (bloqueFosfina) bloqueFosfina.style.display = tieneFosfina ? 'block' : 'none';
 }
 
 function calcularSubtotalLinea(lineaId: string) {
@@ -2224,6 +2439,145 @@ function getRecetaGroupKey(row: RecetaServicioRow): string {
   return `${row.id_servicio}-${row.id_cliente_planta || 0}-${row.id_cliente_planta_area || 0}-${row.id_equipo || 0}`;
 }
 
+function parseRecetaGroupKey(groupKey: string): { idServicio: number; idPlanta: number | null; idArea: number | null; idEquipo: number | null } {
+  const [idServicioRaw, idPlantaRaw, idAreaRaw, idEquipoRaw] = groupKey.split('-').map((v) => Number(v || 0));
+  return {
+    idServicio: idServicioRaw || 0,
+    idPlanta: idPlantaRaw || null,
+    idArea: idAreaRaw || null,
+    idEquipo: idEquipoRaw || null,
+  };
+}
+
+async function cargarEquiposDisponiblesReceta() {
+  try {
+    const res = await equipoService.getAll({ estado: 'Activo' } as any);
+    const raw = res.data || res;
+    equiposDisponiblesReceta = Array.isArray(raw) ? raw : (raw as any).data || [];
+  } catch (e) {
+    console.error('Error cargando equipos para receta de servicio:', e);
+    equiposDisponiblesReceta = [];
+  }
+}
+
+function getEquipoNameReceta(idEquipo?: number | null): string {
+  if (!idEquipo) return '';
+  const equipo = equiposDisponiblesReceta.find((eq: any) => eq.id === idEquipo);
+  return equipo?.descripcion || `Equipo #${idEquipo}`;
+}
+
+async function abrirModalAgregarEquipoReceta(panelEl: HTMLElement) {
+  const modal = panelEl.querySelector('#modal-cot-receta-equipo') as HTMLElement | null;
+  const selGrupo = panelEl.querySelector('#cot-receta-equipo-grupo') as HTMLSelectElement | null;
+  const selEquipo = panelEl.querySelector('#cot-receta-equipo-id') as HTMLSelectElement | null;
+  if (!modal || !selGrupo || !selEquipo) return;
+
+  const groups = getServiceLineGroups(panelEl);
+  if (groups.length === 0) {
+    mostrarToast('warning', 'Sin servicios', 'Primero agregue una línea de servicio con planta/área');
+    return;
+  }
+
+  await cargarEquiposDisponiblesReceta();
+
+  selGrupo.innerHTML = groups.map((g) => {
+    const key = `${g.idServicio}-${g.idPlanta || 0}-${g.idArea || 0}`;
+    const partes = [g.servicioNombre];
+    if (g.plantaNombre) partes.push(g.plantaNombre);
+    if (g.areaNombre) partes.push(g.areaNombre);
+    return `<option value="${key}">${partes.join(' -> ')}</option>`;
+  }).join('');
+
+  selEquipo.innerHTML = '<option value="">Seleccione equipo...</option>' + equiposDisponiblesReceta.map((eq: any) => {
+    return `<option value="${eq.id}">${eq.descripcion}</option>`;
+  }).join('');
+
+  modal.style.display = 'flex';
+}
+
+function cerrarModalAgregarEquipoReceta(panelEl: HTMLElement) {
+  const modal = panelEl.querySelector('#modal-cot-receta-equipo') as HTMLElement | null;
+  if (modal) modal.style.display = 'none';
+}
+
+async function confirmarAgregarEquipoReceta(panelEl: HTMLElement) {
+  const selGrupo = panelEl.querySelector('#cot-receta-equipo-grupo') as HTMLSelectElement | null;
+  const selEquipo = panelEl.querySelector('#cot-receta-equipo-id') as HTMLSelectElement | null;
+  if (!selGrupo || !selEquipo) return;
+
+  const [idServicioRaw, idPlantaRaw, idAreaRaw] = selGrupo.value.split('-').map((v) => Number(v || 0));
+  const idServicio = idServicioRaw || 0;
+  const idPlanta = idPlantaRaw || null;
+  const idArea = idAreaRaw || null;
+  const idEquipo = Number(selEquipo.value || 0);
+
+  if (!idServicio) {
+    mostrarToast('error', 'Dato requerido', 'Seleccione un bloque de servicio');
+    return;
+  }
+  if (!idEquipo) {
+    mostrarToast('error', 'Dato requerido', 'Seleccione un equipo');
+    return;
+  }
+
+  const equipoDesc = getEquipoNameReceta(idEquipo);
+  let agregados = 0;
+
+  try {
+    const res = await servicioService.getProductos(idServicio);
+    const raw = res.data || res;
+    const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
+
+    items
+      .filter((item: any) => Number(item.id_equipo || 0) === idEquipo)
+      .forEach((item: any) => {
+        const existe = recetaServicioRows.find((r) =>
+          r.id_producto === Number(item.id_producto || 0)
+          && r.id_servicio === idServicio
+          && (r.id_cliente_planta || 0) === (idPlanta || 0)
+          && (r.id_cliente_planta_area || 0) === (idArea || 0)
+          && (r.id_equipo || 0) === idEquipo,
+        );
+
+        if (existe) {
+          existe.cantidad += Number(item.cantidad_default || 0);
+          return;
+        }
+
+        recetaServicioRows.push({
+          id_servicio: idServicio,
+          id_equipo: idEquipo,
+          equipo_descripcion: item.equipo_descripcion || equipoDesc,
+          id_producto: Number(item.id_producto || 0),
+          cantidad: Number(item.cantidad_default || 1),
+          observacion: item.observacion || '',
+          id_cliente_planta: idPlanta,
+          id_cliente_planta_area: idArea,
+        });
+        agregados += 1;
+      });
+  } catch (e) {
+    console.error('Error cargando receta por equipo en cotización:', e);
+  }
+
+  if (agregados === 0) {
+    recetaServicioRows.push({
+      id_servicio: idServicio,
+      id_equipo: idEquipo,
+      equipo_descripcion: equipoDesc,
+      id_producto: 0,
+      cantidad: 1,
+      observacion: '',
+      id_cliente_planta: idPlanta,
+      id_cliente_planta_area: idArea,
+    });
+  }
+
+  renderRecetaServicio(panelEl);
+  cerrarModalAgregarEquipoReceta(panelEl);
+  mostrarToast('success', 'Equipo agregado', 'Ahora puede añadir productos al grupo creado');
+}
+
 function getRecetaGroupLabel(row: RecetaServicioRow, panelEl: HTMLElement): string {
   const groups = getServiceLineGroups(panelEl);
   const g = groups.find((x) => x.idServicio === row.id_servicio && (x.idPlanta || 0) === (row.id_cliente_planta || 0) && (x.idArea || 0) === (row.id_cliente_planta_area || 0));
@@ -2257,7 +2611,10 @@ function renderRecetaServicio(panelEl: HTMLElement) {
     const rows = recetaServicioRows.filter((r) => getRecetaGroupKey(r) === groupKey);
     const first = rows[0];
     html += `<tr>
-      <td colspan="4" style="background:#eef2ff;color:#4338ca;font-weight:600;font-size:12px;padding:6px 10px;">${getRecetaGroupLabel(first, panelEl)}</td>
+      <td colspan="3" style="background:#eef2ff;color:#4338ca;font-weight:600;font-size:12px;padding:6px 10px;">${getRecetaGroupLabel(first, panelEl)}</td>
+      <td style="background:#eef2ff;text-align:right;padding:6px 10px;">
+        <button type="button" class="btn-secondary btn-agregar-producto-receta-grupo" data-group-key="${groupKey}" style="font-size:11px;padding:2px 8px;line-height:1.3;">+ Añadir producto</button>
+      </td>
       <td style="background:#eef2ff;text-align:right;padding:6px 10px;">
         <button type="button" class="btn-eliminar-receta-grupo" data-group-key="${groupKey}" style="background:none;border:none;cursor:pointer;color:#ef4444;padding:4px;" title="Eliminar equipo">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -2318,6 +2675,25 @@ function renderRecetaServicio(panelEl: HTMLElement) {
       recetaServicioRows = recetaServicioRows.filter((r) => getRecetaGroupKey(r) !== groupKey);
       renderRecetaServicio(panelEl);
       mostrarToast('success', 'Equipo eliminado', 'Se eliminó el equipo y sus productos');
+    });
+  });
+
+  panelEl.querySelectorAll('.btn-agregar-producto-receta-grupo').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      const groupKey = (e.currentTarget as HTMLButtonElement).dataset.groupKey || '';
+      if (!groupKey) return;
+      const parsed = parseRecetaGroupKey(groupKey);
+      recetaServicioRows.push({
+        id_servicio: parsed.idServicio,
+        id_equipo: parsed.idEquipo,
+        equipo_descripcion: getEquipoNameReceta(parsed.idEquipo),
+        id_producto: 0,
+        cantidad: 1,
+        observacion: '',
+        id_cliente_planta: parsed.idPlanta,
+        id_cliente_planta_area: parsed.idArea,
+      });
+      renderRecetaServicio(panelEl);
     });
   });
 }
@@ -2426,6 +2802,12 @@ async function guardarCotizacion(tipoFijo?: string) {
     return;
   }
 
+  const tieneFosfinaEnDetalle = Array.from(lineas).some((linea) => {
+    const itemSelect = linea.querySelector('.item-select') as HTMLSelectElement | null;
+    const servicioNombre = itemSelect?.options[itemSelect.selectedIndex]?.textContent?.trim() || '';
+    return esServicioFosfina(servicioNombre);
+  });
+
   const tipoAdapter = getCotizacionTipoAdapter(tipoCotizacion);
   if (!tipoAdapter) {
     mostrarToast('warning', 'Tipo no válido', 'No se reconoce el tipo de cotización seleccionado');
@@ -2440,6 +2822,28 @@ async function guardarCotizacion(tipoFijo?: string) {
   const supervisorGlobal = seccionLimpiezaVisible
     ? ((seccionLimpieza.querySelector('#input-supervisor') as HTMLInputElement | null)?.value?.trim() || null)
     : null;
+  const medidaTanqueGlobal = seccionLimpiezaVisible
+    ? ((seccionLimpieza.querySelector('#input-medida-tanque') as HTMLInputElement | null)?.value?.trim() || null)
+    : null;
+  const productoFosfinaGlobal = seccionLimpiezaVisible
+    ? ((seccionLimpieza.querySelector('#input-producto-fosfina') as HTMLInputElement | null)?.value?.trim() || null)
+    : null;
+  const cantidadFosfinaGlobal = seccionLimpiezaVisible
+    ? ((seccionLimpieza.querySelector('#input-cantidad-fosfina') as HTMLInputElement | null)?.value?.trim() || null)
+    : null;
+  const medidaTanqueFosfinaGlobal = seccionLimpiezaVisible
+    ? ((seccionLimpieza.querySelector('#input-medida-tanque-fosfina') as HTMLInputElement | null)?.value?.trim() || null)
+    : null;
+
+  if (tieneFosfinaEnDetalle && !productoFosfinaGlobal) {
+    mostrarToast('warning', 'Campos obligatorios', 'Para FOSFINA debe ingresar el producto manual.');
+    return;
+  }
+
+  if (tieneFosfinaEnDetalle && !cantidadFosfinaGlobal) {
+    mostrarToast('warning', 'Campos obligatorios', 'Para FOSFINA debe ingresar cantidad.');
+    return;
+  }
 
   const horasCapacitacionGlobal = tipoCotizacion === 'Capacitacion'
     ? parseFloat((panelActivoElement.querySelector('#cot-cap-horas') as HTMLInputElement | null)?.value || '0')
@@ -2456,7 +2860,6 @@ async function guardarCotizacion(tipoFijo?: string) {
   lineas.forEach(linea => {
     const itemSelect = linea.querySelector('.item-select') as HTMLSelectElement;
     const itemValue = itemSelect?.value || '';
-    const cantidad = parseInt((linea.querySelector('.cantidad-input') as HTMLInputElement)?.value || '1');
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
     const frecuenciaRaw = frecuenciaSugeridaDesdeFila(linea as HTMLElement);
     if (frecuenciaRaw === '__INVALID__') {
@@ -2466,6 +2869,14 @@ async function guardarCotizacion(tipoFijo?: string) {
     const modalidad = (linea.querySelector('.modalidad-input') as HTMLSelectElement)?.value || null;
     const opTecnicos = opTecnicosGlobal;
     const supervisor = supervisorGlobal;
+    const servicioNombre = itemSelect?.options[itemSelect.selectedIndex]?.textContent?.trim() || '';
+    const esFosfina = esServicioFosfina(servicioNombre);
+    const cantidad = tipoCotizacion === 'Servicio'
+      ? 1
+      : parseInt((linea.querySelector('.cantidad-input') as HTMLInputElement)?.value || '1');
+    const medidaTanque = esFosfina
+      ? medidaTanqueFosfinaGlobal
+      : (esServicioLimpiezaConMedida(servicioNombre) ? medidaTanqueGlobal : null);
     const plantaVal = parseInt((linea.querySelector('.planta-input') as HTMLSelectElement)?.value || '0') || null;
     const areaIds = getAreaIdsFromRow(linea, tipoCotizacion);
     const horasCapacitacion = tipoCotizacion === 'Capacitacion' ? horasCapacitacionGlobal : null;
@@ -2477,6 +2888,8 @@ async function guardarCotizacion(tipoFijo?: string) {
       id_producto,
       id_catalogo_cap_aud,
     } = tipoAdapter.parseSelectedItem(itemValue);
+    const fosfinaProducto = esFosfina ? productoFosfinaGlobal : null;
+    const fosfinaCantidad = esFosfina ? cantidadFosfinaGlobal : null;
 
     const areasExpandibles = (tipoCotizacion === 'Servicio' && areaIds.length > 0) ? areaIds : [null];
     areasExpandibles.forEach((areaVal) => {
@@ -2490,6 +2903,9 @@ async function guardarCotizacion(tipoFijo?: string) {
         modalidad_sugerida: modalidad,
         op_tecnicos: opTecnicos,
         supervisor,
+        medida_tanque: medidaTanque,
+        fosfina_producto: fosfinaProducto,
+        fosfina_cantidad: fosfinaCantidad,
         id_cliente_planta: plantaVal,
         id_cliente_planta_area: areaVal,
         horas_capacitacion: horasCapacitacion,

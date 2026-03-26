@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\OrdenCapacitacionAuditoria;
 use App\Models\Cotizacion;
+use App\Models\Exponente;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -161,6 +162,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
 
         // Obtener el primer servicio/catalogo
         $primerDetalle = $cotizacion->detalles->first();
+        $exponentesIds = array_values(array_filter((array) ($cotizacion->exponentes_ids ?? []), fn($id) => !empty($id)));
+        $exponentesSeleccionados = empty($exponentesIds)
+            ? collect([])
+            : Exponente::whereIn('id', $exponentesIds)->get();
 
         // Mapear todos los detalles de la cotización
         $detalles = $cotizacion->detalles->map(function($d) {
@@ -191,6 +196,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
                     'subtotal' => (float) $cotizacion->subtotal,
                     'igv' => (float) $cotizacion->igv,
                     'total' => (float) $cotizacion->total,
+                    'exponentes_ids' => $exponentesIds,
                 ],
                 'cliente' => [
                     'id' => $cotizacion->cliente->id,
@@ -200,8 +206,17 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 ],
                 'costo_total' => (float) $cotizacion->total,
                 'detalles' => $detalles,
+                'exponentes' => $exponentesSeleccionados->map(fn($e) => [
+                    'id' => $e->id,
+                    'nombre' => $e->nombre,
+                    'apellidos' => $e->apellidos,
+                    'especialidad' => $e->especialidad,
+                    'profesion' => $e->profesion,
+                ])->values(),
                 'servicio' => $primerDetalle ? [
-                    'id' => $primerDetalle->id_servicio ?? $primerDetalle->id_catalogo_cap_aud,
+                    'id' => $primerDetalle->id_servicio,
+                    'id_servicio' => $primerDetalle->id_servicio,
+                    'id_catalogo_cap_aud' => $primerDetalle->id_catalogo_cap_aud,
                     'nombre' => $primerDetalle->catalogoCapAud ? $primerDetalle->catalogoCapAud->nombre : ($primerDetalle->servicio ? $primerDetalle->servicio->nombre : null),
                     'modalidad_sugerida' => $primerDetalle->modalidad_sugerida,
                 ] : null,
@@ -226,7 +241,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'fecha_servicio' => 'required|date',
             'fecha_aceptacion' => 'nullable|date',
             'hora_servicio' => 'nullable|date_format:H:i',
-            'modalidad' => 'required|in:Presencial,Virtual,Híbrido',
+            'modalidad' => 'required|in:Presencial,Virtual,Híbrido,Hibrido,Asíncrona,Asincrona',
             'num_participantes' => 'required|integer|min:1',
             'num_certificados' => 'nullable|integer|min:0',
             'horas_capacitacion' => 'nullable|string', 
@@ -409,7 +424,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'fecha_servicio' => 'sometimes|date',
             'fecha_aceptacion' => 'nullable|date',
             'hora_servicio' => 'nullable|date_format:H:i',
-            'modalidad' => 'sometimes|in:Presencial,Virtual,Híbrido',
+            'modalidad' => 'sometimes|in:Presencial,Virtual,Híbrido,Hibrido,Asíncrona,Asincrona',
             'num_participantes' => 'sometimes|integer|min:1',
             'num_certificados' => 'nullable|integer|min:0',
             'costo' => 'sometimes|numeric|min:0',
