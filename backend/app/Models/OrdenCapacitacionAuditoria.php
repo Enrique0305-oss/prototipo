@@ -30,8 +30,6 @@ class OrdenCapacitacionAuditoria extends Model
         'estado',
         'emitido_por',
         'horas_capacitacion',
-        'participacion_total',
-        'aprobacion_total',
         'observaciones',
     ];
 

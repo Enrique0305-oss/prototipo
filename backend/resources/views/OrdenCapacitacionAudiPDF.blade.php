@@ -153,14 +153,6 @@
             <td class="text-center">{{ $orden->horas_capacitacion ?? '---' }}</td>
         </tr>
         <tr>
-            <td class="label">PARTICIPACIÓN TOTAL</td>
-            <td class="text-center">{{ $orden->participacion_total ?? '---' }}</td>
-        </tr>
-        <tr>
-            <td class="label">APROBACIÓN TOTAL</td>
-            <td class="text-center">{{ $orden->aprobacion_total ?? '---' }}</td>
-        </tr>
-        <tr>
             <td class="label">MODALIDAD</td>
             <td class="text-center">{{ mb_strtoupper($orden->modalidad ?? 'PRESENCIAL') }}</td>
         </tr>

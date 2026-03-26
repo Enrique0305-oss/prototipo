@@ -242,14 +242,6 @@ export function renderComercialOrdenesCapacitacion() {
                 <input type="text" id="oc-horas-capacitacion" class="oc-input" placeholder="Ej: 08 horas">
               </div>
               <div class="oc-field">
-                <label class="oc-label">Participación Total (%)</label>
-                <input type="text" id="oc-participacion-total" class="oc-input" placeholder="Ej: 95%">
-              </div>
-              <div class="oc-field">
-                <label class="oc-label">Aprobación Total (%)</label>
-                <input type="text" id="oc-aprobacion-total" class="oc-input" placeholder="Ej: 90%">
-              </div>
-              <div class="oc-field">
                 <label class="oc-label">Fecha del Servicio <span class="oc-required">*</span></label>
                 <input type="date" id="oc-fecha-servicio" class="oc-input">
               </div>
@@ -1013,8 +1005,6 @@ async function guardarOC() {
   const costo = (document.getElementById('oc-costo') as HTMLInputElement).value;
   const observaciones = (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value?.trim();
   const horasCapacitacion = (document.getElementById('oc-horas-capacitacion') as HTMLInputElement)?.value || '';
-  const participacionTotal = (document.getElementById('oc-participacion-total') as HTMLInputElement)?.value || '';
-  const aprobacionTotal = (document.getElementById('oc-aprobacion-total') as HTMLInputElement)?.value || '';
 
   // --- RECOLECCIÓN DIRECTA DE MATERIALES ---
   const filasMateriales = document.querySelectorAll('#body-materiales tr'); 
@@ -1069,8 +1059,6 @@ async function guardarOC() {
     costo: parseFloat(costo) || 0,
     incluye_igv: ocIncluyeIgv,
     horas_capacitacion: horasCapacitacion,
-    participacion_total: participacionTotal,
-    aprobacion_total: aprobacionTotal,
     materiales,
     equipos,
     observaciones: observaciones || null,
