@@ -467,6 +467,11 @@ class CotizacionController extends Controller
             ], 404);
         }
 
+        $exponentes = collect();
+        if (!empty($cotizacion->exponentes_ids)) {
+            $exponentes = \App\Models\Exponente::whereIn('id', $cotizacion->exponentes_ids)->get();
+        }
+
         $pdfView = match ($cotizacion->tipo_cotizacion) {
             'Servicio' => 'cotizaciones.pdf.servicio',
             'Producto' => 'cotizaciones.pdf.producto',
@@ -474,7 +479,7 @@ class CotizacionController extends Controller
             default => 'CotizacionPDF',
         };
 
-        $pdf = Pdf::loadView($pdfView, compact('cotizacion'))
+        $pdf = Pdf::loadView($pdfView, compact('cotizacion', 'exponentes'))
                   ->setPaper('a4', 'portrait');
 
         // Si se pasa parámetro descargar=true, descarga automáticamente

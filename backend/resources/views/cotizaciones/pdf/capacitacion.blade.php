@@ -183,28 +183,68 @@
             </div>
 
             @php
+                $detalleConCatalogo = $cotizacion->detalles->first(function($d) {
+                    return $d->catalogoCapAud !== null;
+                });
+                $tipoServicio = $detalleConCatalogo?->catalogoCapAud?->tipo ?? 'Capacitación';
                 $detalleCap = $cotizacion->detalles->firstWhere('tipo', 'Capacitacion')
                     ?? $cotizacion->detalles->firstWhere('tipo', 'Capacitación')
                     ?? $cotizacion->detalles->first();
             @endphp
             <div class="issued-name">
-                &nbsp;&nbsp;&nbsp;&nbsp;2.2 Actividades <br><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;2.2 {{ $tipoServicio === 'Auditoría' ? 'Plan de trabajo' : 'Actividades' }} <br><br>
 
                 <div style="margin-left: 40px; font-weight: normal;">
-                    <strong>2.2.1 Capacitaciones:</strong>
-                    El equipo de QSCI Consulting brindará capacitaciones actualizadas al público asistente.
-                    <br><br>Esta capacitación está diseñada para ser cubierta de la siguiente manera.
+                    @if($tipoServicio === 'Auditoría')
+                        <strong>2.2.1 Metodología de Implementación:</strong>
+                        <ul style="list-style-type: disc; margin-top: 10px;">
+                            <li><strong>Tiempo de implementación:</strong> 2 meses (enero y marzo)</li>
+                        </ul>
+                        
+                        <p style="margin-top: 15px;"><strong>Definiciones:</strong></p>
+                        <div style="margin-bottom: 10px;">
+                            <strong>a) ASESOR LÍDER:</strong> Es el experto que proporciona las directrices y el apoyo necesario para la implementación con un enfoque de acompañamiento estratégico de menor frecuencia.
+                        </div>
+                        <div>
+                            <strong>b) PERSONAL DE SOPORTE:</strong> Es el profesional que recibe la orientación necesaria y ejecuta la implementación a nivel documentario, con un enfoque de acompañamiento intensivo.
+                        </div>
+
+                    @else
+                        <strong>2.2.1 Capacitaciones:</strong>
+                        El equipo de QSCI Consulting brindará capacitaciones actualizadas al público asistente.
+                        <br><br>Esta capacitación está diseñada para ser cubierta de la siguiente manera. <br> <br>
+                        
+                        <p style="margin:3px 0;"><strong>Fecha Tentativa de Servicio:</strong> {{ $detalleCap?->fecha_servicio ? \Carbon\Carbon::parse($detalleCap->fecha_servicio)->format('d/m/Y') : 'N/A' }}</p>
+                        <p style="margin:3px 0;"><strong>Horas de Capacitación:</strong> {{ $detalleCap?->horas_capacitacion ? $detalleCap->horas_capacitacion . ' hrs' : 'N/A' }}</p>
+                        <p style="margin:3px 0;"><strong>Número de Participantes:</strong> {{ $detalleCap?->num_participantes ?? 'N/A' }}</p>
+                        <p style="margin:3px 0;"><strong>Modalidad:</strong> {{ $detalleCap?->modalidad_sugerida ?? 'N/A' }}</p>
+                    @endif
                 </div>
-            </div>
-            <div style="margin-left: 40px; font-size:13px; color:#334155; margin-top:12px;">
-                <p style="margin:3px 0;"><strong>Fecha Tentativa de Servicio:</strong> {{ $detalleCap?->fecha_servicio ? \Carbon\Carbon::parse($detalleCap->fecha_servicio)->format('d/m/Y') : 'N/A' }}</p>
-                <p style="margin:3px 0;"><strong>Horas de Capacitación:</strong> {{ $detalleCap?->horas_capacitacion ? $detalleCap->horas_capacitacion . ' hrs' : 'N/A' }}</p>
-                <p style="margin:3px 0;"><strong>Número de Participantes:</strong> {{ $detalleCap?->num_participantes ?? 'N/A' }}</p>
-                <p style="margin:3px 0;"><strong>Modalidad:</strong> {{ $detalleCap?->modalidad_sugerida ?? 'N/A' }}</p>
             </div>
             <br>
             <div class="payment-header-text">
                 EQUIPO DE ASESORES LÍDERES- QSCI GROUP
+            </div>
+            <div class="seccion-descripcion"; "font-size: 13px;">
+                @if($exponentes->count() > 0)
+                    @foreach($exponentes as $exponente)
+                        <div><strong> {{ $exponente->nombre }} {{ $exponente->apellidos }}</strong> <br>{{$exponente->presentacion}} <br> <br></div>
+                    @endforeach
+                @endif
+            </div>
+            <br> <br> <br>
+            <div class="issued-name">
+                &nbsp;&nbsp;&nbsp;&nbsp;2.3 Coordinación del servicio y requisitos para el servicio en la modalidad virtual <br><br>
+
+                <div style="margin-left: 40px; font-weight: normal;">
+                    1. QSCI Consulting designará a un representante responsable de realizar las
+                    coordinaciones del servicio con la empresa solicitante. <br>
+                    2. QSCI Consulting será el responsable de hacer cumplir la actividad
+                    propuesta y requiere del compromiso de la empresa de facilitar el tiempo
+                    al personal asignado en las actividades programadas. <br>
+                    3. La disponibilidad del curso es de acuerdo a coordinación de la empresa
+                    contratante y nuestra empresa.
+                </div>
             </div>
 
             <!-- III. PROPUESTA ECONÓMICA -->
@@ -218,10 +258,9 @@
                 <thead>
                     <tr>
                         <th>Código</th>
-                        <th style="width: 40%;">Descripción</th>
-                        <th>Cantidad</th>
-                        <th>Precio Unitario</th>
-                        <th>Subtotal</th>
+                        <th style="width: 40%;">Temas</th>
+                        <th>Tiempo de Duración</th>
+                        <th>Precio a Pagar</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -242,9 +281,8 @@
                                 <br><small style="color: #6CB52D;"><em>Frecuencia: {{ $detalle->frecuencia_sugerida }}</em></small>
                             @endif
                         </td>
-                        <td class="text-center">{{ $detalle->cantidad }}</td>
+                        <td class="text-center">{{ $detalle->horas_capacitacion }}</td>
                         <td class="text-right">S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
-                        <td class="text-right"><strong>S/ {{ number_format($detalle->cantidad * $detalle->precio_unitario, 2) }}</strong></td>
                     </tr>
                     @endforeach
                 </tbody>
