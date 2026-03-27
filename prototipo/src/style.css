@@ -899,6 +899,21 @@ body {
   color: #166534;
 }
 
+.badge.info {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.badge.purple {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.badge.cyan {
+  background: #cffafe;
+  color: #155e75;
+}
+
 .badge.orange {
   background: #fed7aa;
   color: #9a3412;

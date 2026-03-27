@@ -51,7 +51,7 @@ let quillInstance: any = null; // Usaremos esta variable para manejar el editor
 //  STATE 
 let cotizacionesData: Cotizacion[] = [];
 let estadisticasData: EstadisticasCotizaciones | null = null;
-let filtros = { search: '', tipo: '' };
+let filtros = { search: '', tipo: '', estado: '' };
 let contadorLineas = 0;
 let incluyeIgv = true;
 let plantasClienteData: any[] = [];
@@ -515,6 +515,12 @@ export function renderComercialCotizaciones(): string {
             <option value="Producto">Producto</option>
             <option value="Capacitacion">Capacitación</option>
           </select>
+          <select class="op-filter-select" id="cotiz-filter-estado">
+            <option value="">Todos los estados</option>
+            <option value="Aceptada">Aceptada</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Rechazada">Rechazada</option>
+          </select>
         </div>
       </div>
 
@@ -585,13 +591,20 @@ function renderizarEstadisticas() {
 
 async function cargarCotizaciones() {
   try {
-    const params: any = { estado: 'Aceptada' };
+    const params: any = {};
     if (filtros.search) params.search = filtros.search;
     if (filtros.tipo) params.tipo = filtros.tipo;
+    if (filtros.estado) params.estado = filtros.estado;
 
     const response = await cotizacionService.getAll(params);
     const data = response.data || response;
     cotizacionesData = Array.isArray(data) ? data : (data as any).data || [];
+    cotizacionesData.sort((a: any, b: any) => {
+      const fa = Date.parse(String(a?.fecha_emision || '')) || 0;
+      const fb = Date.parse(String(b?.fecha_emision || '')) || 0;
+      if (fb !== fa) return fb - fa;
+      return Number(b?.id || 0) - Number(a?.id || 0);
+    });
     paginaActual = 1; // Resetear a primera página al cargar nuevos datos
     renderizarTabla();
   } catch (error) {
@@ -620,14 +633,31 @@ function renderizarTabla() {
     const numero = cot.numero || cot.numero_cotizacion || '—';
     const cliente = cot.cliente_nombre || (cot.cliente as any)?.nombre_empresa || '—';
     const fecha = cot.fecha_emision ? new Date(cot.fecha_emision).toLocaleDateString('es-PE') : '—';
-    const tipo = cot.tipo || cot.tipo_cotizacion || '—';
+    const tipoRaw = cot.tipo || cot.tipo_cotizacion || '—';
+    const tipoNorm = String(tipoRaw)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
     const total = typeof cot.total === 'number' ? `S/ ${cot.total.toFixed(2)}` : '—';
     const estado = cot.estado || '—';
 
-    const tipoBadge: Record<string, string> = {
-      'Servicio': 'badge-blue',
-      'Producto': 'badge-purple',
-      'Capacitacion': 'badge-orange'
+    let tipoBadgeClass = 'info';
+    let tipoLabel = String(tipoRaw || '—');
+    if (tipoNorm.includes('serv')) {
+      tipoBadgeClass = 'info';
+      tipoLabel = 'Servicio';
+    } else if (tipoNorm.includes('prod')) {
+      tipoBadgeClass = 'purple';
+      tipoLabel = 'Producto';
+    } else if (tipoNorm.includes('capacit')) {
+      tipoBadgeClass = 'cyan';
+      tipoLabel = 'Capacitación';
+    }
+
+    const estadoBadge: Record<string, string> = {
+      'Aceptada': 'badge-green',
+      'Pendiente': 'badge-warning',
+      'Rechazada': 'red',
     };
 
     return `
@@ -635,8 +665,8 @@ function renderizarTabla() {
         <td><strong>${numero}</strong></td>
         <td>${cliente}</td>
         <td>${fecha}</td>
-        <td><span class="badge ${tipoBadge[tipo] || 'badge-blue'}">${tipo}</span></td>
-        <td>${estado}</td>
+        <td><span class="badge ${tipoBadgeClass}">${tipoLabel}</span></td>
+        <td><span class="badge ${estadoBadge[estado] || 'badge-warning'}">${estado}</span></td>
         <td><strong>${total}</strong></td>
         <td>
           <div class="action-buttons">
@@ -1037,9 +1067,6 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
               <button type="button" class="btn-secondary" id="btn-agregar-equipo-receta-servicio" style="padding:6px 10px;font-size:12px;" title="Agregar equipo por servicio/planta/área">
                 Agregar Equipo
               </button>
-              <button type="button" class="btn-secondary" id="btn-cargar-receta-servicio" style="padding:6px 10px;font-size:12px;">
-                Cargar Receta
-              </button>
               <button type="button" class="btn-secondary" id="btn-agregar-prod-receta-servicio" style="padding:6px 10px;font-size:12px;">
                 Agregar Producto
               </button>
@@ -1060,7 +1087,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
               <tbody id="receta-servicio-body"></tbody>
             </table>
           </div>
-          <div id="receta-servicio-empty" style="text-align:center;padding:10px;color:#94a3b8;font-size:12px;">Sin productos de receta. Use "Cargar Receta", "Agregar Equipo" o "Agregar Producto".</div>
+          <div id="receta-servicio-empty" style="text-align:center;padding:10px;color:#94a3b8;font-size:12px;">Sin productos de receta. Use "Agregar Equipo" o "Agregar Producto".</div>
 
           <div id="modal-cot-receta-equipo" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10000;align-items:center;justify-content:center;">
             <div style="background:#fff;border-radius:12px;width:min(520px,92vw);box-shadow:0 20px 40px rgba(15,23,42,.25);overflow:hidden;">
@@ -1077,7 +1104,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
                   <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Equipo <span style="color:#ef4444">*</span></label>
                   <select id="cot-receta-equipo-id" class="form-control" style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;"></select>
                 </div>
-                <p style="font-size:12px;color:#64748b;margin:0;">Se creará el grupo y se intentarán cargar los productos de receta asociados a ese equipo.</p>
+                <p style="font-size:12px;color:#64748b;margin:0;">Se creará el grupo del equipo y podrá añadir los productos manualmente.</p>
               </div>
               <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #e2e8f0;background:#f8fafc;">
                 <button type="button" id="modal-cot-receta-equipo-cancelar" class="btn-secondary" style="padding:6px 10px;font-size:12px;">Cancelar</button>
@@ -1505,10 +1532,6 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 
     panelEl.querySelector('#btn-agregar-equipo-receta-servicio')?.addEventListener('click', () => {
       void abrirModalAgregarEquipoReceta(panelEl);
-    });
-
-    panelEl.querySelector('#btn-cargar-receta-servicio')?.addEventListener('click', () => {
-      void cargarRecetaServicioDesdeDetalle(panelEl);
     });
 
     panelEl.querySelector('#modal-cot-receta-equipo-cerrar')?.addEventListener('click', () => {
@@ -2521,61 +2544,32 @@ async function confirmarAgregarEquipoReceta(panelEl: HTMLElement) {
   }
 
   const equipoDesc = getEquipoNameReceta(idEquipo);
-  let agregados = 0;
+  const existeGrupo = recetaServicioRows.some((r) =>
+    r.id_servicio === idServicio
+    && (r.id_cliente_planta || 0) === (idPlanta || 0)
+    && (r.id_cliente_planta_area || 0) === (idArea || 0)
+    && (r.id_equipo || 0) === idEquipo,
+  );
 
-  try {
-    const res = await servicioService.getProductos(idServicio);
-    const raw = res.data || res;
-    const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
-
-    items
-      .filter((item: any) => Number(item.id_equipo || 0) === idEquipo)
-      .forEach((item: any) => {
-        const existe = recetaServicioRows.find((r) =>
-          r.id_producto === Number(item.id_producto || 0)
-          && r.id_servicio === idServicio
-          && (r.id_cliente_planta || 0) === (idPlanta || 0)
-          && (r.id_cliente_planta_area || 0) === (idArea || 0)
-          && (r.id_equipo || 0) === idEquipo,
-        );
-
-        if (existe) {
-          existe.cantidad += Number(item.cantidad_default || 0);
-          return;
-        }
-
-        recetaServicioRows.push({
-          id_servicio: idServicio,
-          id_equipo: idEquipo,
-          equipo_descripcion: item.equipo_descripcion || equipoDesc,
-          id_producto: Number(item.id_producto || 0),
-          cantidad: Number(item.cantidad_default || 1),
-          observacion: item.observacion || '',
-          id_cliente_planta: idPlanta,
-          id_cliente_planta_area: idArea,
-        });
-        agregados += 1;
-      });
-  } catch (e) {
-    console.error('Error cargando receta por equipo en cotización:', e);
+  if (existeGrupo) {
+    mostrarToast('warning', 'Equipo duplicado', 'Ese equipo ya está agregado en el bloque seleccionado');
+    return;
   }
 
-  if (agregados === 0) {
-    recetaServicioRows.push({
-      id_servicio: idServicio,
-      id_equipo: idEquipo,
-      equipo_descripcion: equipoDesc,
-      id_producto: 0,
-      cantidad: 1,
-      observacion: '',
-      id_cliente_planta: idPlanta,
-      id_cliente_planta_area: idArea,
-    });
-  }
+  recetaServicioRows.push({
+    id_servicio: idServicio,
+    id_equipo: idEquipo,
+    equipo_descripcion: equipoDesc,
+    id_producto: 0,
+    cantidad: 1,
+    observacion: '',
+    id_cliente_planta: idPlanta,
+    id_cliente_planta_area: idArea,
+  });
 
   renderRecetaServicio(panelEl);
   cerrarModalAgregarEquipoReceta(panelEl);
-  mostrarToast('success', 'Equipo agregado', 'Ahora puede añadir productos al grupo creado');
+  mostrarToast('success', 'Equipo agregado', 'Grupo creado. Ahora agregue los productos manualmente');
 }
 
 function getRecetaGroupLabel(row: RecetaServicioRow, panelEl: HTMLElement): string {
@@ -2696,62 +2690,6 @@ function renderRecetaServicio(panelEl: HTMLElement) {
       renderRecetaServicio(panelEl);
     });
   });
-}
-
-async function cargarRecetaServicioDesdeDetalle(panelEl: HTMLElement) {
-  const groups = getServiceLineGroups(panelEl);
-  if (groups.length === 0) {
-    mostrarToast('warning', 'Sin servicios', 'Agregue al menos una línea de servicio antes de cargar la receta');
-    return;
-  }
-
-  const nuevasFilas: RecetaServicioRow[] = [];
-  const cargados = new Set<string>();
-  for (const g of groups) {
-    const key = `${g.idServicio}-${g.idPlanta || 0}-${g.idArea || 0}`;
-    if (cargados.has(key)) continue;
-    cargados.add(key);
-    try {
-      const res = await servicioService.getProductos(g.idServicio);
-      const raw = res.data || res;
-      const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
-      items.forEach((item: any) => {
-        const existente = nuevasFilas.find((r) =>
-          r.id_servicio === g.idServicio
-          && (r.id_cliente_planta || 0) === (g.idPlanta || 0)
-          && (r.id_cliente_planta_area || 0) === (g.idArea || 0)
-          && (r.id_equipo || 0) === (item.id_equipo || 0)
-          && r.id_producto === item.id_producto,
-        );
-
-        if (existente) {
-          existente.cantidad += Number(item.cantidad_default || 0);
-        } else {
-          nuevasFilas.push({
-            id_servicio: g.idServicio,
-            id_equipo: item.id_equipo || null,
-            equipo_descripcion: item.equipo_descripcion || '',
-            id_producto: Number(item.id_producto || 0),
-            cantidad: Number(item.cantidad_default || 0),
-            observacion: item.observacion || '',
-            id_cliente_planta: g.idPlanta,
-            id_cliente_planta_area: g.idArea,
-          });
-        }
-      });
-    } catch (error) {
-      console.error('Error cargando receta de servicio:', error);
-    }
-  }
-
-  recetaServicioRows = nuevasFilas;
-  renderRecetaServicio(panelEl);
-
-  if (recetaServicioRows.length > 0) {
-    mostrarToast('success', 'Receta cargada', `Se cargaron ${recetaServicioRows.length} producto(s) desde la receta de servicios`);
-  } else {
-    mostrarToast('warning', 'Sin receta', 'Los servicios seleccionados no tienen productos en su receta');
-  }
 }
 
 async function guardarCotizacion(tipoFijo?: string) {
@@ -3180,6 +3118,12 @@ export function initCotizacionesEvents() {
   // Filtro de tipo
   document.getElementById('cotiz-filter-tipo')?.addEventListener('change', (e) => {
     filtros.tipo = (e.target as HTMLSelectElement).value;
+    cargarCotizaciones();
+  });
+
+  // Filtro de estado
+  document.getElementById('cotiz-filter-estado')?.addEventListener('change', (e) => {
+    filtros.estado = (e.target as HTMLSelectElement).value;
     cargarCotizaciones();
   });
 
