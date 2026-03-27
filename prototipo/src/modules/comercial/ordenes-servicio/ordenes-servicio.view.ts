@@ -189,6 +189,10 @@ export function renderComercialOrdenesServicio() {
                   <option value="0">No - Sin IGV</option>
                 </select>
               </div>
+              <div class="oc-field" style="grid-column: 1 / -1;">
+                  <label class="oc-label">Observaciones</label>
+                  <textarea id="oc-observaciones" class="oc-input" rows="3" placeholder="Observaciones adicionales..."></textarea>
+              </div>
             </div>
           </div>
 
@@ -1508,6 +1512,7 @@ function limpiarFormODS() {
   incluyeIgv = true;
   const igvRow = document.getElementById('ods-igv-row') as HTMLElement;
   if (igvRow) igvRow.style.display = 'flex';
+  (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = '';
   (document.getElementById('ods-cotizacion-info') as HTMLElement).style.display = 'none';
   (document.getElementById('ods-detalle-body') as HTMLElement).innerHTML = '';
   (document.getElementById('ods-subtotal') as HTMLElement).textContent = 'S/ 0.00';
@@ -1589,6 +1594,8 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
     (document.getElementById('ods-igv') as HTMLSelectElement).value = incluyeIgv ? '1' : '0';
     const igvRow = document.getElementById('ods-igv-row') as HTMLElement;
     if (igvRow) igvRow.style.display = incluyeIgv ? 'flex' : 'none';
+
+    (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = orden.observaciones || '';
 
     // 6. Detalles (Agregamos las líneas)
     // Cargar plantas del cliente antes de crear las filas
@@ -1699,6 +1706,7 @@ async function guardarODS() {
   const fechaTentativa = (document.getElementById('ods-fecha-tentativa') as HTMLInputElement).value;
   const emitidoPor = (document.getElementById('ods-emitido-por') as HTMLInputElement).value;
   const version = (document.getElementById('ods-version') as HTMLInputElement).value;
+  const observaciones = (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value?.trim();
 
   if (!idCotizacion) {
     mostrarToast('error', 'Campo requerido', 'Debe seleccionar una cotizacion de referencia');
@@ -1752,6 +1760,7 @@ async function guardarODS() {
     emitido_por: Number(emitidoPor),
     version: version || null,
     incluye_igv: incluyeIgv,
+    observaciones: observaciones || null,
     detalles,
     productos: odsProductoRows
       .filter(r => r.id_producto > 0 && r.cantidad > 0)

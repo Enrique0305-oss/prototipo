@@ -21,7 +21,8 @@ class OrdenProducto extends Model
         'igv',
         'incluye_igv',
         'emitido_por',
-        'estado'
+        'estado',
+        'observaciones'
     ];
 
     protected $casts = [

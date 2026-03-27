@@ -199,6 +199,7 @@ class OrdenServicioController extends Controller
             'fecha_aceptacion' => 'required|date',
             'fecha_tentativa' => 'nullable|date',
             'emitido_por' => 'required|exists:personal,id',
+            'observaciones' => 'nullable|string',
             'codigo_doc' => 'nullable|string|max:20',
             'version' => 'nullable|string|max:10',
             'detalles' => 'required|array|min:1',
@@ -271,6 +272,7 @@ class OrdenServicioController extends Controller
                 'total_costo' => $total,
                 'emitido_por' => $validated['emitido_por'],
                 'estado' => 'Aprobado',
+                'observaciones' => $validated['observaciones'] ?? null,
             ]);
 
             // Crear detalles de servicios
@@ -402,6 +404,7 @@ class OrdenServicioController extends Controller
             'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
             'incluye_igv' => 'sometimes|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
+            'observaciones' => 'nullable|string',
             // Productos y equipos
             'productos' => 'sometimes|array',
             'productos.*.id_producto' => 'required_with:productos|integer|exists:productos,id',
