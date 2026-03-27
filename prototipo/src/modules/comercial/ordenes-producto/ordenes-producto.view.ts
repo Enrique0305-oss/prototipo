@@ -216,6 +216,11 @@ export function renderComercialOrdenesProducto() {
             </div>
           </div>
 
+          <div class="oc-field" style="grid-column: 1 / -1;">
+              <label class="oc-label">Observaciones</label>
+              <textarea id="oc-observaciones" class="oc-input" rows="3" placeholder="Observaciones adicionales..."></textarea>
+          </div>
+
           <!-- Detalle de Productos -->
           <div class="op-section">
             <div class="op-section-header">
@@ -675,7 +680,7 @@ function limpiarFormOP() {
   incluyeIgv = true;
   const igvRow = document.getElementById('op-igv-row');
   if (igvRow) igvRow.style.display = 'flex';
-  
+  (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = '';
   (document.getElementById('op-cotizacion-info') as HTMLElement).style.display = 'none';
   (document.getElementById('op-detalle-body') as HTMLElement).innerHTML = '';
   (document.getElementById('op-subtotal') as HTMLElement).textContent = 'S/ 0.00';
@@ -803,6 +808,7 @@ async function abrirModalEditarOP(id: number, soloLectura: boolean = false) {
     const igvRow = document.getElementById('op-igv-row') as HTMLElement;
     if (igvRow) igvRow.style.display = incluyeIgv ? 'flex' : 'none';
 
+    (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = orden.observaciones || '';
     // 5. Detalles de Productos
     const detalles = orden.detalles || [];
     detalles.forEach((d: any) => {
@@ -860,6 +866,7 @@ async function guardarOP() {
   const fechaEnvio = (document.getElementById('op-fecha-envio') as HTMLInputElement).value;
   const fechaAceptacion = (document.getElementById('op-fecha-aceptacion') as HTMLInputElement).value;
   const emitidoPor = (document.getElementById('op-emitido-por') as HTMLSelectElement).value;
+  const observaciones = (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value?.trim();
 
   if (!idCotizacion) {
     mostrarToast('error', 'Campo requerido', 'Debe seleccionar una cotizacion de referencia');
@@ -909,6 +916,7 @@ async function guardarOP() {
     emitido_por: Number(emitidoPor),
     incluye_igv: incluyeIgv,
     detalles,
+    observaciones: observaciones || null,
   };
 
   try {

@@ -323,12 +323,6 @@ function renderTabla() {
                 ' Rechazar' +
               '</button>'
             : '') +
-          '<button class="aprob-btn-pdf btn-descargar-pdf" data-id="' + c.id + '" data-num="' + (c.numero || '') + '" title="Descargar PDF">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
-            ' PDF' +
-          '</button>' +
-          '<button class="aprob-btn-edit btn-editar-cotiz" data-id="' + c.id + '" title="Editar cotización">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>' +
           '</button>' +
           '<button class="aprob-btn-view btn-ver-detalle" data-id="' + c.id + '" title="Ver detalle">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' +
@@ -364,15 +358,6 @@ function bindAccionesTabla() {
     });
   });
 
-  // PDF
-  document.querySelectorAll('.btn-descargar-pdf').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = Number((btn as HTMLElement).dataset.id);
-      const num = (btn as HTMLElement).dataset.num || '';
-      await descargarPDF(id, num);
-    });
-  });
-
   // Ver detalle
   document.querySelectorAll('.btn-ver-detalle').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -381,52 +366,8 @@ function bindAccionesTabla() {
     });
   });
 
-  // Editar cotización
-  document.querySelectorAll('.btn-editar-cotiz').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = Number((btn as HTMLElement).dataset.id);
-      if (!id) return;
-      irAEdicionCotizacion(id);
-    });
-  });
 }
 
-function irAEdicionCotizacion(id: number) {
-  sessionStorage.setItem(COTIZACION_EDIT_SESSION_KEY, String(id));
-
-  const abrirSubmenuCotizaciones = () => {
-    const subCotizaciones = document.querySelector('.submenu-item[data-submenu="Cotizaciones"]') as HTMLButtonElement | null;
-    if (!subCotizaciones) return false;
-    subCotizaciones.click();
-    return true;
-  };
-
-  if (abrirSubmenuCotizaciones()) {
-    return;
-  }
-
-  const comercialBtn = document.querySelector('.nav-item[data-menu="Comercial"]') as HTMLButtonElement | null;
-  if (!comercialBtn) {
-    mostrarToast('warning', 'Navegación', 'No se pudo abrir el módulo de Cotizaciones');
-    return;
-  }
-
-  comercialBtn.click();
-
-  let intentos = 0;
-  const timer = setInterval(() => {
-    intentos += 1;
-    if (abrirSubmenuCotizaciones()) {
-      clearInterval(timer);
-      return;
-    }
-
-    if (intentos >= 20) {
-      clearInterval(timer);
-      mostrarToast('warning', 'Navegación', 'No se encontró el acceso a Cotizaciones');
-    }
-  }, 100);
-}
 
 // ========================================
 // CONFIRM DIALOG
@@ -481,21 +422,6 @@ async function ejecutarCambioEstado() {
     mostrarToast('error', 'Error', msg);
     dialog.style.display = 'none';
     pendingAction = null;
-  }
-}
-
-// ========================================
-// PDF DOWNLOAD
-// ========================================
-
-async function descargarPDF(id: number, numCot: string) {
-  try {
-    const filename = numCot ? numCot.replace(/\s/g, '_') + '.pdf' : 'cotizacion_' + id + '.pdf';
-    await cotizacionService.downloadPDF(id, filename);
-    mostrarToast('success', 'PDF Descargado', 'Se descargó el PDF correctamente');
-  } catch (e: any) {
-    console.error('Error descargando PDF:', e);
-    mostrarToast('error', 'Error', 'No se pudo descargar el PDF');
   }
 }
 
@@ -567,10 +493,6 @@ async function abrirDetalle(id: number) {
     // Footer with actions
     const isPendiente = cot.estado === 'Pendiente';
     footerEl.innerHTML =
-      '<button class="aprob-btn-pdf" id="modal-btn-pdf" data-id="' + cot.id + '" data-num="' + (cot.numero_cotizacion || '') + '">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
-        ' Descargar PDF' +
-      '</button>' +
       (isPendiente
         ? '<button class="aprob-btn-reject" id="modal-btn-rechazar" data-id="' + cot.id + '">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>' +
@@ -583,9 +505,6 @@ async function abrirDetalle(id: number) {
         : '');
 
     // Bind modal actions
-    document.getElementById('modal-btn-pdf')?.addEventListener('click', async () => {
-      await descargarPDF(cot.id, cot.numero_cotizacion || '');
-    });
     document.getElementById('modal-btn-aprobar')?.addEventListener('click', () => {
       modal.style.display = 'none';
       mostrarConfirmacion('Aceptada', cot.id, cot.numero_cotizacion || '');

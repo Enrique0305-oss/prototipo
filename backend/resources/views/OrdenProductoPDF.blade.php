@@ -136,6 +136,9 @@
     {{-- ── OBSERVACIÓN ── --}}
     <div class="observation">
         <strong>Observaci&oacute;n:</strong> El precio {{ $orden->incluye_igv ? 'SI' : 'NO' }} incluye IGV.
+        @if($orden->observaciones)
+            <br>{{ $orden->observaciones }}
+        @endif
     </div>
 
     {{-- ── EMITIDO POR ── --}}

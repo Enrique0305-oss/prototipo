@@ -182,6 +182,7 @@ class OrdenProductoController extends Controller
             'detalles.*.cantidad' => 'required|integer|min:1',
             'detalles.*.precio_unitario' => 'required|numeric|min:0',
             'incluye_igv' => 'sometimes|boolean',
+            'observaciones' => 'nullable|string',
         ]);
 
         $cotizacion = Cotizacion::find($validated['id_cotizacion']);
@@ -247,6 +248,7 @@ class OrdenProductoController extends Controller
                 'total' => $total,
                 'emitido_por' => $validated['emitido_por'],
                 'estado' => 'Aprobado',
+                'observaciones' => $validated['observaciones'] ?? null,
             ]);
 
             // Crear detalles + descontar inventario + registrar kardex
@@ -341,6 +343,7 @@ class OrdenProductoController extends Controller
             'detalles.*.cantidad' => 'required_with:detalles|integer|min:1',
             'detalles.*.precio_unitario' => 'required_with:detalles|numeric|min:0',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
+            'observaciones' => 'nullable|string',
         ]);
 
         try {
