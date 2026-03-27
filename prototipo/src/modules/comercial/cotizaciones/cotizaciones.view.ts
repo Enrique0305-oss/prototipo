@@ -526,7 +526,7 @@ export function renderComercialCotizaciones(): string {
               <th>CLIENTE</th>
               <th>FECHA EMISIÓN</th>
               <th>TIPO</th>
-              <th>IGV</th>
+              <th>ESTADO</th>
               <th>TOTAL</th>
               <th>ACCIONES</th>
             </tr>
@@ -622,7 +622,7 @@ function renderizarTabla() {
     const fecha = cot.fecha_emision ? new Date(cot.fecha_emision).toLocaleDateString('es-PE') : '—';
     const tipo = cot.tipo || cot.tipo_cotizacion || '—';
     const total = typeof cot.total === 'number' ? `S/ ${cot.total.toFixed(2)}` : '—';
-    const tieneIgv = cot.incluye_igv !== false;
+    const estado = cot.estado || '—';
 
     const tipoBadge: Record<string, string> = {
       'Servicio': 'badge-blue',
@@ -636,7 +636,7 @@ function renderizarTabla() {
         <td>${cliente}</td>
         <td>${fecha}</td>
         <td><span class="badge ${tipoBadge[tipo] || 'badge-blue'}">${tipo}</span></td>
-        <td>${tieneIgv ? '<span style="color:#16a34a;font-weight:600;">Sí</span>' : '<span style="color:#94a3b8;">No</span>'}</td>
+        <td>${estado}</td>
         <td><strong>${total}</strong></td>
         <td>
           <div class="action-buttons">
