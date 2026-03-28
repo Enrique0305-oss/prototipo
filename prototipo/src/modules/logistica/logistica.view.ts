@@ -323,12 +323,12 @@ export function renderServiciosDisponiblesTab() {
     </div>
 
     <!-- ============================================ -->
-    <!-- CATÁLOGO DE CAPACITACIONES Y AUDITORÍAS -->
+    <!-- CATÁLOGO DE CAPACITACIONES Y Asesorias -->
     <!-- ============================================ -->
     <div style="margin-top:40px;padding-top:32px;border-top:2px solid #e2e8f0;">
       <h2 style="font-size:20px;font-weight:700;color:#1a2332;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-        Catálogo de Capacitaciones y Auditorías
+        Catálogo de Capacitaciones y Asesorias
       </h2>
 
       <div class="search-filter-bar">
@@ -339,7 +339,7 @@ export function renderServiciosDisponiblesTab() {
         <select class="filter-select" id="catalogo-filter-tipo">
           <option value="">Todos los tipos</option>
           <option value="Capacitación">Capacitaciones</option>
-          <option value="Auditoría">Auditorías</option>
+          <option value="Asesoría">Asesoría</option>
         </select>
         <select class="filter-select" id="catalogo-filter-estado">
           <option value="activo">Activos</option>
@@ -378,7 +378,7 @@ export function renderServiciosDisponiblesTab() {
             <label class="form-label">Tipo <span style="color:#ef4444">*</span></label>
             <select id="catalogo-tipo" class="form-input">
               <option value="Capacitación">Capacitación</option>
-              <option value="Auditoría">Auditoría</option>
+              <option value="Asesoría">Asesoría</option>
             </select>
           </div>
           <div class="form-group">
@@ -1222,7 +1222,7 @@ function limpiarFormCatalogo() {
 
 function abrirModalNuevoCatalogo() {
   limpiarFormCatalogo();
-  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitación / Auditoría';
+  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitación / Asesoría';
   (document.getElementById('modal-catalogo') as HTMLElement).style.display = 'flex';
 }
 
@@ -1258,7 +1258,7 @@ function abrirModalEliminarCatalogo(id: number, nombre: string) {
 
 async function guardarCatalogo() {
   const id = (document.getElementById('catalogo-id') as HTMLInputElement).value;
-  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitación' | 'Auditoría';
+  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitación' | 'Asesoría';
   const nombre = (document.getElementById('catalogo-nombre') as HTMLInputElement).value.trim();
   const descripcion = (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value.trim() || undefined;
   const precio = (document.getElementById('catalogo-precio') as HTMLInputElement).value;

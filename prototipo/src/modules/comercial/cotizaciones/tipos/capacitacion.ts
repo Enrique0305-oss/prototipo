@@ -13,7 +13,11 @@ function getDisabledFieldsState(): DisabledFieldsState {
 
 function buildItemOptions(data: CotizacionTipoData): string {
   let options = '<option value="">Seleccione...</option>';
-  data.catalogoCapAud.forEach((c: any) => {
+  const filtrados = data.tipoCapAudFiltro 
+    ? data.catalogoCapAud.filter((c: any) => c.tipo === data.tipoCapAudFiltro)
+    : data.catalogoCapAud;
+  
+  filtrados.forEach((c: any) => {
     const desc = (c.descripcion || '').replace(/"/g, '&quot;');
     const precio = c.precio_referencial || 0;
     const duracion = c.duracion_horas ? ` (${c.duracion_horas}hrs)` : '';

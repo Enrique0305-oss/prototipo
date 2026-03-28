@@ -84,7 +84,7 @@ class CatalogoCapacitacionAuditoriaController extends Controller
     {
         try {
             $validated = $request->validate([
-                'tipo' => 'required|in:Capacitación,Auditoría',
+                'tipo' => 'required|in:Capacitación,Asesoría',
                 'nombre' => 'required|string|max:200',
                 'descripcion' => 'nullable|string',
                 'precio_referencial' => 'nullable|numeric|min:0',
@@ -132,7 +132,7 @@ class CatalogoCapacitacionAuditoriaController extends Controller
             }
 
             $validated = $request->validate([
-                'tipo' => 'in:Capacitación,Auditoría',
+                'tipo' => 'in:Capacitación,Asesoría',
                 'nombre' => 'string|max:200',
                 'descripcion' => 'nullable|string',
                 'precio_referencial' => 'nullable|numeric|min:0',
@@ -248,7 +248,7 @@ class CatalogoCapacitacionAuditoriaController extends Controller
             $activos = CatalogoCapacitacionAuditoria::where('estado', 'activo')->count();
             $inactivos = CatalogoCapacitacionAuditoria::where('estado', 'inactivo')->count();
             $capacitaciones = CatalogoCapacitacionAuditoria::where('tipo', 'Capacitación')->where('estado', 'activo')->count();
-            $auditorias = CatalogoCapacitacionAuditoria::where('tipo', 'Auditoría')->where('estado', 'activo')->count();
+            $aseorias = CatalogoCapacitacionAuditoria::where('tipo', 'Asesoría')->where('estado', 'activo')->count();
 
             return response()->json([
                 'success' => true,
@@ -257,7 +257,7 @@ class CatalogoCapacitacionAuditoriaController extends Controller
                     'activos' => $activos,
                     'inactivos' => $inactivos,
                     'capacitaciones' => $capacitaciones,
-                    'auditorias' => $auditorias,
+                    'asesorias' => $aseorias,
                 ]
             ]);
 

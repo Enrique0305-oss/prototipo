@@ -25,7 +25,8 @@ class Cotizacion extends Model
         'observaciones',
         'propuesta_tecnica',
         'receta_servicio',
-        'exponentes_ids'
+        'exponentes_ids',
+        'objetivos_asesoria'
     ];
 
     protected $casts = [

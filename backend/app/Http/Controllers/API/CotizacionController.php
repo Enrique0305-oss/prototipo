@@ -101,7 +101,7 @@ class CotizacionController extends Controller
         $validated = $request->validate([
             'id_cliente' => 'required|exists:cliente,id',
             'id_multicim' => 'required|exists:multicim,id',
-            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion',
+            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion,Asesoria',
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
             'propuesta_tecnica' => 'nullable|string',
@@ -134,6 +134,8 @@ class CotizacionController extends Controller
             'detalles.*.horas_capacitacion' => 'nullable|numeric|min:0',
             'detalles.*.num_participantes' => 'nullable|integer|min:1',
             'detalles.*.fecha_servicio' => 'nullable|date',
+            'detalles.*.meses_implementacion' => 'nullable|integer|min:1',
+            'detalles.*.frecuencia_visita' => 'nullable|array',
         ]);
 
         DB::beginTransaction();
@@ -197,6 +199,8 @@ class CotizacionController extends Controller
                     'horas_capacitacion' => $detalle['horas_capacitacion'] ?? null,
                     'num_participantes' => $detalle['num_participantes'] ?? null,
                     'fecha_servicio' => $detalle['fecha_servicio'] ?? null,
+                    'meses_implementacion' => $detalle['meses_implementacion'] ?? null,
+                    'frecuencia_visita' => $detalle['frecuencia_visita'] ?? null,
                 ]);
             }
 
@@ -249,7 +253,7 @@ class CotizacionController extends Controller
         $validated = $request->validate([
             'id_cliente' => 'required|exists:cliente,id',
             'id_multicim' => 'required|exists:multicim,id',
-            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion',
+            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion,Asesoria',
             'fecha_emision' => 'nullable|date',
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
@@ -283,6 +287,8 @@ class CotizacionController extends Controller
             'detalles.*.horas_capacitacion' => 'nullable|numeric|min:0',
             'detalles.*.num_participantes' => 'nullable|integer|min:1',
             'detalles.*.fecha_servicio' => 'nullable|date',
+            'detalles.*.meses_implementacion' => 'nullable|integer|min:1',
+            'detalles.*.frecuencia_visita' => 'nullable|array',
         ]);
 
         DB::beginTransaction();
@@ -344,6 +350,8 @@ class CotizacionController extends Controller
                     'horas_capacitacion' => $detalle['horas_capacitacion'] ?? null,
                     'num_participantes' => $detalle['num_participantes'] ?? null,
                     'fecha_servicio' => $detalle['fecha_servicio'] ?? null,
+                    'meses_implementacion' => $detalle['meses_implementacion'] ?? null,
+                    'frecuencia_visita' => $detalle['frecuencia_visita'] ?? null,
                 ]);
             }
 

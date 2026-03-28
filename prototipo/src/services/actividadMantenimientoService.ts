@@ -17,7 +17,11 @@ export const actividadMantenimientoService = {
   },
 
   create: async (data: {
-    categoria: 'Programado' | 'Entregado' | 'Garantia';
+    motivo: string;
+    tipo_mantenimiento: 'Preventivo' | 'Correctivo';
+    tipo_equipo?: string;
+    frecuencia_sugerida?: string;
+    categoria?: 'Programado' | 'Entregado' | 'Garantia';
   }) => {
     return apiClient.post<ApiResponse<ActividadMantenimiento>>(
       '/actividades-mantenimiento',

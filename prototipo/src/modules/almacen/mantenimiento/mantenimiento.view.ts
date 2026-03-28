@@ -23,10 +23,14 @@ let mntEditId: number | null = null;
 let programaciones: ProgramacionMantenimiento[] = [];
 let progFiltroAnio = new Date().getFullYear();
 let progFiltroEquipo = '';
+let progTipoMantenimiento: 'Preventivo' | 'Correctivo' = 'Preventivo';
+let progVista: 'lista' | 'calendario' = 'lista';
+let progMesCalendario = new Date().getMonth() + 1;
 let previewFechas: PreviewFecha[] = [];
 let expandedProgramacion: number | null = null;
-let progAutoRefreshTimer: ReturnType<typeof setInterval> | null = null;
-let modoPrueba = false;
+
+let progDiaSeleccionado: number | null = null;
+let progMantenimientosDelDia: Array<{ id: number; equipo: string; motivo: string; estado: string; mntId: number }> = [];
 
 // ============================================================
 // TAB: MANTENIMIENTO (dinámico, conectado al backend)
@@ -88,7 +92,7 @@ function renderMantenimientoTab() {
           <option value="">Todos los equipos</option>
         </select>
         <select id="mnt-filter-actividad" class="op-filter-select" style="min-width:180px;">
-          <option value="">Todas las actividades</option>
+          <option value="">Todos los motivos</option>
         </select>
         <input type="date" id="mnt-filter-desde" class="op-filter-select" style="min-width:150px;" title="Desde">
         <input type="date" id="mnt-filter-hasta" class="op-filter-select" style="min-width:150px;" title="Hasta">
@@ -102,7 +106,7 @@ function renderMantenimientoTab() {
           <tr>
             <th>ID</th>
             <th>EQUIPO</th>
-            <th>ACTIVIDAD</th>
+            <th>MOTIVO</th>
             <th>FECHA</th>
             <th>OBSERVACIONES</th>
             <th>ACCIONES</th>
@@ -137,9 +141,9 @@ function renderMantenimientoTab() {
               </select>
             </div>
             <div>
-              <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Actividad *</label>
+              <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Motivo *</label>
               <select id="mant-actividad" class="search-input" style="width:100%; padding:10px;" required>
-                <option value="">Seleccione actividad...</option>
+                <option value="">Seleccione motivo...</option>
               </select>
             </div>
             <div>
@@ -187,19 +191,58 @@ function formatFecha(fecha: string): string {
   return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function getMotivoLabel(act?: ActividadMantenimiento | null): string {
+  if (!act) return 'N/A';
+  return (act.motivo || act.categoria || 'N/A') as string;
+}
+
+function getTipoMantenimiento(act?: ActividadMantenimiento | null): 'Preventivo' | 'Correctivo' | 'N/A' {
+  if (!act?.tipo_mantenimiento) return 'N/A';
+  return act.tipo_mantenimiento;
+}
+
 function categoriaBadge(cat: string): string {
-  const map: Record<string, string> = {
-    'Programado': 'warning',
-    'Entregado': 'success',
-    'Garantia': 'info'
-  };
-  const cls = map[cat] || 'info';
   const colorMap: Record<string, string> = {
-    'warning': 'background:#fef3c7; color:#92400e;',
-    'success': 'background:#dcfce7; color:#166534;',
-    'info': 'background:#dbeafe; color:#1e40af;'
+    'Preventivo': 'background:#dbeafe; color:#1e40af;',
+    'Correctivo': 'background:#fee2e2; color:#991b1b;',
+    'Programado': 'background:#fef3c7; color:#92400e;',
+    'Entregado': 'background:#dcfce7; color:#166534;',
+    'Garantia': 'background:#ede9fe; color:#5b21b6;',
+    'N/A': 'background:#f1f5f9; color:#475569;'
   };
-  return `<span style="padding:4px 10px; border-radius:20px; font-size:12px; font-weight:500; ${colorMap[cls]}">${cat}</span>`;
+  return `<span style="padding:4px 10px; border-radius:20px; font-size:12px; font-weight:500; ${colorMap[cat] || colorMap['N/A']}">${cat}</span>`;
+}
+
+function normalizarTexto(value: string): string {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
+function detectarTipoEquipo(descripcion: string): string {
+  const t = normalizarTexto(descripcion);
+  if (t.includes('MOTOASPERSOR')) return 'MOTOASPERSORA';
+  if (t.includes('TERMO') && t.includes('NEBULIZ')) return 'TERMO NEBULIZADOR';
+  if (t.includes('ASPERSOR') && t.includes('MANUAL')) return 'ASPERSORA MANUAL';
+  if (t.includes('ULV')) return 'ULV';
+  return 'GENERAL';
+}
+
+function filtrarMotivos(tipo: 'Preventivo' | 'Correctivo', equipoId?: number): ActividadMantenimiento[] {
+  const equipo = equiposLista.find(e => e.id === equipoId);
+  const tipoEquipo = equipo ? detectarTipoEquipo(equipo.descripcion) : '';
+
+  return actividadesLista.filter(a => {
+    if (a.estado !== 'Activo') return false;
+    if ((a.tipo_mantenimiento || 'Preventivo') !== tipo) return false;
+
+    if (tipo === 'Correctivo') return true;
+    if (!tipoEquipo) return true;
+
+    const motivoEquipo = (a.tipo_equipo || 'GENERAL').toUpperCase();
+    return motivoEquipo === 'GENERAL' || motivoEquipo === tipoEquipo;
+  });
 }
 
 async function cargarEstadisticasMant() {
@@ -251,8 +294,8 @@ async function cargarDropdownsMant() {
     // Dropdown filtro actividad
     const filterAct = document.getElementById('mnt-filter-actividad') as HTMLSelectElement;
     if (filterAct) {
-      filterAct.innerHTML = '<option value="">Todas las actividades</option>' +
-        actividadesLista.map(a => `<option value="${a.id}">${a.categoria}</option>`).join('');
+      filterAct.innerHTML = '<option value="">Todos los motivos</option>' +
+        actividadesLista.map(a => `<option value="${a.id}">${getMotivoLabel(a)} (${getTipoMantenimiento(a)})</option>`).join('');
     }
 
     // Dropdown modal equipo
@@ -265,8 +308,8 @@ async function cargarDropdownsMant() {
     // Dropdown modal actividad
     const modalAct = document.getElementById('mant-actividad') as HTMLSelectElement;
     if (modalAct) {
-      modalAct.innerHTML = '<option value="">Seleccione actividad...</option>' +
-        actividadesLista.map(a => `<option value="${a.id}">${a.categoria}</option>`).join('');
+      modalAct.innerHTML = '<option value="">Seleccione motivo...</option>' +
+        actividadesLista.map(a => `<option value="${a.id}">${getMotivoLabel(a)} (${getTipoMantenimiento(a)})</option>`).join('');
     }
   } catch (error) {
     console.error('Error cargando dropdowns:', error);
@@ -304,7 +347,10 @@ async function cargarMantenimientos() {
           <div style="font-weight:600;">${(m.equipo as any)?.descripcion || 'Equipo #' + m.id_equipo}</div>
           <div style="font-size:12px; color:#94a3b8;">${(m.equipo as any)?.marca || ''} ${(m.equipo as any)?.modelo || ''}</div>
         </td>
-        <td>${categoriaBadge((m.actividad as any)?.categoria || 'N/A')}</td>
+        <td>
+          <div style="font-weight:600;">${getMotivoLabel(m.actividad as any)}</div>
+          <div style="margin-top:4px;">${categoriaBadge(getTipoMantenimiento(m.actividad as any))}</div>
+        </td>
         <td>${formatFecha(m.fecha)}</td>
         <td><div style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${m.observaciones || ''}">${m.observaciones || '--'}</div></td>
         <td>
@@ -646,9 +692,9 @@ function formatFechaHora(fecha: string): string {
     + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-function frecuenciaLabel(meses: number, esPrueba = false): string {
-  if (esPrueba) return `Cada ${meses} min`;
+function frecuenciaLabel(meses: number): string {
   const labels: Record<number, string> = {
+    0: 'Unica',
     1: 'Mensual',
     2: 'Bimestral',
     3: 'Trimestral',
@@ -689,16 +735,7 @@ function renderProgramacionAnualTab(): string {
           </svg>
           Nueva Programación Anual
         </h3>
-        <!-- Toggle Modo Prueba -->
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; padding:6px 14px; border:2px dashed #f59e0b; border-radius:8px; background:#fffbeb;">
-          <input type="checkbox" id="toggle-modo-prueba" style="width:16px; height:16px; accent-color:#f59e0b; cursor:pointer;">
-          <span style="font-size:13px; font-weight:600; color:#92400e;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:2px;">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
-            </svg>
-            Modo Prueba (minutos)
-          </span>
-        </label>
+
       </div>
       <form id="form-programacion-anual">
         <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;">
@@ -709,15 +746,30 @@ function renderProgramacionAnualTab(): string {
             </select>
           </div>
           <div>
-            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Actividad *</label>
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Tipo *</label>
+            <select id="prog-tipo" class="search-input" style="width:100%; padding:10px;" required>
+              <option value="Preventivo">Preventivo</option>
+              <option value="Correctivo">Correctivo</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Modo *</label>
+            <select id="prog-modo" class="search-input" style="width:100%; padding:10px;" required>
+              <option value="Anual">Programar en el año</option>
+              <option value="Unica">Mantenimiento unico</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Motivo *</label>
             <select id="prog-actividad" class="search-input" style="width:100%; padding:10px;" required>
-              <option value="">Seleccione actividad...</option>
+              <option value="">Seleccione motivo...</option>
             </select>
           </div>
           <div id="frecuencia-container">
             <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;" id="lbl-frecuencia">Frecuencia *</label>
             <select id="prog-frecuencia" class="search-input" style="width:100%; padding:10px;" required>
               <option value="">Seleccione frecuencia...</option>
+              <option value="0">Unica</option>
               <option value="1">Mensual (cada 1 mes)</option>
               <option value="2">Bimestral (cada 2 meses)</option>
               <option value="3">Trimestral (cada 3 meses)</option>
@@ -733,11 +785,6 @@ function renderProgramacionAnualTab(): string {
           <div>
             <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;" id="lbl-fecha-inicio">Fecha de Inicio *</label>
             <input type="date" id="prog-fecha-inicio" class="search-input" style="width:100%; padding:10px;" required>
-            <input type="datetime-local" id="prog-fecha-inicio-dt" class="search-input" style="width:100%; padding:10px; display:none;">
-          </div>
-          <div id="cantidad-container" style="display:none;">
-            <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Cantidad de mantenim. *</label>
-            <input type="number" id="prog-cantidad" class="search-input" style="width:100%; padding:10px;" min="2" max="10" value="5" placeholder="2-10">
           </div>
           <div id="observaciones-container">
             <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Observaciones</label>
@@ -786,6 +833,24 @@ function renderProgramacionAnualTab(): string {
         <select id="prog-filter-equipo" class="op-filter-select" style="min-width:200px;">
           <option value="">Todos los equipos</option>
         </select>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+          <button id="btn-vista-lista" type="button" class="op-filter-select" style="cursor:pointer; min-width:90px;">Lista</button>
+          <button id="btn-vista-calendario" type="button" class="op-filter-select" style="cursor:pointer; min-width:100px;">Calendario</button>
+          <select id="prog-filter-mes" class="op-filter-select" style="min-width:150px; display:none;">
+            <option value="1">Enero</option>
+            <option value="2">Febrero</option>
+            <option value="3">Marzo</option>
+            <option value="4">Abril</option>
+            <option value="5">Mayo</option>
+            <option value="6">Junio</option>
+            <option value="7">Julio</option>
+            <option value="8">Agosto</option>
+            <option value="9">Septiembre</option>
+            <option value="10">Octubre</option>
+            <option value="11">Noviembre</option>
+            <option value="12">Diciembre</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -816,7 +881,6 @@ function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
   const realizados = prog.realizados;
   const porcentaje = total > 0 ? Math.round((realizados / total) * 100) : 0;
   const isExpanded = expandedProgramacion === prog.id;
-  const esPrueba = prog.es_prueba;
 
   let progressColor = '#2563eb';
   if (porcentaje === 100) progressColor = '#16a34a';
@@ -828,7 +892,7 @@ function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
         <thead>
           <tr style="background:#f8fafc;">
             <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">#</th>
-            <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">Fecha${esPrueba ? ' y Hora' : ''}</th>
+            <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">Fecha</th>
             <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">Estado</th>
             <th style="padding:8px 12px; text-align:left; font-weight:600; color:#475569;">Observaciones</th>
             <th style="padding:8px 12px; text-align:center; font-weight:600; color:#475569;">Acción</th>
@@ -840,7 +904,7 @@ function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
               : m.proximidad === 'proximo' ? 'prog-row-proximo'
               : (m.estado === 'Vencido' || m.proximidad === 'vencido') ? 'prog-row-vencido'
               : '';
-            const fechaDisplay = esPrueba ? formatFechaHora(m.fecha) : formatFecha(m.fecha);
+            const fechaDisplay = formatFecha(m.fecha);
             return `
             <tr class="${rowClass}" style="border-bottom:1px solid #f1f5f9; ${rowHighlightStyle(m.proximidad, m.estado)}">
               <td style="padding:8px 12px; color:#94a3b8;">${i + 1}</td>
@@ -862,29 +926,31 @@ function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
     </div>
   ` : '';
 
-  const pruebaTag = esPrueba ? `<span style="padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; background:#fef3c7; color:#92400e; border:1px dashed #f59e0b;">PRUEBA</span>` : '';
+  const motivo = prog.actividad?.motivo || prog.actividad?.categoria || 'N/A';
+  const tipo = prog.actividad?.tipo_mantenimiento || 'N/A';
 
   return `
-    <div class="programacion-card" style="background:#fff; border:1px solid ${esPrueba ? '#f59e0b' : '#e2e8f0'}; border-radius:12px; padding:20px; transition:box-shadow 0.2s;${esPrueba ? ' border-style:dashed;' : ''}" data-prog-id="${prog.id}">
+    <div class="programacion-card" style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; transition:box-shadow 0.2s;" data-prog-id="${prog.id}">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
         <!-- Info principal -->
         <div style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
             <strong style="font-size:15px; color:#1e293b;">${prog.equipo?.descripcion || 'Equipo'}</strong>
             <span style="font-size:12px; color:#94a3b8;">${prog.equipo?.marca || ''} ${prog.equipo?.modelo || ''}</span>
-            ${categoriaBadge(prog.actividad?.categoria || 'N/A')}
-            ${pruebaTag}
+            ${categoriaBadge(tipo)}
           </div>
+          <div style="font-size:13px; color:#0f172a; margin-bottom:8px;"><strong>Motivo:</strong> ${motivo}</div>
           <div style="display:flex; gap:16px; font-size:13px; color:#64748b; flex-wrap:wrap;">
             <span title="Frecuencia">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:2px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-              ${frecuenciaLabel(prog.frecuencia_meses, esPrueba)}
+              ${frecuenciaLabel(prog.frecuencia_meses)}
             </span>
             <span title="Año">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:2px;"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line></svg>
               ${prog.anio}
             </span>
-            <span title="Inicio">${esPrueba ? formatFechaHora(prog.fecha_inicio) : formatFecha(prog.fecha_inicio)}</span>
+            <span title="Modo">${prog.modo_programacion || 'Anual'}</span>
+            <span title="Inicio">${formatFecha(prog.fecha_inicio)}</span>
             ${prog.observaciones ? `<span style="font-style:italic;" title="Observaciones">${prog.observaciones}</span>` : ''}
           </div>
         </div>
@@ -925,6 +991,120 @@ function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
   `;
 }
 
+function renderProgramacionesCalendario(anio: number, mes: number): string {
+  const primerDia = new Date(anio, mes - 1, 1);
+  const ultimoDia = new Date(anio, mes, 0);
+  const totalDias = ultimoDia.getDate();
+  const offset = (primerDia.getDay() + 6) % 7; // Lunes=0
+
+  const eventosPorDia: Record<number, Array<{ equipo: string; motivo: string; estado: string; mntId: number }>> = {};
+
+  programaciones.forEach((prog) => {
+    const equipo = prog.equipo?.descripcion || 'Equipo';
+    const motivo = prog.actividad?.motivo || prog.actividad?.categoria || 'Motivo';
+
+    prog.mantenimientos.forEach((m) => {
+      const d = new Date(m.fecha);
+      if (d.getFullYear() !== anio || d.getMonth() !== mes - 1) return;
+
+      const dia = d.getDate();
+      if (!eventosPorDia[dia]) eventosPorDia[dia] = [];
+      eventosPorDia[dia].push({ equipo, motivo, estado: m.estado, mntId: m.id });
+    });
+  });
+
+  const encabezado = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom']
+    .map((d) => `<div style="padding:10px; text-align:center; font-size:12px; font-weight:700; color:#334155; background:#f8fafc; border:1px solid #e2e8f0;">${d}</div>`)
+    .join('');
+
+  const celdas: string[] = [];
+  for (let i = 0; i < offset; i++) {
+    celdas.push('<div style="min-height:120px; border:1px solid #e2e8f0; background:#f8fafc;"></div>');
+  }
+
+  for (let dia = 1; dia <= totalDias; dia++) {
+    const eventos = eventosPorDia[dia] || [];
+    const pendientes = eventos.filter((e) => e.estado === 'Pendiente').length;
+    const vencidos = eventos.filter((e) => e.estado === 'Vencido').length;
+    const realizados = eventos.filter((e) => e.estado === 'Realizado').length;
+    const resumen = [];
+    if (pendientes) resumen.push(`<span style="padding:2px 6px; border-radius:999px; background:#fef3c7; color:#92400e; font-size:10px;">${pendientes} pend</span>`);
+    if (vencidos) resumen.push(`<span style="padding:2px 6px; border-radius:999px; background:#fee2e2; color:#991b1b; font-size:10px;">${vencidos} venc</span>`);
+    if (realizados) resumen.push(`<span style="padding:2px 6px; border-radius:999px; background:#dcfce7; color:#166534; font-size:10px;">${realizados} ok</span>`);
+
+    const preview = eventos.slice(0, 2).map((e) => `<div style="font-size:11px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${e.equipo}: ${e.motivo}</div>`).join('');
+    const extra = eventos.length > 2 ? `<div style="font-size:11px; color:#6366f1;">+${eventos.length - 2} mas</div>` : '';
+
+    const cursorStyle = eventos.length > 0 ? 'cursor:pointer;' : '';
+    celdas.push(`
+      <div class="prog-calendar-day" data-dia="${dia}" style="min-height:120px; border:1px solid #e2e8f0; background:#fff; padding:8px; display:flex; flex-direction:column; gap:6px; ${cursorStyle} transition:background 0.2s;" onmouseover="this.style.background='#f8fafc';" onmouseout="this.style.background='#fff';">
+        <div style="font-size:13px; font-weight:700; color:#0f172a;">${dia}</div>
+        <div style="display:flex; gap:4px; flex-wrap:wrap;">${resumen.join('')}</div>
+        <div style="display:flex; flex-direction:column; gap:2px;">${preview}${extra}</div>
+      </div>
+    `);
+  }
+
+  return `
+    <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+      <div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr));">${encabezado}${celdas.join('')}</div>
+    </div>
+    <!-- Panel detallado del día -->
+    <div id="prog-panel-dia-detalle" style="display:none; margin-top:20px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:20px;"></div>
+  `;
+}
+
+function renderPanelDetailDia(dia: number): string {
+  if (progMantenimientosDelDia.length === 0) return '';
+  
+  const detalles = progMantenimientosDelDia.map(m => {
+    const color = m.estado === 'Vencido' ? '#ef4444' : m.estado === 'Realizado' ? '#22c55e' : '#f59e0b';
+    const bgColor = m.estado === 'Vencido' ? '#fee2e2' : m.estado === 'Realizado' ? '#dcfce7' : '#fef3c7';
+    const btnDisabled = m.estado === 'Realizado' ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : '';
+    
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-size:14px; font-weight:600; color:#0f172a;">${m.equipo}</div>
+          <div style="font-size:12px; color:#64748b;">${m.motivo}</div>
+          <div style="font-size:11px; padding:4px 8px; border-radius:99px; background:${bgColor}; color:${color}; display:inline-block; margin-top:6px;">${m.estado}</div>
+        </div>
+        <button class="btn-marcar-realizado-panel" data-mnt-id="${m.mntId}" ${btnDisabled} style="padding:8px 16px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">
+          Marcar realizado
+        </button>
+      </div>
+    `;
+  }).join('');
+  
+  return `
+    <div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 style="margin:0; font-size:16px; font-weight:700; color:#0f172a;">Mantenimientos para ${progMesCalendario}/${progDiaSeleccionado}</h3>
+        <button id="btn-cerrar-panel-dia" style="background:#fff; border:1px solid #cbd5e1; padding:6px 12px; border-radius:6px; cursor:pointer; color:#475569; font-size:12px;">Cerrar</button>
+      </div>
+      ${detalles}
+    </div>
+  `;
+}
+
+function actualizarControlesVistaProgramacion() {
+  const btnLista = document.getElementById('btn-vista-lista') as HTMLButtonElement | null;
+  const btnCalendario = document.getElementById('btn-vista-calendario') as HTMLButtonElement | null;
+  const selMes = document.getElementById('prog-filter-mes') as HTMLSelectElement | null;
+  if (!btnLista || !btnCalendario || !selMes) return;
+
+  const aplicarEstado = (btn: HTMLButtonElement, activo: boolean) => {
+    btn.style.background = activo ? '#2563eb' : '#fff';
+    btn.style.color = activo ? '#fff' : '#475569';
+    btn.style.borderColor = activo ? '#2563eb' : '#cbd5e1';
+  };
+
+  aplicarEstado(btnLista, progVista === 'lista');
+  aplicarEstado(btnCalendario, progVista === 'calendario');
+  selMes.style.display = progVista === 'calendario' ? 'block' : 'none';
+  selMes.value = String(progMesCalendario);
+}
+
 async function cargarDropdownsProg() {
   try {
     if (equiposLista.length === 0 || actividadesLista.length === 0) {
@@ -942,11 +1122,7 @@ async function cargarDropdownsProg() {
         equiposLista.map(e => `<option value="${e.id}">${e.descripcion} - ${e.marca} ${e.modelo}</option>`).join('');
     }
 
-    const progAct = document.getElementById('prog-actividad') as HTMLSelectElement;
-    if (progAct) {
-      progAct.innerHTML = '<option value="">Seleccione actividad...</option>' +
-        actividadesLista.filter(a => a.estado === 'Activo').map(a => `<option value="${a.id}">${a.categoria}</option>`).join('');
-    }
+    actualizarOpcionesMotivoProgramacion();
 
     const filterEq = document.getElementById('prog-filter-equipo') as HTMLSelectElement;
     if (filterEq) {
@@ -958,9 +1134,49 @@ async function cargarDropdownsProg() {
   }
 }
 
+function actualizarOpcionesMotivoProgramacion() {
+  const progAct = document.getElementById('prog-actividad') as HTMLSelectElement;
+  if (!progAct) return;
+
+  const equipoId = Number((document.getElementById('prog-equipo') as HTMLSelectElement | null)?.value || 0) || undefined;
+  const motivos = filtrarMotivos(progTipoMantenimiento, equipoId);
+
+  progAct.innerHTML = '<option value="">Seleccione motivo...</option>' +
+    motivos.map(a => {
+      const sufijo = a.frecuencia_sugerida ? ` - ${a.frecuencia_sugerida}` : '';
+      return `<option value="${a.id}">${getMotivoLabel(a)}${sufijo}</option>`;
+    }).join('');
+}
+
+function actualizarReglasProgramacion() {
+  const selModo = document.getElementById('prog-modo') as HTMLSelectElement | null;
+  const selFrecuencia = document.getElementById('prog-frecuencia') as HTMLSelectElement | null;
+  if (!selModo || !selFrecuencia) return;
+
+  const esCorrectivo = progTipoMantenimiento === 'Correctivo';
+
+  if (esCorrectivo) {
+    selModo.value = 'Unica';
+    selModo.disabled = true;
+    selFrecuencia.value = '0';
+    selFrecuencia.disabled = true;
+  } else {
+    selModo.disabled = false;
+    selFrecuencia.disabled = false;
+    if (selModo.value === 'Unica') {
+      selFrecuencia.value = '0';
+      selFrecuencia.disabled = true;
+    } else if (selFrecuencia.value === '0') {
+      selFrecuencia.value = '';
+    }
+  }
+}
+
 async function cargarProgramaciones() {
   const container = document.getElementById('programaciones-lista');
   if (!container) return;
+
+  actualizarControlesVistaProgramacion();
 
   container.innerHTML = '<div style="text-align:center; padding:40px; color:#94a3b8;">Cargando programaciones...</div>';
 
@@ -982,14 +1198,20 @@ async function cargarProgramaciones() {
           <span style="font-size:13px;">Use el formulario de arriba para crear una nueva programación.</span>
         </div>
       `;
+      actualizarControlesVistaProgramacion();
       return;
     }
 
-    container.innerHTML = programaciones.map(p => renderProgramacionCard(p)).join('');
-    bindAccionesProgramaciones();
+    if (progVista === 'calendario') {
+      container.innerHTML = renderProgramacionesCalendario(progFiltroAnio, progMesCalendario);
+      bindAccionesCalendario();
+    } else {
+      container.innerHTML = programaciones.map(p => renderProgramacionCard(p)).join('');
+      bindAccionesProgramaciones();
+    }
+    actualizarControlesVistaProgramacion();
 
-    // Gestionar auto-refresh para programaciones de prueba
-    gestionarAutoRefresh();
+
   } catch (error) {
     console.error('Error cargando programaciones:', error);
     container.innerHTML = '<div style="text-align:center; padding:40px; color:#dc2626;">Error al cargar programaciones.</div>';
@@ -997,6 +1219,80 @@ async function cargarProgramaciones() {
 }
 
 let progIdToDelete: number | null = null;
+
+function bindAccionesCalendario() {
+  // Click en celdas del calendario para ver detalles
+  document.querySelectorAll('.prog-calendar-day').forEach(celda => {
+    celda.addEventListener('click', () => {
+      const dia = Number((celda as HTMLElement).dataset.dia);
+      if (dia && dia > 0) {
+        abrirPanelDetailDia(dia);
+      }
+    });
+  });
+}
+
+function abrirPanelDetailDia(dia: number) {
+  progDiaSeleccionado = dia;
+  progMantenimientosDelDia = [];
+
+  // Buscar todos los mantenimientos para este día
+  programaciones.forEach((prog) => {
+    const equipo = prog.equipo?.descripcion || 'Equipo';
+    const motivo = prog.actividad?.motivo || prog.actividad?.categoria || 'Motivo';
+
+    prog.mantenimientos.forEach((m) => {
+      const d = new Date(m.fecha);
+      if (d.getFullYear() !== progFiltroAnio || d.getMonth() !== progMesCalendario - 1 || d.getDate() !== dia) return;
+      
+      progMantenimientosDelDia.push({
+        id: prog.id,
+        equipo,
+        motivo,
+        estado: m.estado,
+        mntId: m.id
+      });
+    });
+  });
+
+  // Mostrar el panel
+  const panelContainer = document.getElementById('prog-panel-dia-detalle');
+  if (panelContainer) {
+    panelContainer.innerHTML = renderPanelDetailDia(dia);
+    panelContainer.style.display = 'block';
+
+    // Scroll al panel
+    setTimeout(() => panelContainer?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+
+    // Cerrar panel
+    document.getElementById('btn-cerrar-panel-dia')?.addEventListener('click', () => {
+      progDiaSeleccionado = null;
+      progMantenimientosDelDia = [];
+      if (panelContainer) panelContainer.style.display = 'none';
+    });
+
+    // Marcar como realizado desde panel
+    document.querySelectorAll('.btn-marcar-realizado-panel').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const mntId = Number((btn as HTMLButtonElement).dataset.mntId);
+        if (!mntId) return;
+        
+        (btn as HTMLButtonElement).disabled = true;
+        (btn as HTMLButtonElement).style.opacity = '0.5';
+        
+        try {
+          await mantenimientoService.marcarRealizado(mntId);
+          mostrarToast('success', 'Actualizado', 'Mantenimiento marcado como realizado');
+          cargarProgramaciones();
+        } catch (error) {
+          mostrarToast('error', 'Error', 'No se pudo actualizar el mantenimiento');
+          (btn as HTMLButtonElement).disabled = false;
+          (btn as HTMLButtonElement).style.opacity = '1';
+        }
+      });
+    });
+  }
+}
 
 function bindAccionesProgramaciones() {
   // Toggle expandir/contraer
@@ -1034,74 +1330,47 @@ function bindAccionesProgramaciones() {
 
 function initProgramacionAnualEvents() {
   const modalEliminar = document.getElementById('modal-eliminar-prog');
+  const selMes = document.getElementById('prog-filter-mes') as HTMLSelectElement | null;
+  if (selMes) selMes.value = String(progMesCalendario);
 
   // Cargar dropdowns y programaciones
   cargarDropdownsProg();
   cargarProgramaciones();
 
-  // ── Toggle Modo Prueba ───────────────────────────────────
-  document.getElementById('toggle-modo-prueba')?.addEventListener('change', (e) => {
-    modoPrueba = (e.target as HTMLInputElement).checked;
-
-    const frecContainer = document.getElementById('frecuencia-container');
-    const fechaNormal = document.getElementById('prog-fecha-inicio') as HTMLInputElement;
-    const fechaDT = document.getElementById('prog-fecha-inicio-dt') as HTMLInputElement;
-    const cantidadContainer = document.getElementById('cantidad-container');
-
-    if (frecContainer) {
-      if (modoPrueba) {
-        frecContainer.innerHTML = `
-          <label style="font-size:13px; font-weight:500; color:#475569;">Frecuencia (minutos) *</label>
-          <select id="prog-frecuencia" style="width:100%; padding:10px 12px; border:2px dashed #f59e0b; border-radius:8px; font-size:14px; background:#fffbeb;">
-            <option value="">Seleccionar...</option>
-            <option value="1">Cada 1 minuto</option>
-            <option value="2" selected>Cada 2 minutos</option>
-            <option value="3">Cada 3 minutos</option>
-            <option value="5">Cada 5 minutos</option>
-          </select>
-        `;
-      } else {
-        frecContainer.innerHTML = `
-          <label style="font-size:13px; font-weight:500; color:#475569;">Frecuencia *</label>
-          <select id="prog-frecuencia" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
-            <option value="">Seleccionar...</option>
-            <option value="1">Cada mes</option>
-            <option value="2">Cada 2 meses</option>
-            <option value="3">Cada 3 meses (trimestral)</option>
-            <option value="4">Cada 4 meses</option>
-            <option value="6">Cada 6 meses (semestral)</option>
-            <option value="12">Cada 12 meses (anual)</option>
-          </select>
-        `;
-      }
-    }
-
-    // Swap date inputs y toggle required
-    if (fechaNormal && fechaDT) {
-      fechaNormal.style.display = modoPrueba ? 'none' : 'block';
-      fechaNormal.required = !modoPrueba;
-      fechaDT.style.display = modoPrueba ? 'block' : 'none';
-      fechaDT.required = modoPrueba;
-      if (modoPrueba) {
-        // Set datetime-local to now
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        fechaDT.value = now.toISOString().slice(0, 16);
-      }
-    }
-
-    // Show/hide cantidad
-    if (cantidadContainer) {
-      cantidadContainer.style.display = modoPrueba ? 'block' : 'none';
-    }
-
-    // Hide preview if switching modes
-    const previewContainer = document.getElementById('preview-fechas-container');
-    if (previewContainer) previewContainer.style.display = 'none';
-    previewFechas = [];
-    const btnConfirmar = document.getElementById('btn-confirmar-programacion') as HTMLButtonElement;
-    if (btnConfirmar) btnConfirmar.disabled = true;
+  document.getElementById('prog-tipo')?.addEventListener('change', (e) => {
+    progTipoMantenimiento = ((e.target as HTMLSelectElement).value || 'Preventivo') as 'Preventivo' | 'Correctivo';
+    actualizarOpcionesMotivoProgramacion();
+    actualizarReglasProgramacion();
   });
+
+  document.getElementById('prog-equipo')?.addEventListener('change', () => {
+    actualizarOpcionesMotivoProgramacion();
+  });
+
+  document.getElementById('prog-modo')?.addEventListener('change', () => {
+    actualizarReglasProgramacion();
+  });
+
+  document.getElementById('btn-vista-lista')?.addEventListener('click', () => {
+    progVista = 'lista';
+    cargarProgramaciones();
+  });
+
+  document.getElementById('btn-vista-calendario')?.addEventListener('click', () => {
+    progVista = 'calendario';
+    cargarProgramaciones();
+  });
+
+  document.getElementById('prog-filter-mes')?.addEventListener('change', (e) => {
+    progMesCalendario = Number((e.target as HTMLSelectElement).value);
+    if (progVista === 'calendario') {
+      cargarProgramaciones();
+    }
+  });
+
+  actualizarReglasProgramacion();
+
+
 
   // ── Filtros ──────────────────────────────────────────────
   document.getElementById('prog-filter-anio')?.addEventListener('change', (e) => {
@@ -1118,13 +1387,12 @@ function initProgramacionAnualEvents() {
   // ── Preview ──────────────────────────────────────────────
   document.getElementById('btn-preview-programacion')?.addEventListener('click', async () => {
     const anio = Number((document.getElementById('prog-anio') as HTMLInputElement).value);
-    const frecuencia = Number((document.getElementById('prog-frecuencia') as HTMLSelectElement).value);
-    const fechaInicio = modoPrueba
-      ? (document.getElementById('prog-fecha-inicio-dt') as HTMLInputElement).value
-      : (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value;
-    const cantidad = modoPrueba ? Number((document.getElementById('prog-cantidad') as HTMLInputElement).value) || 5 : undefined;
+    const frecuenciaRaw = (document.getElementById('prog-frecuencia') as HTMLSelectElement).value;
+    const frecuencia = Number(frecuenciaRaw);
+    const modoProgramacion = ((document.getElementById('prog-modo') as HTMLSelectElement | null)?.value || 'Anual') as 'Anual' | 'Unica';
+    const fechaInicio = (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value;
 
-    if (!anio || !frecuencia || !fechaInicio) {
+    if (!anio || frecuenciaRaw === '' || !fechaInicio) {
       mostrarToast('error', 'Atención', 'Complete año, frecuencia y fecha de inicio para previsualizar');
       return;
     }
@@ -1132,8 +1400,7 @@ function initProgramacionAnualEvents() {
     try {
       const resp = await mantenimientoService.previewFechas({
         anio, frecuencia_meses: frecuencia, fecha_inicio: fechaInicio,
-        es_prueba: modoPrueba || undefined,
-        cantidad,
+        modo_programacion: modoProgramacion,
       });
       previewFechas = resp.data || [];
 
@@ -1149,7 +1416,7 @@ function initProgramacionAnualEvents() {
           grid.innerHTML = previewFechas.map((f, i) => `
             <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:${f.estado === 'Vencido' ? '#fef2f2' : '#f0fdf4'}; border-radius:8px; border:1px solid ${f.estado === 'Vencido' ? '#fecaca' : '#bbf7d0'};">
               <span style="font-weight:600; color:#475569; min-width:24px;">${i + 1}.</span>
-              <span style="font-weight:500; color:#1e293b;">${modoPrueba ? formatFechaHora(f.fecha) : formatFecha(f.fecha)}</span>
+              <span style="font-weight:500; color:#1e293b;">${formatFecha(f.fecha)}</span>
               <span style="font-size:11px; color:#94a3b8;">${f.mes}</span>
               ${estadoBadge(f.estado)}
             </div>
@@ -1170,14 +1437,13 @@ function initProgramacionAnualEvents() {
     const id_equipo = Number((document.getElementById('prog-equipo') as HTMLSelectElement).value);
     const id_actmanten = Number((document.getElementById('prog-actividad') as HTMLSelectElement).value);
     const anio = Number((document.getElementById('prog-anio') as HTMLInputElement).value);
-    const frecuencia_meses = Number((document.getElementById('prog-frecuencia') as HTMLSelectElement).value);
-    const fecha_inicio = modoPrueba
-      ? (document.getElementById('prog-fecha-inicio-dt') as HTMLInputElement).value
-      : (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value;
+    const frecuenciaRaw = (document.getElementById('prog-frecuencia') as HTMLSelectElement).value;
+    const frecuencia_meses = Number(frecuenciaRaw);
+    const modo_programacion = ((document.getElementById('prog-modo') as HTMLSelectElement | null)?.value || 'Anual') as 'Anual' | 'Unica';
+    const fecha_inicio = (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value;
     const observaciones = (document.getElementById('prog-observaciones') as HTMLInputElement).value.trim();
-    const cantidad = modoPrueba ? Number((document.getElementById('prog-cantidad') as HTMLInputElement).value) || 5 : undefined;
 
-    if (!id_equipo || !id_actmanten || !anio || !frecuencia_meses || !fecha_inicio) {
+    if (!id_equipo || !id_actmanten || !anio || frecuenciaRaw === '' || !fecha_inicio) {
       mostrarToast('error', 'Atención', 'Complete todos los campos requeridos');
       return;
     }
@@ -1185,15 +1451,19 @@ function initProgramacionAnualEvents() {
     try {
       const resp = await mantenimientoService.programarAnual({
         id_equipo, id_actmanten, anio, frecuencia_meses, fecha_inicio,
+        modo_programacion,
         observaciones: observaciones || undefined,
-        es_prueba: modoPrueba || undefined,
-        cantidad,
       });
 
       mostrarToast('success', 'Programación creada', resp.message || 'Los mantenimientos fueron programados correctamente');
 
       // Limpiar formulario
       (document.getElementById('prog-equipo') as HTMLSelectElement).value = '';
+      (document.getElementById('prog-tipo') as HTMLSelectElement).value = 'Preventivo';
+      (document.getElementById('prog-modo') as HTMLSelectElement).value = 'Anual';
+      progTipoMantenimiento = 'Preventivo';
+      actualizarOpcionesMotivoProgramacion();
+      actualizarReglasProgramacion();
       (document.getElementById('prog-actividad') as HTMLSelectElement).value = '';
       (document.getElementById('prog-frecuencia') as HTMLSelectElement).value = '';
       (document.getElementById('prog-observaciones') as HTMLInputElement).value = '';
@@ -1240,22 +1510,6 @@ function initProgramacionAnualEvents() {
 }
 
 /** Inicia o detiene el auto-refresh cada 15s si hay programaciones de prueba activas */
-function gestionarAutoRefresh() {
-  const hayPrueba = programaciones.some(p => p.es_prueba && p.pendientes > 0);
-  const indicator = document.getElementById('auto-refresh-indicator');
-
-  if (hayPrueba && !progAutoRefreshTimer) {
-    progAutoRefreshTimer = setInterval(() => {
-      cargarProgramaciones();
-    }, 15000) as unknown as number;
-    if (indicator) indicator.style.display = 'inline-flex';
-  } else if (!hayPrueba && progAutoRefreshTimer) {
-    clearInterval(progAutoRefreshTimer);
-    progAutoRefreshTimer = null;
-    if (indicator) indicator.style.display = 'none';
-  }
-}
-
 // ============================================================
 // VISTA PRINCIPAL CON TABS
 // ============================================================
@@ -1551,12 +1805,6 @@ export function initMantenimientoEvents() {
       });
 
       if (!tabContent) return;
-
-      // Limpiar auto-refresh al salir de programación anual
-      if (progAutoRefreshTimer) {
-        clearInterval(progAutoRefreshTimer);
-        progAutoRefreshTimer = null;
-      }
 
       if (tab === 'gestion-equipos') {
         tabContent.innerHTML = renderGestionEquiposTab();

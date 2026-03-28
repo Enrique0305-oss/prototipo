@@ -35,8 +35,8 @@ class CatalogoCapacitacionAuditoria extends Model
         return $query->where('tipo', 'Capacitación');
     }
 
-    public function scopeAuditorias($query)
+    public function scopeAsesorias($query)
     {
-        return $query->where('tipo', 'Auditoría');
+        return $query->where('tipo', 'Asesoría');
     }
 }

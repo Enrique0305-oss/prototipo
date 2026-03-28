@@ -412,8 +412,16 @@ export interface HistorialEquipo {
 export interface ProgramacionMantenimiento {
   id: number;
   equipo: { id: number; descripcion: string; marca: string; modelo: string } | null;
-  actividad: { id: number; categoria: string } | null;
+  actividad: {
+    id: number;
+    categoria: string;
+    motivo?: string | null;
+    tipo_mantenimiento?: 'Preventivo' | 'Correctivo' | null;
+    tipo_equipo?: string | null;
+    frecuencia_sugerida?: string | null;
+  } | null;
   anio: number;
+  modo_programacion?: 'Anual' | 'Unica';
   frecuencia_meses: number;
   fecha_inicio: string;
   total_programados: number;
@@ -442,6 +450,10 @@ export interface PreviewFecha {
 
 export interface ActividadMantenimiento {
   id: number;
+  motivo?: string;
+  tipo_mantenimiento?: 'Preventivo' | 'Correctivo';
+  tipo_equipo?: string | null;
+  frecuencia_sugerida?: string | null;
   categoria: 'Programado' | 'Entregado' | 'Garantia';
   estado: 'Activo' | 'Desactivo';
   mantenimientos_count?: number;
@@ -449,6 +461,8 @@ export interface ActividadMantenimiento {
 
 export interface ActividadMantenimientoFilters extends FilterParams {
   categoria?: 'Programado' | 'Entregado' | 'Garantia';
+  tipo_mantenimiento?: 'Preventivo' | 'Correctivo';
+  tipo_equipo?: string;
 }
 
 // Servicios

@@ -71,6 +71,7 @@ export const mantenimientoService = {
     anio: number;
     frecuencia_meses: number;
     fecha_inicio: string;
+    modo_programacion?: 'Anual' | 'Unica';
     es_prueba?: boolean;
     cantidad?: number;
   }) => {
@@ -86,6 +87,7 @@ export const mantenimientoService = {
     anio: number;
     frecuencia_meses: number;
     fecha_inicio: string;
+    modo_programacion?: 'Anual' | 'Unica';
     observaciones?: string;
     es_prueba?: boolean;
     cantidad?: number;

@@ -7,10 +7,11 @@ const ADAPTERS: Record<TipoCotizacion, CotizacionTipoAdapter> = {
   Servicio: servicioCotizacionAdapter,
   Producto: productoCotizacionAdapter,
   Capacitacion: capacitacionCotizacionAdapter,
+  Asesoria: capacitacionCotizacionAdapter,
 };
 
 export function getCotizacionTipoAdapter(tipo: string): CotizacionTipoAdapter | null {
-  if (tipo === 'Servicio' || tipo === 'Producto' || tipo === 'Capacitacion') {
+  if (tipo === 'Servicio' || tipo === 'Producto' || tipo === 'Capacitacion' || tipo === 'Asesoria') {
     return ADAPTERS[tipo];
   }
   return null;
@@ -20,4 +21,5 @@ export const TAB_TO_TIPO: Record<string, TipoCotizacion> = {
   servicio: 'Servicio',
   producto: 'Producto',
   capacitacion: 'Capacitacion',
+  asesoria: 'Asesoria',
 };

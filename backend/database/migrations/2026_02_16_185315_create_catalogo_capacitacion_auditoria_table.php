@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('catalogo_capacitacion_auditoria', function (Blueprint $table) {
             $table->id();
-            $table->enum('tipo', ['Capacitación', 'Auditoría']);
+            $table->enum('tipo', ['Capacitación', 'Asesoría']);
             $table->string('nombre', 200);
             $table->text('descripcion')->nullable();
             $table->decimal('precio_referencial', 10, 2)->nullable();

@@ -14,11 +14,11 @@ class ProgramacionMantenimiento extends Model
         'id_equipo',
         'id_actmanten',
         'anio',
+        'modo_programacion',
         'frecuencia_meses',
         'fecha_inicio',
         'total_programados',
         'observaciones',
-        'es_prueba',
     ];
 
     protected $casts = [
@@ -26,7 +26,6 @@ class ProgramacionMantenimiento extends Model
         'anio' => 'integer',
         'frecuencia_meses' => 'integer',
         'total_programados' => 'integer',
-        'es_prueba' => 'boolean',
     ];
 
     // Relaciones

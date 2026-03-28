@@ -21,7 +21,7 @@ class MantenimientoController extends Controller
             $query->where('id_equipo', $request->id_equipo);
         }
 
-        // Filtro por actividad
+        // Filtro por motivo
         if ($request->has('id_actividad')) {
             $query->where('id_actmanten', $request->id_actividad);
         }
@@ -71,8 +71,8 @@ class MantenimientoController extends Controller
         ], [
             'id_equipo.required' => 'El equipo es obligatorio',
             'id_equipo.exists' => 'El equipo seleccionado no existe',
-            'id_actmanten.required' => 'La actividad de mantenimiento es obligatoria',
-            'id_actmanten.exists' => 'La actividad seleccionada no existe',
+            'id_actmanten.required' => 'El motivo de mantenimiento es obligatorio',
+            'id_actmanten.exists' => 'El motivo seleccionado no existe',
             'fecha.required' => 'La fecha es obligatoria',
             'fecha.date' => 'La fecha debe ser válida',
             'observaciones.max' => 'Las observaciones no pueden exceder 100 caracteres'
@@ -196,16 +196,16 @@ class MantenimientoController extends Controller
                 ];
             });
 
-        // Mantenimientos por actividad
+        // Mantenimientos por motivo
         $porActividad = Mantenimiento::selectRaw('id_actmanten, COUNT(*) as total')
-            ->with('actividad:id,categoria')
+            ->with('actividad:id,categoria,motivo')
             ->groupBy('id_actmanten')
             ->orderBy('total', 'desc')
             ->get()
             ->map(function($item) {
                 return [
                     'actividad_id' => $item->id_actmanten,
-                    'categoria' => $item->actividad->categoria ?? 'N/A',
+                    'categoria' => $item->actividad->motivo ?? $item->actividad->categoria ?? 'N/A',
                     'total' => $item->total
                 ];
             });

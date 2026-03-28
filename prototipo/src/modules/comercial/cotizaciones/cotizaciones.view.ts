@@ -58,7 +58,7 @@ let plantasClienteData: any[] = [];
 let paginaActual = 1;
 const itemsPorPagina = 15;
 let tabActivo = 'historial';
-const tabsInicializados: Record<string, boolean> = { servicio: false, producto: false, capacitacion: false };
+const tabsInicializados: Record<string, boolean> = { servicio: false, producto: false, capacitacion: false, asesoria: false };
 let quillKeydownController: AbortController | null = null;
 let formularioLoadController: AbortController | null = null;  // Para evitar condiciones de carrera
 let cotizacionEditandoId: number | null = null;
@@ -284,6 +284,50 @@ async function cargarDropdownExponentesCotizacion(panelEl: HTMLElement) {
   }
 }
 
+function formatearFrecuenciaVisita(frecuenciaVis: any): string {
+  if (!frecuenciaVis || typeof frecuenciaVis !== 'object') return '—';
+  
+  const meses: string[] = [];
+  Object.keys(frecuenciaVis).forEach((mesKey: string) => {
+    const p = frecuenciaVis[mesKey]?.p || 0;
+    const v = frecuenciaVis[mesKey]?.v || 0;
+    meses.push(`${mesKey.toUpperCase()}: ${p} Presencial, ${v} Virtual`);
+  });
+  
+  return meses.length > 0 ? meses.join(' | ') : '—';
+}
+
+function obtenerInfoImplementacionAsesor(cotizacion: any): { meses: number | null; frecuencia: string } {
+  const meses = cotizacion.detalles?.[0]?.meses_implementacion || null;
+  const frecuencia = cotizacion.detalles?.[0]?.frecuencia_visita || null;
+  const frecuenciaFormato = frecuencia ? formatearFrecuenciaVisita(frecuencia) : '—';
+  return { meses, frecuencia: frecuenciaFormato };
+}
+
+function generarTablaFrecuenciaVisita(panelEl: HTMLElement) {
+  const mesesInput = panelEl.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null;
+  const container = panelEl.querySelector('#cot-frecuencia-visita-container') as HTMLElement | null;
+  if (!mesesInput || !container) return;
+
+  const meses = Math.max(1, parseInt(mesesInput.value || '1', 10));
+  
+  let html = `<div style="display:grid;grid-template-columns:100px 60px 60px;gap:8px;align-items:center;font-size:12px;">
+    <div style="font-weight:600;color:#475569;">Mes</div>
+    <div style="text-align:center;font-weight:600;color:#475569;">Presencial (P)</div>
+    <div style="text-align:center;font-weight:600;color:#475569;">Virtual (V)</div>
+  </div>`;
+  
+  for (let i = 1; i <= meses; i++) {
+    html += `<div style="display:grid;grid-template-columns:100px 60px 60px;gap:8px;margin-top:8px;align-items:center;">
+      <div style="font-weight:500;color:#1e293b;">Mes ${i}</div>
+      <input type="number" id="cot-asesor-freq-m${i}-p" class="form-control" value="0" min="0" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:13px;text-align:center;">
+      <input type="number" id="cot-asesor-freq-m${i}-v" class="form-control" value="0" min="0" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:13px;text-align:center;">
+    </div>`;
+  }
+  
+  container.innerHTML = html;
+}
+
 function initSelectorExponentesCotizacion(panelEl: HTMLElement) {
   const select = panelEl.querySelector('#cot-exponente-selector') as HTMLSelectElement | null;
   if (!select) return;
@@ -467,6 +511,7 @@ export function renderComercialCotizaciones(): string {
       <button class="cotiz-tab" data-tab="servicio" style="padding:10px 24px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:500;color:#64748b;transition:color .15s;">Servicio</button>
       <button class="cotiz-tab" data-tab="producto" style="padding:10px 24px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:500;color:#64748b;transition:color .15s;">Producto</button>
       <button class="cotiz-tab" data-tab="capacitacion" style="padding:10px 24px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:500;color:#64748b;transition:color .15s;">Capacitación</button>
+      <button class="cotiz-tab" data-tab="asesoria" style="padding:10px 24px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:500;color:#64748b;transition:color .15s;">Asesoría</button>
     </div>
 
     <!-- Panel: Historial General -->
@@ -514,6 +559,7 @@ export function renderComercialCotizaciones(): string {
             <option value="Servicio">Servicio</option>
             <option value="Producto">Producto</option>
             <option value="Capacitacion">Capacitación</option>
+            <option value="Asesoria">Asesoría</option>
           </select>
           <select class="op-filter-select" id="cotiz-filter-estado">
             <option value="">Todos los estados</option>
@@ -533,12 +579,13 @@ export function renderComercialCotizaciones(): string {
               <th>FECHA EMISIÓN</th>
               <th>TIPO</th>
               <th>ESTADO</th>
+              <th>IMPLEMENTACIÓN</th>
               <th>TOTAL</th>
               <th>ACCIONES</th>
             </tr>
           </thead>
           <tbody id="cotizaciones-tbody">
-            <tr><td colspan="7" style="text-align:center;padding:40px;color:#64748b;">Cargando cotizaciones...</td></tr>
+            <tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b;">Cargando cotizaciones...</td></tr>
           </tbody>
         </table>
       </div>
@@ -564,6 +611,11 @@ export function renderComercialCotizaciones(): string {
     <!-- Panel: Capacitación -->
     <div id="cotiz-panel-capacitacion" style="display:none;">
       <div id="cotiz-form-capacitacion"></div>
+    </div>
+
+    <!-- Panel: Asesoría -->
+    <div id="cotiz-panel-asesoria" style="display:none;">
+      <div id="cotiz-form-asesoria"></div>
     </div>
   `;
 }
@@ -610,7 +662,7 @@ async function cargarCotizaciones() {
   } catch (error) {
     console.error('Error cargando cotizaciones:', error);
     const tbody = document.getElementById('cotizaciones-tbody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar cotizaciones</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar cotizaciones</td></tr>';
   }
 }
 
@@ -619,7 +671,7 @@ function renderizarTabla() {
   if (!tbody) return;
 
   if (cotizacionesData.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#64748b;">No se encontraron cotizaciones</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b;">No se encontraron cotizaciones</td></tr>';
     renderizarPaginacion();
     return;
   }
@@ -652,6 +704,9 @@ function renderizarTabla() {
     } else if (tipoNorm.includes('capacit')) {
       tipoBadgeClass = 'cyan';
       tipoLabel = 'Capacitación';
+    } else if (tipoNorm.includes('asesor')) {
+      tipoBadgeClass = 'blue';
+      tipoLabel = 'Asesoría';
     }
 
     const estadoBadge: Record<string, string> = {
@@ -660,6 +715,16 @@ function renderizarTabla() {
       'Rechazada': 'red',
     };
 
+    // Obtener información de implementación para Asesoría
+    const esAsesoria = tipoNorm.includes('asesor');
+    const infoImpl = esAsesoria ? obtenerInfoImplementacionAsesor(cot) : { meses: null, frecuencia: '—' };
+    const implementacionHtml = esAsesoria && infoImpl.meses 
+      ? `<div style="font-size:11px;color:#64748b;">
+           ${infoImpl.meses} mes${infoImpl.meses !== 1 ? 'es' : ''}<br/>
+           <span style="color:#94a3b8;font-size:10px;">${infoImpl.frecuencia}</span>
+         </div>`
+      : '';
+
     return `
       <tr>
         <td><strong>${numero}</strong></td>
@@ -667,6 +732,7 @@ function renderizarTabla() {
         <td>${fecha}</td>
         <td><span class="badge ${tipoBadgeClass}">${tipoLabel}</span></td>
         <td><span class="badge ${estadoBadge[estado] || 'badge-warning'}">${estado}</span></td>
+        <td>${implementacionHtml || `<strong>${total}</strong>`}</td>
         <td><strong>${total}</strong></td>
         <td>
           <div class="action-buttons">
@@ -778,7 +844,8 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
   const panelMap: Record<string, string> = {
     Servicio: 'cotiz-form-servicio',
     Producto: 'cotiz-form-producto',
-    Capacitacion: 'cotiz-form-capacitacion'
+    Capacitacion: 'cotiz-form-capacitacion',
+    Asesoria: 'cotiz-form-asesoria'
   };
   const panelEl = tipoFijo ? document.getElementById(panelMap[tipoFijo] || '') : null;
   if (!panelEl) return;
@@ -939,6 +1006,31 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
         </div>
       </div>
     </div>
+  ` : tipoFijo === 'Asesoria' ? `
+    <div class="form-section" style="margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
+        <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Asignar Exponente(s)</h3>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(320px,2fr) repeat(2,minmax(180px,1fr));gap:12px;align-items:end;">
+        <div class="form-group">
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Exponente(s) <span style="color:#ef4444">*</span></label>
+          <div id="cot-exponentes-container" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;min-height:44px;background:#fff;">
+            <div id="cot-exponentes-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+            <select id="cot-exponente-selector" class="form-control" style="border:none;padding:4px 0;margin:0;box-shadow:none;width:100%;">
+              <option value="">+ Agregar exponente...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tiempo de Implementación (Meses)</label>
+          <input type="number" id="cot-cap-fecha-servicio" class="form-control" value="1" min="1" step="1" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+        </div>
+        <div class="form-group">
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Frecuencia por Visita</label>
+          <div id="cot-frecuencia-visita-container" style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#fff;"></div>
+        </div>
+      </div>
+    </div>
   ` : '';
 
   panelEl.innerHTML = `
@@ -970,7 +1062,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
             <div class="form-group">
               <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tipo de Cotización</label>
               ${tipoFijo ? `
-                <input type="text" class="form-control" value="${tipoFijo === 'Capacitacion' ? 'Capacitacion' : tipoFijo}" readonly style="background:#f1f5f9;color:#1e293b;font-weight:600;width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;cursor:not-allowed;">
+                <input type="text" class="form-control" value="${tipoFijo === 'Capacitacion' ? 'Capacitacion' : (tipoFijo === 'Asesoria' ? 'Asesoria' : tipoFijo)}" readonly style="background:#f1f5f9;color:#1e293b;font-weight:600;width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;cursor:not-allowed;">
                 <input type="hidden" id="cot-tipo" value="${tipoFijo}">
               ` : `
                 <select id="cot-tipo" class="form-control" required style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
@@ -978,6 +1070,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
                   <option value="Servicio">Servicio</option>
                   <option value="Producto">Producto</option>
                   <option value="Capacitacion">Capacitacion</option>
+                  <option value="Asesoria">Asesoria</option>
                 </select>
               `}
             </div>
@@ -1499,14 +1592,26 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     agregarLineaDetalle(tipo);
   });
 
-  if (tipoFijo === 'Capacitacion') {
+  if (tipoFijo === 'Capacitacion' || tipoFijo === 'Asesoria') {
     selectedExponentesCotizacion = [];
     renderExponenteTagsCotizacion(panelEl);
     await cargarDropdownExponentesCotizacion(panelEl);
     initSelectorExponentesCotizacion(panelEl);
 
+    if (tipoFijo === 'Asesoria') {
+      generarTablaFrecuenciaVisita(panelEl);
+    }
+
     panelEl.querySelector('#cot-cap-fecha-servicio')?.addEventListener('change', () => {
+      if (tipoFijo === 'Asesoria') {
+        generarTablaFrecuenciaVisita(panelEl);
+      }
       aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl);
+    });
+    panelEl.querySelector('#cot-cap-fecha-servicio')?.addEventListener('input', () => {
+      if (tipoFijo === 'Asesoria') {
+        generarTablaFrecuenciaVisita(panelEl);
+      }
     });
     panelEl.querySelector('#cot-cap-horas')?.addEventListener('input', () => {
       aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl);
@@ -1640,13 +1745,14 @@ function cerrarFormulario() {
   tabsInicializados.servicio = false;
   tabsInicializados.producto = false;
   tabsInicializados.capacitacion = false;
+  tabsInicializados.asesoria = false;
 
-  ['servicio', 'producto', 'capacitacion'].forEach(p => {
+  ['servicio', 'producto', 'capacitacion', 'asesoria'].forEach(p => {
     const formContainer = document.getElementById(`cotiz-form-${p}`);
     if (formContainer) formContainer.innerHTML = '';
   });
 
-  ['servicio', 'producto', 'capacitacion'].forEach(p => {
+  ['servicio', 'producto', 'capacitacion', 'asesoria'].forEach(p => {
     const panel = document.getElementById(`cotiz-panel-${p}`);
     if (panel) panel.style.display = 'none';
   });
@@ -1910,7 +2016,7 @@ function activarTabCotizacion(tabKey: string) {
     el.style.fontWeight = isActive ? '600' : '500';
   });
 
-  ['historial', 'servicio', 'producto', 'capacitacion'].forEach(p => {
+  ['historial', 'servicio', 'producto', 'capacitacion', 'asesoria'].forEach(p => {
     const panel = document.getElementById(`cotiz-panel-${p}`);
     if (panel) panel.style.display = (p === tabKey) ? 'block' : 'none';
   });
@@ -1973,7 +2079,7 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
     observacionesInput.value = cotizacion?.observaciones || '';
   }
 
-  if (tipo === 'Capacitacion') {
+  if (tipo === 'Capacitacion' || tipo === 'Asesoria') {
     const expRaw = Array.isArray(cotizacion?.exponentes) ? cotizacion.exponentes : [];
     const expIdsRaw = Array.isArray(cotizacion?.exponentes_ids) ? cotizacion.exponentes_ids : [];
     selectedExponentesCotizacion = expRaw
@@ -1995,19 +2101,42 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
     actualizarSelectorExponentesCotizacion(panelEl);
     renderExponenteTagsCotizacion(panelEl);
 
-    const primerDetalleCap = detalles.find((d: any) => d?.id_catalogo_cap_aud || d?.horas_capacitacion || d?.num_participantes || d?.fecha_servicio) || detalles[0];
-    const fechaGlobalInput = panelEl.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null;
-    const horasGlobalInput = panelEl.querySelector('#cot-cap-horas') as HTMLInputElement | null;
-    const participantesGlobalInput = panelEl.querySelector('#cot-cap-participantes') as HTMLInputElement | null;
+    if (tipo === 'Capacitacion') {
+      const primerDetalleCap = detalles.find((d: any) => d?.id_catalogo_cap_aud || d?.horas_capacitacion || d?.num_participantes || d?.fecha_servicio) || detalles[0];
+      const fechaGlobalInput = panelEl.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null;
+      const horasGlobalInput = panelEl.querySelector('#cot-cap-horas') as HTMLInputElement | null;
+      const participantesGlobalInput = panelEl.querySelector('#cot-cap-participantes') as HTMLInputElement | null;
 
-    if (fechaGlobalInput) {
-      fechaGlobalInput.value = primerDetalleCap?.fecha_servicio ? String(primerDetalleCap.fecha_servicio).split('T')[0] : '';
-    }
-    if (horasGlobalInput) {
-      horasGlobalInput.value = String(primerDetalleCap?.horas_capacitacion ?? 0);
-    }
-    if (participantesGlobalInput) {
-      participantesGlobalInput.value = String(primerDetalleCap?.num_participantes ?? 1);
+      if (fechaGlobalInput) {
+        fechaGlobalInput.value = primerDetalleCap?.fecha_servicio ? String(primerDetalleCap.fecha_servicio).split('T')[0] : '';
+      }
+      if (horasGlobalInput) {
+        horasGlobalInput.value = String(primerDetalleCap?.horas_capacitacion ?? 0);
+      }
+      if (participantesGlobalInput) {
+        participantesGlobalInput.value = String(primerDetalleCap?.num_participantes ?? 1);
+      }
+    } else if (tipo === 'Asesoria') {
+      const primerDetalleAsesor = detalles.find((d: any) => d?.id_catalogo_cap_aud || d?.meses_implementacion) || detalles[0];
+      const mesesInput = panelEl.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null;
+      
+      if (mesesInput) {
+        mesesInput.value = String(primerDetalleAsesor?.meses_implementacion ?? 1);
+      }
+      
+      // Regenerar tabla de frecuencia con el número correcto de meses
+      generarTablaFrecuenciaVisita(panelEl);
+      
+      // Cargar frecuencia por visita con valores numéricos
+      const frecuVis = primerDetalleAsesor?.frecuencia_visita;
+      if (frecuVis && typeof frecuVis === 'object') {
+        Object.keys(frecuVis).forEach((mesKey: string) => {
+          const pInput = document.getElementById(`cot-asesor-freq-${mesKey}-p`) as HTMLInputElement;
+          const vInput = document.getElementById(`cot-asesor-freq-${mesKey}-v`) as HTMLInputElement;
+          if (pInput) pInput.value = String(frecuVis[mesKey]?.p ?? 0);
+          if (vInput) vInput.value = String(frecuVis[mesKey]?.v ?? 0);
+        });
+      }
     }
   }
 
@@ -2080,7 +2209,7 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
     calcularSubtotalLinea(fila.id);
   }
 
-  if (tipo === 'Capacitacion') {
+  if (tipo === 'Capacitacion' || tipo === 'Asesoria') {
     aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl);
   }
 
@@ -2185,6 +2314,7 @@ function agregarLineaDetalle(tipo?: string) {
     servicios,
     productos,
     catalogoCapAud,
+    tipoCapAudFiltro: tipo === 'Capacitacion' ? 'Capacitación' : tipo === 'Asesoria' ? 'Asesoría' : undefined,
   });
 
   const inputStyle = 'width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;';
@@ -2281,7 +2411,7 @@ function agregarLineaDetalle(tipo?: string) {
 
     const fila = document.getElementById(lineaId)!;
 
-    if (tipo === 'Capacitacion') {
+    if (tipo === 'Capacitacion' || tipo === 'Asesoria') {
       const panelCap = getActivePanelElement();
       if (panelCap) {
         aplicarDatosCapacitacionGlobalALinea(fila, panelCap);
@@ -2729,7 +2859,7 @@ async function guardarCotizacion(tipoFijo?: string) {
     }
   }
 
-  if (tipoCotizacion === 'Capacitacion' && selectedExponentesCotizacion.length === 0) {
+  if ((tipoCotizacion === 'Capacitacion' || tipoCotizacion === 'Asesoria') && selectedExponentesCotizacion.length === 0) {
     mostrarToast('warning', 'Campo obligatorio', 'Seleccione al menos un exponente para la cotización de capacitación');
     return;
   }
@@ -2783,15 +2913,35 @@ async function guardarCotizacion(tipoFijo?: string) {
     return;
   }
 
-  const horasCapacitacionGlobal = tipoCotizacion === 'Capacitacion'
+  const esCapacitacion = tipoCotizacion === 'Capacitacion';
+  const esAsesoria = tipoCotizacion === 'Asesoria';
+
+  const horasCapacitacionGlobal = esCapacitacion
     ? parseFloat((panelActivoElement.querySelector('#cot-cap-horas') as HTMLInputElement | null)?.value || '0')
     : null;
-  const numParticipantesGlobal = tipoCotizacion === 'Capacitacion'
+  const numParticipantesGlobal = esCapacitacion
     ? parseInt((panelActivoElement.querySelector('#cot-cap-participantes') as HTMLInputElement | null)?.value || '1', 10)
     : null;
-  const fechaServicioGlobal = tipoCotizacion === 'Capacitacion'
+  const fechaServicioGlobal = esCapacitacion
     ? ((panelActivoElement.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null)?.value || null)
     : null;
+  const mesesImplementacionGlobal = esAsesoria
+    ? parseInt((panelActivoElement.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null)?.value || '1', 10)
+    : null;
+  
+  // Capturar frecuencia por visita para Asesoría
+  let frecuenciaPorVisitaGlobal: any = null;
+  if (esAsesoria && mesesImplementacionGlobal) {
+    frecuenciaPorVisitaGlobal = {};
+    for (let i = 1; i <= mesesImplementacionGlobal; i++) {
+      const pInput = document.getElementById(`cot-asesor-freq-m${i}-p`) as HTMLInputElement;
+      const vInput = document.getElementById(`cot-asesor-freq-m${i}-v`) as HTMLInputElement;
+      frecuenciaPorVisitaGlobal[`m${i}`] = {
+        p: parseInt(pInput?.value || '0', 10),
+        v: parseInt(vInput?.value || '0', 10)
+      };
+    }
+  }
 
   const detalles: any[] = [];
   let frecuenciaDiasInvalida = false;
@@ -2817,9 +2967,11 @@ async function guardarCotizacion(tipoFijo?: string) {
       : (esServicioLimpiezaConMedida(servicioNombre) ? medidaTanqueGlobal : null);
     const plantaVal = parseInt((linea.querySelector('.planta-input') as HTMLSelectElement)?.value || '0') || null;
     const areaIds = getAreaIdsFromRow(linea, tipoCotizacion);
-    const horasCapacitacion = tipoCotizacion === 'Capacitacion' ? horasCapacitacionGlobal : null;
-    const numParticipantes = tipoCotizacion === 'Capacitacion' ? numParticipantesGlobal : null;
-    const fechaServicio = tipoCotizacion === 'Capacitacion' ? fechaServicioGlobal : null;
+    const horasCapacitacion = esCapacitacion ? horasCapacitacionGlobal : null;
+    const numParticipantes = esCapacitacion ? numParticipantesGlobal : null;
+    const fechaServicio = esCapacitacion ? fechaServicioGlobal : null;
+    const mesesImplementacion = esAsesoria ? mesesImplementacionGlobal : null;
+    const frecuenciaVisita = esAsesoria ? frecuenciaPorVisitaGlobal : null;
 
     const {
       id_servicio,
@@ -2849,6 +3001,8 @@ async function guardarCotizacion(tipoFijo?: string) {
         horas_capacitacion: horasCapacitacion,
         num_participantes: numParticipantes,
         fecha_servicio: fechaServicio,
+        meses_implementacion: mesesImplementacion,
+        frecuencia_visita: frecuenciaVisita,
       });
     });
   });
@@ -2880,7 +3034,7 @@ async function guardarCotizacion(tipoFijo?: string) {
         observacion: b.observacion || null,
       }));
     })(),
-    exponentes_ids: tipoCotizacion === 'Capacitacion'
+    exponentes_ids: (tipoCotizacion === 'Capacitacion' || tipoCotizacion === 'Asesoria')
       ? selectedExponentesCotizacion.map((e) => e.id)
       : null,
     detalles
@@ -3035,6 +3189,7 @@ export function initCotizacionesEvents() {
   tabsInicializados.servicio = false;
   tabsInicializados.producto = false;
   tabsInicializados.capacitacion = false;
+  tabsInicializados.asesoria = false;
 
   // Navegación por tabs
   document.querySelectorAll('.cotiz-tab').forEach(tab => {
@@ -3052,6 +3207,7 @@ export function initCotizacionesEvents() {
         tabsInicializados.servicio = false;
         tabsInicializados.producto = false;
         tabsInicializados.capacitacion = false;
+        tabsInicializados.asesoria = false;
         resetEditarCotizacionState();
         console.log('[TABS] 🔄 Regresando a Historial - Flags resetados');
       }
@@ -3080,7 +3236,7 @@ export function initCotizacionesEvents() {
       });
 
       // Mostrar/ocultar paneles
-      ['historial', 'servicio', 'producto', 'capacitacion'].forEach(p => {
+      ['historial', 'servicio', 'producto', 'capacitacion', 'asesoria'].forEach(p => {
         const panel = document.getElementById(`cotiz-panel-${p}`);
         if (panel) panel.style.display = 'none';
       });

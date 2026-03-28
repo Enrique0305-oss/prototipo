@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\ProgramacionMantenimiento;
 use App\Models\Mantenimiento;
+use App\Models\ActividadMantenimiento;
 use App\Models\Equipo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,10 +18,11 @@ class ProgramacionMantenimientoController extends Controller
      */
     private function autoVencerMantenimientos(): void
     {
-        $ahora = Carbon::now();
+        $hoy = Carbon::today();
 
+        // Marcar como vencidos los mantenimientos cuya fecha pasó
         Mantenimiento::where('estado', 'Pendiente')
-            ->where('fecha', '<', $ahora)
+            ->whereDate('fecha', '<', $hoy)
             ->update(['estado' => 'Vencido']);
     }
 
@@ -63,24 +65,28 @@ class ProgramacionMantenimientoController extends Controller
                 'actividad' => $prog->actividad ? [
                     'id' => $prog->actividad->id,
                     'categoria' => $prog->actividad->categoria,
+                    'motivo' => $prog->actividad->motivo,
+                    'tipo_mantenimiento' => $prog->actividad->tipo_mantenimiento,
+                    'tipo_equipo' => $prog->actividad->tipo_equipo,
+                    'frecuencia_sugerida' => $prog->actividad->frecuencia_sugerida,
                 ] : null,
                 'anio' => $prog->anio,
+                'modo_programacion' => $prog->modo_programacion ?? 'Anual',
                 'frecuencia_meses' => $prog->frecuencia_meses,
                 'fecha_inicio' => $prog->fecha_inicio->format('Y-m-d H:i:s'),
                 'total_programados' => $prog->total_programados,
                 'observaciones' => $prog->observaciones,
-                'es_prueba' => (bool) $prog->es_prueba,
                 'created_at' => $prog->created_at,
                 'realizados' => $realizados,
                 'pendientes' => $pendientes,
                 'vencidos' => $vencidos,
                 'mantenimientos' => $mantenimientos->map(function ($m) use ($ahora, $prog) {
                     $fecha = $m->fecha;
-                    $diffMinutos = $ahora->diffInMinutes($fecha, false);
+                    $fechaComparacion = $fecha->copy()->endOfDay();
+                    $diffMinutos = $ahora->diffInMinutes($fechaComparacion, false);
 
-                    // Para modo prueba: alerta si faltan <= 1 minuto
-                    // Para modo normal: alerta si faltan <= 3 días
-                    $umbralAlerta = $prog->es_prueba ? 1 : (3 * 24 * 60);
+                    // Alerta si faltan <= 3 días
+                    $umbralAlerta = 3 * 24 * 60;
                     $proximidad = 'normal';
 
                     if ($m->estado === 'Pendiente') {
@@ -132,44 +138,54 @@ class ProgramacionMantenimientoController extends Controller
 
     /**
      * Crear programación anual y generar mantenimientos
-     * Soporta modo prueba (es_prueba=true) donde frecuencia es en minutos
      */
     public function store(Request $request): JsonResponse
     {
-        $esPrueba = $request->boolean('es_prueba', false);
+        $modoProgramacion = $request->input('modo_programacion', 'Anual');
 
         $rules = [
             'id_equipo' => 'required|integer|exists:equipo,id',
             'id_actmanten' => 'required|integer|exists:actividades_mantenieminto,id',
             'anio' => 'required|integer|min:2024|max:2050',
+            'modo_programacion' => 'nullable|in:Anual,Unica',
             'fecha_inicio' => 'required|date',
             'observaciones' => 'nullable|string|max:255',
-            'es_prueba' => 'nullable|boolean',
+            'frecuencia_meses' => 'required|integer|in:0,1,2,3,4,6,12',
         ];
-
-        if ($esPrueba) {
-            $rules['frecuencia_meses'] = 'required|integer|min:1|max:60';
-        } else {
-            $rules['frecuencia_meses'] = 'required|integer|in:1,2,3,4,6,12';
-        }
 
         $validated = $request->validate($rules, [
             'id_equipo.required' => 'El equipo es obligatorio',
             'id_equipo.exists' => 'El equipo seleccionado no existe',
-            'id_actmanten.required' => 'La actividad es obligatoria',
-            'id_actmanten.exists' => 'La actividad seleccionada no existe',
+            'id_actmanten.required' => 'El motivo es obligatorio',
+            'id_actmanten.exists' => 'El motivo seleccionado no existe',
             'anio.required' => 'El año es obligatorio',
             'frecuencia_meses.required' => 'La frecuencia es obligatoria',
-            'frecuencia_meses.in' => 'La frecuencia debe ser 1, 2, 3, 4, 6 o 12 meses',
+            'frecuencia_meses.in' => 'La frecuencia debe ser Unica (0), 1, 2, 3, 4, 6 o 12 meses',
             'fecha_inicio.required' => 'La fecha de inicio es obligatoria',
         ]);
 
-        // Verificar duplicado (solo en modo normal)
-        if (!$esPrueba) {
+        $actividad = ActividadMantenimiento::find($validated['id_actmanten']);
+        if (!$actividad) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El motivo seleccionado no existe.'
+            ], 422);
+        }
+
+        if (($actividad->tipo_mantenimiento ?? null) === 'Correctivo') {
+            $modoProgramacion = 'Unica';
+            $validated['frecuencia_meses'] = 0;
+        }
+
+        if ((($validated['frecuencia_meses'] ?? null) === 0)) {
+            $modoProgramacion = 'Unica';
+        }
+
+        // Verificar duplicado
+        if ($modoProgramacion !== 'Unica') {
             $existe = ProgramacionMantenimiento::where('id_equipo', $validated['id_equipo'])
                 ->where('id_actmanten', $validated['id_actmanten'])
                 ->where('anio', $validated['anio'])
-                ->where('es_prueba', false)
                 ->exists();
 
             if ($existe) {
@@ -187,14 +203,8 @@ class ProgramacionMantenimientoController extends Controller
         $fechas = [];
         $currentDate = $fechaInicio->copy();
 
-        if ($esPrueba) {
-            // Modo prueba: generar N mantenimientos espaciados por X minutos
-            // Máximo 10 para no saturar
-            $cantidad = min(intval(request('cantidad', 5)), 10);
-            for ($i = 0; $i < $cantidad; $i++) {
-                $fechas[] = $currentDate->format('Y-m-d H:i:s');
-                $currentDate->addMinutes($frecuencia);
-            }
+        if ($modoProgramacion === 'Unica' || $frecuencia === 0) {
+            $fechas[] = $currentDate->format('Y-m-d H:i:s');
         } else {
             // Modo normal: generar hasta fin de año
             $finAnio = Carbon::create($validated['anio'], 12, 31, 23, 59, 59);
@@ -216,18 +226,19 @@ class ProgramacionMantenimientoController extends Controller
             'id_equipo' => $validated['id_equipo'],
             'id_actmanten' => $validated['id_actmanten'],
             'anio' => $validated['anio'],
+            'modo_programacion' => $modoProgramacion,
             'frecuencia_meses' => $frecuencia,
             'fecha_inicio' => $validated['fecha_inicio'],
             'total_programados' => count($fechas),
             'observaciones' => $validated['observaciones'] ?? null,
-            'es_prueba' => $esPrueba,
         ]);
 
         // Crear los registros de mantenimiento
         $ahora = Carbon::now();
         foreach ($fechas as $fecha) {
             $fechaCarbon = Carbon::parse($fecha);
-            $estado = $fechaCarbon->lt($ahora) ? 'Vencido' : 'Pendiente';
+            $fechaComparacion = $fechaCarbon->copy()->endOfDay();
+            $estado = $fechaComparacion->lt($ahora) ? 'Vencido' : 'Pendiente';
 
             Mantenimiento::create([
                 'id_programacion' => $programacion->id,
@@ -241,10 +252,10 @@ class ProgramacionMantenimientoController extends Controller
 
         $programacion->load(['equipo', 'actividad', 'mantenimientos']);
 
-        $unidad = $esPrueba ? 'minuto(s)' : 'mes(es)';
+        $unidad = ($frecuencia === 0 || $modoProgramacion === 'Unica') ? 'evento unico' : 'mes(es)';
         return response()->json([
             'success' => true,
-            'message' => "Programación creada con {$programacion->total_programados} mantenimientos (cada {$frecuencia} {$unidad}).",
+            'message' => "Programación creada con {$programacion->total_programados} mantenimientos ({$unidad}).",
             'data' => $programacion,
         ], 201);
     }
@@ -254,14 +265,13 @@ class ProgramacionMantenimientoController extends Controller
      */
     public function preview(Request $request): JsonResponse
     {
-        $esPrueba = $request->boolean('es_prueba', false);
+        $modoProgramacion = $request->input('modo_programacion', 'Anual');
 
         $validated = $request->validate([
             'anio' => 'required|integer',
-            'frecuencia_meses' => 'required|integer|min:1',
+            'frecuencia_meses' => 'required|integer|min:0',
             'fecha_inicio' => 'required|date',
-            'es_prueba' => 'nullable|boolean',
-            'cantidad' => 'nullable|integer|min:1|max:10',
+            'modo_programacion' => 'nullable|in:Anual,Unica',
         ]);
 
         $fechaInicio = Carbon::parse($validated['fecha_inicio']);
@@ -271,24 +281,22 @@ class ProgramacionMantenimientoController extends Controller
         $currentDate = $fechaInicio->copy();
         $ahora = Carbon::now();
 
-        if ($esPrueba) {
-            $cantidad = min($validated['cantidad'] ?? 5, 10);
-            for ($i = 0; $i < $cantidad; $i++) {
-                $f = $currentDate->format('Y-m-d H:i:s');
-                $fechas[] = [
-                    'fecha' => $f,
-                    'estado' => $currentDate->lt($ahora) ? 'Vencido' : 'Pendiente',
-                    'mes' => $currentDate->format('H:i'),
-                ];
-                $currentDate->addMinutes($frecuencia);
-            }
+        if ($modoProgramacion === 'Unica' || $frecuencia === 0) {
+            $f = $currentDate->format('Y-m-d H:i:s');
+            $fechaComparacion = $currentDate->copy()->endOfDay();
+            $fechas[] = [
+                'fecha' => $f,
+                'estado' => $fechaComparacion->lt($ahora) ? 'Vencido' : 'Pendiente',
+                'mes' => 'Unica',
+            ];
         } else {
             $finAnio = Carbon::create($validated['anio'], 12, 31, 23, 59, 59);
             while ($currentDate->lte($finAnio)) {
                 $f = $currentDate->format('Y-m-d H:i:s');
+                $fechaComparacion = $currentDate->copy()->endOfDay();
                 $fechas[] = [
                     'fecha' => $f,
-                    'estado' => $currentDate->lt($ahora) ? 'Vencido' : 'Pendiente',
+                    'estado' => $fechaComparacion->lt($ahora) ? 'Vencido' : 'Pendiente',
                     'mes' => ucfirst($currentDate->locale('es')->translatedFormat('F')),
                 ];
                 $currentDate->addMonths($frecuencia);
@@ -366,26 +374,11 @@ class ProgramacionMantenimientoController extends Controller
             ->where('estado', 'Pendiente')
             ->where('fecha', '>', $ahora)
             ->where('fecha', '<=', $ahora->copy()->addDays(7))
-            ->whereHas('programacion', function ($q) {
-                $q->where('es_prueba', false);
-            })
             ->orderBy('fecha')
             ->limit(5)
             ->get();
 
-        // Mantenimientos pendientes próximos - modo prueba (dentro de 2 minutos)
-        $proximosPrueba = Mantenimiento::with(['equipo', 'programacion'])
-            ->where('estado', 'Pendiente')
-            ->where('fecha', '>', $ahora)
-            ->where('fecha', '<=', $ahora->copy()->addMinutes(2))
-            ->whereHas('programacion', function ($q) {
-                $q->where('es_prueba', true);
-            })
-            ->orderBy('fecha')
-            ->limit(5)
-            ->get();
-
-        $proximos = $proximosNormal->merge($proximosPrueba)->sortBy('fecha');
+        $proximos = $proximosNormal->sortBy('fecha');
 
         // Mantenimientos vencidos no realizados (solo contar + el más reciente)
         $totalVencidosCount = Mantenimiento::where('estado', 'Vencido')->count();
@@ -404,15 +397,8 @@ class ProgramacionMantenimientoController extends Controller
         // Solo el próximo más cercano (1)
         $proximoMasCercano = $proximos->first();
         if ($proximoMasCercano) {
-            $diff = (int) round(abs($ahora->diffInMinutes($proximoMasCercano->fecha, false)));
-            $esPrueba = $proximoMasCercano->programacion && $proximoMasCercano->programacion->es_prueba;
-
-            if ($esPrueba) {
-                $tiempoTexto = $diff <= 1 ? 'en menos de 1 minuto' : "en {$diff} minutos";
-            } else {
-                $dias = (int) ceil($diff / 1440);
-                $tiempoTexto = $dias <= 1 ? 'mañana' : "en {$dias} días";
-            }
+            $diff = (int) ceil($proximoMasCercano->fecha->copy()->startOfDay()->diffInDays($ahora));
+            $tiempoTexto = $diff <= 0 ? 'hoy' : ($diff === 1 ? 'mañana' : "en {$diff} días");
 
             $alertas[] = [
                 'tipo' => 'proximo',
@@ -420,22 +406,14 @@ class ProgramacionMantenimientoController extends Controller
                 'equipo' => $proximoMasCercano->equipo ? $proximoMasCercano->equipo->descripcion : 'Equipo',
                 'fecha' => $proximoMasCercano->fecha->format('Y-m-d H:i:s'),
                 'tiempo_texto' => $tiempoTexto,
-                'es_prueba' => $esPrueba,
             ];
         }
 
         // Solo el vencido más reciente (1)
         $vencidoMasReciente = $vencidos->first();
         if ($vencidoMasReciente) {
-            $diff = (int) round(abs($ahora->diffInMinutes($vencidoMasReciente->fecha)));
-            $esPrueba = $vencidoMasReciente->programacion && $vencidoMasReciente->programacion->es_prueba;
-
-            if ($esPrueba) {
-                $tiempoTexto = $diff <= 1 ? 'hace menos de 1 min' : "hace {$diff} min";
-            } else {
-                $dias = (int) ceil($diff / 1440);
-                $tiempoTexto = $dias <= 1 ? 'hace 1 día' : "hace {$dias} días";
-            }
+            $diff = (int) ceil($ahora->copy()->startOfDay()->diffInDays($vencidoMasReciente->fecha));
+            $tiempoTexto = $diff <= 0 ? 'hoy' : ($diff === 1 ? 'ayer' : "hace {$diff} días");
 
             $alertas[] = [
                 'tipo' => 'vencido',
@@ -443,7 +421,6 @@ class ProgramacionMantenimientoController extends Controller
                 'equipo' => $vencidoMasReciente->equipo ? $vencidoMasReciente->equipo->descripcion : 'Equipo',
                 'fecha' => $vencidoMasReciente->fecha->format('Y-m-d H:i:s'),
                 'tiempo_texto' => $tiempoTexto,
-                'es_prueba' => $esPrueba,
             ];
         }
 

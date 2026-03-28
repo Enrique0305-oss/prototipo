@@ -1,4 +1,4 @@
-export type TipoCotizacion = 'Servicio' | 'Producto' | 'Capacitacion';
+export type TipoCotizacion = 'Servicio' | 'Producto' | 'Capacitacion' | 'Asesoria';
 
 export interface DetalleItemIds {
   id_servicio: number | null;
@@ -19,6 +19,7 @@ export interface CotizacionTipoData {
   servicios: any[];
   productos: any[];
   catalogoCapAud: any[];
+  tipoCapAudFiltro?: string;
 }
 
 export interface CotizacionTipoAdapter {

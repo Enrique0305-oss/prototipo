@@ -29,7 +29,9 @@ class CotizacionDetalle extends Model
         'fecha_servicio',
         'medida_tanque',
         'fosfina_producto',
-        'fosfina_cantidad'
+        'fosfina_cantidad',
+        'meses_implementacion',
+        'frecuencia_visita'
     ];
 
     protected $casts = [
@@ -38,6 +40,8 @@ class CotizacionDetalle extends Model
         'horas_capacitacion' => 'decimal:2',
         'num_participantes' => 'integer',
         'fecha_servicio' => 'date',
+        'meses_implementacion' => 'integer',
+        'frecuencia_visita' => 'array',
     ];
 
     // Relaciones

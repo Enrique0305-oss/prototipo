@@ -12,6 +12,10 @@ class ActividadMantenimiento extends Model
     
     protected $fillable = [
         'categoria',
+        'motivo',
+        'tipo_mantenimiento',
+        'tipo_equipo',
+        'frecuencia_sugerida',
         'estado'
     ];
 

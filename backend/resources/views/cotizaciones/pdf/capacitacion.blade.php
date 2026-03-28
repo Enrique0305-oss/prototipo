@@ -192,10 +192,10 @@
                     ?? $cotizacion->detalles->first();
             @endphp
             <div class="issued-name">
-                &nbsp;&nbsp;&nbsp;&nbsp;2.2 {{ $tipoServicio === 'Auditoría' ? 'Plan de trabajo' : 'Actividades' }} <br><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;2.2 {{ $tipoServicio === 'Asesoría' ? 'Plan de trabajo' : 'Actividades' }} <br><br>
 
                 <div style="margin-left: 40px; font-weight: normal;">
-                    @if($tipoServicio === 'Auditoría')
+                    @if($tipoServicio === 'Asesoría')
                         <strong>2.2.1 Metodología de Implementación:</strong>
                         <ul style="list-style-type: disc; margin-top: 10px;">
                             <li><strong>Tiempo de implementación:</strong> 2 meses (enero y marzo)</li>
