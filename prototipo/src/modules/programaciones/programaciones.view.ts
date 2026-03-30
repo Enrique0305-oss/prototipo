@@ -3,6 +3,7 @@ import './programaciones.css';
 import { programacionService } from './programaciones.service';
 import { mostrarToast, confirmarAccion } from '../../shared/toast';
 import { clienteService } from '../../services/clienteService';
+import { renderModalProgramarCapacitacion, abrirModalProgramarCapacitacion } from './programacion-capacitacion';
 import type {
   Programacion,
   Tecnico,
@@ -32,6 +33,40 @@ let filtroEstados: EstadoEjecucion[] = ['Programado', 'Confirmado', 'En Camino',
 let filtroTecnico: number | null = null;
 let filtroCliente: number | null = null;
 let plantasClienteDataProg: any[] = [];
+
+type ProgramacionExtendida = Programacion & {
+  tipo_programacion?: 'servicio' | 'capacitacion';
+  orden_capacitacion?: any;
+  exponentes?: any[];
+};
+
+function mapCapacitacionToProgramacion(cap: any): ProgramacionExtendida {
+  return {
+    id: cap.id,
+    id_orden_servicio: 0,
+    id_servicio: cap.orden_capacitacion?.id_servicio || 0,
+    id_tecnico_asignado: 0,
+    id_supervisor: cap.id_supervisor,
+    id_vehiculo: cap.id_vehiculo,
+    fecha_programada: normalizarFecha(cap.fecha_programada),
+    hora_inicio: normalizarHora(cap.hora_inicio),
+    hora_fin: cap.hora_fin ? normalizarHora(cap.hora_fin) : cap.hora_fin,
+    local_sede: cap.local_sede,
+    direccion_completa: cap.direccion_completa,
+    id_cliente_planta: cap.id_cliente_planta,
+    id_cliente_planta_area: cap.id_cliente_planta_area,
+    estado_ejecucion: cap.estado_ejecucion,
+    observaciones: cap.observaciones,
+    servicio: cap.orden_capacitacion?.servicio,
+    supervisor: cap.supervisor,
+    vehiculo: cap.vehiculo,
+    planta: cap.planta,
+    area: cap.area,
+    orden_capacitacion: cap.orden_capacitacion,
+    exponentes: cap.exponentes || [],
+    tipo_programacion: 'capacitacion',
+  } as ProgramacionExtendida;
+}
 
 async function cargarPlantasClienteProg(idCliente: number) {
   try {
@@ -95,6 +130,10 @@ export function renderProgramaciones(): string {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
           Exportar PDF
         </button>
+        <button class="prog-btn-secondary" id="btnProgramarCapacitacion" title="Programar Capacitación">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+          Programar Capacitación
+        </button>
         <button class="prog-btn-primary" id="btnNuevaProgramacion">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Nueva Programación
@@ -142,6 +181,9 @@ export function renderProgramaciones(): string {
         <div class="prog-modal-body" id="modalSugerenciaBody"></div>
       </div>
     </div>
+
+    <!-- Modal Programar Capacitación -->
+    ${renderModalProgramarCapacitacion()}
   `;
 }
 
@@ -154,6 +196,9 @@ export async function initProgramacionesEvents(): Promise<void> {
   renderCalendario();
 
   document.getElementById('btnNuevaProgramacion')?.addEventListener('click', abrirModalNueva);
+  document.getElementById('btnProgramarCapacitacion')?.addEventListener('click', () => {
+    abrirModalProgramarCapacitacion(tecnicosData, personalData, vehiculosData);
+  });
   document.getElementById('viewSelector')?.addEventListener('change', (e) => {
     vistaActual = (e.target as HTMLSelectElement).value as VistaProgramacion;
     renderCalendario();
@@ -171,12 +216,21 @@ export async function initProgramacionesEvents(): Promise<void> {
       cerrarModal('modalSugerencia');
     });
   });
+
+  // Escuchar evento de capacitación programada para recargar
+  window.addEventListener('capacitacionProgramada', async () => {
+    await recargarProgramaciones();
+  });
 }
 
 async function cargarDatosIniciales() {
   try {
-    const [progRes, tecRes, vehRes, perRes, estRes] = await Promise.all([
+    const [progRes, progCapRes, tecRes, vehRes, perRes, estRes] = await Promise.all([
       programacionService.getAll({
+        mes: fechaActual.getMonth() + 1,
+        anio: fechaActual.getFullYear(),
+      }),
+      programacionService.getAllProgramacionCapacitacion({
         mes: fechaActual.getMonth() + 1,
         anio: fechaActual.getFullYear(),
       }),
@@ -185,12 +239,15 @@ async function cargarDatosIniciales() {
       programacionService.getPersonal(),
       programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear()),
     ]);
-    programacionesData = (progRes.data || []).map(p => ({
+    const programacionesServicio = (progRes.data || []).map(p => ({
       ...p,
       fecha_programada: normalizarFecha(p.fecha_programada),
       hora_inicio: normalizarHora(p.hora_inicio),
       hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
-    }));
+      tipo_programacion: 'servicio',
+    })) as ProgramacionExtendida[];
+    const programacionesCapacitacion = (progCapRes.data || []).map(mapCapacitacionToProgramacion);
+    programacionesData = [...programacionesServicio, ...programacionesCapacitacion] as Programacion[];
     tecnicosData = (tecRes.data || []).filter((t: Tecnico) => t.estado === 'Activo');
     vehiculosData = (vehRes.data || []).filter((v: Vehiculo) => v.estado === 'Activo');
     personalData = perRes.data || [];
@@ -202,19 +259,26 @@ async function cargarDatosIniciales() {
 
 async function recargarProgramaciones() {
   try {
-    const [progRes, estRes] = await Promise.all([
+    const [progRes, progCapRes, estRes] = await Promise.all([
       programacionService.getAll({
+        mes: fechaActual.getMonth() + 1,
+        anio: fechaActual.getFullYear(),
+      }),
+      programacionService.getAllProgramacionCapacitacion({
         mes: fechaActual.getMonth() + 1,
         anio: fechaActual.getFullYear(),
       }),
       programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear()),
     ]);
-    programacionesData = (progRes.data || []).map(p => ({
+    const programacionesServicio = (progRes.data || []).map(p => ({
       ...p,
       fecha_programada: normalizarFecha(p.fecha_programada),
       hora_inicio: normalizarHora(p.hora_inicio),
       hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
-    }));
+      tipo_programacion: 'servicio',
+    })) as ProgramacionExtendida[];
+    const programacionesCapacitacion = (progCapRes.data || []).map(mapCapacitacionToProgramacion);
+    programacionesData = [...programacionesServicio, ...programacionesCapacitacion] as Programacion[];
     if (estRes.data) estadisticas = estRes.data;
   } catch (err) {
     console.error('Error recargando programaciones:', err);
@@ -319,8 +383,21 @@ function getProgramacionesFiltradas(): Programacion[] {
   let lista = programacionesData;
   if (filtroEstados.length > 0) lista = lista.filter(p => filtroEstados.includes(p.estado_ejecucion));
   if (filtroTecnico) lista = lista.filter(p => p.id_tecnico_asignado === filtroTecnico);
-  if (filtroCliente) lista = lista.filter(p => p.orden_servicio?.cliente?.id === filtroCliente);
+  if (filtroCliente) {
+    lista = lista.filter(p => {
+      const px = p as ProgramacionExtendida;
+      return p.orden_servicio?.cliente?.id === filtroCliente || px.orden_capacitacion?.cliente?.id === filtroCliente;
+    });
+  }
   return lista;
+}
+
+function nombreActividad(p: Programacion): string {
+  const px = p as ProgramacionExtendida;
+  if (px.tipo_programacion === 'capacitacion') {
+    return px.orden_capacitacion?.servicio?.nombre || p.servicio?.nombre || 'Capacitación';
+  }
+  return p.servicio?.nombre || 'Servicio';
 }
 
 function renderVistaMensual(): string {
@@ -348,9 +425,9 @@ function renderVistaMensual(): string {
       <div class="prog-calendar-day ${isToday ? 'highlighted' : ''}">
         <span class="prog-day-number">${d}</span>
         ${servicios.slice(0, 3).map(s => `
-          <div class="prog-event ${getColorByState(s.estado_ejecucion)}" data-prog-id="${s.id}">
+          <div class="prog-event ${getColorByState(s.estado_ejecucion)}" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
             <div class="prog-event-title">${clienteNombre(s)}</div>
-            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${s.servicio?.nombre || 'Servicio'}</div>
+            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${nombreActividad(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'capacitacion' ? '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Capacitación</span>' : ''}</div>
             <div class="prog-event-time">${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
           </div>
         `).join('')}
@@ -416,9 +493,9 @@ function renderVistaSemanal(): string {
                 ${servicios.map(s => {
                   const color = getColorByState(s.estado_ejecucion);
                   return `
-                  <div class="prog-week-card prog-week-card-${color}" data-prog-id="${s.id}">
+                  <div class="prog-week-card prog-week-card-${color}" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
                     <div class="prog-week-card-title">${clienteNombre(s)}</div>
-                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${s.servicio?.nombre || 'Servicio'}</div>
+                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${nombreActividad(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'capacitacion' ? '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Capacitación</span>' : ''}</div>
                     <div class="prog-week-card-time"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
                     <div class="prog-week-card-tech"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre).join(', ') : (s.tecnico ? s.tecnico.nombre : '—')}</div>
                     <span class="prog-week-card-badge">${s.estado_ejecucion}</span>
@@ -451,7 +528,7 @@ function renderVistaDiaria(): string {
       <div class="prog-day-timeline">
         <div class="prog-day-services">
           ${programaciones.length > 0 ? programaciones.map(s => `
-            <div class="prog-day-service-card" data-prog-id="${s.id}">
+            <div class="prog-day-service-card" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
               <div class="prog-day-service-time">
                 <div class="prog-time-badge">${fmtH(s.hora_inicio)}</div>
                 <div class="prog-time-line"></div>
@@ -463,7 +540,7 @@ function renderVistaDiaria(): string {
                   <span class="prog-status-badge ${s.estado_ejecucion}">${s.estado_ejecucion}</span>
                 </div>
                 <div class="prog-day-service-details">
-                  <div><strong>Servicio:</strong> ${s.servicio?.nombre || 'Servicio'}</div>
+                  <div><strong>Servicio:</strong> ${nombreActividad(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'capacitacion' ? '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Capacitación</span>' : ''}</div>
                   <div><strong>Técnico:</strong> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre + ' ' + t.apellidos).join(', ') : (s.tecnico ? s.tecnico.nombre + ' ' + s.tecnico.apellidos : 'Sin asignar')}</div>
                   <div><strong>Local:</strong> ${s.planta ? s.planta.nombre : (s.local_sede || '—')}</div>
                   ${s.vehiculo ? `<div><strong>Vehículo:</strong> ${s.vehiculo.placa} - ${s.vehiculo.marca} ${s.vehiculo.modelo}</div>` : ''}
@@ -498,14 +575,15 @@ function enlazarEventosCalendario() {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = parseInt((el as HTMLElement).dataset.progId || '0');
-      if (id) abrirModalDetalle(id);
+      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion';
+      if (id) abrirModalDetalle(id, tipo);
     });
   });
 }
 
 // ═══════════ Modal Detalle ═══════════
 
-async function abrirModalDetalle(id: number) {
+async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' = 'servicio') {
   const modal = document.getElementById('modalDetalleProgramacion');
   const body = document.getElementById('modalDetalleBody');
   if (!modal || !body) return;
@@ -515,9 +593,39 @@ async function abrirModalDetalle(id: number) {
   document.body.style.overflow = 'hidden';
 
   try {
-    const res = await programacionService.getById(id);
+    const res = tipo === 'capacitacion'
+      ? await programacionService.getProgramacionCapacitacionById(id)
+      : await programacionService.getById(id);
     const p = res.data;
     if (!p) { body.innerHTML = '<p style="padding:24px;">No encontrado</p>'; return; }
+
+    if (tipo === 'capacitacion') {
+      const exps = (p.exponentes || []).map((e: any) => `${e.nombre} ${e.apellidos}`).join(', ');
+      body.innerHTML = `
+        <div class="prog-detalle-grid">
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Programación de Capacitación</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">Capacitación</span></div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Orden:</div><div class="prog-detalle-value">${p.orden_capacitacion?.numero_orden || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Servicio:</div><div class="prog-detalle-value">${p.orden_capacitacion?.servicio?.nombre || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${new Date(normalizarFecha(p.fecha_programada) + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
+          </div>
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Cliente y Recursos</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${p.orden_capacitacion?.cliente?.nombre_empresa || p.orden_capacitacion?.cliente?.persona_contacto || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Exponentes:</div><div class="prog-detalle-value">${exps || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Supervisor:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? p.vehiculo.placa + ' - ' + p.vehiculo.marca + ' ' + p.vehiculo.modelo : '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Local:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
+          </div>
+          ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
+          <div class="prog-modal-footer"><button type="button" class="prog-btn-secondary" id="btnCerrarDetalleCap">Cerrar</button></div>
+        </div>`;
+      body.querySelector('#btnCerrarDetalleCap')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
+      return;
+    }
 
     body.innerHTML = `
       <div class="prog-detalle-grid" id="detalleView">
@@ -1237,14 +1345,16 @@ async function exportarPDF() {
 }
 
 function clienteNombre(p: Programacion): string {
-  const c = p.orden_servicio?.cliente;
+  const px = p as ProgramacionExtendida;
+  const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente;
   return c ? (c.nombre_empresa || c.persona_contacto || '—') : '—';
 }
 
 function getClientesUnicos(): { id: number; nombre: string }[] {
   const clientesMap = new Map<number, string>();
   programacionesData.forEach(p => {
-    const cliente = p.orden_servicio?.cliente;
+    const px = p as ProgramacionExtendida;
+    const cliente = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente;
     if (cliente && cliente.id) {
       const nombre = cliente.nombre_empresa || cliente.persona_contacto || '—';
       clientesMap.set(cliente.id, nombre);

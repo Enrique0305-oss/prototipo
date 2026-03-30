@@ -122,6 +122,15 @@ class ProgramacionServicio extends Model
         return $this->hasMany(ProgramacionInsumo::class, 'id_programacion');
     }
 
+    /**
+     * Relación muchos a muchos con exponentes (tabla pivot programacion_exponentes)
+     */
+    public function exponentes()
+    {
+        return $this->belongsToMany(Exponente::class, 'programacion_exponentes', 'id_programacion', 'id_exponente')
+                    ->withTimestamps();
+    }
+
     // Scopes
     public function scopeProgramados($query)
     {

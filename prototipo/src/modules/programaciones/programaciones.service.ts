@@ -87,6 +87,10 @@ export const programacionService = {
     return apiClient.get<{ success: boolean; data: { id: number; nombre: string; apellidos: string }[] }>('/personal');
   },
 
+  getExponentes: async () => {
+    return apiClient.get<{ success: boolean; data: any[] }>('/exponentes');
+  },
+
   downloadPDF: async (params: {
     vista: 'mensual' | 'semanal' | 'diaria';
     mes?: number;
@@ -108,4 +112,36 @@ export const programacionService = {
     const filename = `Programacion_${params.vista}_${new Date().toISOString().slice(0, 10)}.pdf`;
     return apiClient.downloadFile(`/programacion-servicio/pdf?${query.toString()}`, filename);
   },
+
+  // ─── Programación de Capacitaciones ──────────────────────
+
+  getCapacitacionesDisponibles: async () => {
+    return apiClient.get<ApiResponse<any[]>>('/programacion-capacitacion/capacitaciones-disponibles');
+  },
+
+  getAllProgramacionCapacitacion: async (filtros?: FiltroProgramacion) => {
+    return apiClient.get<ApiResponse<any[]>>('/programacion-capacitacion', filtros as any);
+  },
+
+  getProgramacionCapacitacionById: async (id: number) => {
+    return apiClient.get<ApiResponse<any>>(`/programacion-capacitacion/${id}`);
+  },
+
+  programarCapacitacion: async (data: {
+    id_orden_capacitacion: number;
+    id_supervisor?: number;
+    id_vehiculo?: number;
+    fecha_programada: string;
+    hora_inicio: string;
+    hora_fin?: string;
+    id_cliente_planta?: number;
+    id_cliente_planta_area?: number;
+    exponentes_ids?: number[];
+    local_sede?: string;
+    direccion_completa?: string;
+    observaciones?: string;
+  }) => {
+    return apiClient.post<ApiResponse<Programacion>>('/programacion-capacitacion', data);
+  },
 };
+

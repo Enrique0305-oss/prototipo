@@ -113,6 +113,11 @@ class OrdenCapacitacionAuditoria extends Model
         return $this->hasMany(DetalleOrdenCapacitacionEquipo::class, 'id_orden_capacitacion');
     }
 
+    public function programaciones()
+    {
+        return $this->hasMany(ProgramacionServicio::class, 'id_orden_capacitacion');
+    }
+
     // Generar número de orden
     public static function generarNumero()
     {

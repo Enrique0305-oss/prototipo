@@ -12,8 +12,11 @@ use App\Models\ServicioProducto;
 use App\Models\Kardex;
 use App\Models\Tecnico;
 use App\Models\Vehiculo;
+use App\Models\Servicio;
+use App\Models\OrdenCapacitacionAuditoria;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 
@@ -580,6 +583,155 @@ class ProgramacionServicioController extends Controller
             'success' => true,
             'data' => $ordenes,
         ]);
+    }
+
+    /**
+     * Listar órdenes de capacitación disponibles para programar (estado = Aprobado)
+     */
+    public function getCapacitacionesDisponibles()
+    {
+        $ordenes = OrdenCapacitacionAuditoria::with(['cliente', 'servicio', 'exponentes', 'cotizacion'])
+            ->where('estado', 'Aprobado')
+            ->whereDoesntHave('programaciones', function ($q) {
+                $q->whereNotIn('estado_ejecucion', ['Cancelado']);
+            })
+            ->orderBy('id', 'desc')
+            ->get()
+            ->map(function ($orden) {
+                return [
+                    'id' => $orden->id,
+                    'numero_orden' => $orden->numero_orden,
+                    'cliente' => $orden->cliente->nombre_empresa ?? $orden->cliente->persona_contacto ?? 'Sin cliente',
+                    'id_cliente' => $orden->id_cliente,
+                    'estado' => $orden->estado,
+                    'fecha_servicio' => $orden->fecha_servicio,
+                    'hora_servicio' => $orden->hora_servicio,
+                    'modalidad' => $orden->modalidad,
+                    'num_participantes' => $orden->num_participantes,
+                    'num_certificados' => $orden->num_certificados ?? 0,
+                    'horas_capacitacion' => $orden->horas_capacitacion ?? 0,
+                    'servicio' => $orden->servicio?->nombre ?? 'Sin servicio',
+                    'exponentes' => $orden->exponentes->map(fn($e) => [
+                        'id' => $e->id,
+                        'nombre' => $e->nombre,
+                        'apellidos' => $e->apellidos,
+                    ]),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $ordenes,
+        ]);
+    }
+
+    /**
+     * Programar una orden de capacitación
+     */
+    public function programarCapacitacion(Request $request)
+    {
+        $validated = $request->validate([
+            'id_orden_capacitacion' => 'required|integer|exists:orden_capacitacion_auditoria,id',
+            'id_tecnico_asignado'   => 'required|integer|exists:tecnicos,id',
+            'tecnicos_ids'          => 'nullable|array',
+            'tecnicos_ids.*'        => 'integer|exists:tecnicos,id',
+            'id_supervisor'         => 'nullable|integer|exists:personal,id',
+            'id_vehiculo'           => 'nullable|integer|exists:vehiculos,id',
+            'fecha_programada'      => 'required|date',
+            'hora_inicio'           => 'required',
+            'hora_fin'              => 'nullable',
+            'id_cliente_planta'     => 'nullable|integer|exists:cliente_planta,id',
+            'id_cliente_planta_area'=> 'nullable|integer|exists:cliente_planta_area,id',
+            'exponentes_ids'        => 'nullable|array',
+            'exponentes_ids.*'      => 'integer|exists:exponentes,id',
+            'observaciones'         => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $idUsuario = $request->user()?->id;
+            $ordenCap = OrdenCapacitacionAuditoria::findOrFail($validated['id_orden_capacitacion']);
+            $idServicio = $ordenCap->id_servicio;
+
+            if (empty($idServicio)) {
+                $idServicio = Servicio::where('estado', 'activo')->value('id');
+            }
+
+            if (empty($idServicio)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró un servicio activo para asociar la programación de capacitación. Configure un servicio en el catálogo.',
+                ], 422);
+            }
+
+            // Validar que no esté ya programada
+            $yaProgamada = ProgramacionServicio::where('id_orden_capacitacion', $ordenCap->id)
+                ->whereNotIn('estado_ejecucion', ['Cancelado'])
+                ->exists();
+
+            if ($yaProgamada) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta capacitación ya está programada',
+                ], 422);
+            }
+
+            // Crear programación
+            $prog = ProgramacionServicio::create([
+                'id_orden_capacitacion' => $validated['id_orden_capacitacion'],
+                'id_servicio'           => $idServicio,
+                'id_tecnico_asignado'   => $validated['id_tecnico_asignado'],
+                'id_supervisor'         => $validated['id_supervisor'] ?? null,
+                'id_vehiculo'           => $validated['id_vehiculo'] ?? null,
+                'fecha_programada'      => $validated['fecha_programada'],
+                'hora_inicio'           => $validated['hora_inicio'],
+                'hora_fin'              => $validated['hora_fin'] ?? null,
+                'local_sede'            => 'Aula/Sede de Capacitación',
+                'direccion_completa'    => $ordenCap->cliente?->direccion,
+                'id_cliente_planta'     => $validated['id_cliente_planta'] ?? null,
+                'id_cliente_planta_area'=> $validated['id_cliente_planta_area'] ?? null,
+                'estado_ejecucion'      => 'Programado',
+                'observaciones'         => $validated['observaciones'] ?? null,
+                'creado_por'            => $idUsuario,
+            ]);
+
+            // Sincronizar técnicos
+            $this->syncTecnicos($prog, $validated['id_tecnico_asignado'], $validated['tecnicos_ids'] ?? []);
+
+            // Sincronizar exponentes solo si existe tabla pivot
+            if (!empty($validated['exponentes_ids']) && Schema::hasTable('programacion_exponentes')) {
+                $prog->exponentes()->sync($validated['exponentes_ids']);
+            }
+
+            // Cambiar estado de la OCA a "Programado"
+            $ordenCap->estado = 'Programado';
+            $ordenCap->save();
+
+            DB::commit();
+
+            $prog->load([
+                'ordenCapacitacion.cliente',
+                'ordenCapacitacion.exponentes',
+                'exponentes',
+                'servicio',
+                'tecnico',
+                'tecnicos',
+                'supervisor',
+                'vehiculo',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Capacitación programada exitosamente',
+                'data' => $prog,
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al programar capacitación: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

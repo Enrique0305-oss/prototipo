@@ -28,6 +28,7 @@ use App\Http\Controllers\API\ClientePlantaController;
 use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
+use App\Http\Controllers\API\ProgramacionCapacitacionController;
 use App\Http\Controllers\API\EntregaEppController;
 use App\Http\Controllers\API\ProveedorController;
 use App\Http\Controllers\API\SalidaProgramacionController;
@@ -271,8 +272,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Programación de Servicios
     Route::get('/programacion-servicio/estadisticas/resumen', [ProgramacionServicioController::class, 'estadisticas']);
     Route::get('/programacion-servicio/ods-disponibles', [ProgramacionServicioController::class, 'getODSDisponibles']);
+    Route::get('/programacion-servicio/capacitaciones-disponibles', [ProgramacionServicioController::class, 'getCapacitacionesDisponibles']);
     Route::post('/programacion-servicio/preview-anual', [ProgramacionServicioController::class, 'previewAnual']);
     Route::post('/programacion-servicio/anual', [ProgramacionServicioController::class, 'storeAnual']);
+    Route::post('/programacion-servicio/capacitacion', [ProgramacionServicioController::class, 'programarCapacitacion']);
     Route::get('/programacion-servicio/pdf', [ProgramacionServicioController::class, 'generarPDF']);
     Route::get('/programacion-servicio', [ProgramacionServicioController::class, 'index']);
     Route::get('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'show']);
@@ -280,6 +283,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'update']);
     Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
     Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
+
+    // Programación de Capacitaciones (independiente)
+    Route::get('/programacion-capacitacion/capacitaciones-disponibles', [ProgramacionCapacitacionController::class, 'getCapacitacionesDisponibles']);
+    Route::get('/programacion-capacitacion', [ProgramacionCapacitacionController::class, 'index']);
+    Route::get('/programacion-capacitacion/{id}', [ProgramacionCapacitacionController::class, 'show']);
+    Route::post('/programacion-capacitacion', [ProgramacionCapacitacionController::class, 'store']);
 
     // Almacén - Salidas por Programación
     Route::get('/almacen/salidas-programacion/pendientes', [SalidaProgramacionController::class, 'getPendientes']);
