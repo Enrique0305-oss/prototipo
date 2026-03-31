@@ -175,7 +175,9 @@
             </div>
 
             <div class="proposal-text" style="margin-bottom: 20px;">
-                @if($cotizacion->propuesta_tecnica)
+                @if(!empty($cotizacion->objetivos_asesoria))
+                    {!! nl2br(e($cotizacion->objetivos_asesoria)) !!}
+                @elseif($cotizacion->propuesta_tecnica)
                     {!! $cotizacion->propuesta_tecnica !!}
                 @else
                     <p>Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.</p>

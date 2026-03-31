@@ -272,14 +272,6 @@
                 <div class="page-break"></div>
             @endif
             
-            <div class="proposal-text" style="margin-bottom: 20px;">
-                @if($cotizacion->propuesta_tecnica)
-                    {!! $cotizacion->propuesta_tecnica !!}
-                @else
-                    <p>Presentamos a su consideraciÃ³n la oferta econÃ³mica, a continuaciÃ³n, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
-                @endif
-            </div>
-
             
 
             @if($mostrarServicioFosfina)

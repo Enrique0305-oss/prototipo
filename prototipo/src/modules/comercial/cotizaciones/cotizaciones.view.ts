@@ -329,6 +329,7 @@ function generarTablaFrecuenciaVisita(panelEl: HTMLElement) {
         <option value="1 vez al mes">1 vez al mes</option>
         <option value="semanal">semanal</option>
         <option value="quincenal">quincenal</option>
+        <option value="A solicitud">A solicitud</option>
       </select>
     </div>`;
   }
@@ -1019,7 +1020,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
         <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Asignar Exponente(s)</h3>
       </div>
-      <div style="display:grid;grid-template-columns:minmax(320px,2fr) repeat(2,minmax(180px,1fr));gap:12px;align-items:end;">
+      <div style="display:grid;grid-template-columns:minmax(320px,2fr) minmax(140px,0.7fr) minmax(340px,1.3fr);gap:12px;align-items:end;">
         <div class="form-group">
           <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Exponente(s) <span style="color:#ef4444">*</span></label>
           <div id="cot-exponentes-container" style="border:1px solid #d1d5db;border-radius:8px;padding:8px;min-height:44px;background:#fff;">
@@ -1031,7 +1032,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
         </div>
         <div class="form-group">
           <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Tiempo de Implementación (Meses)</label>
-          <input type="number" id="cot-cap-fecha-servicio" class="form-control" value="1" min="1" step="1" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
+          <input type="number" id="cot-cap-fecha-servicio" class="form-control" value="1" min="1" step="1" style="max-width:180px; width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
         </div>
         <div class="form-group">
           <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Frecuencia por Visita</label>
@@ -1041,11 +1042,11 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     </div>
   ` : '';
 
-  const seccionObjetivosAsesoria = tipoFijo === 'Asesoria' ? `
+  const seccionObjetivosAsesoria = (tipoFijo === 'Asesoria' || tipoFijo === 'Capacitacion') ? `
     <div class="form-section" style="margin-bottom: 24px; background: #fff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px;">
       <div style="margin-bottom: 12px;">
-        <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:8px;">Objetivos de la Asesoría</label>
-        <textarea id="cot-objetivos-asesoria" class="form-control" placeholder="Ingrese los objetivos de la asesoría..." style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; font-family:Arial, sans-serif; min-height:100px; resize:vertical;"></textarea>
+        <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:8px;">${tipoFijo === 'Capacitacion' ? 'Objetivos de la Capacitación' : 'Objetivos de la Asesoría'}</label>
+        <textarea id="cot-objetivos-asesoria" class="form-control" placeholder="${tipoFijo === 'Capacitacion' ? 'Ingrese los objetivos de la capacitación...' : 'Ingrese los objetivos de la asesoría...'}" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; font-family:Arial, sans-serif; min-height:100px; resize:vertical;"></textarea>
       </div>
     </div>
   ` : '';
@@ -1119,6 +1120,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 
         ${seccionExponentesCapacitacion}
 
+        ${tipoFijo === 'Asesoria' ? `
         <div class="propuesta-tecnica-container" style="margin-bottom: 25px; background: #fff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Propuesta Técnica (Objetivos)</h3>
@@ -1140,6 +1142,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
                 <div id="editor-propuesta" style="height: 200px; background: #fff;"></div>
             </div>
         </div>
+          ` : ''}
 
         <div class="form-section" style="margin-bottom: 24px;">
           ${seccionLimpiezaCisternas}
@@ -1157,10 +1160,10 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
                   <th style="width: 20%;">Servicio/Producto</th>
                   <th style="width: 14%;">Planta</th>
                   <th style="width: 14%;">Área</th>
-                  ${tipoFijo === 'Servicio' ? '' : '<th style="width: 8%;">Cantidad</th>'}
-                  <th style="width: 11%;">Precio Unit.</th>
-                  <th style="width: 11%;">Frecuencia</th>
-                  ${tipoFijo === 'Servicio' ? '' : '<th style="width: 10%;">Modalidad</th>'}
+                  ${tipoFijo === 'Servicio' || tipoFijo === 'Asesoria' || tipoFijo === 'Capacitacion' ? '' : '<th style="width: 8%;">Cantidad</th>'}
+                  <th style="width: 11%;">${tipoFijo === 'Asesoria' || tipoFijo === 'Capacitacion' || tipoFijo === 'Servicio' ? 'Precio' : 'Precio Unit.'}</th>
+                  ${tipoFijo === 'Asesoria' || tipoFijo === 'Producto' ? '' : '<th style="width: 11%;">Frecuencia</th>'}
+                  ${tipoFijo === 'Servicio' || tipoFijo === 'Producto' ? '' : '<th style="width: 10%;">Modalidad</th>'}
                   <!-- Eliminado: técnicos/supervisor de capacitación -->
                   <th style="width: 9%;">Subtotal</th>
                   <th style="width: 3%;"></th>
@@ -1221,6 +1224,29 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
               <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #e2e8f0;background:#f8fafc;">
                 <button type="button" id="modal-cot-receta-equipo-cancelar" class="btn-secondary" style="padding:6px 10px;font-size:12px;">Cancelar</button>
                 <button type="button" id="modal-cot-receta-equipo-confirmar" class="btn-primary" style="padding:6px 10px;font-size:12px;">Agregar</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="modal-cot-receta-producto" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10000;align-items:center;justify-content:center;">
+            <div style="background:#fff;border-radius:12px;width:min(520px,92vw);box-shadow:0 20px 40px rgba(15,23,42,.25);overflow:hidden;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e2e8f0;">
+                <h4 style="margin:0;font-size:16px;color:#0f172a;">Agregar Producto</h4>
+                <button type="button" id="modal-cot-receta-producto-cerrar" style="background:none;border:none;font-size:20px;line-height:1;color:#64748b;cursor:pointer;">&times;</button>
+              </div>
+              <div style="padding:16px;display:grid;gap:12px;">
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Bloque Servicio / Planta / Área <span style="color:#ef4444">*</span></label>
+                  <select id="cot-receta-producto-grupo" class="form-control" style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;"></select>
+                </div>
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Producto (Categoría DISPOSITIVOS) <span style="color:#ef4444">*</span></label>
+                  <select id="cot-receta-producto-id" class="form-control" style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;"></select>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #e2e8f0;background:#f8fafc;">
+                <button type="button" id="modal-cot-receta-producto-cancelar" class="btn-secondary" style="padding:6px 10px;font-size:12px;">Cancelar</button>
+                <button type="button" id="modal-cot-receta-producto-confirmar" class="btn-primary" style="padding:6px 10px;font-size:12px;">Agregar</button>
               </div>
             </div>
           </div>
@@ -1689,19 +1715,17 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     });
 
     panelEl.querySelector('#btn-agregar-prod-receta-servicio')?.addEventListener('click', () => {
-      const grupos = getServiceLineGroups(panelEl);
-      const grupo = grupos[0] || { idServicio: 0, idPlanta: null, idArea: null, servicioNombre: 'General', plantaNombre: '', areaNombre: '' };
-      recetaServicioRows.push({
-        id_servicio: grupo.idServicio,
-        id_equipo: null,
-        equipo_descripcion: '',
-        id_producto: 0,
-        cantidad: 1,
-        observacion: '',
-        id_cliente_planta: grupo.idPlanta,
-        id_cliente_planta_area: grupo.idArea,
-      });
-      renderRecetaServicio(panelEl);
+      abrirModalAgregarProductoReceta(panelEl);
+    });
+
+    panelEl.querySelector('#modal-cot-receta-producto-cerrar')?.addEventListener('click', () => {
+      cerrarModalAgregarProductoReceta(panelEl);
+    });
+    panelEl.querySelector('#modal-cot-receta-producto-cancelar')?.addEventListener('click', () => {
+      cerrarModalAgregarProductoReceta(panelEl);
+    });
+    panelEl.querySelector('#modal-cot-receta-producto-confirmar')?.addEventListener('click', () => {
+      confirmarAgregarProductoReceta(panelEl);
     });
 
     // Función para mostrar/ocultar sección de servicios especiales
@@ -2185,8 +2209,8 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
     quillInstance.root.innerHTML = cotizacion?.propuesta_tecnica || '';
   }
 
-  // Cargar objetivos de asesoría si es Asesoría
-  if (tipo === 'Asesoria') {
+  // Cargar objetivos para Asesoría y Capacitación
+  if (tipo === 'Asesoria' || tipo === 'Capacitacion') {
     const textareaObjtivos = panelEl.querySelector('#cot-objetivos-asesoria') as HTMLTextAreaElement | null;
     if (textareaObjtivos) {
       textareaObjtivos.value = cotizacion?.objetivos_asesoria || '';
@@ -2412,13 +2436,15 @@ function agregarLineaDetalle(tipo?: string) {
                <option value="">— Sin área —</option>
              </select>`}
       </td>
-      ${tipo === 'Servicio'
+      ${tipo === 'Servicio' || tipo === 'Asesoria' || tipo === 'Capacitacion'
         ? `<td style="display:none;"><input type="hidden" class="cantidad-input" value="1"></td>`
         : `<td><input type="number" class="cantidad-input" value="1" min="1" style="${inputStyle}${disabledCantidadStyle}" ${disabledCantidad}></td>`}
       <td>
         <input type="number" class="precio-input" value="0.00" min="0" step="0.01" style="${inputStyle}">
       </td>
-      <td>
+      ${tipo === 'Asesoria' || tipo === 'Producto'
+        ? `<td style="display:none;"><input type="hidden" class="frecuencia-input" value=""></td>`
+        : `<td>
         <select class="frecuencia-input" style="${selectStyle}${disabledFrecuenciaStyle}" ${disabledFrecuencia}>
           <option value="">—</option>
           <option value="Única">Única</option>
@@ -2426,13 +2452,14 @@ function agregarLineaDetalle(tipo?: string) {
           <option value="Semanal">Semanal</option>
           <option value="Quincenal">Quincenal</option>
           <option value="Mensual">Mensual</option>
+          <option value="A solicitud">A solicitud</option>
           <option value="Trimestral">Trimestral</option>
           <option value="Semestral">Semestral</option>
           <option value="Anual">Anual</option>
         </select>
         ${construirFrecuenciaDiasHtml(lineaId)}
-      </td>
-      ${tipo === 'Servicio'
+      </td>`}
+      ${tipo === 'Servicio' || tipo === 'Producto'
         ? `<td style="display:none;"><input type="hidden" class="modalidad-input" value=""></td>`
         : `<td>
         <select class="modalidad-input" style="${selectStyle}${disabledModalidadStyle}" ${disabledModalidad}>
@@ -2595,8 +2622,12 @@ function calcularTotales() {
   if (totalEl) totalEl.textContent = `S/ ${total.toFixed(2)}`;
 }
 
+function getProductosDispositivosReceta(): any[] {
+  return (window as any).__productosData || [];
+}
+
 function buildProductoOptionsReceta(selectedId: number): string {
-  const productos = (window as any).__productosData || [];
+  const productos = getProductosDispositivosReceta();
   let opts = '<option value="">Seleccione producto...</option>';
   productos.forEach((p: any) => {
     const sel = p.id === selectedId ? 'selected' : '';
@@ -2700,6 +2731,80 @@ async function abrirModalAgregarEquipoReceta(panelEl: HTMLElement) {
 function cerrarModalAgregarEquipoReceta(panelEl: HTMLElement) {
   const modal = panelEl.querySelector('#modal-cot-receta-equipo') as HTMLElement | null;
   if (modal) modal.style.display = 'none';
+}
+
+function abrirModalAgregarProductoReceta(panelEl: HTMLElement) {
+  const modal = panelEl.querySelector('#modal-cot-receta-producto') as HTMLElement | null;
+  const selGrupo = panelEl.querySelector('#cot-receta-producto-grupo') as HTMLSelectElement | null;
+  const selProducto = panelEl.querySelector('#cot-receta-producto-id') as HTMLSelectElement | null;
+  if (!modal || !selGrupo || !selProducto) return;
+
+  const groups = getServiceLineGroups(panelEl);
+  if (groups.length === 0) {
+    mostrarToast('warning', 'Sin servicios', 'Primero agregue una línea de servicio con planta/área');
+    return;
+  }
+
+  const productos = getProductosDispositivosReceta();
+  if (productos.length === 0) {
+    mostrarToast('warning', 'Sin productos', 'No hay productos activos disponibles');
+    return;
+  }
+
+  selGrupo.innerHTML = groups.map((g) => {
+    const key = `${g.idServicio}-${g.idPlanta || 0}-${g.idArea || 0}`;
+    const partes = [g.servicioNombre];
+    if (g.plantaNombre) partes.push(g.plantaNombre);
+    if (g.areaNombre) partes.push(g.areaNombre);
+    return `<option value="${key}">${partes.join(' -> ')}</option>`;
+  }).join('');
+
+  selProducto.innerHTML = '<option value="">Seleccione producto...</option>' + productos.map((p: any) => {
+    return `<option value="${p.id}">${p.descripcion}${p.unidad ? ` (${p.unidad})` : ''}</option>`;
+  }).join('');
+
+  modal.style.display = 'flex';
+}
+
+function cerrarModalAgregarProductoReceta(panelEl: HTMLElement) {
+  const modal = panelEl.querySelector('#modal-cot-receta-producto') as HTMLElement | null;
+  if (modal) modal.style.display = 'none';
+}
+
+function confirmarAgregarProductoReceta(panelEl: HTMLElement) {
+  const selGrupo = panelEl.querySelector('#cot-receta-producto-grupo') as HTMLSelectElement | null;
+  const selProducto = panelEl.querySelector('#cot-receta-producto-id') as HTMLSelectElement | null;
+  if (!selGrupo || !selProducto) return;
+
+  const [idServicioRaw, idPlantaRaw, idAreaRaw] = selGrupo.value.split('-').map((v) => Number(v || 0));
+  const idServicio = idServicioRaw || 0;
+  const idPlanta = idPlantaRaw || null;
+  const idArea = idAreaRaw || null;
+  const idProducto = Number(selProducto.value || 0);
+
+  if (!idServicio) {
+    mostrarToast('error', 'Dato requerido', 'Seleccione un bloque de servicio');
+    return;
+  }
+  if (!idProducto) {
+    mostrarToast('error', 'Dato requerido', 'Seleccione un producto');
+    return;
+  }
+
+  recetaServicioRows.push({
+    id_servicio: idServicio,
+    id_equipo: null,
+    equipo_descripcion: '',
+    id_producto: idProducto,
+    cantidad: 1,
+    observacion: '',
+    id_cliente_planta: idPlanta,
+    id_cliente_planta_area: idArea,
+  });
+
+  renderRecetaServicio(panelEl);
+  cerrarModalAgregarProductoReceta(panelEl);
+  mostrarToast('success', 'Producto agregado', 'Se agregó el producto al bloque seleccionado');
 }
 
 async function confirmarAgregarEquipoReceta(panelEl: HTMLElement) {
@@ -2895,7 +3000,7 @@ async function guardarCotizacion(tipoFijo?: string) {
     console.log('[SAVE] Propuesta técnica capturada:', propuestaHtml.substring(0, 100));
   }
   
-  const objetivosAsesoria = tipoCotizacion === 'Asesoria' 
+  const objetivosAsesoria = (tipoCotizacion === 'Asesoria' || tipoCotizacion === 'Capacitacion')
     ? (panelActivoElement.querySelector('#cot-objetivos-asesoria') as HTMLTextAreaElement)?.value?.trim() || ''
     : null;
 
