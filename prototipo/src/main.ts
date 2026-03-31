@@ -16,7 +16,7 @@ import { renderAlmacenCompras, initComprasEvents } from './modules/almacen/compr
 import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './modules/almacen/entradas-salidas/entradas-salidas.view'
 import { renderEntregaEpp, initEntregaEppEvents } from './modules/almacen/entrega-epp/entrega-epp.view'
 import { renderSalidasProgramacion, initSalidasProgramacion } from './modules/almacen/salidas-programacion/salidas-programacion.view'
-// Logística
+// Servicios - Clientes
 import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab, initClientesLogisticaEvents, initServiciosTabEvents } from './modules/logistica/logistica.view'
 // Comercial
 import { renderComercialProspectos, initProspectosEvents } from './modules/comercial/prospectos/prospectos.view'
@@ -24,6 +24,7 @@ import { renderComercialCotizaciones, initCotizacionesEvents } from './modules/c
 import { renderComercialOrdenesServicio, initOrdenesServicioEvents } from './modules/comercial/ordenes-servicio/ordenes-servicio.view'
 import { renderComercialOrdenesProducto, initOrdenesProductoEvents } from './modules/comercial/ordenes-producto/ordenes-producto.view'
 import { renderComercialOrdenesCapacitacion, initOrdenesCapacitacionEvents } from './modules/comercial/ordenes-capacitacion/ordenes-capacitacion.view'
+import { renderComercialOrdenesAsesoria, initOrdenesAsesoriaEvents } from './modules/comercial/ordenes-asesoria/ordenes-asesoria.view'
 import { renderComercialConversiones } from './modules/comercial/conversiones/conversiones.view'
 import { renderAprobacionCotizaciones, initAprobacionCotizacionesEvents } from './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.view'
 import './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.css'
@@ -44,7 +45,7 @@ let activeSubMenu = '';
 let expandedMenu = ''; // Controla qué menú con submenús está expandido (sin navegar)
 let activeInventoryTab = 'productos'; // Estado para el tab de inventario
 let activeEntradasTab = 'movimientos'; // Estado para el tab de entradas y salidas
-let activeLogisticaTab = 'clientes'; // Estado para el tab de logística
+let activeLogisticaTab = 'clientes'; // Estado para el tab de Servicios - Clientes
 let activeFinanzasTab = 'dashboard'; // Estado para el tab de finanzas
 let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
 let activeRecursosTab = 'asistencia'; // Estado para el tab de recursos humanos
@@ -59,7 +60,7 @@ let misProyecciones: any[] = []; // Lista de proyecciones para facturación
 const MENU_PERMISOS: Record<string, string[]> = {
   'Dashboard':         ['dashboard'],
   'Almacén':           ['inventario', 'entradas-salidas'],
-  'Logística':         ['logistica'],
+  'Servicios - Clientes':         ['logistica'],
   'Programaciones':    ['programaciones'],
   'Comercial':         ['prospectos', 'cotizaciones', 'ods', 'odp', 'servicios'],
   'Finanzas':          ['cotizaciones'],  // Finanzas ve cotizaciones
@@ -81,9 +82,9 @@ function filtrarMenuPorPermisos(items: typeof menuItems): typeof menuItems {
 const menuItems = [
   { name: 'Dashboard', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>', submenu: [] },
   { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Mantenimiento', 'Inventario', 'Ajuste de Inventario', 'Proveedores', 'Órdenes de Compra', 'Entradas y Salidas', 'Entrega EPP', 'Salidas Programación'] },
-  { name: 'Logística', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>', submenu: [] },
+  { name: 'Servicios - Clientes', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>', submenu: [] },
   { name: 'Programaciones', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>', submenu: [] },
-  { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Clientes Potenciales', 'Cotizaciones', 'Aprobación Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Exponentes', 'Conversiones'] },
+  { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Clientes Potenciales', 'Cotizaciones', 'Aprobación Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Órdenes de Asesoría', 'Exponentes', 'Conversiones'] },
   { name: 'Finanzas', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>', submenu: [] },
   { name: 'Facturación', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>', submenu: [] },
   { name: 'Recursos Humanos', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>', submenu: [] },
@@ -110,7 +111,7 @@ function getMainContent() {
       return html;
     }
     return renderAlmacenMantenimiento(); // Mantenimiento por defecto (con tabs)
-  } else if (activeMenu === 'Logística') {
+  } else if (activeMenu === 'Servicios - Clientes') {
     const html = renderLogistica();
     setTimeout(() => initClientesLogisticaEvents(), 0);
     return html;
@@ -145,6 +146,11 @@ function getMainContent() {
     if (activeSubMenu === 'Órdenes de Capacitación') {
       const html = renderComercialOrdenesCapacitacion();
       setTimeout(() => initOrdenesCapacitacionEvents(), 0);
+      return html;
+    }
+    if (activeSubMenu === 'Órdenes de Asesoría') {
+      const html = renderComercialOrdenesAsesoria();
+      setTimeout(() => initOrdenesAsesoriaEvents(), 0);
       return html;
     }
     if (activeSubMenu === 'Exponentes') {
@@ -353,7 +359,7 @@ if (activeMenu === 'Facturación') {
         updateEntradasTabContent();
       }
 
-      if (tabName && activeMenu === 'Logística') {
+      if (tabName && activeMenu === 'Servicios - Clientes') {
         activeLogisticaTab = tabName;
         updateLogisticaTabContent();
       }

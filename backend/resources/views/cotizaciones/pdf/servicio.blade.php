@@ -907,19 +907,14 @@
                         necesario evaluar otras opciones de eliminación mediante an+alisis de tendencia, se aplcar+a un recargo adicional correspondiente</li>
                         <li>Vigencia de la oferta: 15 días</li>
                     @else
-                        <li>Mensualmente se evalúan los comportamientos de las plagas objeto del control con el propósito
-                        de determinar la efectividad de las actividades y realizar las mejoras que correspondan para garantizar 
-                        mantener nuveles mínimos de presencia de plagas.</li>
-                        <li>El cliente es responsale se seguir las recomendaciones y sugerencias que resulten de las actividades 
-                        de inspección y control con el propósito de disminuir las condiciones que puedan favorecer el sustento y 
-                        desarrollo de plagas.</li>
-                        <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
-                        la actividad</li>
+                        <li>Mensualmente se evalúan los comportamientos de las plagas objeto del control con el propósito de determinar la efectividad de las actividades y realizar las mejoras que correspondan para garantizar mantener niveles mínimos de presencia de plagas.</li>
+                        <li>El cliente es responsable de seguir las recomendaciones y sugerencias que resulten de las actividades de inspección y control con el propósito de disminuir las condiciones que puedan favorecer el sustento y desarrollo de plagas.</li>
+                        <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe la actividad.</li>
                         <li>Cualquier daño o deterioro de los dispositivos serán responsabilidad del cliente.</li>
                         <li>Los productos a usar pueden variar de acuerdo a la observación del especialista.</li>
-                        <li>Los químicos son referenciales, ya que el especialista recomendará los cambios según la evaluación. que realice</li>
-                        <li>El presupuesto se basa en la metodología actualmente vigente. Sin embargo, si se determina que es 
-                        necesario evaluar otras opciones de eliminación mediante an+alisis de tendencia, se aplcar+a un recargo adicional correspondiente</li>
+                        <li>Los servicios realizados a partir de las 11:30 pm estarán sujetos a un recargo adicional, el cual será previamente coordinado y aprobado por el cliente.</li>
+                        <li>El presupuesto se basa en la metodología actualmente vigente. Sin embargo, si se determina que es necesario evaluar otras opciones de eliminación mediante análisis de tendencia, se aplicará un recargo adicional correspondiente.</li>
+                        <li>Los servicios realizados en días feriados tendrán un recargo del 20% previa coordinación.</li>
                         <li>Vigencia de la oferta: 15 días</li>
                     @endif
                 </ul>

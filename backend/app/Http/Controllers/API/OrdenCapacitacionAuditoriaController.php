@@ -192,6 +192,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
                     'id' => $cotizacion->id,
                     'numero_cotizacion' => $cotizacion->numero_cotizacion,
                     'fecha_emision' => $cotizacion->fecha_emision->format('Y-m-d'),
+                    'fecha_aceptacion' => $cotizacion->fecha_estado_cotizacion
+                        ? $cotizacion->fecha_estado_cotizacion->format('Y-m-d')
+                        : null,
                     'incluye_igv' => (bool) $cotizacion->incluye_igv,
                     'subtotal' => (float) $cotizacion->subtotal,
                     'igv' => (float) $cotizacion->igv,
@@ -276,8 +279,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
             return response()->json(['success' => false, 'message' => 'Esta cotización ya tiene una orden'], 400);
         }
 
-        // Copiar fecha emisión a fecha aceptación si no viene
-        $validated['fecha_aceptacion'] = $validated['fecha_aceptacion'] ?? $cotizacion->fecha_emision->format('Y-m-d');
+        // Fecha de aceptación desde la cotización (aceptada/rechazada)
+        $validated['fecha_aceptacion'] = $cotizacion->fecha_estado_cotizacion
+            ? $cotizacion->fecha_estado_cotizacion->format('Y-m-d')
+            : ($validated['fecha_aceptacion'] ?? $cotizacion->fecha_emision->format('Y-m-d'));
 
         // Copiar datos desde el primer detalle de cotización cuando falte algo
         $detalle = $cotizacion->detalles->first();

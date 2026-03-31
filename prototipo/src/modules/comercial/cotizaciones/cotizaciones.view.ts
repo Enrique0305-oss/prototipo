@@ -291,7 +291,8 @@ function formatearFrecuenciaVisita(frecuenciaVis: any): string {
   Object.keys(frecuenciaVis).forEach((mesKey: string) => {
     const p = frecuenciaVis[mesKey]?.p || 0;
     const v = frecuenciaVis[mesKey]?.v || 0;
-    meses.push(`${mesKey.toUpperCase()}: ${p} Presencial, ${v} Virtual`);
+    const f = String(frecuenciaVis[mesKey]?.f || '').trim();
+    meses.push(`${mesKey.toUpperCase()}: ${p} Presencial, ${v} Virtual${f ? `, ${f}` : ''}`);
   });
   
   return meses.length > 0 ? meses.join(' | ') : '—';
@@ -311,17 +312,24 @@ function generarTablaFrecuenciaVisita(panelEl: HTMLElement) {
 
   const meses = Math.max(1, parseInt(mesesInput.value || '1', 10));
   
-  let html = `<div style="display:grid;grid-template-columns:100px 60px 60px;gap:8px;align-items:center;font-size:12px;">
+  let html = `<div style="display:grid;grid-template-columns:100px 60px 60px 150px;gap:8px;align-items:center;font-size:12px;">
     <div style="font-weight:600;color:#475569;">Mes</div>
     <div style="text-align:center;font-weight:600;color:#475569;">Presencial (P)</div>
     <div style="text-align:center;font-weight:600;color:#475569;">Virtual (V)</div>
+    <div style="text-align:center;font-weight:600;color:#475569;">Frecuencia</div>
   </div>`;
   
   for (let i = 1; i <= meses; i++) {
-    html += `<div style="display:grid;grid-template-columns:100px 60px 60px;gap:8px;margin-top:8px;align-items:center;">
+    html += `<div style="display:grid;grid-template-columns:100px 60px 60px 150px;gap:8px;margin-top:8px;align-items:center;">
       <div style="font-weight:500;color:#1e293b;">Mes ${i}</div>
       <input type="number" id="cot-asesor-freq-m${i}-p" class="form-control" value="0" min="0" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:13px;text-align:center;">
       <input type="number" id="cot-asesor-freq-m${i}-v" class="form-control" value="0" min="0" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:13px;text-align:center;">
+      <select id="cot-asesor-freq-m${i}-f" class="form-control" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:13px;">
+        <option value="">Seleccione...</option>
+        <option value="1 vez al mes">1 vez al mes</option>
+        <option value="semanal">semanal</option>
+        <option value="quincenal">quincenal</option>
+      </select>
     </div>`;
   }
   
@@ -1033,6 +1041,15 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     </div>
   ` : '';
 
+  const seccionObjetivosAsesoria = tipoFijo === 'Asesoria' ? `
+    <div class="form-section" style="margin-bottom: 24px; background: #fff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px;">
+      <div style="margin-bottom: 12px;">
+        <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:8px;">Objetivos de la Asesoría</label>
+        <textarea id="cot-objetivos-asesoria" class="form-control" placeholder="Ingrese los objetivos de la asesoría..." style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; font-family:Arial, sans-serif; min-height:100px; resize:vertical;"></textarea>
+      </div>
+    </div>
+  ` : '';
+
   panelEl.innerHTML = `
     <div class="form-card" style="background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
       <form id="form-cotizacion">
@@ -1098,6 +1115,10 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           </div>
         </div>
 
+        ${seccionObjetivosAsesoria}
+
+        ${seccionExponentesCapacitacion}
+
         <div class="propuesta-tecnica-container" style="margin-bottom: 25px; background: #fff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Propuesta Técnica (Objetivos)</h3>
@@ -1114,13 +1135,11 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
               <button type="button" class="btn-secondary" id="btn-del-col" style="padding:6px 10px;">Eliminar columna</button>
             </div>
 
-            <div id="editor-wrapper" style="display: none;">
+            <div id="editor-wrapper" style="display: block;">
                 <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Use el editor para dar formato a los objetivos y actividades tal cual aparecerán en el PDF.</p>
                 <div id="editor-propuesta" style="height: 200px; background: #fff;"></div>
             </div>
         </div>
-
-          ${seccionExponentesCapacitacion}
 
         <div class="form-section" style="margin-bottom: 24px;">
           ${seccionLimpiezaCisternas}
@@ -1342,6 +1361,13 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
         }
       });
 
+      console.log('[QUILL] ✅ Quill inicializado correctamente:', !!quillInstance);
+      
+      // Dar foco al editor para permitir escribir
+      setTimeout(() => {
+        quillInstance?.focus?.();
+      }, 100);
+
       const tableModule = quillInstance.getModule('table');
       const runTableAction = (action: () => void) => {
         if (!tableModule) {
@@ -1420,18 +1446,23 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     }, { capture: true, signal: quillKeydownController.signal });
 
       panelEl.querySelector('#btn-insert-table-5x5')?.addEventListener('click', () => {
+        quillInstance?.focus?.();
         runTableAction(() => tableModule.insertTable(5, 5));
       });
       panelEl.querySelector('#btn-add-row')?.addEventListener('click', () => {
+        quillInstance?.focus?.();
         runTableAction(() => tableModule.insertRowBelow());
       });
       panelEl.querySelector('#btn-del-row')?.addEventListener('click', () => {
+        quillInstance?.focus?.();
         runTableAction(() => tableModule.deleteRow());
       });
       panelEl.querySelector('#btn-add-col')?.addEventListener('click', () => {
+        quillInstance?.focus?.();
         runTableAction(() => tableModule.insertColumnRight());
       });
       panelEl.querySelector('#btn-del-col')?.addEventListener('click', () => {
+        quillInstance?.focus?.();
         runTableAction(() => tableModule.deleteColumn());
       });
     } catch (error) {
@@ -1455,10 +1486,18 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
   const btnToggle = panelEl.querySelector('#btn-toggle-propuesta') as HTMLElement;
   const wrapper = panelEl.querySelector('#editor-wrapper') as HTMLElement;
   if (btnToggle && wrapper) {
+    let isExpanded = true; // Estado inicial: expandido
+    btnToggle.textContent = 'Minimizar Editor';
     btnToggle.onclick = () => {
-      const isHidden = wrapper.style.display === 'none';
-      wrapper.style.display = isHidden ? 'block' : 'none';
-      btnToggle.textContent = isHidden ? 'Ocultar Editor' : 'Mostrar/Ocultar Editor';
+      isExpanded = !isExpanded;
+      wrapper.style.display = isExpanded ? 'block' : 'none';
+      btnToggle.textContent = isExpanded ? 'Minimizar Editor' : 'Mostrar Editor';
+      // Forzar que Quill se reajuste cuando se muestra
+      if (isExpanded && quillInstance) {
+        setTimeout(() => {
+          (quillInstance as any)?.focus?.();
+        }, 100);
+      }
     };
   }
   // --- FIN CONFIGURACIÓN EDITOR ---
@@ -2133,8 +2172,10 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
         Object.keys(frecuVis).forEach((mesKey: string) => {
           const pInput = document.getElementById(`cot-asesor-freq-${mesKey}-p`) as HTMLInputElement;
           const vInput = document.getElementById(`cot-asesor-freq-${mesKey}-v`) as HTMLInputElement;
+          const fInput = document.getElementById(`cot-asesor-freq-${mesKey}-f`) as HTMLSelectElement;
           if (pInput) pInput.value = String(frecuVis[mesKey]?.p ?? 0);
           if (vInput) vInput.value = String(frecuVis[mesKey]?.v ?? 0);
+          if (fInput) fInput.value = String(frecuVis[mesKey]?.f ?? '');
         });
       }
     }
@@ -2142,6 +2183,14 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
 
   if (quillInstance) {
     quillInstance.root.innerHTML = cotizacion?.propuesta_tecnica || '';
+  }
+
+  // Cargar objetivos de asesoría si es Asesoría
+  if (tipo === 'Asesoria') {
+    const textareaObjtivos = panelEl.querySelector('#cot-objetivos-asesoria') as HTMLTextAreaElement | null;
+    if (textareaObjtivos) {
+      textareaObjtivos.value = cotizacion?.objetivos_asesoria || '';
+    }
   }
 
   const tbody = panelEl.querySelector('#detalle-cotizacion-body') as HTMLElement | null;
@@ -2836,8 +2885,19 @@ async function guardarCotizacion(tipoFijo?: string) {
   const clienteId = parseInt((panelActivoElement.querySelector('#cot-cliente') as HTMLInputElement)?.value || '0');
   const fechaEmision = (panelActivoElement.querySelector('#cot-fecha') as HTMLInputElement)?.value || '';
   const tipoCotizacion = (panelActivoElement.querySelector('#cot-tipo') as HTMLSelectElement)?.value;
-  const observaciones = (panelActivoElement.querySelector('#cot-observaciones') as HTMLInputElement)?.value?.trim();  
-  const propuestaHtml = quillInstance ? quillInstance.root.innerHTML : '';
+  const observaciones = (panelActivoElement.querySelector('#cot-observaciones') as HTMLInputElement)?.value?.trim();
+  
+  // Capturar propuesta técnica desde Quill
+  let propuestaHtml = '';
+  if (quillInstance) {
+    const editorContent = quillInstance.root.innerHTML;
+    propuestaHtml = editorContent.trim();
+    console.log('[SAVE] Propuesta técnica capturada:', propuestaHtml.substring(0, 100));
+  }
+  
+  const objetivosAsesoria = tipoCotizacion === 'Asesoria' 
+    ? (panelActivoElement.querySelector('#cot-objetivos-asesoria') as HTMLTextAreaElement)?.value?.trim() || ''
+    : null;
 
   console.log('[SAVE] Panel encontrado:', panelActivoElement.id, 'multicimId:', multicimId, 'clienteId:', clienteId, 'tipo:', tipoCotizacion);
 
@@ -2936,9 +2996,11 @@ async function guardarCotizacion(tipoFijo?: string) {
     for (let i = 1; i <= mesesImplementacionGlobal; i++) {
       const pInput = document.getElementById(`cot-asesor-freq-m${i}-p`) as HTMLInputElement;
       const vInput = document.getElementById(`cot-asesor-freq-m${i}-v`) as HTMLInputElement;
+      const fInput = document.getElementById(`cot-asesor-freq-m${i}-f`) as HTMLSelectElement;
       frecuenciaPorVisitaGlobal[`m${i}`] = {
         p: parseInt(pInput?.value || '0', 10),
-        v: parseInt(vInput?.value || '0', 10)
+        v: parseInt(vInput?.value || '0', 10),
+        f: String(fInput?.value || '').trim(),
       };
     }
   }
@@ -3020,6 +3082,7 @@ async function guardarCotizacion(tipoFijo?: string) {
     incluye_igv: incluyeIgv,
     observaciones: observaciones || undefined,
     propuesta_tecnica: propuestaHtml,
+    objetivos_asesoria: objetivosAsesoria,
     receta_servicio: tipoCotizacion === 'Servicio' && recetaServicioRows.length > 0 ? recetaServicioRows : null,
     beneficios_servicio: (() => {
       if (tipoCotizacion !== 'Servicio') return null;

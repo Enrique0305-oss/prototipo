@@ -171,7 +171,7 @@ export function renderComercialOrdenesServicio() {
               </div>
               <div class="os-field">
                 <label>Fecha de Aceptacion <span style="color:#ef4444">*</span></label>
-                <input type="date" id="ods-fecha-aceptacion" class="os-input">
+                <input type="date" id="ods-fecha-aceptacion" class="os-input" disabled>
               </div>
               <div class="os-field">
                 <label>Fecha Tentativa</label>
@@ -525,6 +525,12 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     (document.getElementById('ods-cot-info-numero') as HTMLElement).textContent = data.cotizacion?.numero_cotizacion || '';
     (document.getElementById('ods-cot-info-detalle') as HTMLElement).textContent =
       '| Emitida: ' + (data.cotizacion?.fecha_emision || '') + ' | Total: S/ ' + Number(data.total || 0).toFixed(2);
+
+    // Auto-llenar fecha de aceptación desde estado de cotización
+    const fechaAceptacion = String(data.cotizacion?.fecha_aceptacion || data.cotizacion?.fecha_emision || '').split('T')[0];
+    const fechaAcepInput = document.getElementById('ods-fecha-aceptacion') as HTMLInputElement;
+    fechaAcepInput.value = fechaAceptacion;
+    fechaAcepInput.disabled = true;
 
     // Auto-setear IGV desde cotizacion
     incluyeIgv = data.incluye_igv !== false;
@@ -1502,7 +1508,8 @@ function limpiarFormODS() {
   (document.getElementById('ods-cliente-nombre') as HTMLInputElement).value = '';
   (document.getElementById('ods-cliente-id') as HTMLInputElement).value = '';
   (document.getElementById('ods-cliente-ruc') as HTMLInputElement).value = '';
-  (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
+  (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).value = '';
+  (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).disabled = true;
   (document.getElementById('ods-fecha-tentativa') as HTMLInputElement).value = '';
   // Auto-llenar emitido por con usuario logueado
   const currentUser = authService.getUser();
@@ -1712,10 +1719,6 @@ async function guardarODS() {
     mostrarToast('error', 'Campo requerido', 'Debe seleccionar una cotizacion de referencia');
     return;
   }
-  if (!fechaAceptacion) {
-    mostrarToast('error', 'Campo requerido', 'La fecha de aceptacion es obligatoria');
-    return;
-  }
   if (!emitidoPor) {
     mostrarToast('error', 'Campo requerido', 'Debe seleccionar quien emite la orden');
     return;
@@ -1755,7 +1758,7 @@ async function guardarODS() {
 
   const payload: any = {
     id_cotizacion: Number(idCotizacion),
-    fecha_aceptacion: fechaAceptacion,
+    fecha_aceptacion: fechaAceptacion || null,
     fecha_tentativa: fechaTentativa || null,
     emitido_por: Number(emitidoPor),
     version: version || null,
@@ -1856,6 +1859,8 @@ export function initOrdenesServicioEvents() {
       (document.getElementById('ods-cliente-nombre') as HTMLInputElement).value = '';
       (document.getElementById('ods-cliente-id') as HTMLInputElement).value = '';
       (document.getElementById('ods-cliente-ruc') as HTMLInputElement).value = '';
+      (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).value = '';
+      (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).disabled = true;
       (document.getElementById('ods-cotizacion-info') as HTMLElement).style.display = 'none';
       (document.getElementById('ods-detalle-body') as HTMLElement).innerHTML = '';
       calcularTotalCosto();

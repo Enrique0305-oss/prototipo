@@ -188,7 +188,7 @@ export function renderComercialOrdenesProducto() {
               </div>
               <div class="op-field">
                 <label class="op-label">Aceptación</label>
-                <input type="date" id="op-fecha-aceptacion" class="op-input">
+                <input type="date" id="op-fecha-aceptacion" class="op-input" disabled>
               </div>
               <div class="op-field">
                 <label class="op-label">Emitido por <span class="op-required">*</span></label>
@@ -483,6 +483,12 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     (document.getElementById('op-cot-info-detalle') as HTMLElement).textContent =
       '| Emitida: ' + (data.cotizacion?.fecha_emision || '') + ' | Total: S/ ' + Number(data.total || 0).toFixed(2);
 
+    // Auto-llenar fecha de aceptación desde estado de cotización
+    const fechaAceptacion = String(data.cotizacion?.fecha_aceptacion || data.cotizacion?.fecha_emision || '').split('T')[0];
+    const fechaAcepInput = document.getElementById('op-fecha-aceptacion') as HTMLInputElement;
+    fechaAcepInput.value = fechaAceptacion;
+    fechaAcepInput.disabled = true;
+
     // Auto-setear IGV desde cotizacion
     incluyeIgv = data.incluye_igv !== false;
     const igvSelect = document.getElementById('op-igv') as HTMLSelectElement;
@@ -673,6 +679,7 @@ function limpiarFormOP() {
   (document.getElementById('op-cliente-ruc') as HTMLInputElement).value = '';
   (document.getElementById('op-fecha-envio') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
   (document.getElementById('op-fecha-aceptacion') as HTMLInputElement).value = '';
+  (document.getElementById('op-fecha-aceptacion') as HTMLInputElement).disabled = true;
   (document.getElementById('op-emitido-por') as HTMLSelectElement).value = '';
   (document.getElementById('op-igv') as HTMLSelectElement).value = '1';
 
@@ -986,6 +993,8 @@ export function initOrdenesProductoEvents() {
       (document.getElementById('op-cliente-nombre') as HTMLInputElement).value = '';
       (document.getElementById('op-cliente-id') as HTMLInputElement).value = '';
       (document.getElementById('op-cliente-ruc') as HTMLInputElement).value = '';
+      (document.getElementById('op-fecha-aceptacion') as HTMLInputElement).value = '';
+      (document.getElementById('op-fecha-aceptacion') as HTMLInputElement).disabled = true;
       (document.getElementById('op-cotizacion-info') as HTMLElement).style.display = 'none';
       (document.getElementById('op-detalle-body') as HTMLElement).innerHTML = '';
       calcularTotalCosto();

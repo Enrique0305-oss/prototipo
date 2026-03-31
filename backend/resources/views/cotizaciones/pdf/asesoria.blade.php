@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -144,6 +144,24 @@
                 return $detalle->servicio && $detalle->servicio->nombre === 'LIMPIEZA DE CISTERNAS Y RESERVORIOS';
             });
         @endphp
+
+        @php
+            $detallePlan = $cotizacion->detalles->first();
+            $tiempoImplementacion = $detallePlan?->meses_implementacion;
+            $modalidadPlan = $detallePlan?->modalidad_sugerida;
+            $frecuenciaVisita = $detallePlan?->frecuencia_visita;
+
+            $frecuenciaOrdenada = collect();
+            if (is_array($frecuenciaVisita)) {
+                $frecuenciaOrdenada = collect($frecuenciaVisita)
+                    ->sortBy(function ($valor, $clave) {
+                        if (preg_match('/\d+/', (string) $clave, $m)) {
+                            return (int) $m[0];
+                        }
+                        return 9999;
+                    });
+            }
+        @endphp
         <!-- PÃGINA DE PROPUESTA TÃ‰CNICA -->
         <div class="contenido-desplazado">
             
@@ -174,6 +192,50 @@
                 &nbsp;&nbsp;&nbsp;&nbsp;2.1 Objetivos
             </div>
 
+            <div class="proposal-text" style="margin-bottom: 16px; margin-top: 6px;">
+                @if(!empty($cotizacion->objetivos_asesoria))
+                    {!! nl2br(e($cotizacion->objetivos_asesoria)) !!}
+                @else
+                    <p>No se registraron objetivos de asesoría.</p>
+                @endif
+            </div>
+
+            <div class="issued-name">
+                &nbsp;&nbsp;&nbsp;&nbsp;2.2 Plan de trabajo
+            </div>
+
+            <div class="proposal-text" style="margin-bottom: 20px; margin-top: 6px;">
+                <p>
+                    <strong>Tiempo de implementación:</strong>
+                    @if(!empty($tiempoImplementacion))
+                        {{ $tiempoImplementacion }} mes{{ (int)$tiempoImplementacion === 1 ? '' : 'es' }}
+                    @else
+                        No definido
+                    @endif
+                </p>
+                <p>
+                    <strong>Modalidad:</strong>
+                    {{ !empty($modalidadPlan) ? $modalidadPlan : 'No definida' }}
+                </p>
+                <p><strong>Frecuencia de visita:</strong></p>
+                @if($frecuenciaOrdenada->isNotEmpty())
+                    @foreach($frecuenciaOrdenada as $mesKey => $frecuenciaMes)
+                        @php
+                            preg_match('/\d+/', (string) $mesKey, $m);
+                            $numeroMes = isset($m[0]) ? (int) $m[0] : null;
+                            $presencial = (int) ($frecuenciaMes['p'] ?? 0);
+                            $virtual = (int) ($frecuenciaMes['v'] ?? 0);
+                            $frecuenciaFila = trim((string) ($frecuenciaMes['f'] ?? ''));
+                        @endphp
+                        <p style="margin: 0 0 2px 0;">
+                            - {{ $numeroMes ? $numeroMes . 'er MES.' : strtoupper((string) $mesKey) . '.' }}- {{ $presencial }} presencial y {{ $virtual }} virtual{{ $frecuenciaFila !== '' ? ' - ' . $frecuenciaFila : '' }}
+                        </p>
+                    @endforeach
+                @else
+                    <p>No definida</p>
+                @endif
+            </div>
+
             <div class="proposal-text" style="margin-bottom: 20px;">
                 @if($cotizacion->propuesta_tecnica)
                     {!! $cotizacion->propuesta_tecnica !!}
@@ -182,46 +244,7 @@
                 @endif
             </div>
 
-            @php
-                $detalleConCatalogo = $cotizacion->detalles->first(function($d) {
-                    return $d->catalogoCapAud !== null;
-                });
-                $tipoServicio = $detalleConCatalogo?->catalogoCapAud?->tipo ?? 'Capacitación';
-                $detalleCap = $cotizacion->detalles->firstWhere('tipo', 'Capacitacion')
-                    ?? $cotizacion->detalles->firstWhere('tipo', 'Capacitación')
-                    ?? $cotizacion->detalles->first();
-            @endphp
-            <div class="issued-name">
-                &nbsp;&nbsp;&nbsp;&nbsp;2.2 {{ $tipoServicio === 'Asesoría' ? 'Plan de trabajo' : 'Actividades' }} <br><br>
-
-                <div style="margin-left: 40px; font-weight: normal;">
-                    @if($tipoServicio === 'Asesoría')
-                        <strong>2.2.1 Metodología de Implementación:</strong>
-                        <ul style="list-style-type: disc; margin-top: 10px;">
-                            <li><strong>Tiempo de implementación:</strong> 2 meses (enero y marzo)</li>
-                        </ul>
-                        
-                        <p style="margin-top: 15px;"><strong>Definiciones:</strong></p>
-                        <div style="margin-bottom: 10px;">
-                            <strong>a) ASESOR LÍDER:</strong> Es el experto que proporciona las directrices y el apoyo necesario para la implementación con un enfoque de acompañamiento estratégico de menor frecuencia.
-                        </div>
-                        <div>
-                            <strong>b) PERSONAL DE SOPORTE:</strong> Es el profesional que recibe la orientación necesaria y ejecuta la implementación a nivel documentario, con un enfoque de acompañamiento intensivo.
-                        </div>
-
-                    @else
-                        <strong>2.2.1 Capacitaciones:</strong>
-                        El equipo de QSCI Consulting brindará capacitaciones actualizadas al público asistente.
-                        <br><br>Esta capacitación está diseñada para ser cubierta de la siguiente manera. <br> <br>
-                        
-                        <p style="margin:3px 0;"><strong>Fecha Tentativa de Servicio:</strong> {{ $detalleCap?->fecha_servicio ? \Carbon\Carbon::parse($detalleCap->fecha_servicio)->format('d/m/Y') : 'N/A' }}</p>
-                        <p style="margin:3px 0;"><strong>Horas de Capacitación:</strong> {{ $detalleCap?->horas_capacitacion ? $detalleCap->horas_capacitacion . ' hrs' : 'N/A' }}</p>
-                        <p style="margin:3px 0;"><strong>Número de Participantes:</strong> {{ $detalleCap?->num_participantes ?? 'N/A' }}</p>
-                        <p style="margin:3px 0;"><strong>Modalidad:</strong> {{ $detalleCap?->modalidad_sugerida ?? 'N/A' }}</p>
-                    @endif
-                </div>
-            </div>
-            <br>
+            
             <div class="payment-header-text">
                 EQUIPO DE ASESORES LÍDERES- QSCI GROUP
             </div>
@@ -406,15 +429,7 @@
                         Número: {{ $cotizacion->creador->celular  }}
                     </p>
                 </div>
-            </div> <br><br>
-
-            <!-- IMAGEN FINAL -->
-            <div class="seccion-titulo">
-                <span class="seccion-titulo-num">IV.</span> METODOLOGÍA DE CAPACITACIÓN
-                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/met_capa.png'))) }}" alt="Imagen Final">
-
             </div>
-
         </div>
         
     </div>

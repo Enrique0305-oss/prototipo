@@ -7,6 +7,7 @@ use App\Http\Controllers\API\ClienteController;
 use App\Http\Controllers\API\CotizacionController;
 use App\Http\Controllers\API\OrdenServicioController;
 use App\Http\Controllers\API\OrdenCapacitacionAuditoriaController;
+use App\Http\Controllers\API\OrdenAsesoriaController;
 use App\Http\Controllers\API\OrdenProductoController;
 use App\Http\Controllers\API\EquipoController;
 use App\Http\Controllers\API\ProductoController;
@@ -117,6 +118,17 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/ordenes-capacitacion-auditoria', [OrdenCapacitacionAuditoriaController::class, 'store']);
     Route::put('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'update']);
     Route::delete('/ordenes-capacitacion-auditoria/{id}', [OrdenCapacitacionAuditoriaController::class, 'destroy']);
+
+    // para las ordenes de asesoria :v
+    Route::get('/ordenes-asesoria/estadisticas/resumen', [OrdenAsesoriaController::class, 'estadisticas']);
+    Route::get('/ordenes-asesoria/cotizaciones-disponibles', [OrdenAsesoriaController::class, 'cotizacionesDisponibles']);
+    Route::get('/ordenes-asesoria/desde-cotizacion/{id}', [OrdenAsesoriaController::class, 'desdeCotizacion']);
+    Route::get('/ordenes-asesoria', [OrdenAsesoriaController::class, 'index']);
+    Route::get('/ordenes-asesoria/{id}/pdf', [OrdenAsesoriaController::class, 'descargarPdf']);
+    Route::get('/ordenes-asesoria/{id}', [OrdenAsesoriaController::class, 'show']);
+    Route::post('/ordenes-asesoria', [OrdenAsesoriaController::class, 'store']);
+    Route::put('/ordenes-asesoria/{id}', [OrdenAsesoriaController::class, 'update']);
+    Route::delete('/ordenes-asesoria/{id}', [OrdenAsesoriaController::class, 'destroy']);
 
     // Exponentes
     Route::get('/exponentes', [ExponenteController::class, 'index']);

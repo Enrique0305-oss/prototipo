@@ -153,6 +153,9 @@ class OrdenProductoController extends Controller
                     'id' => $cotizacion->id,
                     'numero_cotizacion' => $cotizacion->numero_cotizacion,
                     'fecha_emision' => $cotizacion->fecha_emision->format('Y-m-d'),
+                    'fecha_aceptacion' => $cotizacion->fecha_estado_cotizacion
+                        ? $cotizacion->fecha_estado_cotizacion->format('Y-m-d')
+                        : null,
                 ],
                 'cliente' => [
                     'id' => $cotizacion->cliente->id,
@@ -234,6 +237,9 @@ class OrdenProductoController extends Controller
             $incluyeIgv = $validated['incluye_igv'] ?? true;
             $igvCalc = $incluyeIgv ? round($subtotalCalc * 0.18, 2) : 0;
             $total = $subtotalCalc + $igvCalc;
+            $fechaAceptacion = $cotizacion->fecha_estado_cotizacion
+                ? $cotizacion->fecha_estado_cotizacion->format('Y-m-d')
+                : ($validated['fecha_aceptacion'] ?? null);
 
             // Crear orden de producto
             $orden = OrdenProducto::create([
@@ -241,7 +247,7 @@ class OrdenProductoController extends Controller
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
                 'fecha_envio' => $validated['fecha_envio'],
-                'fecha_aceptacion' => $validated['fecha_aceptacion'] ?? null,
+                'fecha_aceptacion' => $fechaAceptacion,
                 'subtotal' => $subtotalCalc,
                 'igv' => $igvCalc,
                 'incluye_igv' => $incluyeIgv,

@@ -105,6 +105,7 @@ class CotizacionController extends Controller
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
             'propuesta_tecnica' => 'nullable|string',
+            'objetivos_asesoria' => 'nullable|string',
             'receta_servicio' => 'nullable|array',
             'exponentes_ids' => 'nullable|array',
             'exponentes_ids.*' => 'integer|exists:exponentes,id',
@@ -173,6 +174,7 @@ class CotizacionController extends Controller
                 'total' => $total,
                 'observaciones' => $observaciones,
                 'propuesta_tecnica' => $validated['propuesta_tecnica'] ?? null,
+                'objetivos_asesoria' => $validated['objetivos_asesoria'] ?? null,
                 'receta_servicio' => $validated['receta_servicio'] ?? null,
                 'exponentes_ids' => $validated['exponentes_ids'] ?? null,
             ]);
@@ -258,6 +260,7 @@ class CotizacionController extends Controller
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
             'propuesta_tecnica' => 'nullable|string',
+            'objetivos_asesoria' => 'nullable|string',
             'receta_servicio' => 'nullable|array',
             'exponentes_ids' => 'nullable|array',
             'exponentes_ids.*' => 'integer|exists:exponentes,id',
@@ -323,6 +326,7 @@ class CotizacionController extends Controller
                 'total' => $total,
                 'observaciones' => $observaciones,
                 'propuesta_tecnica' => $validated['propuesta_tecnica'] ?? null,
+                'objetivos_asesoria' => $validated['objetivos_asesoria'] ?? null,
                 'receta_servicio' => $validated['receta_servicio'] ?? null,
                 'exponentes_ids' => $validated['exponentes_ids'] ?? null,
             ]);
@@ -405,7 +409,13 @@ class CotizacionController extends Controller
             ], 404);
         }
 
-        $cotizacion->update(['estado' => $validated['estado']]);
+        $nuevoEstado = $validated['estado'];
+        $fechaEstado = in_array($nuevoEstado, ['Aceptada', 'Rechazada'], true) ? now() : null;
+
+        $cotizacion->update([
+            'estado' => $nuevoEstado,
+            'fecha_estado_cotizacion' => $fechaEstado,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -542,6 +552,7 @@ class CotizacionController extends Controller
             'Servicio' => 'cotizaciones.pdf.servicio',
             'Producto' => 'cotizaciones.pdf.producto',
             'Capacitacion' => 'cotizaciones.pdf.capacitacion',
+            'Asesoria' => 'cotizaciones.pdf.asesoria',
             default => 'CotizacionPDF',
         };
 

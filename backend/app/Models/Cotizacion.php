@@ -26,11 +26,13 @@ class Cotizacion extends Model
         'propuesta_tecnica',
         'receta_servicio',
         'exponentes_ids',
-        'objetivos_asesoria'
+        'objetivos_asesoria',
+        'fecha_estado_cotizacion'
     ];
 
     protected $casts = [
         'fecha_emision' => 'date',
+        'fecha_estado_cotizacion' => 'datetime',
         'incluye_igv' => 'boolean',
         'subtotal' => 'decimal:2',
         'igv' => 'decimal:2',
@@ -78,6 +80,11 @@ class Cotizacion extends Model
     public function ordenCapacitacionAuditoria()
     {
         return $this->hasOne(OrdenCapacitacionAuditoria::class, 'id_cotizacion');
+    }
+
+    public function ordenAsesoria()
+    {
+        return $this->hasOne(OrdenAsesoria::class, 'id_cotizacion');
     }
 
     // Scopes

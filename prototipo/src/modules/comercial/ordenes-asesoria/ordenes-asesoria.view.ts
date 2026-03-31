@@ -1,6 +1,6 @@
-// Comercial - Ordenes de Capacitación y Auditoría (Conectado al Backend)
-import './ordenes-capacitacion.css';
-import { ordenCapacitacionService } from '../../../services/ordenCapacitacionService';
+// Comercial - Ordenes de Asesoria (Conectado al Backend)
+import './ordenes-asesoria.css';
+import { ordenAsesoriaService } from '../../../services/ordenAsesoriaService';
 import { exponenteService, type Exponente } from '../../../services/exponenteService';
 import { mostrarToast } from '../../../shared/toast';
 
@@ -10,7 +10,7 @@ let exponentesData: Exponente[] = [];
 let selectedExponentes: { id: number; nombre: string }[] = [];
 let ocIncluyeIgv = true;
 
-export function renderComercialOrdenesCapacitacion() {
+export function renderComercialOrdenesAsesoria() {
   return `
   <div class="oc-main-container">
 
@@ -22,14 +22,14 @@ export function renderComercialOrdenesCapacitacion() {
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
           </svg>
-          Órdenes de Capacitación y Auditoría
+          Órdenes de Asesoría
         </h1>
         <button class="oc-btn-primary" id="btn-nueva-oc">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          Nueva Orden de Capacitación
+          Nueva Orden de Asesoría
         </button>
       </div>
 
@@ -147,7 +147,7 @@ export function renderComercialOrdenesCapacitacion() {
               <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
               <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
             </svg>
-            Nueva Orden de Capacitación
+            Nueva Orden de Asesoría
           </h2>
           <button class="oc-btn-close" id="modal-oc-cerrar">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -234,12 +234,9 @@ export function renderComercialOrdenesCapacitacion() {
                   <div id="oc-exponentes-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
                   <select id="oc-exponente-selector" class="oc-input" style="border:none;padding:4px 0;margin:0;box-shadow:none;">
                     <option value="">+ Agregar exponente...</option>
+                    <option value="__nuevo__">+ Crear nuevo exponente...</option>
                   </select>
                 </div>
-              </div>
-              <div class="oc-field">
-                <label class="oc-label">Horas de Capacitación</label>
-                <input type="text" id="oc-horas-capacitacion" class="oc-input" placeholder="Ej: 08 horas">
               </div>
               <div class="oc-field">
                 <label class="oc-label">Fecha del Servicio <span class="oc-required">*</span></label>
@@ -282,46 +279,7 @@ export function renderComercialOrdenesCapacitacion() {
                 <label class="oc-label">Subtotal <span class="oc-required">*</span></label>
                 <input type="number" id="oc-costo" class="oc-input" min="0" step="0.01" value="0.00">
               </div>
-            </div> <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:25px;">
-    <div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <h4 style="margin:0; font-size:14px; color:#1e293b; font-weight:600;">Materiales</h4>
-            <button type="button" id="btn-add-material" style="background:#fff; border:1px solid #e2e8f0; padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer;">+ Agregar Material</button>
-        </div>
-        <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-            <table style="width:100%; border-collapse: collapse;">
-                <thead style="background:#2d4a68; color:#fff; font-size:11px;">
-                    <tr>
-                        <th style="padding:10px; text-align:left;">MATERIALES</th>
-                        <th style="padding:10px; text-align:center; width:50px;">CANT.</th>
-                        <th style="padding:10px; text-align:left; width:100px;">DISPOSICIÓN</th>
-                        <th style="width:30px;"></th>
-                    </tr>
-                </thead>
-                <tbody id="body-materiales" style="font-size:12px; background:#fff;"></tbody>
-            </table>
-        </div>
-    </div>
-
-    <div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <h4 style="margin:0; font-size:14px; color:#1e293b; font-weight:600;">Equipos Audiovisuales</h4>
-            <button type="button" id="btn-add-equipo" style="background:#fff; border:1px solid #e2e8f0; padding:4px 8px; border-radius:6px; font-size:11px; cursor:pointer;">+ Agregar Equipo</button>
-        </div>
-        <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-            <table style="width:100%; border-collapse: collapse;">
-                <thead style="background:#2d4a68; color:#fff; font-size:11px;">
-                    <tr>
-                        <th style="padding:10px; text-align:left;">EQUIPOS</th>
-                        <th style="padding:10px; text-align:left; width:120px;">DISPOSICIÓN</th>
-                        <th style="width:30px;"></th>
-                    </tr>
-                </thead>
-                <tbody id="body-equipos" style="font-size:12px; background:#fff;"></tbody>
-            </table>
-        </div>
-    </div>
-</div>
+              </div>
       </div>
             <!-- Desglose de costos -->
             <div id="oc-desglose-costos" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin-top:8px;">
@@ -413,7 +371,7 @@ function agregarFilaEquipo(data = { equipo: '', disposicion: '' }) { // 'equipo'
 
 async function cargarEstadisticasOC() {
   try {
-    const res = await ordenCapacitacionService.getEstadisticas();
+    const res = await ordenAsesoriaService.getEstadisticas();
     const raw = res.data || res;
     const stats = (raw as any).data || raw;
 
@@ -442,12 +400,12 @@ async function cargarOrdenesCapacitacion() {
     if (desde) params.fecha_desde = desde;
     if (hasta) params.fecha_hasta = hasta;
 
-    const res = await ordenCapacitacionService.getAll(params);
+    const res = await ordenAsesoriaService.getAll(params);
     const raw = res.data || res;
     ocListData = Array.isArray(raw) ? raw : (raw as any).data || [];
 
     if (ocListData.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:#64748b;">No se encontraron órdenes de capacitación</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:#64748b;">No se encontraron órdenes de asesoría</td></tr>';
       return;
     }
 
@@ -535,7 +493,7 @@ function bindAccionesTablaOC() {
       const numero = (btn as HTMLElement).dataset.numero || '';
       try {
         mostrarToast('success', 'PDF', 'Generando PDF...');
-        await ordenCapacitacionService.downloadPDF(id);
+        await ordenAsesoriaService.downloadPDF(id);
         mostrarToast('success', 'PDF', 'PDF descargado: ' + numero);
       } catch (e) {
         console.error('Error descargando PDF:', e);
@@ -549,13 +507,13 @@ async function cargarDropdownCotizaciones() {
   const select = document.getElementById('oc-cotizacion-ref') as HTMLSelectElement;
   if (!select) return;
   try {
-    const res = await ordenCapacitacionService.getCotizacionesDisponibles();
+    const res = await ordenAsesoriaService.getCotizacionesDisponibles();
     const raw = res.data || res;
     cotizacionesDisponibles = Array.isArray(raw) ? raw : (raw as any).data || [];
 
     select.innerHTML = '<option value="">Seleccione una cotización...</option>' +
       cotizacionesDisponibles.map(c =>
-        '<option value="' + c.id + '">' + c.numero_cotizacion + ' - ' + (c.cliente?.nombre_empresa || '') + ' (S/ ' + Number(c.total).toFixed(2) + ')</option>'
+        '<option value="' + c.id + '">' + (c.numero_cotizacion || '') + ' - ' + (c.cliente?.nombre_empresa || c.cliente_nombre || '') + ' (S/ ' + Number(c.total || 0).toFixed(2) + ')</option>'
       ).join('');
   } catch (e) {
     console.error('Error cargando cotizaciones:', e);
@@ -567,7 +525,7 @@ async function cargarDropdownExponentes() {
   const select = document.getElementById('oc-exponente-selector') as HTMLSelectElement;
   if (!select) return;
   try {
-    const res = await ordenCapacitacionService.getExponentes();
+    const res = await ordenAsesoriaService.getExponentes();
     const raw = res.data || res;
     exponentesData = Array.isArray(raw) ? raw : (raw as any).data || [];
     actualizarSelectorExponentes();
@@ -583,6 +541,7 @@ function actualizarSelectorExponentes() {
   const selectedIds = selectedExponentes.map(e => e.id);
   const disponibles = exponentesData.filter(e => !selectedIds.includes(e.id));
   select.innerHTML = '<option value="">+ Agregar exponente...</option>' +
+    '<option value="__nuevo__">+ Crear nuevo exponente...</option>' +
     disponibles.map(e =>
       '<option value="' + e.id + '">' + e.nombre + ' ' + (e.apellidos || '') + ' — ' + (e.especialidad || '') + '</option>'
     ).join('');
@@ -720,9 +679,53 @@ async function cargarDatosCotizacion(cotizacionId: number) {
       return match ? match[1] : '';
     };
 
-    const res = await ordenCapacitacionService.getDesdeCotizacion(cotizacionId);
+    const res = await ordenAsesoriaService.getDesdeCotizacion(cotizacionId);
     const raw = res.data || res;
     const data = (raw as any).data || raw;
+
+    const construirTablaFrecuenciaVisita = (frecuencia: any): string => {
+      if (!frecuencia || typeof frecuencia !== 'object') {
+        return '<div style="padding:8px 10px;color:#64748b;">No definida</div>';
+      }
+
+      const filas = Object.entries(frecuencia)
+        .sort((a: any, b: any) => {
+          const ma = String(a[0]).match(/\d+/);
+          const mb = String(b[0]).match(/\d+/);
+          const na = ma ? parseInt(ma[0], 10) : 999;
+          const nb = mb ? parseInt(mb[0], 10) : 999;
+          return na - nb;
+        })
+        .map(([mes, val]: any) => {
+          const p = Number(val?.p || 0);
+          const v = Number(val?.v || 0);
+          const f = String(val?.f || '').trim() || '-';
+          const matchMes = String(mes).match(/\d+/);
+          const mesLabel = matchMes ? `Mes ${matchMes[0]}` : String(mes).toUpperCase();
+          return '<tr style="border-bottom:1px solid #e2e8f0;">' +
+            '<td style="padding:8px 10px;">' + mesLabel + '</td>' +
+            '<td style="padding:8px 10px;text-align:center;">' + p + '</td>' +
+            '<td style="padding:8px 10px;text-align:center;">' + v + '</td>' +
+            '<td style="padding:8px 10px;">' + f + '</td>' +
+          '</tr>';
+        });
+
+      if (filas.length === 0) {
+        return '<div style="padding:8px 10px;color:#64748b;">No definida</div>';
+      }
+
+      return '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">' +
+        '<thead>' +
+          '<tr style="background:#f1f5f9;">' +
+            '<th style="padding:8px 10px;text-align:left;color:#334155;font-weight:600;">Mes</th>' +
+            '<th style="padding:8px 10px;text-align:center;color:#334155;font-weight:600;">Presencial (P)</th>' +
+            '<th style="padding:8px 10px;text-align:center;color:#334155;font-weight:600;">Virtual (V)</th>' +
+            '<th style="padding:8px 10px;text-align:left;color:#334155;font-weight:600;">Frecuencia</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + filas.join('') + '</tbody>' +
+      '</table>';
+    };
 
     // Reiniciar exponentes al cambiar de cotización y luego precargar los de la cotización elegida
     selectedExponentes = [];
@@ -745,31 +748,23 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     const detallesLista = document.getElementById('oc-detalles-lista') as HTMLElement;
 
     if (detalles.length > 0) {
+      const detalleInfo = detalles[0] || {};
+      const tiempoImplementacion = detalleInfo.meses_implementacion
+        ? `${detalleInfo.meses_implementacion} mes${Number(detalleInfo.meses_implementacion) === 1 ? '' : 'es'}`
+        : 'No definido';
+      const tablaFrecuenciaVisita = construirTablaFrecuenciaVisita(detalleInfo.frecuencia_visita);
+
       detallesDiv.style.display = 'block';
       detallesLista.innerHTML =
-        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-          '<thead>' +
-            '<tr style="background:#e2e8f0;">' +
-              '<th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569;">Servicio/Capacitación</th>' +
-              '<th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569;">Tipo</th>' +
-              '<th style="padding:8px 12px;text-align:center;font-weight:600;color:#475569;">Cant.</th>' +
-              '<th style="padding:8px 12px;text-align:right;font-weight:600;color:#475569;">Precio Unit.</th>' +
-              '<th style="padding:8px 12px;text-align:right;font-weight:600;color:#475569;">Subtotal</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody>' +
-            detalles.map((d: any) => {
-              const badgeClass = d.tipo === 'Capacitación' ? 'oc-badge-info' : 'oc-badge-purple';
-              return '<tr style="border-bottom:1px solid #e2e8f0;">' +
-                '<td style="padding:8px 12px;">' + (d.nombre || '-') + '</td>' +
-                '<td style="padding:8px 12px;"><span class="oc-badge ' + badgeClass + '">' + (d.tipo || '-') + '</span></td>' +
-                '<td style="padding:8px 12px;text-align:center;">' + (d.cantidad || 1) + '</td>' +
-                '<td style="padding:8px 12px;text-align:right;">S/ ' + Number(d.precio_unitario || 0).toFixed(2) + '</td>' +
-                '<td style="padding:8px 12px;text-align:right;font-weight:600;">S/ ' + (Number(d.cantidad || 1) * Number(d.precio_unitario || 0)).toFixed(2) + '</td>' +
-              '</tr>';
-            }).join('') +
-          '</tbody>' +
-        '</table>';
+        '<div style="display:grid;grid-template-columns:260px 1fr;gap:12px;padding:12px;border:1px solid #e2e8f0;background:#f8fafc;font-size:12px;color:#334155;">' +
+          '<div style="border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:10px;display:flex;align-items:center;">' +
+            '<div><strong>Tiempo de implementación:</strong><br><span style="display:inline-block;margin-top:6px;font-size:14px;color:#1e293b;">' + tiempoImplementacion + '</span></div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-weight:700;color:#334155;margin-bottom:6px;">Frecuencia por visita</div>' +
+            tablaFrecuenciaVisita +
+          '</div>' +
+        '</div>';
     } else {
       detallesDiv.style.display = 'none';
     }
@@ -803,14 +798,10 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     );
     (document.getElementById('oc-fecha-aceptacion') as HTMLInputElement).disabled = true;
 
-    // Auto-llenar campos de capacitación desde el detalle
+    // Auto-llenar campos de asesoría desde el detalle
     if (data.detalles && data.detalles.length > 0) {
-      // Buscar el detalle de capacitación con o sin acento en el tipo, o usar el primero
-      const detalleCap = data.detalles.find((d: any) => {
-        const tipo = String(d.tipo || '').toLowerCase();
-        return tipo === 'capacitación' || tipo === 'capacitacion';
-      }) || data.detalles.find((d: any) => !!d.fecha_servicio) || data.detalles[0];
-      (document.getElementById('oc-horas-capacitacion') as HTMLInputElement).value = detalleCap.horas_capacitacion || '';
+      // Usar primer detalle con fecha_servicio o el primero disponible
+      const detalleCap = data.detalles.find((d: any) => !!d.fecha_servicio) || data.detalles[0];
       (document.getElementById('oc-num-participantes') as HTMLInputElement).value = detalleCap.num_participantes || '';
       (document.getElementById('oc-fecha-servicio') as HTMLInputElement).value = toDateInput(detalleCap.fecha_servicio);
     }
@@ -899,12 +890,12 @@ async function abrirModalNuevaOC() {
     (document.getElementById('oc-id-usuario') as HTMLInputElement).value = String(userData.id || '');
   }
   (document.getElementById('modal-oc-titulo') as HTMLElement).innerHTML =
-    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Nueva Orden de Capacitación';
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Nueva Orden de Asesoría';
   const cotSelect = document.getElementById('oc-cotizacion-ref') as HTMLSelectElement;
   cotSelect.disabled = false;
   await Promise.all([cargarDropdownCotizaciones(), cargarDropdownExponentes()]);
   try {
-    const res = await ordenCapacitacionService.getEstadisticas();
+    const res = await ordenAsesoriaService.getEstadisticas();
     const raw = res.data || res;
     const stats = (raw as any).data || raw;
     if (stats.siguiente_numero) {
@@ -919,7 +910,7 @@ async function abrirModalNuevaOC() {
 
 async function abrirModalEditarOC(id: number) {
   try {
-    const res = await ordenCapacitacionService.getById(id);
+    const res = await ordenAsesoriaService.getById(id);
     const raw = res.data || res;
     const orden = (raw as any).data || raw;
 
@@ -981,14 +972,6 @@ async function abrirModalEditarOC(id: number) {
     calcularDesgloseOC();
     (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value = orden.observaciones || '';
 
-    // Recargar materiales y equipos de la orden
-    if (orden.materiales && Array.isArray(orden.materiales)) {
-      orden.materiales.forEach((m: any) => agregarFilaMaterial({ material: m.material || '', cantidad: m.cantidad || '', disposicion: m.disposicion || '' }));
-    }
-    if (orden.equipos && Array.isArray(orden.equipos)) {
-      orden.equipos.forEach((e: any) => agregarFilaEquipo({ equipo: e.equipo || '', disposicion: e.disposicion || '' }));
-    }
-
     (document.getElementById('modal-oc') as HTMLElement).style.display = 'flex';
   } catch (e) {
     console.error('Error cargando OC:', e);
@@ -1009,22 +992,6 @@ async function guardarOC() {
   const numCertificados = (document.getElementById('oc-num-certificados') as HTMLInputElement).value;
   const costo = (document.getElementById('oc-costo') as HTMLInputElement).value;
   const observaciones = (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value?.trim();
-  const horasCapacitacion = (document.getElementById('oc-horas-capacitacion') as HTMLInputElement)?.value || '';
-
-  // --- RECOLECCIÓN DIRECTA DE MATERIALES ---
-  const filasMateriales = document.querySelectorAll('#body-materiales tr'); 
-  const materiales = Array.from(filasMateriales).map(fila => ({
-      material: (fila.querySelector('.mat-desc') as HTMLInputElement)?.value || '',
-      cantidad: (fila.querySelector('.mat-cant') as HTMLInputElement)?.value || '',
-      disposicion: (fila.querySelector('.mat-disp') as HTMLInputElement)?.value || ''
-  })).filter(m => m.material.trim() !== ""); 
-
-  // --- RECOLECCIÓN DE EQUIPOS ---
-  const filasEquipos = document.querySelectorAll('#body-equipos tr'); 
-  const equipos = Array.from(filasEquipos).map(fila => ({
-      equipo: (fila.querySelector('.eq-desc') as HTMLInputElement)?.value || '',
-      disposicion: (fila.querySelector('.eq-disp') as HTMLInputElement)?.value || ''
-  })).filter(e => e.equipo.trim() !== "");
 
   const idUsuario = (document.getElementById('oc-id-usuario') as HTMLInputElement).value;
 
@@ -1063,23 +1030,20 @@ async function guardarOC() {
     num_certificados: parseInt(numCertificados) || 0,
     costo: parseFloat(costo) || 0,
     incluye_igv: ocIncluyeIgv,
-    horas_capacitacion: horasCapacitacion,
-    materiales,
-    equipos,
     observaciones: observaciones || null,
   };
 
   try {
     if (editId) {
-      await ordenCapacitacionService.update(Number(editId), payload);
+      await ordenAsesoriaService.update(Number(editId), payload);
       mostrarToast('success', 'Orden Actualizada', 'La orden se actualizó correctamente');
     } else {
-      const response = await ordenCapacitacionService.create(payload);
-      mostrarToast('success', 'Orden Creada', 'La orden de capacitación se creó correctamente');
+      const response = await ordenAsesoriaService.create(payload);
+      mostrarToast('success', 'Orden Creada', 'La orden de asesoría se creó correctamente');
       const nuevaId = (response.data as any)?.id;
       if (nuevaId) {
         try {
-          await ordenCapacitacionService.downloadPDF(nuevaId);
+          await ordenAsesoriaService.downloadPDF(nuevaId);
           mostrarToast('success', 'PDF', 'PDF generado correctamente');
         } catch (e) {
           console.error('Error generando PDF:', e);
@@ -1123,7 +1087,7 @@ function calcularDesgloseOC() {
 // =============================
 // INIT EVENTS
 // =============================
-export function initOrdenesCapacitacionEvents() {
+export function initOrdenesAsesoriaEvents() {
   // Botón nueva OC
   document.getElementById('btn-nueva-oc')?.addEventListener('click', abrirModalNuevaOC);
 
@@ -1165,6 +1129,11 @@ export function initOrdenesCapacitacionEvents() {
     const select = document.getElementById('oc-exponente-selector') as HTMLSelectElement;
     const val = select.value;
     if (!val) return;
+    if (val === '__nuevo__') {
+      select.value = '';
+      abrirModalNuevoExponente();
+      return;
+    }
     const id = Number(val);
     if (selectedExponentes.some(e => e.id === id)) return;
     const exp = exponentesData.find(e => e.id === id);

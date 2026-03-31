@@ -172,6 +172,9 @@ class OrdenServicioController extends Controller
                     'id' => $cotizacion->id,
                     'numero_cotizacion' => $cotizacion->numero_cotizacion,
                     'fecha_emision' => $cotizacion->fecha_emision->format('Y-m-d'),
+                    'fecha_aceptacion' => $cotizacion->fecha_estado_cotizacion
+                        ? $cotizacion->fecha_estado_cotizacion->format('Y-m-d')
+                        : null,
                 ],
                 'cliente' => [
                     'id' => $cotizacion->cliente->id,
@@ -196,7 +199,7 @@ class OrdenServicioController extends Controller
     {
         $validated = $request->validate([
             'id_cotizacion' => 'required|exists:cotizacion,id',
-            'fecha_aceptacion' => 'required|date',
+            'fecha_aceptacion' => 'nullable|date',
             'fecha_tentativa' => 'nullable|date',
             'emitido_por' => 'required|exists:personal,id',
             'observaciones' => 'nullable|string',
@@ -256,6 +259,9 @@ class OrdenServicioController extends Controller
             $incluyeIgv = $validated['incluye_igv'] ?? true;
             $igv = $incluyeIgv ? round($subtotal * 0.18, 2) : 0;
             $total = $subtotal + $igv;
+            $fechaAceptacion = $cotizacion->fecha_estado_cotizacion
+                ? $cotizacion->fecha_estado_cotizacion->format('Y-m-d')
+                : ($validated['fecha_aceptacion'] ?? $cotizacion->fecha_emision->format('Y-m-d'));
 
             // Crear orden de servicio
             $orden = OrdenServicio::create([
@@ -264,7 +270,7 @@ class OrdenServicioController extends Controller
                 'version' => $validated['version'] ?? '1.0',
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
-                'fecha_aceptacion' => $validated['fecha_aceptacion'],
+                'fecha_aceptacion' => $fechaAceptacion,
                 'fecha_tentativa' => $validated['fecha_tentativa'] ?? null,
                 'subtotal' => $subtotal,
                 'igv' => $igv,
