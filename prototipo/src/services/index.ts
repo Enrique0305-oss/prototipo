@@ -17,6 +17,7 @@ export { inventarioAjusteService } from './inventarioAjusteService';
 export { vehiculoService } from './vehiculoService';
 export { tecnicoService } from './tecnicoService';
 export { areaService } from './areaService';
+export { cargoService } from './cargoService';
 export { rrhhService } from './rrhhService';
 
 // Servicios Operaciones

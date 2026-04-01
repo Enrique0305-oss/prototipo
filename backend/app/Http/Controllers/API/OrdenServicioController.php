@@ -211,7 +211,8 @@ class OrdenServicioController extends Controller
             'detalles.*.frecuencia' => 'nullable|string|max:100',
             'detalles.*.precio' => 'required|numeric|min:0',
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
-            'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'detalles.*.id_cliente_planta_area' => 'nullable|array',
+            'detalles.*.id_cliente_planta_area.*' => 'integer|exists:cliente_planta_area,id',
             'incluye_igv' => 'sometimes|boolean',
             // Productos y equipos
             'productos' => 'sometimes|array',
@@ -327,7 +328,7 @@ class OrdenServicioController extends Controller
             DB::commit();
 
             // Cargar relaciones para respuesta
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
 
             return response()->json([
                 'success' => true,
@@ -357,7 +358,6 @@ class OrdenServicioController extends Controller
             'cotizacion',
             'detalles.servicio',
             'detalles.planta',
-            'detalles.area',
             'productos.producto',
             'productos.servicio',
             'productos.planta',
@@ -407,7 +407,8 @@ class OrdenServicioController extends Controller
             'detalles.*.frecuencia' => 'nullable|string|max:100',
             'detalles.*.precio' => 'required_with:detalles|numeric|min:0',
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
-            'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'detalles.*.id_cliente_planta_area' => 'nullable|array',
+            'detalles.*.id_cliente_planta_area.*' => 'integer|exists:cliente_planta_area,id',
             'incluye_igv' => 'sometimes|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
             'observaciones' => 'nullable|string',
@@ -524,7 +525,7 @@ class OrdenServicioController extends Controller
 
             DB::commit();
 
-            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'detalles.area', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
+            $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
 
             return response()->json([
                 'success' => true,
@@ -612,7 +613,7 @@ class OrdenServicioController extends Controller
     {
         $orden = OrdenServicio::with([
             'cliente', 
-            'detalles.servicio', 'detalles.planta', 'detalles.area', 
+            'detalles.servicio', 'detalles.planta', 
             'emisor', 'cotizacion', 
             'productos.producto', 'productos.planta', 'productos.area', 'productos.equipo',
             'equipos.equipo', 'equipos.planta', 'equipos.area'

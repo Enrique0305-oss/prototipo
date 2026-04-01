@@ -8,6 +8,7 @@ initAuthGuard();
 import { renderDashboard, cargarAlertaStockBajo, cargarAlertaMantenimiento, cargarAlertaCotizacionesSinOrden } from './modules/dashboard/dashboard.view'
 import { renderProgramaciones, initProgramacionesEvents } from './modules/programaciones/programaciones.view'
 import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios } from './modules/recursos-humanos/recursos-humanos.view'
+import { renderTecnicosTab, cargarTecnicos } from './modules/recursos-humanos/tecnicos.view'
 // Almacén
 import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
 import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderAjustesInventarioTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents, initKardexEvents, initAjustesInventarioEvents } from './modules/almacen/inventario/inventario.view'
@@ -16,6 +17,7 @@ import { renderAlmacenCompras, initComprasEvents } from './modules/almacen/compr
 import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './modules/almacen/entradas-salidas/entradas-salidas.view'
 import { renderEntregaEpp, initEntregaEppEvents } from './modules/almacen/entrega-epp/entrega-epp.view'
 import { renderSalidasProgramacion, initSalidasProgramacion } from './modules/almacen/salidas-programacion/salidas-programacion.view'
+import { renderAlmacenVehiculos, initVehiculosEvents } from './modules/almacen/vehiculos/vehiculos.view'
 // Servicios - Clientes
 import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab, initClientesLogisticaEvents, initServiciosTabEvents } from './modules/logistica/logistica.view'
 // Comercial
@@ -65,7 +67,7 @@ const MENU_PERMISOS: Record<string, string[]> = {
   'Comercial':         ['prospectos', 'cotizaciones', 'ods', 'odp', 'servicios'],
   'Finanzas':          ['cotizaciones'],  // Finanzas ve cotizaciones
   'Facturación':       ['cotizaciones'],
-  'Recursos Humanos':  ['rrhh-asistencia', 'rrhh-empleados', 'rrhh-reportes', 'marcar-asistencia'],
+  'Recursos Humanos':  ['rrhh-asistencia', 'rrhh-empleados', 'rrhh-tecnicos', 'rrhh-reportes', 'marcar-asistencia'],
   'Operaciones':       ['ods', 'odp', 'servicios'],
   'Reportes':          ['dashboard'],  // Todos con dashboard ven reportes
   'Usuarios':          ['usuarios'],
@@ -81,7 +83,7 @@ function filtrarMenuPorPermisos(items: typeof menuItems): typeof menuItems {
 
 const menuItems = [
   { name: 'Dashboard', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>', submenu: [] },
-  { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Mantenimiento', 'Inventario', 'Ajuste de Inventario', 'Proveedores', 'Órdenes de Compra', 'Entradas y Salidas', 'Entrega EPP', 'Salidas Programación'] },
+  { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Mantenimiento', 'Inventario', 'Ajuste de Inventario', 'Proveedores', 'Órdenes de Compra', 'Entradas y Salidas', 'Entrega EPP', 'Gestión de Vehículos', 'Salidas Programación'] },
   { name: 'Servicios - Clientes', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>', submenu: [] },
   { name: 'Programaciones', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>', submenu: [] },
   { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Clientes Potenciales', 'Cotizaciones', 'Aprobación Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Órdenes de Asesoría', 'Exponentes', 'Conversiones'] },
@@ -105,6 +107,7 @@ function getMainContent() {
     if (activeSubMenu === 'Órdenes de Compra') return renderAlmacenCompras();
     if (activeSubMenu === 'Entradas y Salidas') return renderAlmacenEntradasSalidas();
     if (activeSubMenu === 'Entrega EPP') return renderEntregaEpp();
+    if (activeSubMenu === 'Gestión de Vehículos') return renderAlmacenVehiculos();
     if (activeSubMenu === 'Salidas Programación') {
       const html = renderSalidasProgramacion();
       setTimeout(() => initSalidasProgramacion(), 0);
@@ -439,6 +442,11 @@ if (activeMenu === 'Facturación') {
   if (activeMenu === 'Almacén' && activeSubMenu === 'Órdenes de Compra') {
     setTimeout(() => initComprasEvents(), 0);
   }
+
+  // Inicializar eventos de Gestión de Vehículos
+  if (activeMenu === 'Almacén' && activeSubMenu === 'Gestión de Vehículos') {
+    setTimeout(() => initVehiculosEvents(), 0);
+  }
 }
 
 
@@ -624,6 +632,9 @@ function updateRecursosTabContent() {
     case 'empleados':
       tabContent.innerHTML = renderEmpleadosTab();
       break;
+    case 'tecnicos':
+      tabContent.innerHTML = renderTecnicosTab();
+      break;
     case 'reportes':
       tabContent.innerHTML = renderReportesTab();
       break;
@@ -644,6 +655,10 @@ function updateRecursosTabContent() {
   // Cargar datos de horarios
   if (activeRecursosTab === 'horarios') {
     cargarHorarios();
+  }
+
+  if (activeRecursosTab === 'tecnicos') {
+    cargarTecnicos();
   }
 }
 

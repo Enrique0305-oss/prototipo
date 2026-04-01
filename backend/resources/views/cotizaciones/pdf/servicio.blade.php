@@ -108,7 +108,7 @@
                     {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                    {{ $cotizacion->creador->cargo?->nombre ?? 'Gerente Comercial' }}
                 </div>
                 <div class="signature-logos">
                     <table>
@@ -386,10 +386,17 @@
                             @php
                                 $servicio = $detalle->servicio;
                                 $planta = $cotizacion->cliente->plantas()->find($detalle->id_cliente_planta);
-                                $area = null;
-                                if ($planta) {
-                                    $area = $planta->areasActivas()->find($detalle->id_cliente_planta_area) ?? $planta->areas()->find($detalle->id_cliente_planta_area);
+                                
+                                // Obtener múltiples áreas desde el array JSON
+                                $areaIds = $detalle->id_cliente_planta_area ?? [];
+                                $areas = [];
+                                if ($planta && is_array($areaIds) && count($areaIds) > 0) {
+                                    $areas = $planta->areasActivas()->whereIn('id', $areaIds)->get();
+                                    if ($areas->isEmpty()) {
+                                        $areas = $planta->areas()->whereIn('id', $areaIds)->get();
+                                    }
                                 }
+                                
                                 $frecuenciaRaw = trim((string)($detalle->frecuencia_sugerida ?? ''));
                                 $frecuencia = $frecuenciaRaw;
                                 if ($frecuenciaRaw !== '') {
@@ -514,8 +521,11 @@
                                 <td>
                                     @if($planta)
                                         <strong>{{ $planta->nombre }}</strong>
-                                        @if($area)
-                                            <br><small>({{ $area->nombre }})</small>
+                                        @if(count($areas) > 0)
+                                            <br>
+                                            @foreach($areas as $area)
+                                                <small>({{ $area->nombre }})@if(!$loop->last)<br>@endif</small>
+                                            @endforeach
                                         @endif
                                     @else
                                         Por especificar
@@ -917,10 +927,10 @@
                     Atentamente,
                 </div> <br>
                 <div class="issued-name">
-                    {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
+                    {{ $gerenteComercial->nombre ?? 'N/A' }} {{ $gerenteComercial->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                    {{ $gerenteComercial->cargo?->nombre ?? 'N/A' }}
                 </div>
                 <div class="signature-logos">
                     <table>
@@ -936,10 +946,10 @@
                 </div>
                 <div class="proposal-text">
                     <p>
-                        E-mail: {{ $cotizacion->creador->correo  }}
+                        E-mail: {{ $gerenteComercial->correo }}
                     </p>
                     <p>
-                        Número: {{ $cotizacion->creador->celular  }}
+                        Número: {{ $gerenteComercial->celular }}
                     </p>
                 </div>
             </div>

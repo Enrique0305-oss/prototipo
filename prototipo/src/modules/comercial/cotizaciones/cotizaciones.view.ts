@@ -2258,12 +2258,17 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
 
     const areaSelect = fila.querySelector('.area-input') as HTMLSelectElement | null;
     const areaMultiSelect = fila.querySelector('.area-input-multi') as HTMLSelectElement | null;
+    const areaIdsDetalle = Array.isArray(detalle?.id_cliente_planta_area)
+      ? detalle.id_cliente_planta_area.map((id: any) => Number(id)).filter((id: number) => id > 0)
+      : (detalle?.id_cliente_planta_area ? [Number(detalle.id_cliente_planta_area)] : []);
+
     if (areaSelect) {
-      areaSelect.value = detalle?.id_cliente_planta_area ? String(detalle.id_cliente_planta_area) : '';
+      areaSelect.value = areaIdsDetalle.length > 0 ? String(areaIdsDetalle[0]) : '';
     }
-    if (areaMultiSelect && detalle?.id_cliente_planta_area) {
+
+    if (areaMultiSelect && areaIdsDetalle.length > 0) {
       Array.from(areaMultiSelect.options).forEach((opt) => {
-        opt.selected = Number(opt.value) === Number(detalle.id_cliente_planta_area);
+        opt.selected = areaIdsDetalle.includes(Number(opt.value));
       });
       renderAreaPickerOptions(fila);
       actualizarResumenAreasFila(fila);
@@ -3148,29 +3153,29 @@ async function guardarCotizacion(tipoFijo?: string) {
     const fosfinaProducto = esFosfina ? productoFosfinaGlobal : null;
     const fosfinaCantidad = esFosfina ? cantidadFosfinaGlobal : null;
 
-    const areasExpandibles = (tipoCotizacion === 'Servicio' && areaIds.length > 0) ? areaIds : [null];
-    areasExpandibles.forEach((areaVal) => {
-      detalles.push({
-        id_servicio,
-        id_producto,
-        id_catalogo_cap_aud,
-        cantidad,
-        precio_unitario: precio,
-        frecuencia_sugerida: frecuencia,
-        modalidad_sugerida: modalidad,
-        op_tecnicos: opTecnicos,
-        supervisor,
-        medida_tanque: medidaTanque,
-        fosfina_producto: fosfinaProducto,
-        fosfina_cantidad: fosfinaCantidad,
-        id_cliente_planta: plantaVal,
-        id_cliente_planta_area: areaVal,
-        horas_capacitacion: horasCapacitacion,
-        num_participantes: numParticipantes,
-        fecha_servicio: fechaServicio,
-        meses_implementacion: mesesImplementacion,
-        frecuencia_visita: frecuenciaVisita,
-      });
+    // Guardar siempre como array JSON para todos los tipos
+    const areasParaGuardar = areaIds.length > 0 ? areaIds : null;
+    
+    detalles.push({
+      id_servicio,
+      id_producto,
+      id_catalogo_cap_aud,
+      cantidad,
+      precio_unitario: precio,
+      frecuencia_sugerida: frecuencia,
+      modalidad_sugerida: modalidad,
+      op_tecnicos: opTecnicos,
+      supervisor,
+      medida_tanque: medidaTanque,
+      fosfina_producto: fosfinaProducto,
+      fosfina_cantidad: fosfinaCantidad,
+      id_cliente_planta: plantaVal,
+      id_cliente_planta_area: areasParaGuardar,  // Array de IDs o null
+      horas_capacitacion: horasCapacitacion,
+      num_participantes: numParticipantes,
+      fecha_servicio: fechaServicio,
+      meses_implementacion: mesesImplementacion,
+      frecuencia_visita: frecuenciaVisita,
     });
   });
 

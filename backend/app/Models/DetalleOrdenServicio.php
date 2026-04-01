@@ -22,6 +22,7 @@ class DetalleOrdenServicio extends Model
 
     protected $casts = [
         'precio' => 'decimal:2',
+        'id_cliente_planta_area' => 'array',
     ];
 
     // Relaciones
@@ -43,5 +44,17 @@ class DetalleOrdenServicio extends Model
     public function area()
     {
         return $this->belongsTo(ClientePlantaArea::class, 'id_cliente_planta_area');
+    }
+
+    /**
+     * Obtener todas las áreas del detalle (cuando hay múltiples)
+     */
+    public function areas()
+    {
+        $areaIds = $this->id_cliente_planta_area ?? [];
+        if (empty($areaIds)) {
+            return collect();
+        }
+        return ClientePlantaArea::whereIn('id', $areaIds)->get();
     }
 }

@@ -111,7 +111,7 @@
                     {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                    {{ $cotizacion->creador->cargo?->nombre ?? 'Gerente Comercial' }}
                 </div>
                 <div class="signature-logos">
                     <table>
@@ -391,10 +391,12 @@
                 <p class="payment-header-text">Consideraciones</p>
                 <ul>
                     <li style="font-size: 13px; margin-bottom: 5px;">
-                        En caso exista la necesidad de reprogramar el servicio por parte del cliente, se debrá comunicar con una anticipación
-                        mínima de 48 horas respecto a la fecha previamente acordada, a fin de evitar la emisión de cualquier cargo.</li>
+                        Se requiere de la disposición del cliente para proporcionar la información necesaria para el buen desarrollo de las actividades propuestas,
+                        además de la accesibilidad a  planta tanto en línea parada como en producción.</li>
                     <li style="font-size: 13px; margin-bottom: 5px;">
-                        Es importante que el cliente nos brinde información adicional según se requiera para una adecuada capacitación.</li>
+                        Los servicios realizados a partir de las 11:30 pm estarán sujetos a un recargo adicional, el cual será previamente coordinado y aprobado por el cliente.</li>
+                    <li style="font-size: 13px; margin-bottom: 5px;">
+                        Los servicios realizados en días feriados tendrán un recargo del 20% previa coordinación.</li>
                 </ul>
             </div>
 
@@ -404,10 +406,10 @@
                     Atentamente,
                 </div> <br>
                 <div class="issued-name">
-                    {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
+                    {{ $gerenteComercial->nombre ?? 'N/A' }} {{ $gerenteComercial->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                    {{ $gerenteComercial->cargo?->nombre ?? 'N/A' }}
                 </div>
                 <div class="signature-logos">
                     <table>
@@ -423,10 +425,10 @@
                 </div>
                 <div class="proposal-text">
                     <p>
-                        E-mail: {{ $cotizacion->creador->correo  }}
+                        E-mail: {{ $gerenteComercial->correo }}
                     </p>
                     <p>
-                        Número: {{ $cotizacion->creador->celular  }}
+                        Número: {{ $gerenteComercial->celular }}
                     </p>
                 </div>
             </div>

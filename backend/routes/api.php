@@ -14,6 +14,7 @@ use App\Http\Controllers\API\ProductoController;
 use App\Http\Controllers\API\CategoriaController;
 use App\Http\Controllers\API\VehiculoController;
 use App\Http\Controllers\API\AreaController;
+use App\Http\Controllers\API\CargoController;
 use App\Http\Controllers\API\TecnicoController;
 use App\Http\Controllers\API\MantenimientoController;
 use App\Http\Controllers\API\ActividadMantenimientoController;
@@ -30,6 +31,7 @@ use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
 use App\Http\Controllers\API\ProgramacionCapacitacionController;
+use App\Http\Controllers\API\ProgramacionAsesoriaController;
 use App\Http\Controllers\API\EntregaEppController;
 use App\Http\Controllers\API\ProveedorController;
 use App\Http\Controllers\API\SalidaProgramacionController;
@@ -182,6 +184,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/areas/{id}', [AreaController::class, 'update']);
     Route::delete('/areas/{id}', [AreaController::class, 'destroy']);
 
+    // para los cargos :v
+    Route::get('/cargos', [CargoController::class, 'index']);
+    Route::get('/cargos/{id}', [CargoController::class, 'show']);
+    Route::post('/cargos', [CargoController::class, 'store']);
+    Route::put('/cargos/{id}', [CargoController::class, 'update']);
+    Route::delete('/cargos/{id}', [CargoController::class, 'destroy']);
+    Route::get('/areas/{idArea}/cargos', [CargoController::class, 'porArea']);
+
     // para los técnicos :v
     Route::get('/tecnicos/estadisticas/resumen', [TecnicoController::class, 'estadisticas']);
     Route::get('/tecnicos', [TecnicoController::class, 'index']);
@@ -301,6 +311,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/programacion-capacitacion', [ProgramacionCapacitacionController::class, 'index']);
     Route::get('/programacion-capacitacion/{id}', [ProgramacionCapacitacionController::class, 'show']);
     Route::post('/programacion-capacitacion', [ProgramacionCapacitacionController::class, 'store']);
+
+    // Programación de Asesorías (independiente)
+    Route::get('/programacion-asesoria/asesorias-disponibles', [ProgramacionAsesoriaController::class, 'getAsesoriasDisponibles']);
+    Route::get('/programacion-asesoria', [ProgramacionAsesoriaController::class, 'index']);
+    Route::get('/programacion-asesoria/{id}', [ProgramacionAsesoriaController::class, 'show']);
+    Route::post('/programacion-asesoria', [ProgramacionAsesoriaController::class, 'store']);
 
     // Almacén - Salidas por Programación
     Route::get('/almacen/salidas-programacion/pendientes', [SalidaProgramacionController::class, 'getPendientes']);

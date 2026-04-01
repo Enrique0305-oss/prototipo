@@ -16,7 +16,7 @@ class PersonalController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Personal::with('area');
+        $query = Personal::with('area', 'cargo');
 
         if ($request->filled('search')) {
             $s = $request->search;
@@ -49,7 +49,7 @@ class PersonalController extends Controller
      */
     public function show($id)
     {
-        $personal = Personal::with('area')->findOrFail($id);
+        $personal = Personal::with('area', 'cargo')->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -68,6 +68,7 @@ class PersonalController extends Controller
             'celular'   => 'required|string|max:13',
             'correo'    => 'required|email|max:50|unique:personal,correo',
             'id_area'   => 'required|integer|exists:area,id',
+            'id_cargo'  => 'nullable|integer|exists:cargo,id',
             'usuario'   => 'required|string|max:100|unique:personal,usuario',
             'password'  => 'required|string|min:6',
         ]);
@@ -76,7 +77,7 @@ class PersonalController extends Controller
         $validated['estado'] = 'Activo';
 
         $personal = Personal::create($validated);
-        $personal->load('area');
+        $personal->load('area', 'cargo');
 
         return response()->json([
             'success' => true,
@@ -98,6 +99,7 @@ class PersonalController extends Controller
             'celular'   => 'required|string|max:13',
             'correo'    => ['required', 'email', 'max:50', Rule::unique('personal', 'correo')->ignore($id)],
             'id_area'   => 'required|integer|exists:area,id',
+            'id_cargo'  => 'nullable|integer|exists:cargo,id',
             'usuario'   => ['required', 'string', 'max:100', Rule::unique('personal', 'usuario')->ignore($id)],
             'password'  => 'nullable|string|min:6',
         ]);
@@ -109,7 +111,7 @@ class PersonalController extends Controller
         }
 
         $personal->update($validated);
-        $personal->load('area');
+        $personal->load('area', 'cargo');
 
         return response()->json([
             'success' => true,

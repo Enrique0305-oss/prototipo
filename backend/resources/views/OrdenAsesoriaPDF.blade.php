@@ -28,15 +28,22 @@
 
     <table class="no-border">
         <tr>
-            <td>
+            <td style="width: 25%; text-align: left">
                 @php $pathLogo = public_path('images/qsci-capa.png'); @endphp
                 @if(file_exists($pathLogo))
-                    <img src="data:image/png;base64,{{ base64_encode(file_get_contents($pathLogo)) }}" width="220">
+                    <img src="data:image/png;base64,{{ base64_encode(file_get_contents($pathLogo)) }}" width="240">
                 @else
-                    <strong>QSCI GROUP</strong>
+                    <div style="font-weight: bold; color: #1e4ba1; font-size: 14px;">QSCIGROUP</div>
                 @endif
             </td>
-            <td class="text-right"><strong>{{ $orden->numero_orden }}</strong></td>
+            <td style="width: 25%; text-align: right">
+                @php $pathIso = public_path('images/logo-calidad.png'); @endphp
+                @if(file_exists($pathIso))
+                    <img src="data:image/png;base64,{{ base64_encode(file_get_contents($pathIso)) }}" width="120">
+                @else
+                    <strong>QSCI</strong>
+                @endif
+            </td>
         </tr>
     </table>
 

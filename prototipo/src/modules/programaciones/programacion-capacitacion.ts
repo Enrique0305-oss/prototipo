@@ -6,7 +6,6 @@ import { programacionService } from './programaciones.service';
 import { mostrarToast } from '../../shared/toast';
 
 let capacitacionesDisponibles: any[] = [];
-let tecnicosData: any[] = [];
 let personalData: any[] = [];
 let vehiculosData: any[] = [];
 let exponentesDisponiblesActual: any[] = [];
@@ -91,8 +90,7 @@ export function renderModalProgramarCapacitacion(): string {
   `;
 }
 
-export async function abrirModalProgramarCapacitacion(tecnicos: any[], personal: any[], vehiculos: any[]) {
-  tecnicosData = tecnicos;
+export async function abrirModalProgramarCapacitacion(_tecnicos: any[], personal: any[], vehiculos: any[]) {
   personalData = personal;
   vehiculosData = vehiculos;
 
@@ -151,7 +149,7 @@ function renderFormCapacitacion(body: HTMLElement) {
           <div id="detallesCapacitacion" style="display:none;margin-top:12px;padding:14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;font-size:13px;line-height:1.6;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
               <div>
-                <strong style="color:#0369a1;">Servicio:</strong>
+                <strong style="color:#0369a1;">Capacitación:</strong>
                 <div style="color:#475569;margin-top:2px;"><span id="detCapServicio"></span></div>
               </div>
               <div>
@@ -191,9 +189,9 @@ function renderFormCapacitacion(body: HTMLElement) {
           </div>
 
           <div class="prog-form-group">
-            <label class="prog-form-label">Supervisor</label>
+            <label class="prog-form-label">Asistente Administrativo</label>
             <select class="prog-form-control" id="supervisor">
-              <option value="">-- Seleccionar supervisor --</option>
+              <option value="">-- Seleccionar asistente administrativo --</option>
               ${personalData.map(p => `
                 <option value="${p.id}">
                   ${p.nombre} ${p.apellidos}
@@ -241,6 +239,19 @@ function renderFormCapacitacion(body: HTMLElement) {
         <!-- Observaciones -->
         <div class="prog-form-section">
           <h3 class="prog-form-section-title">Observaciones</h3>
+
+          <div class="prog-form-group" style="margin-bottom:10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
+              <div>
+                <label class="prog-form-label" style="font-size:12px;color:#64748b;margin-bottom:4px;">Planta</label>
+                <div id="obsPlantaLabel" style="font-size:14px;font-weight:600;color:#1e293b;">Sin selección</div>
+              </div>
+              <div>
+                <label class="prog-form-label" style="font-size:12px;color:#64748b;margin-bottom:4px;">Área</label>
+                <div id="obsAreaLabel" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;align-items:center;color:#1e293b;font-weight:600;">Sin selección</div>
+              </div>
+            </div>
+          </div>
           
           <div class="prog-form-group">
             <label class="prog-form-label">Notas Adicionales</label>
@@ -271,6 +282,10 @@ function bindEventosCapacitacion() {
       const capId = (e.target as HTMLSelectElement).value;
       if (!capId) {
         detalles!.style.display = 'none';
+        const obsPlanta = document.getElementById('obsPlantaLabel');
+        const obsArea = document.getElementById('obsAreaLabel');
+        if (obsPlanta) obsPlanta.textContent = 'Sin selección';
+        if (obsArea) obsArea.textContent = 'Sin selección';
         exponentesDisponiblesActual = [];
         exponentesSeleccionadosIds = [];
         const contenedor = document.getElementById('exponentesSeleccionados');
@@ -287,11 +302,30 @@ function bindEventosCapacitacion() {
       const capacitacion = capacitacionesDisponibles.find(c => c.id == capId);
       if (capacitacion && detalles) {
         // Llenar información general
-        document.getElementById('detCapServicio')!.textContent = capacitacion.servicio || 'Sin especificar';
+        document.getElementById('detCapServicio')!.textContent = capacitacion.capacitacion_nombre || capacitacion.servicio || 'Sin capacitación';
         document.getElementById('detCapModalidad')!.textContent = capacitacion.modalidad || 'Sin especificar';
         document.getElementById('detCapParticipantes')!.textContent = `${capacitacion.num_participantes || 0} personas`;
         document.getElementById('detCapCertificados')!.textContent = `${capacitacion.num_certificados || 0} certificados`;
         document.getElementById('detCapHoras')!.textContent = `${capacitacion.horas_capacitacion || 0} horas`;
+
+        const obsPlanta = document.getElementById('obsPlantaLabel');
+        const obsArea = document.getElementById('obsAreaLabel');
+        if (obsPlanta) {
+          obsPlanta.textContent = capacitacion.planta_nombre || 'Sin planta';
+        }
+        if (obsArea) {
+          const areas = Array.isArray(capacitacion.areas_nombres)
+            ? capacitacion.areas_nombres.map((a: any) => String(a || '').trim()).filter((a: string) => !!a)
+            : [];
+
+          if (areas.length > 0) {
+            obsArea.innerHTML = areas
+              .map((area: string) => `<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:12px;font-weight:600;">${area}</span>`)
+              .join('');
+          } else {
+            obsArea.textContent = 'Sin área';
+          }
+        }
         
         detalles.style.display = 'block';
 
@@ -375,11 +409,6 @@ async function guardarCapacitacionProgramada(form: HTMLFormElement) {
     return;
   }
 
-  if (!tecnicosData.length) {
-    mostrarToast('error', 'Sin técnicos', 'No hay técnicos disponibles para registrar la programación');
-    return;
-  }
-
   const capacity = capacitacionesDisponibles.find(c => c.id == selectCap.value);
   if (!capacity) {
     mostrarToast('error', 'Capacitación inválida', 'No se encontró la orden seleccionada');
@@ -430,11 +459,10 @@ async function guardarCapacitacionProgramada(form: HTMLFormElement) {
     mostrarToast('error', 'Error', mensaje);
     console.error('Error programar capacitación:', error);
   } finally {
-    // Restaurar botón
     const btnSubmit = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     if (btnSubmit) {
       btnSubmit.disabled = false;
-      btnSubmit.innerHTML = 'Guardar Programación';
+      btnSubmit.innerHTML = 'Programar Capacitación';
     }
   }
 }

@@ -196,7 +196,7 @@
                     {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                    {{ $cotizacion->creador->cargo?->nombre ?? 'Gerente Comercial' }}
                 </div>
                 <div class="signature-logos">
                     <table>

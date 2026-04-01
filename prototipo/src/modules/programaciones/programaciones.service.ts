@@ -143,5 +143,39 @@ export const programacionService = {
   }) => {
     return apiClient.post<ApiResponse<Programacion>>('/programacion-capacitacion', data);
   },
+
+  // ─── Programación de Asesorías ──────────────────────
+
+  getAsesoriasDisponibles: async () => {
+    return apiClient.get<ApiResponse<any[]>>('/programacion-asesoria/asesorias-disponibles');
+  },
+
+  getAllExponentes: async () => {
+    return apiClient.get<ApiResponse<any[]>>('/exponentes');
+  },
+
+  getAllProgramacionAsesoria: async (filtros?: FiltroProgramacion) => {
+    return apiClient.get<ApiResponse<any[]>>('/programacion-asesoria', filtros as any);
+  },
+
+  getProgramacionAsesoriaById: async (id: number) => {
+    return apiClient.get<ApiResponse<any>>(`/programacion-asesoria/${id}`);
+  },
+
+  programarAsesoria: async (data: {
+    id_orden_asesoria: number;
+    id_supervisor?: number;
+    id_vehiculo?: number;
+    fecha_programada: string;
+    hora_inicio: string;
+    hora_fin?: string;
+    id_cliente_planta?: number;
+    id_cliente_planta_area?: number;
+    local_sede?: string;
+    direccion_completa?: string;
+    observaciones?: string;
+  }) => {
+    return apiClient.post<ApiResponse<Programacion>>('/programacion-asesoria', data);
+  },
 };
 

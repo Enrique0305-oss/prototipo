@@ -120,7 +120,7 @@ class OrdenAsesoriaController extends Controller
 
     public function desdeCotizacion($cotizacionId): JsonResponse
     {
-        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.catalogoCapAud'])
+        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.catalogoCapAud', 'detalles.planta.areas'])
             ->find($cotizacionId);
 
         if (!$cotizacion) {
@@ -153,12 +153,34 @@ class OrdenAsesoriaController extends Controller
         }
 
         $detalles = $cotizacion->detalles->map(function ($d) {
+            $planta = $d->planta;
+            $areaIds = $d->id_cliente_planta_area ?? [];
+
+            if (!is_array($areaIds)) {
+                $areaIds = empty($areaIds) ? [] : [$areaIds];
+            }
+
+            $areasNombres = collect($areaIds)
+                ->map(function ($areaId) use ($planta) {
+                    if (!$planta || !$planta->areas) {
+                        return null;
+                    }
+                    $area = $planta->areas->firstWhere('id', $areaId);
+                    return $area ? $area->nombre : null;
+                })
+                ->filter()
+                ->values();
+
             $nombre = $d->catalogoCapAud
                 ? $d->catalogoCapAud->nombre
                 : ($d->servicio ? $d->servicio->nombre : ($d->descripcion_manual ?: 'Sin nombre'));
             return [
                 'id_servicio' => $d->id_servicio,
                 'id_catalogo_cap_aud' => $d->id_catalogo_cap_aud,
+                'id_cliente_planta' => $d->id_cliente_planta,
+                'id_cliente_planta_area' => $areaIds,
+                'planta_nombre' => $planta->nombre ?? null,
+                'areas_nombres' => $areasNombres,
                 'nombre' => $nombre,
                 'descripcion' => $d->descripcion_manual,
                 'cantidad' => $d->cantidad,

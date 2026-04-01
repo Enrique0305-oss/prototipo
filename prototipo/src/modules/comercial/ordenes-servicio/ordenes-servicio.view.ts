@@ -7,7 +7,6 @@ import { equipoService } from '../../../services/equipoService';
 import { authService } from '../../auth/auth.service';
 import { mostrarToast } from '../../../shared/toast';
 import { clienteService } from '../../../services/clienteService';
-import { cotizacionService } from '../../../services/cotizacionService';
 
 let odsListData: any[] = [];
 let cotizacionesDisponibles: any[] = [];
@@ -19,7 +18,278 @@ let equiposDisponiblesODS: any[] = [];
 let odsProductoRows: { id_servicio?: number; id_equipo?: number | null; equipo_descripcion?: string; id_producto: number; cantidad: number; observacion: string; stock?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
 let odsEquipoRows: { id_equipo: number; observacion: string; equipo_descripcion?: string; id_servicio?: number; id_cliente_planta?: number | null; id_cliente_planta_area?: number | null }[] = [];
 let plantasClienteDataODS: any[] = [];
-let recetaServicioODS: any[] = [];
+
+const DIAS_SEMANA_ODS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+function normalizeAreaIds(value: any): number[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => Number(v))
+      .filter((n) => Number.isFinite(n) && n > 0);
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? [parsed] : [];
+}
+
+function normalizarDiaNombreODS(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function construirFrecuenciaDiasHtmlODS(lineaId: string): string {
+  const checks = DIAS_SEMANA_ODS.map((dia) => {
+    return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#475569;">'
+      + '<input type="checkbox" class="frecuencia-dia-checkbox-ods" value="' + dia + '"> '
+      + dia.substring(0, 3)
+      + '</label>';
+  }).join('');
+
+  return '<div class="frecuencia-dias-wrap-ods" data-linea="' + lineaId + '" style="display:none;margin-top:6px;padding:6px;border:1px dashed #cbd5e1;border-radius:6px;background:#f8fafc;">'
+    + '<div style="font-size:11px;color:#64748b;margin-bottom:4px;">Seleccione días</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + checks + '</div>'
+    + '</div>';
+}
+
+function limpiarFrecuenciaDiasODS(fila: HTMLElement) {
+  fila.querySelectorAll('.frecuencia-dia-checkbox-ods').forEach((el) => {
+    (el as HTMLInputElement).checked = false;
+  });
+}
+
+function actualizarUIFrecuenciaDiasODS(fila: HTMLElement) {
+  const frecuenciaSelect = fila.querySelector('.frecuencia-select') as HTMLSelectElement | null;
+  const wrap = fila.querySelector('.frecuencia-dias-wrap-ods') as HTMLElement | null;
+  if (!frecuenciaSelect || !wrap) return;
+
+  const mostrar = frecuenciaSelect.value === 'Días de la semana';
+  wrap.style.display = mostrar ? 'block' : 'none';
+  if (!mostrar) limpiarFrecuenciaDiasODS(fila);
+}
+
+function extraerDiasDesdeTextoODS(raw: string): string[] {
+  const found: string[] = [];
+  const normalizedRaw = normalizarDiaNombreODS(raw || '');
+
+  DIAS_SEMANA_ODS.forEach((dia) => {
+    const normDia = normalizarDiaNombreODS(dia);
+    if (new RegExp('\\b' + normDia + '\\b', 'i').test(normalizedRaw)) {
+      found.push(dia);
+    }
+  });
+
+  return found;
+}
+
+function esFrecuenciaDiasSemanaODS(texto: string): boolean {
+  const t = (texto || '').trim();
+  if (!t) return false;
+  if (/dias?\s+de\s+la\s+semana/i.test(t)) return true;
+  if (/a\s+la\s+semana/i.test(t)) return true;
+  return extraerDiasDesdeTextoODS(t).length > 0;
+}
+
+function frecuenciaBaseParaSelectODS(frecuenciaTexto: string): string {
+  if (!frecuenciaTexto) return '';
+  if (esFrecuenciaDiasSemanaODS(frecuenciaTexto)) return 'Días de la semana';
+  return frecuenciaTexto;
+}
+
+function setFrecuenciaDiasDesdeTextoODS(fila: HTMLElement, frecuenciaTexto: string) {
+  if (!frecuenciaTexto) return;
+
+  const frecuenciaSelect = fila.querySelector('.frecuencia-select') as HTMLSelectElement | null;
+  if (!frecuenciaSelect) return;
+
+  frecuenciaSelect.value = frecuenciaBaseParaSelectODS(frecuenciaTexto);
+  actualizarUIFrecuenciaDiasODS(fila);
+
+  if (frecuenciaSelect.value !== 'Días de la semana') return;
+
+  const texto = frecuenciaTexto.trim();
+  const diasDetectados = extraerDiasDesdeTextoODS(texto);
+  const diasEnTexto = (() => {
+    const m = texto.match(/\(([^)]+)\)/);
+    if (m?.[1]) return m[1].split(',').map((d) => d.trim()).filter(Boolean);
+
+    if (diasDetectados.length > 0) return diasDetectados;
+
+    const split = texto.split(':');
+    if (split[1]) return split[1].split(',').map((d) => d.trim()).filter(Boolean);
+
+    const splitGuion = texto.split('-');
+    if (splitGuion[1]) return splitGuion[1].split(',').map((d) => d.trim()).filter(Boolean);
+
+    return [];
+  })();
+
+  const diasNorm = new Set(diasEnTexto.map(normalizarDiaNombreODS));
+  fila.querySelectorAll('.frecuencia-dia-checkbox-ods').forEach((el) => {
+    const chk = el as HTMLInputElement;
+    chk.checked = diasNorm.has(normalizarDiaNombreODS(chk.value));
+  });
+}
+
+function frecuenciaDesdeFilaODS(fila: HTMLElement): string | null {
+  const frecuenciaSelect = fila.querySelector('.frecuencia-select') as HTMLSelectElement | null;
+  if (!frecuenciaSelect || !frecuenciaSelect.value) return null;
+
+  if (frecuenciaSelect.value !== 'Días de la semana') {
+    return frecuenciaSelect.value;
+  }
+
+  const dias = Array.from(fila.querySelectorAll('.frecuencia-dia-checkbox-ods'))
+    .filter((el) => (el as HTMLInputElement).checked)
+    .map((el) => (el as HTMLInputElement).value);
+
+  if (dias.length === 0) {
+    return '__INVALID__';
+  }
+
+  const textoDias = dias.join(', ');
+  const etiquetaDias = dias.length === 1 ? 'día' : 'días';
+  return dias.length + ' ' + etiquetaDias + ' a la semana (' + textoDias + ')';
+}
+
+function getAreaOptionsMultiODS(idPlanta: number | null, selectedIds: number[] = []): string {
+  if (!idPlanta) return '';
+  const planta = plantasClienteDataODS.find((p: any) => p.id == idPlanta);
+  if (!planta) return '';
+  const selectedSet = new Set(selectedIds);
+  const areas = planta.areas_activas || planta.areas || [];
+  return areas
+    .filter((a: any) => !a.estado || a.estado === 'Activo')
+    .map((a: any) => {
+      const sel = selectedSet.has(Number(a.id)) ? 'selected' : '';
+      return '<option value="' + a.id + '" ' + sel + '>' + a.nombre + '</option>';
+    })
+    .join('');
+}
+
+function getAreaIdsFromODSRow(row: Element): number[] {
+  const multi = row.querySelector('.area-select-multi') as HTMLSelectElement | null;
+  if (!multi) {
+    const single = row.querySelector('.area-select') as HTMLSelectElement | null;
+    const id = parseInt(single?.value || '0', 10);
+    return id > 0 ? [id] : [];
+  }
+  return Array.from(multi.selectedOptions)
+    .map((opt) => parseInt(opt.value || '0', 10))
+    .filter((id) => id > 0);
+}
+
+function actualizarResumenAreasODSRow(fila: HTMLElement) {
+  const multi = fila.querySelector('.area-select-multi') as HTMLSelectElement | null;
+  const resumen = fila.querySelector('.area-multi-summary-ods') as HTMLElement | null;
+  const toggle = fila.querySelector('.area-picker-toggle-ods') as HTMLButtonElement | null;
+  const single = fila.querySelector('.area-select') as HTMLSelectElement | null;
+  if (!resumen || !single) return;
+
+  const ids = multi
+    ? Array.from(multi.selectedOptions)
+        .map((opt) => parseInt(opt.value || '0', 10))
+        .filter((id) => id > 0)
+    : [];
+
+  single.value = ids[0] ? String(ids[0]) : '';
+
+  if (ids.length === 0) {
+    resumen.textContent = 'Sin áreas seleccionadas';
+    resumen.style.color = '#94a3b8';
+    if (toggle) toggle.textContent = 'Seleccionar áreas';
+    return;
+  }
+
+  if (toggle) toggle.textContent = ids.length + ' área(s)';
+  resumen.style.color = '#334155';
+
+  const labels = multi
+    ? Array.from(multi.selectedOptions).map((opt) => (opt.text || '').trim()).filter(Boolean)
+    : [];
+
+  const chips = labels.slice(0, 2).map((nombre) => {
+    return '<span style="display:inline-block;background:#ecfeff;color:#0f766e;border:1px solid #99f6e4;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">' + nombre + '</span>';
+  }).join('');
+
+  if (labels.length > 2) {
+    resumen.innerHTML = chips + '<span style="font-size:11px;color:#64748b;">+' + (labels.length - 2) + ' más</span>';
+  } else {
+    resumen.innerHTML = chips;
+  }
+}
+
+function renderAreaPickerOptionsODS(fila: HTMLElement) {
+  const multi = fila.querySelector('.area-select-multi') as HTMLSelectElement | null;
+  const wrap = fila.querySelector('.area-picker-options-ods') as HTMLElement | null;
+  if (!multi || !wrap) return;
+
+  if (multi.options.length === 0) {
+    wrap.innerHTML = '<div style="padding:6px 0;color:#94a3b8;font-size:12px;">Primero seleccione una planta</div>';
+    return;
+  }
+
+  wrap.innerHTML = Array.from(multi.options).map((opt, index) => {
+    return '<label style="display:flex;align-items:center;gap:7px;padding:4px 0;font-size:13px;color:#334155;cursor:pointer;">'
+      + '<input type="checkbox" class="area-picker-check-ods" data-index="' + index + '" ' + (opt.selected ? 'checked' : '') + '>'
+      + '<span>' + opt.text + '</span>'
+      + '</label>';
+  }).join('');
+
+  wrap.querySelectorAll('.area-picker-check-ods').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const idx = Number((e.currentTarget as HTMLInputElement).dataset.index || '-1');
+      if (idx < 0 || !multi.options[idx]) return;
+      multi.options[idx].selected = (e.currentTarget as HTMLInputElement).checked;
+      actualizarResumenAreasODSRow(fila);
+    });
+  });
+}
+
+function bindAreaMultiInteractionsODS(fila: HTMLElement) {
+  const multi = fila.querySelector('.area-select-multi') as HTMLSelectElement | null;
+  const panel = fila.querySelector('.area-picker-panel-ods') as HTMLElement | null;
+  const toggle = fila.querySelector('.area-picker-toggle-ods') as HTMLButtonElement | null;
+  const btnAll = fila.querySelector('.area-select-all-ods') as HTMLButtonElement | null;
+  const btnClear = fila.querySelector('.area-clear-all-ods') as HTMLButtonElement | null;
+
+  if (!multi || !panel || !toggle) return;
+
+  if (!(toggle as any)._boundOdsMulti) {
+    toggle.addEventListener('click', () => {
+      const show = panel.style.display === 'none' || !panel.style.display;
+      panel.style.display = show ? 'block' : 'none';
+      if (show) renderAreaPickerOptionsODS(fila);
+    });
+    document.addEventListener('click', (e) => {
+      if (!fila.contains(e.target as Node)) panel.style.display = 'none';
+    });
+    (toggle as any)._boundOdsMulti = true;
+  }
+
+  if (btnAll && !(btnAll as any)._boundOdsMulti) {
+    btnAll.addEventListener('click', () => {
+      Array.from(multi.options).forEach((opt) => { opt.selected = true; });
+      renderAreaPickerOptionsODS(fila);
+      actualizarResumenAreasODSRow(fila);
+    });
+    (btnAll as any)._boundOdsMulti = true;
+  }
+
+  if (btnClear && !(btnClear as any)._boundOdsMulti) {
+    btnClear.addEventListener('click', () => {
+      Array.from(multi.options).forEach((opt) => { opt.selected = false; });
+      renderAreaPickerOptionsODS(fila);
+      actualizarResumenAreasODSRow(fila);
+    });
+    (btnClear as any)._boundOdsMulti = true;
+  }
+
+  renderAreaPickerOptionsODS(fila);
+  actualizarResumenAreasODSRow(fila);
+}
 
 export function renderComercialOrdenesServicio() {
   return `
@@ -337,11 +607,41 @@ export function renderComercialOrdenesServicio() {
             <label>Equipo <span style="color:#ef4444">*</span></label>
             <select id="ods-agregar-equipo-id" class="os-input"></select>
           </div>
-          <p style="font-size:12px;color:#64748b;margin:0;">Se creará el grupo y se intentarán cargar los productos de receta asociados a ese equipo.</p>
         </div>
         <div class="modal-footer">
           <button class="btn-secondary" id="modal-ods-agregar-equipo-cancelar">Cancelar</button>
           <button class="btn-primary" id="modal-ods-agregar-equipo-confirmar">Agregar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-ods-agregar-producto" style="display:none;">
+      <div class="modal-container" style="max-width:520px;">
+        <div class="modal-header">
+          <h2>Agregar Producto</h2>
+          <button class="modal-close" id="modal-ods-agregar-producto-cerrar">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="os-field" style="margin-bottom:12px;">
+            <label>Bloque Servicio / Planta / Área <span style="color:#ef4444">*</span></label>
+            <select id="ods-agregar-producto-grupo" class="os-input"></select>
+          </div>
+          <div class="os-field" style="margin-bottom:12px;">
+            <label>Producto <span style="color:#ef4444">*</span></label>
+            <select id="ods-agregar-producto-id" class="os-input"></select>
+          </div>
+          <div class="os-field" style="margin-bottom:12px;">
+            <label>Cantidad</label>
+            <input id="ods-agregar-producto-cantidad" class="os-input" type="number" min="0.01" step="0.01" value="1">
+          </div>
+          <div class="os-field" style="margin-bottom:0;">
+            <label>Observación</label>
+            <input id="ods-agregar-producto-observacion" class="os-input" type="text" maxlength="200" placeholder="Opcional">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-ods-agregar-producto-cancelar">Cancelar</button>
+          <button class="btn-primary" id="modal-ods-agregar-producto-confirmar">Agregar</button>
         </div>
       </div>
     </div>
@@ -550,85 +850,21 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     if (idCliente) await cargarPlantasClienteODS(idCliente);
 
     detalles.forEach((d: any) => {
-      agregarLineaConDatos(d.id_servicio, d.servicio_nombre || '', d.frecuencia || '', Number(d.precio || 0), d.id_cliente_planta || null, d.id_cliente_planta_area || null);
+      agregarLineaConDatos(
+        d.id_servicio,
+        d.servicio_nombre || '',
+        d.frecuencia || '',
+        Number(d.precio || 0),
+        d.id_cliente_planta || null,
+        normalizeAreaIds(d.id_cliente_planta_area)
+      );
     });
 
     calcularTotalCosto();
 
-    // Cargar receta desde cotización si existe
-    await cargarRecetaDesdeCotizacion(cotizacionId);
   } catch (e) {
     console.error('Error cargando datos de cotizacion:', e);
     mostrarToast('error', 'Error', 'No se pudieron cargar los datos de la cotizacion');
-  }
-}
-
-async function cargarRecetaDesdeCotizacion(cotizacionId: number) {
-  try {
-    const res = await cotizacionService.getById(cotizacionId);
-    const raw = res.data || res;
-    const cotizacion = (raw as any).data || raw;
-
-    // Verificar si tiene receta_servicio almacenada
-    if (!cotizacion.receta_servicio || !Array.isArray(cotizacion.receta_servicio) || cotizacion.receta_servicio.length === 0) {
-      recetaServicioODS = [];
-      return;
-    }
-
-    // Guardar receta en variable
-    recetaServicioODS = cotizacion.receta_servicio;
-
-    // Cargar productos y equipos disponibles
-    await cargarProductosDisponiblesODS();
-    await cargarEquiposDisponiblesODS();
-
-    // Limpiar productos y equipos actuales
-    odsProductoRows = [];
-    odsEquipoRows = [];
-
-    // Cargar cada producto de la receta
-    recetaServicioODS.forEach((item: any) => {
-      if (item.id_producto && item.cantidad && item.cantidad > 0) {
-        odsProductoRows.push({
-          id_producto: Number(item.id_producto),
-          cantidad: Number(item.cantidad),
-          observacion: item.observacion || '',
-          id_servicio: item.id_servicio || undefined,
-          id_cliente_planta: item.id_cliente_planta || null,
-          id_cliente_planta_area: item.id_cliente_planta_area || null,
-          id_equipo: item.id_equipo || null,
-          equipo_descripcion: item.equipo_descripcion || '',
-        });
-      }
-
-      if (item.id_equipo && !odsEquipoRows.find(r =>
-        r.id_equipo === Number(item.id_equipo) &&
-        (r.id_servicio || 0) === (Number(item.id_servicio) || 0) &&
-        (r.id_cliente_planta || null) === (item.id_cliente_planta || null) &&
-        (r.id_cliente_planta_area || null) === (item.id_cliente_planta_area || null)
-      )) {
-        odsEquipoRows.push({
-          id_equipo: Number(item.id_equipo),
-          observacion: '',
-          equipo_descripcion: item.equipo_descripcion || '',
-          id_servicio: Number(item.id_servicio) || undefined,
-          id_cliente_planta: item.id_cliente_planta || null,
-          id_cliente_planta_area: item.id_cliente_planta_area || null,
-        });
-      }
-    });
-
-    // Renderizar productos
-    renderProductosODS();
-    renderEquiposODS();
-
-    if (odsProductoRows.length > 0) {
-      mostrarToast('success', 'Receta cargada', `Se cargaron ${odsProductoRows.length} producto(s) desde la receta de servicio de la cotización`);
-    }
-  } catch (error) {
-    console.error('Error cargando receta desde cotización:', error);
-    // No mostrar error si falla, puede ser que la cotización no tenga receta
-    recetaServicioODS = [];
   }
 }
 
@@ -682,7 +918,7 @@ function getAreaOptionsODS(idPlanta: number | null, selectedId?: number | null):
   return opts;
 }
 
-function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuencia: string, precio: number, idPlanta?: number | null, idArea?: number | null) {
+function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuencia: string, precio: number, idPlanta?: number | null, idAreas: number[] = []) {
   const tbody = document.getElementById('ods-detalle-body');
   if (!tbody) return;
 
@@ -690,9 +926,10 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
   const lineaId = 'linea-srv-' + contadorLineasSrv;
 
   const frecOpts = ['', 'Única', 'Días de la semana', 'Semanal', 'Quincenal', 'Mensual', 'Trimestral', 'Semestral', 'Anual'];
+  const frecuenciaBase = frecuenciaBaseParaSelectODS(frecuencia);
   const frecSelect = frecOpts.map(f => {
     const label = f || 'A SOLICITUD DEL CLIENTE';
-    const sel = (f && frecuencia && f.toLowerCase() === frecuencia.toLowerCase()) ? 'selected' : (!f && !frecuencia ? 'selected' : '');
+    const sel = (f && frecuenciaBase && f.toLowerCase() === frecuenciaBase.toLowerCase()) ? 'selected' : (!f && !frecuenciaBase ? 'selected' : '');
     return '<option value="' + f + '" ' + sel + '>' + label + '</option>';
   }).join('');
 
@@ -712,10 +949,23 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
         '<select class="os-input os-input-sm planta-select">' + getPlantaOptionsODS(idPlanta) + '</select>' +
       '</td>' +
       '<td>' +
-        '<select class="os-input os-input-sm area-select">' + getAreaOptionsODS(idPlanta || null, idArea) + '</select>' +
+        '<div class="area-multi-wrapper-ods" style="display:flex;flex-direction:column;gap:5px;">' +
+          '<select class="area-select os-input os-input-sm" style="display:none;">' + getAreaOptionsODS(idPlanta || null, idAreas[0] || null) + '</select>' +
+          '<select class="area-select-multi" multiple style="display:none;">' + getAreaOptionsMultiODS(idPlanta || null, idAreas) + '</select>' +
+          '<button type="button" class="area-picker-toggle-ods os-input os-input-sm" style="text-align:left;display:flex;justify-content:space-between;align-items:center;background:#fff;">Seleccionar áreas <span style="color:#64748b;">▾</span></button>' +
+          '<div class="area-picker-panel-ods" style="display:none;position:static;background:#fff;border:1px solid #dbe3ef;border-radius:10px;padding:8px;box-shadow:0 4px 10px rgba(0,0,0,0.06);">' +
+            '<div class="area-picker-options-ods" style="max-height:150px;overflow:auto;padding-right:4px;"></div>' +
+            '<div style="display:flex;gap:6px;margin-top:8px;">' +
+              '<button type="button" class="area-select-all-ods" style="padding:2px 8px;border:1px solid #cbd5e1;background:#fff;border-radius:999px;font-size:11px;color:#475569;cursor:pointer;">Todas</button>' +
+              '<button type="button" class="area-clear-all-ods" style="padding:2px 8px;border:1px solid #cbd5e1;background:#fff;border-radius:999px;font-size:11px;color:#475569;cursor:pointer;">Limpiar</button>' +
+            '</div>' +
+          '</div>' +
+          '<small class="area-multi-summary-ods" style="display:block;font-size:11px;">Sin áreas seleccionadas</small>' +
+        '</div>' +
       '</td>' +
       '<td>' +
         '<select class="os-input os-input-sm frecuencia-select">' + frecSelect + '</select>' +
+        construirFrecuenciaDiasHtmlODS(lineaId) +
       '</td>' +
       '<td>' +
         '<input type="number" class="os-input os-input-sm precio-input" value="' + precio.toFixed(2) + '" min="0" step="0.01">' +
@@ -731,6 +981,11 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
     '</tr>';
 
   tbody.insertAdjacentHTML('beforeend', html);
+  const fila = document.getElementById(lineaId) as HTMLElement | null;
+  if (fila) {
+    bindAreaMultiInteractionsODS(fila);
+    setFrecuenciaDiasDesdeTextoODS(fila, frecuencia || '');
+  }
   bindLineasServicios();
 }
 
@@ -778,7 +1033,25 @@ function bindLineasServicios() {
       if (!tr) return;
       const idPlanta = parseInt((e.target as HTMLSelectElement).value) || null;
       const areaSel = tr.querySelector('.area-select') as HTMLSelectElement;
+      const areaMulti = tr.querySelector('.area-select-multi') as HTMLSelectElement;
       if (areaSel) areaSel.innerHTML = getAreaOptionsODS(idPlanta);
+      if (areaMulti) {
+        areaMulti.innerHTML = getAreaOptionsMultiODS(idPlanta);
+        bindAreaMultiInteractionsODS(tr as HTMLElement);
+      }
+    });
+  });
+
+  // Frecuencia días de semana por línea
+  document.querySelectorAll('#ods-detalle-body .frecuencia-select').forEach(sel => {
+    const s = sel as HTMLSelectElement;
+    s.replaceWith(s.cloneNode(true));
+  });
+  document.querySelectorAll('#ods-detalle-body .frecuencia-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      const tr = (e.target as HTMLElement).closest('tr');
+      if (!tr) return;
+      actualizarUIFrecuenciaDiasODS(tr as HTMLElement);
     });
   });
 }
@@ -1004,42 +1277,9 @@ async function confirmarAgregarEquipoODS() {
     });
   }
 
-  try {
-    const res = await servicioService.getProductos(idServicio);
-    const raw = res.data || res;
-    const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
-    items
-      .filter((item: any) => Number(item.id_equipo || 0) === idEquipo)
-      .forEach((item: any) => {
-        const existeProd = odsProductoRows.find((r) =>
-          r.id_producto === Number(item.id_producto) &&
-          (r.id_servicio || 0) === idServicio &&
-          (r.id_cliente_planta || 0) === (idPlanta || 0) &&
-          (r.id_cliente_planta_area || 0) === (idArea || 0) &&
-          (r.id_equipo || 0) === idEquipo
-        );
-        if (existeProd) {
-          existeProd.cantidad += Number(item.cantidad_default || 0);
-          return;
-        }
-        odsProductoRows.push({
-          id_producto: Number(item.id_producto || 0),
-          cantidad: Number(item.cantidad_default || 1),
-          observacion: item.observacion || '',
-          id_servicio: idServicio,
-          id_cliente_planta: idPlanta,
-          id_cliente_planta_area: idArea,
-          id_equipo: idEquipo,
-          equipo_descripcion: item.equipo_descripcion || equipoDesc,
-        });
-      });
-  } catch (e) {
-    console.error('Error cargando receta por equipo:', e);
-  }
-
   renderProductosODS();
   cerrarModalAgregarEquipoODS();
-  mostrarToast('success', 'Equipo agregado', 'Ahora puede añadir productos al grupo creado');
+  mostrarToast('success', 'Equipo agregado', 'Seleccione productos manualmente para este bloque');
 }
 
 function getGroupOrderFromDetalleODS(): string[] {
@@ -1049,11 +1289,91 @@ function getGroupOrderFromDetalleODS(): string[] {
     const idServicio = Number((linea.querySelector('.servicio-id-hidden') as HTMLInputElement)?.value || 0);
     if (!idServicio) return;
     const idPlanta = parseInt((linea.querySelector('.planta-select') as HTMLSelectElement)?.value || '0') || 0;
-    const idArea = parseInt((linea.querySelector('.area-select') as HTMLSelectElement)?.value || '0') || 0;
-    const key = `${idServicio}-${idPlanta}-${idArea}`;
-    if (!order.includes(key)) order.push(key);
+    const areasSeleccionadas = getAreaIdsFromODSRow(linea);
+    const areas = areasSeleccionadas.length > 0 ? areasSeleccionadas : [0];
+    areas.forEach((idArea) => {
+      const key = `${idServicio}-${idPlanta}-${idArea || 0}`;
+      if (!order.includes(key)) order.push(key);
+    });
   });
   return order;
+}
+
+async function abrirModalAgregarProductoODS() {
+  const modal = document.getElementById('modal-ods-agregar-producto') as HTMLElement;
+  const selGrupo = document.getElementById('ods-agregar-producto-grupo') as HTMLSelectElement;
+  const selProducto = document.getElementById('ods-agregar-producto-id') as HTMLSelectElement;
+  const inputCantidad = document.getElementById('ods-agregar-producto-cantidad') as HTMLInputElement;
+  const inputObs = document.getElementById('ods-agregar-producto-observacion') as HTMLInputElement;
+  if (!modal || !selGrupo || !selProducto || !inputCantidad || !inputObs) return;
+
+  const groups = getGroupOrderFromDetalleODS();
+  if (groups.length === 0) {
+    mostrarToast('error', 'Sin servicios', 'Primero agregue una línea de servicio con planta/área');
+    return;
+  }
+
+  await cargarProductosDisponiblesODS();
+
+  selGrupo.innerHTML = groups.map((key) => {
+    const p = parseGroupKey(key);
+    return `<option value="${key}">${getGroupLabel(p.idServicio, p.idPlanta, p.idArea)}</option>`;
+  }).join('');
+
+  selProducto.innerHTML = '<option value="">Seleccione producto...</option>' + productosDisponiblesODS.map((p: any) => {
+    return `<option value="${p.id}">${p.descripcion}${p.unidad ? ' (' + p.unidad + ')' : ''}</option>`;
+  }).join('');
+
+  inputCantidad.value = '1';
+  inputObs.value = '';
+  modal.style.display = 'flex';
+}
+
+function cerrarModalAgregarProductoODS() {
+  const modal = document.getElementById('modal-ods-agregar-producto') as HTMLElement;
+  if (modal) modal.style.display = 'none';
+}
+
+function confirmarAgregarProductoODS() {
+  const selGrupo = document.getElementById('ods-agregar-producto-grupo') as HTMLSelectElement;
+  const selProducto = document.getElementById('ods-agregar-producto-id') as HTMLSelectElement;
+  const inputCantidad = document.getElementById('ods-agregar-producto-cantidad') as HTMLInputElement;
+  const inputObs = document.getElementById('ods-agregar-producto-observacion') as HTMLInputElement;
+  if (!selGrupo || !selProducto || !inputCantidad || !inputObs) return;
+
+  const groupKey = selGrupo.value;
+  const idProducto = Number(selProducto.value || 0);
+  const cantidad = Number(inputCantidad.value || 0);
+  const observacion = (inputObs.value || '').trim();
+
+  if (!groupKey) {
+    mostrarToast('error', 'Dato requerido', 'Seleccione un bloque de servicio');
+    return;
+  }
+  if (!idProducto) {
+    mostrarToast('error', 'Dato requerido', 'Seleccione un producto');
+    return;
+  }
+  if (!Number.isFinite(cantidad) || cantidad <= 0) {
+    mostrarToast('error', 'Dato requerido', 'Ingrese una cantidad válida');
+    return;
+  }
+
+  const { idServicio, idPlanta, idArea } = parseGroupKey(groupKey);
+  odsProductoRows.push({
+    id_producto: idProducto,
+    cantidad,
+    observacion,
+    id_servicio: idServicio,
+    id_cliente_planta: idPlanta,
+    id_cliente_planta_area: idArea,
+    id_equipo: null,
+    equipo_descripcion: '',
+  });
+
+  renderProductosODS();
+  cerrarModalAgregarProductoODS();
+  mostrarToast('success', 'Producto agregado', 'Producto agregado al bloque seleccionado');
 }
 
 function renderProductosODS() {
@@ -1244,104 +1564,6 @@ function agregarProductoODS(
     equipo_descripcion: getEquipoName(idEquipo),
   });
   renderProductosODS();
-}
-
-async function cargarRecetaDesdeServicios() {
-  const lineas = document.querySelectorAll('#ods-detalle-body tr');
-  const servicioLineas: { id: number; nombre: string; idPlanta: number | null; idArea: number | null; plantaNombre: string; areaNombre: string }[] = [];
-  lineas.forEach(linea => {
-    const idSrv = Number((linea.querySelector('.servicio-id-hidden') as HTMLInputElement)?.value || 0);
-    const select = linea.querySelector('.servicio-select') as HTMLSelectElement;
-    const nombre = select ? select.options[select.selectedIndex]?.text || '' : '';
-    const plantaSelect = linea.querySelector('.planta-select') as HTMLSelectElement;
-    const areaSelect = linea.querySelector('.area-select') as HTMLSelectElement;
-    const idPlanta = plantaSelect ? parseInt(plantaSelect.value) || null : null;
-    const idArea = areaSelect ? parseInt(areaSelect.value) || null : null;
-    const plantaNombre = plantaSelect && plantaSelect.selectedIndex > 0 ? plantaSelect.options[plantaSelect.selectedIndex]?.text || '' : '';
-    const areaNombre = areaSelect && areaSelect.selectedIndex > 0 ? areaSelect.options[areaSelect.selectedIndex]?.text || '' : '';
-    if (idSrv > 0) servicioLineas.push({ id: idSrv, nombre, idPlanta, idArea, plantaNombre, areaNombre });
-  });
-
-  if (servicioLineas.length === 0) {
-    mostrarToast('error', 'Sin servicios', 'Agregue al menos un servicio primero');
-    return;
-  }
-
-  await cargarProductosDisponiblesODS();
-  await cargarEquiposDisponiblesODS();
-
-  // Limpiar productos y equipos actuales
-  odsProductoRows = [];
-  odsEquipoRows = [];
-
-  // Agrupar por servicio+planta+area para evitar cargar receta duplicada
-  const cargados = new Set<string>();
-
-  for (const linea of servicioLineas) {
-    const clave = `${linea.id}-${linea.idPlanta || 0}-${linea.idArea || 0}`;
-    if (cargados.has(clave)) continue;
-    cargados.add(clave);
-
-    try {
-      const res = await servicioService.getProductos(linea.id);
-      const raw = res.data || res;
-      const items: any[] = Array.isArray(raw) ? raw : (raw as any).data || [];
-      items.forEach((item: any) => {
-        // Verificar si ya existe este producto para la misma combinación servicio+planta+área+equipo
-        const existing = odsProductoRows.find(r =>
-          r.id_producto === item.id_producto &&
-          (r.id_servicio || 0) === linea.id &&
-          (r.id_cliente_planta || null) === linea.idPlanta &&
-          (r.id_cliente_planta_area || null) === linea.idArea &&
-          (r.id_equipo || 0) === (item.id_equipo || 0)
-        );
-        if (existing) {
-          existing.cantidad += Number(item.cantidad_default);
-        } else {
-          odsProductoRows.push({
-            id_producto: item.id_producto,
-            cantidad: Number(item.cantidad_default),
-            observacion: item.observacion || '',
-            id_servicio: linea.id,
-            id_cliente_planta: linea.idPlanta,
-            id_cliente_planta_area: linea.idArea,
-            id_equipo: item.id_equipo || null,
-            equipo_descripcion: item.equipo_descripcion || '',
-          });
-        }
-        // Agregar equipo si existe y no está duplicado para esta combinación
-        if (item.id_equipo && !odsEquipoRows.find(r =>
-          r.id_equipo === item.id_equipo &&
-          (r.id_servicio || 0) === linea.id &&
-          (r.id_cliente_planta || null) === linea.idPlanta &&
-          (r.id_cliente_planta_area || null) === linea.idArea
-        )) {
-          odsEquipoRows.push({
-            id_equipo: item.id_equipo,
-            observacion: '',
-            equipo_descripcion: item.equipo_descripcion || '',
-            id_servicio: linea.id,
-            id_cliente_planta: linea.idPlanta,
-            id_cliente_planta_area: linea.idArea,
-          });
-        }
-      });
-    } catch (e) {
-      console.error(`Error cargando receta del servicio ${linea.id}:`, e);
-    }
-  }
-
-  renderProductosODS();
-  renderEquiposODS();
-  const totalCargados = odsProductoRows.length + odsEquipoRows.length;
-  if (totalCargados > 0) {
-    let msg = `Se cargaron ${odsProductoRows.length} producto(s)`;
-    if (odsEquipoRows.length > 0) msg += ` y ${odsEquipoRows.length} equipo(s)`;
-    msg += ` desde la receta de ${cargados.size} combinación(es) servicio/planta/área`;
-    mostrarToast('success', 'Receta Cargada', msg);
-  } else {
-    mostrarToast('error', 'Sin receta', 'Los servicios seleccionados no tienen receta de materiales');
-  }
 }
 
 // ===== EQUIPOS ODS =====
@@ -1617,7 +1839,7 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
         d.frecuencia || '',
         Number(d.precio || 0),
         d.id_cliente_planta || null,
-        d.id_cliente_planta_area || null
+        normalizeAreaIds(d.id_cliente_planta_area)
       );
     });
 
@@ -1732,27 +1954,34 @@ async function guardarODS() {
 
   const detalles: any[] = [];
   let valid = true;
+  let frecuenciaDiasInvalida = false;
   lineas.forEach(linea => {
     const selectSrv = linea.querySelector('.servicio-select') as HTMLSelectElement;
     const idServicio = selectSrv?.value || (linea.querySelector('.servicio-id-hidden') as HTMLInputElement)?.value;
     const idPlanta = parseInt((linea.querySelector('.planta-select') as HTMLSelectElement)?.value) || null;
-    const idArea = parseInt((linea.querySelector('.area-select') as HTMLSelectElement)?.value) || null;
-    const frecuencia = (linea.querySelector('.frecuencia-select') as HTMLSelectElement)?.value || '';
+    const areaIds = getAreaIdsFromODSRow(linea);
+    const frecuencia = frecuenciaDesdeFilaODS(linea as HTMLElement);
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
 
     if (!idServicio) valid = false;
+    if (frecuencia === '__INVALID__') frecuenciaDiasInvalida = true;
 
     detalles.push({
       id_servicio: Number(idServicio),
       id_cliente_planta: idPlanta,
-      id_cliente_planta_area: idArea,
-      frecuencia: frecuencia || null,
+      id_cliente_planta_area: areaIds.length > 0 ? areaIds : null,
+      frecuencia: (frecuencia && frecuencia !== '__INVALID__') ? frecuencia : null,
       precio,
     });
   });
 
   if (!valid) {
     mostrarToast('error', 'Error', 'Todos los servicios deben tener un servicio asignado');
+    return;
+  }
+
+  if (frecuenciaDiasInvalida) {
+    mostrarToast('error', 'Frecuencia incompleta', 'Si selecciona "Días de la semana", debe marcar al menos un día.');
     return;
   }
 
@@ -1767,10 +1996,24 @@ async function guardarODS() {
     detalles,
     productos: odsProductoRows
       .filter(r => r.id_producto > 0 && r.cantidad > 0)
-      .map(r => ({ id_producto: r.id_producto, cantidad: r.cantidad, observacion: r.observacion || null, id_servicio: r.id_servicio || null, id_cliente_planta: r.id_cliente_planta || null, id_cliente_planta_area: r.id_cliente_planta_area || null, id_equipo: r.id_equipo || null })),
+      .map(r => ({
+        id_producto: r.id_producto,
+        cantidad: r.cantidad,
+        observacion: r.observacion || null,
+        id_servicio: r.id_servicio || null,
+        id_cliente_planta: r.id_cliente_planta || null,
+        id_cliente_planta_area: (normalizeAreaIds(r.id_cliente_planta_area)[0] || null),
+        id_equipo: r.id_equipo || null,
+      })),
     equipos: odsEquipoRows
       .filter(r => r.id_equipo > 0)
-      .map(r => ({ id_equipo: r.id_equipo, observacion: r.observacion || null, id_servicio: r.id_servicio || null, id_cliente_planta: r.id_cliente_planta || null, id_cliente_planta_area: r.id_cliente_planta_area || null })),
+      .map(r => ({
+        id_equipo: r.id_equipo,
+        observacion: r.observacion || null,
+        id_servicio: r.id_servicio || null,
+        id_cliente_planta: r.id_cliente_planta || null,
+        id_cliente_planta_area: (normalizeAreaIds(r.id_cliente_planta_area)[0] || null),
+      })),
   };
   console.log('ODS Payload:', JSON.stringify(payload, null, 2));
 
@@ -1879,10 +2122,7 @@ export function initOrdenesServicioEvents() {
   document.getElementById('btn-agregar-linea-servicio')?.addEventListener('click', agregarLineaVacia);
 
   // Productos ODS
-  document.getElementById('btn-agregar-producto-ods')?.addEventListener('click', async () => {
-    await cargarProductosDisponiblesODS();
-    agregarProductoODS();
-  });
+  document.getElementById('btn-agregar-producto-ods')?.addEventListener('click', abrirModalAgregarProductoODS);
   document.getElementById('btn-agregar-equipo-ods')?.addEventListener('click', abrirModalAgregarEquipoODS);
 
   // Modal agregar equipo
@@ -1890,6 +2130,11 @@ export function initOrdenesServicioEvents() {
   document.getElementById('modal-ods-agregar-equipo-cerrar')?.addEventListener('click', () => { if (modalAddEq) modalAddEq.style.display = 'none'; });
   document.getElementById('modal-ods-agregar-equipo-cancelar')?.addEventListener('click', () => { if (modalAddEq) modalAddEq.style.display = 'none'; });
   document.getElementById('modal-ods-agregar-equipo-confirmar')?.addEventListener('click', confirmarAgregarEquipoODS);
+
+  const modalAddProd = document.getElementById('modal-ods-agregar-producto') as HTMLElement;
+  document.getElementById('modal-ods-agregar-producto-cerrar')?.addEventListener('click', () => { if (modalAddProd) modalAddProd.style.display = 'none'; });
+  document.getElementById('modal-ods-agregar-producto-cancelar')?.addEventListener('click', () => { if (modalAddProd) modalAddProd.style.display = 'none'; });
+  document.getElementById('modal-ods-agregar-producto-confirmar')?.addEventListener('click', confirmarAgregarProductoODS);
 
   // Modal eliminar
   const modalElim = document.getElementById('modal-ods-eliminar') as HTMLElement;

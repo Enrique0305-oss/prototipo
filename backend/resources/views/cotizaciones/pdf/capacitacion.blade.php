@@ -8,6 +8,29 @@
 @include('cotizaciones.pdf.partials.styles-common')
 
 @include('cotizaciones.pdf.partials.styles-capacitacion')
+
+            .metodologia-page {
+                page-break-before: always;
+                page-break-inside: avoid;
+                break-before: page;
+                break-inside: avoid;
+            }
+
+            .metodologia-title {
+                font-size: 13px;
+                font-weight: bold;
+                color: #000;
+                margin-top: 0;
+                margin-bottom: 10px;
+                text-transform: uppercase;
+            }
+
+            .metodologia-image {
+                width: 100%;
+                height: auto;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
     </style>
 </head>
 <body>
@@ -111,7 +134,7 @@
                     {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                    {{ $cotizacion->creador->cargo?->nombre ?? 'Gerente Comercial' }}
                 </div>
                 <div class="signature-logos">
                     <table>
@@ -370,10 +393,14 @@
                 <p class="payment-header-text">Consideraciones</p>
                 <ul>
                     <li style="font-size: 13px; margin-bottom: 5px;">
-                        En caso exista la necesidad de reprogramar el servicio por parte del cliente, se debrá comunicar con una anticipación
-                        mínima de 48 horas respecto a la fecha previamente acordada, a fin de evitar la emisión de cualquier cargo.</li>
+                        En caso exista la necesidad de reprogramar el servicio por parte del cliente, se deberá comunicar con una anticipación mínima de 48 horas respecto
+                        a la fecha previamente acordada, a fin de evitar la emisión de cualquier cargo.</li>
                     <li style="font-size: 13px; margin-bottom: 5px;">
                         Es importante que el cliente nos brinde información adicional según se requiera para una adecuada capacitación.</li>
+                    <li style="font-size: 13px; margin-bottom: 5px;">
+                        Los servicios realizados a partir de las 11:30 pm estarán sujetos a un recargo adicional, el cual será previamente coordinado y aprobado por el cliente.</li>
+                    <li style="font-size: 13px; margin-bottom: 5px;">
+                        Los servicios realizados en días feriados tendrán un recargo del 20% previa coordinación.</li>
                 </ul>
             </div>
 
@@ -383,10 +410,10 @@
                     Atentamente,
                 </div> <br>
                 <div class="issued-name">
-                    {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
+                    {{ $gerenteComercial->nombre ?? 'N/A' }} {{ $gerenteComercial->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $cotizacion->creador->cargo ?? 'Gerente Comercial' }}
+                    {{ $gerenteComercial->cargo?->nombre ?? 'N/A' }}
                 </div>
                 <div class="signature-logos">
                     <table>
@@ -402,19 +429,23 @@
                 </div>
                 <div class="proposal-text">
                     <p>
-                        E-mail: {{ $cotizacion->creador->correo  }}
+                        E-mail: {{ $gerenteComercial->correo }}
                     </p>
                     <p>
-                        Número: {{ $cotizacion->creador->celular  }}
+                        Número: {{ $gerenteComercial->celular }}
                     </p>
                 </div>
-            </div> <br><br>
+            </div>
 
-            <!-- IMAGEN FINAL -->
-            <div class="seccion-titulo">
-                <span class="seccion-titulo-num">IV.</span> METODOLOGÍA DE CAPACITACIÓN
-                <img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/met_capa.png'))) }}" alt="Imagen Final">
-
+            <div class="metodologia-page">
+                <div class="metodologia-title">
+                    <span class="seccion-titulo-num">IV.</span> METODOLOGÍA DE CAPACITACIÓN
+                </div>
+                <img
+                    src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/met_capa.png'))) }}"
+                    alt="Imagen Final"
+                    class="metodologia-image"
+                >
             </div>
 
         </div>

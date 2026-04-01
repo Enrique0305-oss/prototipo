@@ -204,8 +204,8 @@ export function renderComercialOrdenesCapacitacion() {
 
           <!-- Detalles de la cotización -->
           <div id="oc-detalles-cotizacion" style="display:none;margin-bottom:20px;">
-            <h4 style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px;">Detalle de la Cotización</h4>
-            <div id="oc-detalles-lista" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;"></div>
+            <h4 style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px;">Ubicación del Servicio</h4>
+            <div id="oc-detalles-lista" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;"></div>
           </div>
 
           <!-- Datos del servicio -->
@@ -739,37 +739,40 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     (document.getElementById('oc-cot-info-detalle') as HTMLElement).textContent =
       '| Emitida: ' + (data.cotizacion?.fecha_emision || '') + ' | Total: S/ ' + Number(data.costo_total || 0).toFixed(2);
 
-    // Mostrar detalles de la cotización
+    // Mostrar ubicación (Planta / Área) en lugar del detalle de cotización
     const detalles = data.detalles || [];
     const detallesDiv = document.getElementById('oc-detalles-cotizacion') as HTMLElement;
     const detallesLista = document.getElementById('oc-detalles-lista') as HTMLElement;
 
     if (detalles.length > 0) {
+      const ubicaciones = detalles
+        .map((d: any) => ({
+          planta: String(d.planta_nombre || '').trim(),
+          areas: Array.isArray(d.areas_nombres)
+            ? d.areas_nombres.map((a: any) => String(a || '').trim()).filter((a: string) => !!a)
+            : [],
+        }))
+        .filter((u: any) => !!u.planta || u.areas.length > 0);
+
+      const plantasUnicas: string[] = Array.from(new Set(ubicaciones.map((u: any) => u.planta).filter((p: string) => !!p)));
+      const areasUnicas: string[] = Array.from(new Set(ubicaciones.flatMap((u: any) => u.areas as string[]).filter((a: string) => !!a)));
+
       detallesDiv.style.display = 'block';
       detallesLista.innerHTML =
-        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-          '<thead>' +
-            '<tr style="background:#e2e8f0;">' +
-              '<th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569;">Servicio/Capacitación</th>' +
-              '<th style="padding:8px 12px;text-align:left;font-weight:600;color:#475569;">Tipo</th>' +
-              '<th style="padding:8px 12px;text-align:center;font-weight:600;color:#475569;">Cant.</th>' +
-              '<th style="padding:8px 12px;text-align:right;font-weight:600;color:#475569;">Precio Unit.</th>' +
-              '<th style="padding:8px 12px;text-align:right;font-weight:600;color:#475569;">Subtotal</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody>' +
-            detalles.map((d: any) => {
-              const badgeClass = d.tipo === 'Capacitación' ? 'oc-badge-info' : 'oc-badge-purple';
-              return '<tr style="border-bottom:1px solid #e2e8f0;">' +
-                '<td style="padding:8px 12px;">' + (d.nombre || '-') + '</td>' +
-                '<td style="padding:8px 12px;"><span class="oc-badge ' + badgeClass + '">' + (d.tipo || '-') + '</span></td>' +
-                '<td style="padding:8px 12px;text-align:center;">' + (d.cantidad || 1) + '</td>' +
-                '<td style="padding:8px 12px;text-align:right;">S/ ' + Number(d.precio_unitario || 0).toFixed(2) + '</td>' +
-                '<td style="padding:8px 12px;text-align:right;font-weight:600;">S/ ' + (Number(d.cantidad || 1) * Number(d.precio_unitario || 0)).toFixed(2) + '</td>' +
-              '</tr>';
-            }).join('') +
-          '</tbody>' +
-        '</table>';
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">' +
+          '<div>' +
+            '<div style="font-size:12px;color:#64748b;margin-bottom:6px;font-weight:600;">PLANTA</div>' +
+            '<div style="font-size:14px;color:#0f172a;font-weight:600;">' + (plantasUnicas.join(', ') || '-') + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:12px;color:#64748b;margin-bottom:6px;font-weight:600;">ÁREA</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
+              (areasUnicas.length > 0
+                ? areasUnicas.map((area: string) => '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:12px;font-weight:600;">' + area + '</span>').join('')
+                : '<span style="font-size:14px;color:#0f172a;font-weight:600;">-</span>') +
+            '</div>' +
+          '</div>' +
+        '</div>';
     } else {
       detallesDiv.style.display = 'none';
     }

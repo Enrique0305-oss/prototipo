@@ -93,7 +93,7 @@ export interface ODSDetalle {
   frecuencia?: string;
   precio: number;
   id_cliente_planta?: number | null;
-  id_cliente_planta_area?: number | null;
+  id_cliente_planta_area?: number | number[] | string | null;
 }
 
 export interface PreviewAnual {

@@ -20,11 +20,11 @@ export const tecnicoService = {
 
   create: async (data: {
     nombre: string;
-    apellido: string;
+    apellidos: string;
     dni: string;
     especialidad?: string;
-    telefono?: string;
-    email?: string;
+    celular?: string | null;
+    correo?: string | null;
     carga_maxima_semanal: number;
     autorizado_conducir: boolean;
   }) => {

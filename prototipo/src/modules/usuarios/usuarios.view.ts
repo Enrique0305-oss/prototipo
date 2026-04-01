@@ -1,5 +1,7 @@
 import { personalService } from '../../services/personalService';
+import { cargoService } from '../../services/cargoService';
 import { mostrarToast } from '../../shared/toast';
+import { renderCargos, initCargosEvents } from './cargos.view';
 
 let usuariosData: any[] = [];
 let areasData: any[] = [];
@@ -15,71 +17,89 @@ function escHtml(str: string): string {
 
 export function renderUsuarios(): string {
   return `
-    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
-      <div>
-        <h1 style="font-size:24px;font-weight:700;color:#1e293b;margin:0;">Gestión de Usuarios</h1>
-        <p style="color:#64748b;font-size:14px;margin:4px 0 0;">Administra los usuarios del sistema</p>
-      </div>
-      <button id="btn-nuevo-usuario" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        Nuevo Usuario
+    <!-- Tabs Navigation -->
+    <div style="display:flex;gap:0;margin-bottom:24px;border-bottom:2px solid #e2e8f0;background:#fff;border-radius:12px 12px 0 0;padding:0 16px;">
+      <button id="tab-usuarios" class="tab-button active" style="flex:0 0 auto;padding:16px 20px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all 0.3s ease;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:8px;vertical-align:middle;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Usuarios
+      </button>
+      <button id="tab-cargos" class="tab-button" style="flex:0 0 auto;padding:16px 20px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all 0.3s ease;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:8px;vertical-align:middle;"><rect x="3" y="4" width="18" height="16" rx="2" ry="2"></rect><path d="M8 9h8m-8 4h5"></path></svg>
+        Cargos
       </button>
     </div>
 
-    <!-- Estadísticas -->
-    <div id="usuarios-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
-      <div style="background:#fff;padding:20px;border-radius:12px;border:1px solid #e2e8f0;">
-        <p style="font-size:12px;color:#64748b;margin:0;">Total Usuarios</p>
-        <p style="font-size:28px;font-weight:700;color:#1e293b;margin:4px 0 0;" id="stat-total">0</p>
+    <!-- Tab Usuarios Content -->
+    <div id="content-usuarios" class="tab-content active" style="display:block;">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <div>
+          <h1 style="font-size:24px;font-weight:700;color:#1e293b;margin:0;">Gestión de Usuarios</h1>
+          <p style="color:#64748b;font-size:14px;margin:4px 0 0;">Administra los usuarios del sistema</p>
+        </div>
+        <button id="btn-nuevo-usuario" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Nuevo Usuario
+        </button>
       </div>
-      <div style="background:#fff;padding:20px;border-radius:12px;border:1px solid #e2e8f0;">
-        <p style="font-size:12px;color:#64748b;margin:0;">Activos</p>
-        <p style="font-size:28px;font-weight:700;color:#16a34a;margin:4px 0 0;" id="stat-activos">0</p>
+
+      <!-- Estadísticas -->
+      <div id="usuarios-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+        <div style="background:#fff;padding:20px;border-radius:12px;border:1px solid #e2e8f0;">
+          <p style="font-size:12px;color:#64748b;margin:0;">Total Usuarios</p>
+          <p style="font-size:28px;font-weight:700;color:#1e293b;margin:4px 0 0;" id="stat-total">0</p>
+        </div>
+        <div style="background:#fff;padding:20px;border-radius:12px;border:1px solid #e2e8f0;">
+          <p style="font-size:12px;color:#64748b;margin:0;">Activos</p>
+          <p style="font-size:28px;font-weight:700;color:#16a34a;margin:4px 0 0;" id="stat-activos">0</p>
+        </div>
+        <div style="background:#fff;padding:20px;border-radius:12px;border:1px solid #e2e8f0;">
+          <p style="font-size:12px;color:#64748b;margin:0;">Inactivos</p>
+          <p style="font-size:28px;font-weight:700;color:#dc2626;margin:4px 0 0;" id="stat-inactivos">0</p>
+        </div>
+        <div style="background:#fff;padding:20px;border-radius:12px;border:1px solid #e2e8f0;">
+          <p style="font-size:12px;color:#64748b;margin:0;">Áreas</p>
+          <p style="font-size:28px;font-weight:700;color:#2563eb;margin:4px 0 0;" id="stat-areas">0</p>
+        </div>
       </div>
-      <div style="background:#fff;padding:20px;border-radius:12px;border:1px solid #e2e8f0;">
-        <p style="font-size:12px;color:#64748b;margin:0;">Inactivos</p>
-        <p style="font-size:28px;font-weight:700;color:#dc2626;margin:4px 0 0;" id="stat-inactivos">0</p>
+
+      <!-- Filtros -->
+      <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;position:relative;">
+          <input type="text" id="filtro-search-usuarios" placeholder="Buscar por nombre, usuario o correo..." style="width:100%;padding:10px 12px 10px 36px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+        </div>
+        <select id="filtro-estado-usuarios" style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;min-width:150px;">
+          <option value="">Todos los estados</option>
+          <option value="Activo">Activo</option>
+          <option value="Inactivo">Inactivo</option>
+        </select>
+        <select id="filtro-area-usuarios" style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;min-width:150px;">
+          <option value="">Todas las áreas</option>
+        </select>
       </div>
-      <div style="background:#fff;padding:20px;border-radius:12px;border:1px solid #e2e8f0;">
-        <p style="font-size:12px;color:#64748b;margin:0;">Áreas</p>
-        <p style="font-size:28px;font-weight:700;color:#2563eb;margin:4px 0 0;" id="stat-areas">0</p>
+
+      <!-- Tabla -->
+      <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+        <table class="data-table" style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Usuario</th>
+              <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Correo</th>
+              <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Celular</th>
+              <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Área</th>
+              <th style="padding:12px 16px;text-align:center;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Estado</th>
+              <th style="padding:12px 16px;text-align:center;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-usuarios-body">
+            <tr><td colspan="6" style="text-align:center;padding:40px;color:#94a3b8;">Cargando usuarios...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <!-- Filtros -->
-    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
-      <div style="flex:1;min-width:200px;position:relative;">
-        <input type="text" id="filtro-search-usuarios" placeholder="Buscar por nombre, usuario o correo..." style="width:100%;padding:10px 12px 10px 36px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;outline:none;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-      </div>
-      <select id="filtro-estado-usuarios" style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;min-width:150px;">
-        <option value="">Todos los estados</option>
-        <option value="Activo">Activo</option>
-        <option value="Inactivo">Inactivo</option>
-      </select>
-      <select id="filtro-area-usuarios" style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;min-width:150px;">
-        <option value="">Todas las áreas</option>
-      </select>
-    </div>
-
-    <!-- Tabla -->
-    <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
-      <table class="data-table" style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:#f8fafc;">
-            <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Usuario</th>
-            <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Correo</th>
-            <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Celular</th>
-            <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Área</th>
-            <th style="padding:12px 16px;text-align:center;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Estado</th>
-            <th style="padding:12px 16px;text-align:center;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;">Acciones</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-usuarios-body">
-          <tr><td colspan="6" style="text-align:center;padding:40px;color:#94a3b8;">Cargando usuarios...</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <!-- Tab Cargos Content (will be injected via initUsuariosEvents) -->
+    <div id="content-cargos" class="tab-content" style="display:none;"></div>
   `;
 }
 
@@ -88,6 +108,52 @@ export function initUsuariosEvents() {
   cargarUsuarios();
 
   document.getElementById('btn-nuevo-usuario')?.addEventListener('click', () => abrirFormUsuario());
+
+  // ===== TAB SWITCHING =====
+  const tabUsuariosBtn = document.getElementById('tab-usuarios') as HTMLButtonElement;
+  const tabCargosBtn = document.getElementById('tab-cargos') as HTMLButtonElement;
+  const contentUsuarios = document.getElementById('content-usuarios') as HTMLElement;
+  const contentCargos = document.getElementById('content-cargos') as HTMLElement;
+
+  if (tabUsuariosBtn && tabCargosBtn && contentUsuarios && contentCargos) {
+    const tabButtons = [tabUsuariosBtn, tabCargosBtn];
+
+    tabUsuariosBtn.addEventListener('click', () => {
+      tabButtons.forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.color = '#64748b';
+        btn.style.borderBottomColor = 'transparent';
+      });
+      tabUsuariosBtn.classList.add('active');
+      tabUsuariosBtn.style.color = '#2563eb';
+      tabUsuariosBtn.style.borderBottomColor = '#2563eb';
+      contentUsuarios.style.display = 'block';
+      contentCargos.style.display = 'none';
+    });
+
+    tabCargosBtn.addEventListener('click', () => {
+      tabButtons.forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.color = '#64748b';
+        btn.style.borderBottomColor = 'transparent';
+      });
+      tabCargosBtn.classList.add('active');
+      tabCargosBtn.style.color = '#2563eb';
+      tabCargosBtn.style.borderBottomColor = '#2563eb';
+      contentUsuarios.style.display = 'none';
+      contentCargos.style.display = 'block';
+      
+      // Inyectar contenido de cargos si no existe
+      if (!contentCargos.innerHTML.trim()) {
+        contentCargos.innerHTML = renderCargos();
+        setTimeout(() => initCargosEvents(), 0);
+      }
+    });
+
+    // Aplicar estilos iniciales al tab activo
+    tabUsuariosBtn.style.color = '#2563eb';
+    tabUsuariosBtn.style.borderBottomColor = '#2563eb';
+  }
 
   let debounceTimer: any;
   document.getElementById('filtro-search-usuarios')?.addEventListener('input', (e) => {
@@ -301,6 +367,14 @@ function abrirFormUsuario(usuario?: any) {
             </select>
           </div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+          <div>
+            <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Cargo</label>
+            <select id="fu-cargo" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+              <option value="">Seleccione área primero...</option>
+            </select>
+          </div>
+        </div>
         ${!esEditar ? `
         <div style="margin-top:16px;">
           <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Contraseña *</label>
@@ -332,7 +406,8 @@ function abrirFormUsuario(usuario?: any) {
       usuario: (document.getElementById('fu-usuario') as HTMLInputElement).value.trim(),
       correo: (document.getElementById('fu-correo') as HTMLInputElement).value.trim(),
       celular: (document.getElementById('fu-celular') as HTMLInputElement).value.trim(),
-      id_area: parseInt((document.getElementById('fu-area') as HTMLSelectElement).value),
+      id_area: parseInt((document.getElementById('fu-area') as HTMLSelectElement).value) || null,
+      id_cargo: parseInt((document.getElementById('fu-cargo') as HTMLSelectElement).value) || null,
     };
 
     if (!esEditar) {
@@ -363,6 +438,43 @@ function abrirFormUsuario(usuario?: any) {
       if (btn) { btn.disabled = false; btn.textContent = esEditar ? 'Guardar Cambios' : 'Crear Usuario'; }
     }
   });
+
+  // Event listener para cambios en el área - cargar cargos disponibles
+  const areaSelect = document.getElementById('fu-area') as HTMLSelectElement;
+  const cargoSelect = document.getElementById('fu-cargo') as HTMLSelectElement;
+  
+  areaSelect?.addEventListener('change', async (e) => {
+    const idArea = parseInt((e.target as HTMLSelectElement).value);
+    
+    if (!idArea) {
+      cargoSelect!.innerHTML = '<option value="">Seleccione área primero...</option>';
+      return;
+    }
+
+    try {
+      const res = await cargoService.getByArea(idArea);
+      const cargos = res.data || [];
+      
+      if (cargos.length === 0) {
+        cargoSelect!.innerHTML = '<option value="">No hay cargos disponibles</option>';
+      } else {
+        let html = '<option value="">Seleccione cargo...</option>';
+        cargos.forEach((cargo: any) => {
+          html += `<option value="${cargo.id}" ${usuario?.id_cargo === cargo.id ? 'selected' : ''}>${escHtml(cargo.nombre)}</option>`;
+        });
+        cargoSelect!.innerHTML = html;
+      }
+    } catch (err) {
+      console.error('Error cargando cargos:', err);
+      cargoSelect!.innerHTML = '<option value="">Error al cargar cargos</option>';
+    }
+  });
+
+  // Si hay usuario editándose, triggerear el cargue de cargos
+  if (usuario && usuario.id_area) {
+    const event = new Event('change');
+    areaSelect?.dispatchEvent(event);
+  }
 }
 
 function abrirResetPassword(id: number, nombre: string) {

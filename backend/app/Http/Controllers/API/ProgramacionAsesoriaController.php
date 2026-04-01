@@ -3,19 +3,19 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\OrdenCapacitacionAuditoria;
-use App\Models\ProgramacionCapacitacion;
+use App\Models\OrdenAsesoria;
+use App\Models\ProgramacionAsesoria;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class ProgramacionCapacitacionController extends Controller
+class ProgramacionAsesoriaController extends Controller
 {
     public function index(Request $request)
     {
-        $query = ProgramacionCapacitacion::with([
-            'ordenCapacitacion.cliente',
-            'ordenCapacitacion.servicio',
-            'exponentes',
+        $query = ProgramacionAsesoria::with([
+            'ordenAsesoria.cliente',
+            'ordenAsesoria.servicio',
+            'ordenAsesoria.exponentes',
             'supervisor',
             'vehiculo',
             'planta',
@@ -45,27 +45,27 @@ class ProgramacionCapacitacionController extends Controller
 
     public function show($id)
     {
-        $programacion = ProgramacionCapacitacion::with([
-            'ordenCapacitacion.cliente',
-            'ordenCapacitacion.servicio',
-            'ordenCapacitacion.cotizacion.detalles.catalogoCapAud',
-            'ordenCapacitacion.cotizacion.detalles.servicio',
-            'exponentes',
+        $programacion = ProgramacionAsesoria::with([
+            'ordenAsesoria.cliente',
+            'ordenAsesoria.servicio',
+            'ordenAsesoria.cotizacion.detalles.catalogoCapAud',
+            'ordenAsesoria.cotizacion.detalles.servicio',
+            'ordenAsesoria.exponentes',
             'supervisor',
             'vehiculo',
             'planta',
             'area',
         ])->findOrFail($id);
 
-        // Calcular capacitacion_nombre
-        $detalle = $programacion->ordenCapacitacion?->cotizacion?->detalles?->first();
-        $capacitacion_nombre = $detalle?->catalogoCapAud?->nombre
+        // Calcular asesoria_nombre
+        $detalle = $programacion->ordenAsesoria?->cotizacion?->detalles?->first();
+        $asesoria_nombre = $detalle?->catalogoCapAud?->nombre
             ?? $detalle?->servicio?->nombre
-            ?? $programacion->ordenCapacitacion?->servicio?->nombre
-            ?? 'Sin capacitación';
+            ?? $programacion->ordenAsesoria?->servicio?->nombre
+            ?? 'Sin asesoría';
 
         $data = $programacion->toArray();
-        $data['capacitacion_nombre'] = $capacitacion_nombre;
+        $data['asesoria_nombre'] = $asesoria_nombre;
 
         return response()->json([
             'success' => true,
@@ -73,20 +73,20 @@ class ProgramacionCapacitacionController extends Controller
         ]);
     }
 
-    public function getCapacitacionesDisponibles()
+    public function getAsesoriasDisponibles()
     {
-        $idsYaProgramadas = ProgramacionCapacitacion::whereNotIn('estado_ejecucion', ['Cancelado'])
-            ->pluck('id_orden_capacitacion')
+        $idsYaProgramadas = ProgramacionAsesoria::whereNotIn('estado_ejecucion', ['Cancelado'])
+            ->pluck('id_orden_asesoria')
             ->filter()
             ->toArray();
 
-        $ordenes = OrdenCapacitacionAuditoria::with([
+        $ordenes = OrdenAsesoria::with([
                 'cliente:id,nombre_empresa,persona_contacto',
                 'servicio:id,nombre',
                 'exponentes:id,nombre,apellidos,especialidad,profesion',
-            'cotizacion.detalles.planta.areas',
-            'cotizacion.detalles.catalogoCapAud',
-            'cotizacion.detalles.servicio',
+                'cotizacion.detalles.planta.areas',
+                'cotizacion.detalles.catalogoCapAud',
+                'cotizacion.detalles.servicio',
             ])
             ->where('estado', 'Aprobado')
             ->when(!empty($idsYaProgramadas), function ($q) use ($idsYaProgramadas) {
@@ -95,7 +95,10 @@ class ProgramacionCapacitacionController extends Controller
             ->orderByDesc('id')
             ->get()
             ->map(function ($o) {
-                $detalle = $o->cotizacion?->detalles?->first();
+                $detalles = $o->cotizacion?->detalles;
+                $detalle = $detalles?->first(function ($d) {
+                    return !is_null($d->meses_implementacion) || !empty($d->frecuencia_visita);
+                }) ?? $detalles?->first();
                 $planta = $detalle?->planta;
 
                 $areaIds = $detalle?->id_cliente_planta_area ?? [];
@@ -124,15 +127,16 @@ class ProgramacionCapacitacionController extends Controller
                     'modalidad' => $o->modalidad,
                     'num_participantes' => $o->num_participantes,
                     'num_certificados' => $o->num_certificados,
-                    'horas_capacitacion' => $o->horas_capacitacion,
-                    'capacitacion_nombre' => $detalle?->catalogoCapAud?->nombre
+                    'asesoria_nombre' => $detalle?->catalogoCapAud?->nombre
                         ?? $detalle?->servicio?->nombre
                         ?? $o->servicio->nombre
-                        ?? 'Sin capacitación',
+                        ?? 'Sin asesoría',
                     'servicio' => $o->servicio->nombre ?? 'Sin servicio',
                     'planta_nombre' => $planta?->nombre,
                     'areas_nombres' => $areasNombres,
-                    'exponentes' => $o->exponentes->values(),
+                    'exponentes' => $o->exponentes->toArray(),
+                    'meses_implementacion' => $detalle?->meses_implementacion,
+                    'frecuencia_visita' => $detalle?->frecuencia_visita,
                 ];
             })
             ->values();
@@ -146,7 +150,7 @@ class ProgramacionCapacitacionController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'id_orden_capacitacion' => 'required|integer|exists:orden_capacitacion_auditoria,id',
+            'id_orden_asesoria' => 'required|integer|exists:orden_asesoria,id',
             'id_supervisor' => 'nullable|integer|exists:personal,id',
             'id_vehiculo' => 'nullable|integer|exists:vehiculos,id',
             'id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
@@ -157,27 +161,27 @@ class ProgramacionCapacitacionController extends Controller
             'local_sede' => 'nullable|string|max:150',
             'direccion_completa' => 'nullable|string|max:255',
             'observaciones' => 'nullable|string',
-            'exponentes_ids' => 'required|array|min:1',
-            'exponentes_ids.*' => 'integer|exists:exponentes,id',
+            'exponentes' => 'nullable|array',
+            'exponentes.*' => 'integer|exists:exponentes,id',
         ]);
 
         DB::beginTransaction();
         try {
-            $ordenCap = OrdenCapacitacionAuditoria::with('cliente')->findOrFail($validated['id_orden_capacitacion']);
+            $ordenAsesoria = OrdenAsesoria::with('cliente')->findOrFail($validated['id_orden_asesoria']);
 
-            $yaProgramada = ProgramacionCapacitacion::where('id_orden_capacitacion', $ordenCap->id)
+            $yaProgramada = ProgramacionAsesoria::where('id_orden_asesoria', $ordenAsesoria->id)
                 ->whereNotIn('estado_ejecucion', ['Cancelado'])
                 ->exists();
 
             if ($yaProgramada) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Esta orden de capacitación ya está programada',
+                    'message' => 'Esta orden de asesoría ya está programada',
                 ], 422);
             }
 
-            $programacion = ProgramacionCapacitacion::create([
-                'id_orden_capacitacion' => $validated['id_orden_capacitacion'],
+            $programacion = ProgramacionAsesoria::create([
+                'id_orden_asesoria' => $validated['id_orden_asesoria'],
                 'id_supervisor' => $validated['id_supervisor'] ?? null,
                 'id_vehiculo' => $validated['id_vehiculo'] ?? null,
                 'id_cliente_planta' => $validated['id_cliente_planta'] ?? null,
@@ -185,24 +189,27 @@ class ProgramacionCapacitacionController extends Controller
                 'fecha_programada' => $validated['fecha_programada'],
                 'hora_inicio' => $validated['hora_inicio'],
                 'hora_fin' => $validated['hora_fin'] ?? null,
-                'local_sede' => $validated['local_sede'] ?? 'Aula/Sede de Capacitación',
-                'direccion_completa' => $validated['direccion_completa'] ?? ($ordenCap->cliente?->direccion ?? null),
+                'local_sede' => $validated['local_sede'] ?? 'Lugar de Asesoría',
+                'direccion_completa' => $validated['direccion_completa'] ?? ($ordenAsesoria->cliente?->direccion ?? null),
                 'estado_ejecucion' => 'Programado',
                 'observaciones' => $validated['observaciones'] ?? null,
                 'creado_por' => $request->user()?->id,
             ]);
 
-            $programacion->exponentes()->sync($validated['exponentes_ids']);
+            // Sincronizar exponentes
+            if (!empty($validated['exponentes'])) {
+                $programacion->exponentes()->sync($validated['exponentes']);
+            }
 
-            $ordenCap->estado = 'Programado';
-            $ordenCap->save();
+            $ordenAsesoria->estado = 'Programado';
+            $ordenAsesoria->save();
 
             DB::commit();
 
             $programacion->load([
-                'ordenCapacitacion.cliente',
-                'ordenCapacitacion.servicio',
-                'exponentes',
+                'ordenAsesoria.cliente',
+                'ordenAsesoria.servicio',
+                'ordenAsesoria.exponentes',
                 'supervisor',
                 'vehiculo',
                 'planta',
@@ -211,14 +218,14 @@ class ProgramacionCapacitacionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Capacitación programada exitosamente',
+                'message' => 'Asesoría programada exitosamente',
                 'data' => $programacion,
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Error al programar capacitación: ' . $e->getMessage(),
+                'message' => 'Error al programar asesoría: ' . $e->getMessage(),
             ], 500);
         }
     }

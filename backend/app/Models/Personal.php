@@ -19,6 +19,7 @@ class Personal extends Authenticatable
         'celular',
         'correo',
         'id_area',
+        'id_cargo',
         'usuario',
         'password',
         'estado'
@@ -48,6 +49,11 @@ class Personal extends Authenticatable
     public function area()
     {
         return $this->belongsTo(Area::class, 'id_area');
+    }
+
+    public function cargo()
+    {
+        return $this->belongsTo(Cargo::class, 'id_cargo');
     }
 
     public function cotizacionesCreadas()

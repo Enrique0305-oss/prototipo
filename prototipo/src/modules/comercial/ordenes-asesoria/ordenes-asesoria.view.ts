@@ -754,15 +754,43 @@ async function cargarDatosCotizacion(cotizacionId: number) {
         : 'No definido';
       const tablaFrecuenciaVisita = construirTablaFrecuenciaVisita(detalleInfo.frecuencia_visita);
 
+      const ubicaciones = detalles
+        .map((d: any) => ({
+          planta: String(d.planta_nombre || '').trim(),
+          areas: Array.isArray(d.areas_nombres)
+            ? d.areas_nombres.map((a: any) => String(a || '').trim()).filter((a: string) => !!a)
+            : [],
+        }))
+        .filter((u: any) => !!u.planta || u.areas.length > 0);
+
+      const plantasUnicas: string[] = Array.from(new Set(ubicaciones.map((u: any) => u.planta).filter((p: string) => !!p)));
+      const areasUnicas: string[] = Array.from(new Set(ubicaciones.flatMap((u: any) => u.areas as string[]).filter((a: string) => !!a)));
+
       detallesDiv.style.display = 'block';
       detallesLista.innerHTML =
-        '<div style="display:grid;grid-template-columns:260px 1fr;gap:12px;padding:12px;border:1px solid #e2e8f0;background:#f8fafc;font-size:12px;color:#334155;">' +
+        '<div style="display:grid;grid-template-columns:1fr;gap:10px;padding:12px;border:1px solid #e2e8f0;background:#f8fafc;font-size:12px;color:#334155;">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:10px;">' +
+            '<div>' +
+              '<div style="font-size:12px;color:#64748b;margin-bottom:6px;font-weight:700;">PLANTA</div>' +
+              '<div style="font-size:14px;color:#1e293b;font-weight:600;">' + (plantasUnicas.join(', ') || '-') + '</div>' +
+            '</div>' +
+            '<div>' +
+              '<div style="font-size:12px;color:#64748b;margin-bottom:6px;font-weight:700;">ÁREA</div>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
+                (areasUnicas.length > 0
+                  ? areasUnicas.map((area: string) => '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:12px;font-weight:600;">' + area + '</span>').join('')
+                  : '<span style="font-size:14px;color:#1e293b;font-weight:600;">-</span>') +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:260px 1fr;gap:12px;">' +
           '<div style="border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:10px;display:flex;align-items:center;">' +
             '<div><strong>Tiempo de implementación:</strong><br><span style="display:inline-block;margin-top:6px;font-size:14px;color:#1e293b;">' + tiempoImplementacion + '</span></div>' +
           '</div>' +
           '<div>' +
             '<div style="font-weight:700;color:#334155;margin-bottom:6px;">Frecuencia por visita</div>' +
             tablaFrecuenciaVisita +
+          '</div>' +
           '</div>' +
         '</div>';
     } else {

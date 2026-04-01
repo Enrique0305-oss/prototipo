@@ -42,6 +42,7 @@ class CotizacionDetalle extends Model
         'fecha_servicio' => 'date',
         'meses_implementacion' => 'integer',
         'frecuencia_visita' => 'array',
+        'id_cliente_planta_area' => 'array',
     ];
 
     // Relaciones
@@ -73,6 +74,18 @@ class CotizacionDetalle extends Model
     public function area()
     {
         return $this->belongsTo(ClientePlantaArea::class, 'id_cliente_planta_area');
+    }
+
+    /**
+     * Obtener todas las áreas del detalle (cuando hay múltiples)
+     */
+    public function areas()
+    {
+        $areaIds = $this->id_cliente_planta_area ?? [];
+        if (empty($areaIds)) {
+            return collect();
+        }
+        return ClientePlantaArea::whereIn('id', $areaIds)->get();
     }
 
     // Accessor para calcular subtotal

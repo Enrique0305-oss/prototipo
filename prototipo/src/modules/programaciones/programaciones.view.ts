@@ -4,6 +4,7 @@ import { programacionService } from './programaciones.service';
 import { mostrarToast, confirmarAccion } from '../../shared/toast';
 import { clienteService } from '../../services/clienteService';
 import { renderModalProgramarCapacitacion, abrirModalProgramarCapacitacion } from './programacion-capacitacion';
+import { renderModalProgramarAsesoria, abrirModalProgramarAsesoria } from './programacion-asesoria';
 import type {
   Programacion,
   Tecnico,
@@ -32,11 +33,22 @@ let fechaActual = new Date();
 let filtroEstados: EstadoEjecucion[] = ['Programado', 'Confirmado', 'En Camino', 'En Ejecución'];
 let filtroTecnico: number | null = null;
 let filtroCliente: number | null = null;
+let filtrosVisibles = false;
 let plantasClienteDataProg: any[] = [];
+let areaIdsServicioSeleccionado: number[] = [];
+let plantaIdServicioSeleccionado: number | null = null;
+
+function extractList<T = any>(response: any): T[] {
+  const raw = response?.data ?? response;
+  if (Array.isArray(raw)) return raw as T[];
+  if (Array.isArray(raw?.data)) return raw.data as T[];
+  return [];
+}
 
 type ProgramacionExtendida = Programacion & {
-  tipo_programacion?: 'servicio' | 'capacitacion';
+  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria';
   orden_capacitacion?: any;
+  orden_asesoria?: any;
   exponentes?: any[];
 };
 
@@ -68,6 +80,33 @@ function mapCapacitacionToProgramacion(cap: any): ProgramacionExtendida {
   } as ProgramacionExtendida;
 }
 
+function mapAsesoriaToProgramacion(ase: any): ProgramacionExtendida {
+  return {
+    id: ase.id,
+    id_orden_servicio: 0,
+    id_servicio: ase.ordenAsesoria?.id_servicio || ase.orden_asesoria?.id_servicio || 0,
+    id_tecnico_asignado: 0,
+    id_supervisor: ase.id_supervisor,
+    id_vehiculo: ase.id_vehiculo,
+    fecha_programada: normalizarFecha(ase.fecha_programada),
+    hora_inicio: normalizarHora(ase.hora_inicio),
+    hora_fin: ase.hora_fin ? normalizarHora(ase.hora_fin) : ase.hora_fin,
+    local_sede: ase.local_sede,
+    direccion_completa: ase.direccion_completa,
+    id_cliente_planta: ase.id_cliente_planta,
+    id_cliente_planta_area: ase.id_cliente_planta_area,
+    estado_ejecucion: ase.estado_ejecucion,
+    observaciones: ase.observaciones,
+    servicio: ase.ordenAsesoria?.servicio || ase.orden_asesoria?.servicio,
+    supervisor: ase.supervisor,
+    vehiculo: ase.vehiculo,
+    planta: ase.planta,
+    area: ase.area,
+    orden_asesoria: ase.ordenAsesoria || ase.orden_asesoria,
+    tipo_programacion: 'asesoria',
+  } as ProgramacionExtendida;
+}
+
 async function cargarPlantasClienteProg(idCliente: number) {
   try {
     const res = await clienteService.getPlantas(idCliente);
@@ -89,17 +128,155 @@ function getPlantaOptionsProg(selectedId?: number | null): string {
 }
 
 function getAreaOptionsProg(idPlanta: number | null, selectedId?: number | null): string {
+  return getAreaOptionsProgFiltrado(idPlanta, selectedId, null);
+}
+
+function getAreaOptionsProgFiltrado(
+  idPlanta: number | null,
+  selectedId?: number | null,
+  allowedAreaIds?: number[] | null,
+): string {
   let opts = '<option value="">-- Área --</option>';
   if (!idPlanta) return opts;
   const planta = plantasClienteDataProg.find((p: any) => p.id == idPlanta);
   if (!planta) return opts;
   const areas = planta.areas_activas || planta.areas || [];
+  const allowSet = allowedAreaIds && allowedAreaIds.length > 0 ? new Set(allowedAreaIds.map(Number)) : null;
   areas.forEach((a: any) => {
     if (a.estado && a.estado !== 'Activo') return;
+    if (allowSet && !allowSet.has(Number(a.id))) return;
     const sel = selectedId && a.id == selectedId ? 'selected' : '';
     opts += `<option value="${a.id}" ${sel}>${a.nombre}</option>`;
   });
   return opts;
+}
+
+function normalizeAreaIds(input: any): number[] {
+  if (input === null || input === undefined || input === '') return [];
+
+  if (Array.isArray(input)) {
+    return input.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0);
+  }
+
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && input > 0 ? [input] : [];
+  }
+
+  if (typeof input === 'string') {
+    const raw = input.trim();
+    if (!raw) return [];
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0);
+      }
+      if (typeof parsed === 'number' && Number.isFinite(parsed) && parsed > 0) {
+        return [parsed];
+      }
+    } catch {
+      // continuar con parsing por comas
+    }
+
+    if (raw.includes(',')) {
+      return raw
+        .split(',')
+        .map((v) => Number(v.trim()))
+        .filter((v) => Number.isFinite(v) && v > 0);
+    }
+
+    const asNumber = Number(raw);
+    return Number.isFinite(asNumber) && asNumber > 0 ? [asNumber] : [];
+  }
+
+  return [];
+}
+
+function getAreaNombresPorIds(idPlanta: number | null, areaIds: number[]): string[] {
+  if (!idPlanta || areaIds.length === 0) return [];
+  const planta = plantasClienteDataProg.find((p: any) => p.id == idPlanta);
+  if (!planta) return [];
+  const areas = planta.areas_activas || planta.areas || [];
+  const wanted = new Set(areaIds.map(Number));
+  return areas
+    .filter((a: any) => wanted.has(Number(a.id)))
+    .map((a: any) => a.nombre)
+    .filter(Boolean);
+}
+
+function renderAreaChipsLikeODS(labels: string[]): string {
+  if (labels.length === 0) return 'Sin áreas seleccionadas';
+
+  const chips = labels
+    .slice(0, 2)
+    .map((nombre) =>
+      '<span style="display:inline-block;background:#ecfeff;color:#0f766e;border:1px solid #99f6e4;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">' + nombre + '</span>'
+    )
+    .join('');
+
+  if (labels.length > 2) {
+    return chips + '<span style="font-size:11px;color:#64748b;">+' + (labels.length - 2) + ' más</span>';
+  }
+
+  return chips;
+}
+
+function esFrecuenciaUnica(frecuencia: string): boolean {
+  return (frecuencia || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase() === 'unica';
+}
+
+function normalizarTextoFrecuencia(frecuencia: string): string {
+  return (frecuencia || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function esFrecuenciaDiasSemana(frecuencia: string): boolean {
+  const txt = normalizarTextoFrecuencia(frecuencia);
+  if (!txt) return false;
+  if (txt === 'dias de la semana') return true;
+  if (/dias?\s+a\s+la\s+semana/.test(txt)) return true;
+  const dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+  return dias.some((d) => new RegExp('\\b' + d + '\\b', 'i').test(txt));
+}
+
+function frecuenciaParaBackend(frecuencia: string): string {
+  if (esFrecuenciaDiasSemana(frecuencia)) return 'Días de la semana';
+  return frecuencia;
+}
+
+function extraerDiasDesdeFrecuencia(frecuencia: string): string[] {
+  const texto = frecuencia || '';
+  const diasBase = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+  const fromParens = texto.match(/\(([^)]+)\)/);
+  const source = fromParens?.[1] || texto;
+  const sourceNorm = normalizarTextoFrecuencia(source);
+
+  return diasBase.filter((dia) => {
+    const diaNorm = normalizarTextoFrecuencia(dia);
+    return new RegExp('\\b' + diaNorm + '\\b', 'i').test(sourceNorm);
+  });
+}
+
+function setDiasSemanaChecks(body: HTMLElement, dias: string[]) {
+  const diasNorm = new Set(dias.map((d) => normalizarTextoFrecuencia(d)));
+  body.querySelectorAll('.dia-semana-check').forEach((el) => {
+    const chk = el as HTMLInputElement;
+    chk.checked = diasNorm.has(normalizarTextoFrecuencia(chk.value));
+  });
+}
+
+function resolveAreaIdNuevaProgramacion(idPlantaSel: number | null): number | null {
+  if (!idPlantaSel || !plantaIdServicioSeleccionado) return null;
+  if (idPlantaSel !== plantaIdServicioSeleccionado) return null;
+  return areaIdsServicioSeleccionado[0] || null;
 }
 
 function getPlantaDireccion(idPlanta: number | null): string {
@@ -134,6 +311,10 @@ export function renderProgramaciones(): string {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
           Programar Capacitación
         </button>
+        <button class="prog-btn-secondary" id="btnProgramarAsesoria" title="Programar Asesoría">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          Programar Asesoría
+        </button>
         <button class="prog-btn-primary" id="btnNuevaProgramacion">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Nueva Programación
@@ -141,11 +322,23 @@ export function renderProgramaciones(): string {
       </div>
     </div>
 
-    <div class="prog-layout">
-      <div class="prog-sidebar" id="progSidebar">
-        <p style="padding:16px;color:#999;">Cargando...</p>
+    <div class="prog-layout" style="display:flex;flex-direction:column;gap:10px;">
+      <div id="progFiltrosWrap" style="width:100%;">
+        <div class="prog-sidebar" id="progSidebar" style="width:100%;max-width:none;">
+          <p style="padding:16px;color:#999;">Cargando...</p>
+        </div>
       </div>
-      <div class="prog-calendar-main" id="progCalendar">
+      <div style="display:flex;justify-content:center;align-items:center;padding:4px 0 10px;">
+        <button
+          id="btnToggleFiltrosProg"
+          type="button"
+          title="Mostrar/Ocultar filtros"
+          style="width:34px;height:34px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:#334155;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(15,23,42,0.08);"
+        >
+          <span id="iconToggleFiltrosProg" style="font-size:14px;font-weight:700;line-height:1;">▲</span>
+        </button>
+      </div>
+      <div class="prog-calendar-main" id="progCalendar" style="width:100%;">
         <p style="padding:24px;color:#999;">Cargando calendario...</p>
       </div>
     </div>
@@ -184,6 +377,9 @@ export function renderProgramaciones(): string {
 
     <!-- Modal Programar Capacitación -->
     ${renderModalProgramarCapacitacion()}
+
+    <!-- Modal Programar Asesoría -->
+    ${renderModalProgramarAsesoria()}
   `;
 }
 
@@ -194,10 +390,15 @@ export async function initProgramacionesEvents(): Promise<void> {
 
   renderSidebar();
   renderCalendario();
+  bindToggleFiltrosProg();
+  applyEstadoFiltrosProg();
 
   document.getElementById('btnNuevaProgramacion')?.addEventListener('click', abrirModalNueva);
   document.getElementById('btnProgramarCapacitacion')?.addEventListener('click', () => {
     abrirModalProgramarCapacitacion(tecnicosData, personalData, vehiculosData);
+  });
+  document.getElementById('btnProgramarAsesoria')?.addEventListener('click', () => {
+    abrirModalProgramarAsesoria(personalData, vehiculosData);
   });
   document.getElementById('viewSelector')?.addEventListener('change', (e) => {
     vistaActual = (e.target as HTMLSelectElement).value as VistaProgramacion;
@@ -221,16 +422,25 @@ export async function initProgramacionesEvents(): Promise<void> {
   window.addEventListener('capacitacionProgramada', async () => {
     await recargarProgramaciones();
   });
+
+  // Escuchar evento de asesoría programada para recargar
+  window.addEventListener('asesoriaProgramada', async () => {
+    await recargarProgramaciones();
+  });
 }
 
 async function cargarDatosIniciales() {
   try {
-    const [progRes, progCapRes, tecRes, vehRes, perRes, estRes] = await Promise.all([
+    const [progRes, progCapRes, progAseRes, tecRes, vehRes, perRes, estRes] = await Promise.all([
       programacionService.getAll({
         mes: fechaActual.getMonth() + 1,
         anio: fechaActual.getFullYear(),
       }),
       programacionService.getAllProgramacionCapacitacion({
+        mes: fechaActual.getMonth() + 1,
+        anio: fechaActual.getFullYear(),
+      }),
+      programacionService.getAllProgramacionAsesoria({
         mes: fechaActual.getMonth() + 1,
         anio: fechaActual.getFullYear(),
       }),
@@ -247,9 +457,27 @@ async function cargarDatosIniciales() {
       tipo_programacion: 'servicio',
     })) as ProgramacionExtendida[];
     const programacionesCapacitacion = (progCapRes.data || []).map(mapCapacitacionToProgramacion);
-    programacionesData = [...programacionesServicio, ...programacionesCapacitacion] as Programacion[];
-    tecnicosData = (tecRes.data || []).filter((t: Tecnico) => t.estado === 'Activo');
-    vehiculosData = (vehRes.data || []).filter((v: Vehiculo) => v.estado === 'Activo');
+    const programacionesAsesoria = (progAseRes.data || []).map(mapAsesoriaToProgramacion);
+    programacionesData = [...programacionesServicio, ...programacionesCapacitacion, ...programacionesAsesoria] as Programacion[];
+    const tecnicosRaw = extractList<Tecnico>(tecRes);
+    const vehiculosRaw = extractList<Vehiculo>(vehRes);
+
+    tecnicosData = tecnicosRaw
+      .filter((t: any) => (t?.estado || '').toLowerCase() === 'activo')
+      .map((t: any) => ({
+        ...t,
+        id: Number(t.id ?? t.id_tecnico ?? 0),
+        apellidos: t.apellidos ?? t.apellido ?? '',
+      }))
+      .filter((t: Tecnico) => t.id > 0);
+
+    vehiculosData = vehiculosRaw
+      .filter((v: any) => (v?.estado || '') !== 'Fuera de Servicio')
+      .map((v: any) => ({
+        ...v,
+        id: Number(v.id ?? v.id_vehiculo ?? 0),
+      }))
+      .filter((v: Vehiculo) => v.id > 0);
     personalData = perRes.data || [];
     if (estRes.data) estadisticas = estRes.data;
   } catch (err) {
@@ -285,6 +513,27 @@ async function recargarProgramaciones() {
   }
   renderSidebar();
   renderCalendario();
+  bindToggleFiltrosProg();
+  applyEstadoFiltrosProg();
+}
+
+function applyEstadoFiltrosProg() {
+  const filtrosWrap = document.getElementById('progFiltrosWrap') as HTMLElement | null;
+  const icon = document.getElementById('iconToggleFiltrosProg') as HTMLElement | null;
+  if (!filtrosWrap || !icon) return;
+
+  filtrosWrap.style.display = filtrosVisibles ? '' : 'none';
+  icon.textContent = filtrosVisibles ? '▲' : '▼';
+}
+
+function bindToggleFiltrosProg() {
+  const btn = document.getElementById('btnToggleFiltrosProg') as HTMLButtonElement | null;
+  if (!btn) return;
+
+  btn.onclick = () => {
+    filtrosVisibles = !filtrosVisibles;
+    applyEstadoFiltrosProg();
+  };
 }
 
 // ═══════════ Sidebar ═══════════
@@ -296,9 +545,10 @@ function renderSidebar() {
   sidebar.innerHTML = `
     <div class="prog-filter-section">
       <h3 class="prog-section-title">FILTROS</h3>
-      <div class="prog-filter-group">
+      <div style="display:grid;grid-template-columns:minmax(320px,1.3fr) minmax(220px,1fr) minmax(220px,1fr);gap:12px;align-items:end;">
+      <div class="prog-filter-group" style="margin-bottom:0;">
         <label class="prog-filter-label">Estado</label>
-        <div class="prog-checkbox-group" id="filtroEstadosGroup">
+        <div class="prog-checkbox-group" id="filtroEstadosGroup" style="display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:4px 10px;">
           ${(['Programado', 'Confirmado', 'En Camino', 'En Ejecución', 'Realizado', 'Reprogramado', 'Cancelado'] as EstadoEjecucion[]).map(e => `
             <label class="prog-checkbox-item">
               <input type="checkbox" value="${e}" ${filtroEstados.includes(e) ? 'checked' : ''}> ${e}
@@ -306,19 +556,20 @@ function renderSidebar() {
           `).join('')}
         </div>
       </div>
-      <div class="prog-filter-group">
+      <div class="prog-filter-group" style="margin-bottom:0;">
         <label class="prog-filter-label">Técnico</label>
         <select class="prog-filter-select" id="filtroTecnicoSelect">
           <option value="">Todos</option>
           ${tecnicosData.map(t => `<option value="${t.id}" ${filtroTecnico === t.id ? 'selected' : ''}>${t.nombre} ${t.apellidos}</option>`).join('')}
         </select>
       </div>
-      <div class="prog-filter-group">
+      <div class="prog-filter-group" style="margin-bottom:0;">
         <label class="prog-filter-label">Cliente</label>
         <select class="prog-filter-select" id="filtroClienteSelect">
           <option value="">Todos</option>
           ${getClientesUnicos().map(c => `<option value="${c.id}" ${filtroCliente === c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
         </select>
+      </div>
       </div>
     </div>
 
@@ -326,26 +577,6 @@ function renderSidebar() {
       <div class="prog-stat-item"><div class="prog-stat-value">${estadisticas.programados}</div><div class="prog-stat-label">Programados</div></div>
       <div class="prog-stat-item"><div class="prog-stat-value">${estadisticas.completados}</div><div class="prog-stat-label">Completados</div></div>
       <div class="prog-stat-item"><div class="prog-stat-value">${estadisticas.total}</div><div class="prog-stat-label">Total</div></div>
-    </div>
-
-    <div class="prog-tech-section">
-      <h3 class="prog-section-title">TÉCNICOS</h3>
-      ${tecnicosData.map(t => {
-        const hoy = programacionesData.filter(p => {
-          if (p.fecha_programada !== todayStr()) return false;
-          if (p.id_tecnico_asignado === t.id) return true;
-          return p.tecnicos?.some(pt => pt.id === t.id) || false;
-        }).length;
-        return `
-        <div class="prog-tech-item">
-          <div class="prog-tech-avatar">${t.nombre[0]}${t.apellidos?.[0] || ''}</div>
-          <div class="prog-tech-info">
-            <div class="prog-tech-name">${t.nombre} ${t.apellidos}</div>
-            <div class="prog-tech-status ${hoy === 0 ? 'available' : hoy < 3 ? 'busy' : 'full'}">${hoy === 0 ? 'Disponible' : `${hoy} servicio(s) hoy`}</div>
-            ${t.autorizado_conducir ? '<div class="prog-tech-badge">Autorizado conducir</div>' : ''}
-          </div>
-        </div>`;
-      }).join('')}
     </div>
   `;
 
@@ -386,7 +617,9 @@ function getProgramacionesFiltradas(): Programacion[] {
   if (filtroCliente) {
     lista = lista.filter(p => {
       const px = p as ProgramacionExtendida;
-      return p.orden_servicio?.cliente?.id === filtroCliente || px.orden_capacitacion?.cliente?.id === filtroCliente;
+      return p.orden_servicio?.cliente?.id === filtroCliente
+        || px.orden_capacitacion?.cliente?.id === filtroCliente
+        || px.orden_asesoria?.cliente?.id === filtroCliente;
     });
   }
   return lista;
@@ -397,7 +630,21 @@ function nombreActividad(p: Programacion): string {
   if (px.tipo_programacion === 'capacitacion') {
     return px.orden_capacitacion?.servicio?.nombre || p.servicio?.nombre || 'Capacitación';
   }
+  if (px.tipo_programacion === 'asesoria') {
+    return px.orden_asesoria?.servicio?.nombre || p.servicio?.nombre || 'Asesoría';
+  }
   return p.servicio?.nombre || 'Servicio';
+}
+
+function badgeTipoProgramacion(p: Programacion): string {
+  const tipo = (p as ProgramacionExtendida).tipo_programacion;
+  if (tipo === 'capacitacion') {
+    return '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Capacitación</span>';
+  }
+  if (tipo === 'asesoria') {
+    return '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Asesoría</span>';
+  }
+  return '';
 }
 
 function renderVistaMensual(): string {
@@ -427,7 +674,7 @@ function renderVistaMensual(): string {
         ${servicios.slice(0, 3).map(s => `
           <div class="prog-event ${getColorByState(s.estado_ejecucion)}" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
             <div class="prog-event-title">${clienteNombre(s)}</div>
-            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${nombreActividad(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'capacitacion' ? '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Capacitación</span>' : ''}</div>
+            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${nombreActividad(s)} ${badgeTipoProgramacion(s)}</div>
             <div class="prog-event-time">${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
           </div>
         `).join('')}
@@ -495,7 +742,7 @@ function renderVistaSemanal(): string {
                   return `
                   <div class="prog-week-card prog-week-card-${color}" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
                     <div class="prog-week-card-title">${clienteNombre(s)}</div>
-                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${nombreActividad(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'capacitacion' ? '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Capacitación</span>' : ''}</div>
+                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${nombreActividad(s)} ${badgeTipoProgramacion(s)}</div>
                     <div class="prog-week-card-time"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
                     <div class="prog-week-card-tech"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre).join(', ') : (s.tecnico ? s.tecnico.nombre : '—')}</div>
                     <span class="prog-week-card-badge">${s.estado_ejecucion}</span>
@@ -540,7 +787,7 @@ function renderVistaDiaria(): string {
                   <span class="prog-status-badge ${s.estado_ejecucion}">${s.estado_ejecucion}</span>
                 </div>
                 <div class="prog-day-service-details">
-                  <div><strong>Servicio:</strong> ${nombreActividad(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'capacitacion' ? '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Capacitación</span>' : ''}</div>
+                  <div><strong>Servicio:</strong> ${nombreActividad(s)} ${badgeTipoProgramacion(s)}</div>
                   <div><strong>Técnico:</strong> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre + ' ' + t.apellidos).join(', ') : (s.tecnico ? s.tecnico.nombre + ' ' + s.tecnico.apellidos : 'Sin asignar')}</div>
                   <div><strong>Local:</strong> ${s.planta ? s.planta.nombre : (s.local_sede || '—')}</div>
                   ${s.vehiculo ? `<div><strong>Vehículo:</strong> ${s.vehiculo.placa} - ${s.vehiculo.marca} ${s.vehiculo.modelo}</div>` : ''}
@@ -575,7 +822,7 @@ function enlazarEventosCalendario() {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = parseInt((el as HTMLElement).dataset.progId || '0');
-      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion';
+      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria';
       if (id) abrirModalDetalle(id, tipo);
     });
   });
@@ -583,7 +830,7 @@ function enlazarEventosCalendario() {
 
 // ═══════════ Modal Detalle ═══════════
 
-async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' = 'servicio') {
+async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' = 'servicio') {
   const modal = document.getElementById('modalDetalleProgramacion');
   const body = document.getElementById('modalDetalleBody');
   if (!modal || !body) return;
@@ -595,6 +842,8 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' =
   try {
     const res = tipo === 'capacitacion'
       ? await programacionService.getProgramacionCapacitacionById(id)
+      : tipo === 'asesoria'
+      ? await programacionService.getProgramacionAsesoriaById(id)
       : await programacionService.getById(id);
     const p = res.data;
     if (!p) { body.innerHTML = '<p style="padding:24px;">No encontrado</p>'; return; }
@@ -607,7 +856,7 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' =
             <h3 class="prog-detalle-section-title">Programación de Capacitación</h3>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">Capacitación</span></div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Orden:</div><div class="prog-detalle-value">${p.orden_capacitacion?.numero_orden || '—'}</div></div>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Servicio:</div><div class="prog-detalle-value">${p.orden_capacitacion?.servicio?.nombre || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Capacitación:</div><div class="prog-detalle-value">${p.capacitacion_nombre || p.orden_capacitacion?.servicio?.nombre || '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${new Date(normalizarFecha(p.fecha_programada) + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
@@ -616,7 +865,7 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' =
             <h3 class="prog-detalle-section-title">Cliente y Recursos</h3>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${p.orden_capacitacion?.cliente?.nombre_empresa || p.orden_capacitacion?.cliente?.persona_contacto || '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Exponentes:</div><div class="prog-detalle-value">${exps || '—'}</div></div>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Supervisor:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Asistente administrativo:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? p.vehiculo.placa + ' - ' + p.vehiculo.marca + ' ' + p.vehiculo.modelo : '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Local:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
           </div>
@@ -624,6 +873,34 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' =
           <div class="prog-modal-footer"><button type="button" class="prog-btn-secondary" id="btnCerrarDetalleCap">Cerrar</button></div>
         </div>`;
       body.querySelector('#btnCerrarDetalleCap')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
+      return;
+    }
+
+    if (tipo === 'asesoria') {
+      const exps = (p.ordenAsesoria?.exponentes || p.orden_asesoria?.exponentes || []).map((e: any) => `${e.nombre} ${e.apellidos}`).join(', ');
+      body.innerHTML = `
+        <div class="prog-detalle-grid">
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Programación de Asesoría</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="background:#dbeafe;color:#0369a1;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">Asesoría</span></div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Orden:</div><div class="prog-detalle-value">${p.ordenAsesoria?.numero_orden || p.orden_asesoria?.numero_orden || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Asesoría:</div><div class="prog-detalle-value">${p.asesoria_nombre || p.ordenAsesoria?.servicio?.nombre || p.orden_asesoria?.servicio?.nombre || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${new Date(normalizarFecha(p.fecha_programada) + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
+          </div>
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Cliente y Recursos</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${p.ordenAsesoria?.cliente?.nombre_empresa || p.ordenAsesoria?.cliente?.persona_contacto || p.orden_asesoria?.cliente?.nombre_empresa || p.orden_asesoria?.cliente?.persona_contacto || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Asesores:</div><div class="prog-detalle-value">${exps || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Asistente administrativo:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? p.vehiculo.placa + ' - ' + p.vehiculo.marca + ' ' + p.vehiculo.modelo : '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Local:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
+          </div>
+          ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
+          <div class="prog-modal-footer"><button type="button" class="prog-btn-secondary" id="btnCerrarDetalleAse">Cerrar</button></div>
+        </div>`;
+      body.querySelector('#btnCerrarDetalleAse')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
       return;
     }
 
@@ -648,10 +925,10 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' =
           <h3 class="prog-detalle-section-title">Recursos Asignados</h3>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Técnico(s):</div><div class="prog-detalle-value">${
             p.tecnicos && p.tecnicos.length > 0
-              ? p.tecnicos.map(t => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;padding:2px 10px;border-radius:6px;margin:2px 4px 2px 0;font-size:13px;">${t.nombre} ${t.apellidos}${t.pivot?.rol === 'Principal' ? ' <span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:0 5px;border-radius:3px;font-weight:600;">Principal</span>' : ''}</span>`).join('')
+              ? p.tecnicos.map((t: any) => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;padding:2px 10px;border-radius:6px;margin:2px 4px 2px 0;font-size:13px;">${t.nombre} ${t.apellidos}${t.pivot?.rol === 'Principal' ? ' <span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:0 5px;border-radius:3px;font-weight:600;">Principal</span>' : ''}</span>`).join('')
               : (p.tecnico ? p.tecnico.nombre + ' ' + p.tecnico.apellidos : '—')
           }</div></div>
-          <div class="prog-detalle-row"><div class="prog-detalle-label">Supervisor:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
+          <div class="prog-detalle-row"><div class="prog-detalle-label">Asistente administrativo:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? p.vehiculo.placa + ' - ' + p.vehiculo.marca + ' ' + p.vehiculo.modelo : '—'}</div></div>
         </div>
         ${p.insumos && p.insumos.length > 0 ? `
@@ -659,7 +936,7 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' =
           <h3 class="prog-detalle-section-title">Insumos / Productos</h3>
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <thead><tr style="background:#f5f5f5;"><th style="padding:8px;text-align:left;">Producto</th><th style="padding:8px;">Cant. Asignada</th><th style="padding:8px;">Cant. Utilizada</th><th style="padding:8px;">Estado</th></tr></thead>
-            <tbody>${p.insumos.map(ins => `
+            <tbody>${p.insumos.map((ins: any) => `
               <tr style="border-bottom:1px solid #eee;"><td style="padding:8px;">${ins.producto?.descripcion || '—'}</td><td style="padding:8px;text-align:center;">${ins.cantidad_asignada}</td><td style="padding:8px;text-align:center;">${ins.cantidad_utilizada ?? '—'}</td><td style="padding:8px;text-align:center;">${ins.estado}</td></tr>
             `).join('')}</tbody>
           </table>
@@ -812,9 +1089,9 @@ async function abrirEdicion(p: Programacion) {
             </div>
           </div>
           <div class="prog-form-group">
-            <label class="prog-form-label">Supervisor</label>
+            <label class="prog-form-label">Asistente administrativo</label>
             <select class="prog-form-control" name="id_supervisor">
-              <option value="">Sin supervisor</option>
+              <option value="">Sin asistente administrativo</option>
               ${personalData.map(pe => `<option value="${pe.id}" ${pe.id === p.id_supervisor ? 'selected' : ''}>${pe.nombre} ${pe.apellidos}</option>`).join('')}
             </select>
           </div>
@@ -1004,9 +1281,9 @@ function renderFormNueva(body: HTMLElement) {
             </div>
           </div>
           <div class="prog-form-group">
-            <label class="prog-form-label">Supervisor</label>
+            <label class="prog-form-label">Asistente administrativo</label>
             <select class="prog-form-control" name="id_supervisor">
-              <option value="">Sin supervisor</option>
+              <option value="">Sin asistente administrativo</option>
               ${personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('')}
             </select>
           </div>
@@ -1023,7 +1300,7 @@ function renderFormNueva(body: HTMLElement) {
         <div class="prog-form-section">
           <h3 class="prog-form-section-title">Ubicación</h3>
           <div class="prog-form-group"><label class="prog-form-label">Planta</label><select class="prog-form-control" name="id_cliente_planta" id="newPlantaSelect"><option value="">-- Planta --</option></select></div>
-          <div class="prog-form-group"><label class="prog-form-label">Área</label><select class="prog-form-control" name="id_cliente_planta_area" id="newAreaSelect"><option value="">-- Área --</option></select></div>
+          <div id="infoAreasServicio" style="display:none;margin-top:-4px;margin-bottom:8px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;color:#475569;"></div>
           <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="2"></textarea></div>
         </div>
       </div>
@@ -1037,11 +1314,16 @@ function renderFormNueva(body: HTMLElement) {
   // ── Eventos formulario ──
   const selectODS = body.querySelector('#selectODS') as HTMLSelectElement;
   const selectServicio = body.querySelector('#selectServicio') as HTMLSelectElement;
+  const infoAreasServicio = body.querySelector('#infoAreasServicio') as HTMLElement;
 
   // Lógica de badge "Principal" para técnicos
   setupPrincipalBadge(body.querySelector('#tecnicosCheckboxes') as HTMLElement);
 
   selectODS?.addEventListener('change', async () => {
+    areaIdsServicioSeleccionado = [];
+    plantaIdServicioSeleccionado = null;
+    if (infoAreasServicio) infoAreasServicio.style.display = 'none';
+
     const odsId = parseInt(selectODS.value);
     const ods = odsDisponibles.find(o => o.id === odsId);
     const grupoServicio = body.querySelector('#grupoServicio') as HTMLElement;
@@ -1049,7 +1331,12 @@ function renderFormNueva(body: HTMLElement) {
 
     if (ods && ods.detalles.length > 0) {
       selectServicio.innerHTML = '<option value="">Seleccionar servicio...</option>' +
-        ods.detalles.map(d => `<option value="${d.id_servicio}" data-frecuencia="${d.frecuencia || ''}" data-local="${d.local || ''}" data-id-planta="${d.id_cliente_planta || ''}" data-id-area="${d.id_cliente_planta_area || ''}">${d.servicio_nombre}${d.frecuencia ? ' (' + d.frecuencia + ')' : ''}</option>`).join('');
+        ods.detalles.map(d => {
+          const areaData = Array.isArray((d as any).id_cliente_planta_area)
+            ? (d as any).id_cliente_planta_area.join(',')
+            : ((d as any).id_cliente_planta_area || '');
+          return `<option value="${d.id_servicio}" data-frecuencia="${d.frecuencia || ''}" data-local="${d.local || ''}" data-id-planta="${d.id_cliente_planta || ''}" data-id-area="${areaData}">${d.servicio_nombre}${d.frecuencia ? ' (' + d.frecuencia + ')' : ''}</option>`;
+        }).join('');
       grupoServicio.style.display = 'block';
       detallesDiv.innerHTML = `<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;">
         <strong>Cliente:</strong> ${ods.cliente} &nbsp;|&nbsp; <strong>Servicios:</strong> ${ods.detalles.length}
@@ -1059,8 +1346,6 @@ function renderFormNueva(body: HTMLElement) {
         await cargarPlantasClienteProg(ods.id_cliente);
         const plantaSel = body.querySelector('#newPlantaSelect') as HTMLSelectElement;
         if (plantaSel) plantaSel.innerHTML = getPlantaOptionsProg();
-        const areaSel = body.querySelector('#newAreaSelect') as HTMLSelectElement;
-        if (areaSel) areaSel.innerHTML = getAreaOptionsProg(null);
       }
     } else {
       grupoServicio.style.display = 'none';
@@ -1074,14 +1359,19 @@ function renderFormNueva(body: HTMLElement) {
     const frecuencia = opt?.dataset.frecuencia || '';
     const infoDiv = body.querySelector('#infoFrecuencia') as HTMLElement;
     const diasGroup = body.querySelector('#diasSemanaGroup') as HTMLElement;
+    const radioIndividual = body.querySelector('input[name="modo"][value="individual"]') as HTMLInputElement | null;
+    const radioAnual = body.querySelector('input[name="modo"][value="anual"]') as HTMLInputElement | null;
 
     // Mostrar/ocultar selección de días según frecuencia
-    if (frecuencia.toLowerCase() === 'días de la semana' || frecuencia.toLowerCase() === 'dias de la semana') {
+    const frecuenciaEsDiasSemana = esFrecuenciaDiasSemana(frecuencia);
+    if (frecuenciaEsDiasSemana) {
       diasGroup.style.display = 'block';
-      infoDiv.innerHTML = `Frecuencia: <strong>${frecuencia}</strong>. Selecciona los días específicos de la semana.`;
+      infoDiv.innerHTML = `Frecuencia: <strong>${frecuencia}</strong>. Puedes editar los días específicos de la semana.`;
       infoDiv.style.display = 'block';
+      setDiasSemanaChecks(body, extraerDiasDesdeFrecuencia(frecuencia));
     } else {
       diasGroup.style.display = 'none';
+      setDiasSemanaChecks(body, []);
       if (frecuencia) {
         infoDiv.innerHTML = `Frecuencia: <strong>${frecuencia}</strong>. ${frecuencia.toLowerCase() !== 'única' ? 'Puedes usar "Año Completo" para programar todas las fechas automáticamente.' : ''}`;
         infoDiv.style.display = 'block';
@@ -1090,24 +1380,61 @@ function renderFormNueva(body: HTMLElement) {
       }
     }
 
+    // Regla de negocio: si la frecuencia es única, no permitir programación anual.
+    if (radioAnual) {
+      const bloquearAnual = esFrecuenciaUnica(frecuencia);
+      radioAnual.disabled = bloquearAnual;
+      if (bloquearAnual) {
+        radioAnual.checked = false;
+        if (radioIndividual) radioIndividual.checked = true;
+        (body.querySelector('#seccionIndividual') as HTMLElement).style.display = 'block';
+        (body.querySelector('#seccionAnual') as HTMLElement).style.display = 'none';
+        const submitBtn = body.querySelector('#btnSubmitNueva') as HTMLElement | null;
+        if (submitBtn) submitBtn.textContent = 'Crear Programación';
+      }
+    }
+
     // Auto-seleccionar planta/area del detalle del servicio
     const idPlantaDet = parseInt(opt?.dataset.idPlanta || '') || null;
-    const idAreaDet = parseInt(opt?.dataset.idArea || '') || null;
+    const areasDet = normalizeAreaIds(opt?.dataset.idArea || '');
+    areaIdsServicioSeleccionado = areasDet;
+    plantaIdServicioSeleccionado = idPlantaDet;
+
+    if (infoAreasServicio) {
+      const nombres = getAreaNombresPorIds(idPlantaDet, areasDet);
+      if (nombres.length > 0) {
+        infoAreasServicio.style.display = '';
+        infoAreasServicio.innerHTML = '<div style="font-size:12px;color:#64748b;margin-bottom:4px;">Áreas del servicio</div>' +
+          '<div>' + renderAreaChipsLikeODS(nombres) + '</div>';
+      } else {
+        infoAreasServicio.style.display = 'none';
+      }
+    }
+
     const plantaSel = body.querySelector('#newPlantaSelect') as HTMLSelectElement;
     if (plantaSel) {
       plantaSel.innerHTML = getPlantaOptionsProg(idPlantaDet);
     }
-    const areaSel = body.querySelector('#newAreaSelect') as HTMLSelectElement;
-    if (areaSel) {
-      areaSel.innerHTML = getAreaOptionsProg(idPlantaDet, idAreaDet);
-    }
   });
 
-  // Cascada planta → área en nueva programación
+  // Si cambian la planta, se mantiene la visualización de áreas del servicio solo cuando coincide con su planta original.
   body.querySelector('#newPlantaSelect')?.addEventListener('change', (e) => {
     const idPlanta = parseInt((e.target as HTMLSelectElement).value) || null;
-    const areaSel = body.querySelector('#newAreaSelect') as HTMLSelectElement;
-    if (areaSel) areaSel.innerHTML = getAreaOptionsProg(idPlanta);
+    if (infoAreasServicio) {
+      const mostrar = !!(idPlanta && plantaIdServicioSeleccionado && idPlanta === plantaIdServicioSeleccionado && areaIdsServicioSeleccionado.length > 0);
+      if (!mostrar) {
+        infoAreasServicio.style.display = 'none';
+      } else {
+        const nombres = getAreaNombresPorIds(idPlanta, areaIdsServicioSeleccionado);
+        if (nombres.length > 0) {
+          infoAreasServicio.style.display = '';
+          infoAreasServicio.innerHTML = '<div style="font-size:12px;color:#64748b;margin-bottom:4px;">Áreas del servicio</div>' +
+            '<div>' + renderAreaChipsLikeODS(nombres) + '</div>';
+        } else {
+          infoAreasServicio.style.display = 'none';
+        }
+      }
+    }
   });
 
   body.querySelectorAll('input[name="modo"]').forEach(r => r.addEventListener('change', () => {
@@ -1127,6 +1454,7 @@ function renderFormNueva(body: HTMLElement) {
     const idServicio = parseInt(selectServicio.value);
     const opt = selectServicio.selectedOptions[0];
     const frecuencia = opt?.dataset.frecuencia || '';
+    const frecuenciaBackend = frecuenciaParaBackend(frecuencia);
     const fechaInicio = (body.querySelector('#fechaInicioAnual') as HTMLInputElement).value;
     const resultDiv = body.querySelector('#previewAnualResult') as HTMLElement;
 
@@ -1151,7 +1479,7 @@ function renderFormNueva(body: HTMLElement) {
     resultDiv.innerHTML = '<p style="color:#999;">Calculando fechas...</p>';
 
     try {
-      const payload: any = { id_servicio: idServicio, frecuencia, fecha_inicio: fechaInicio };
+      const payload: any = { id_servicio: idServicio, frecuencia: frecuenciaBackend, fecha_inicio: fechaInicio };
       if (diasSemana) payload.dias_semana = diasSemana;
       
       const res = await programacionService.previewAnual(payload);
@@ -1190,7 +1518,7 @@ async function submitIndividual(body: HTMLElement) {
   // Derivar local_sede y direccion_completa de planta
   const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || null;
   data.id_cliente_planta = idPlantaSel;
-  data.id_cliente_planta_area = parseInt(fd.get('id_cliente_planta_area') as string) || null;
+  data.id_cliente_planta_area = resolveAreaIdNuevaProgramacion(idPlantaSel);
   data.local_sede = getPlantaNombre(idPlantaSel) || '';
   data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
 
@@ -1228,11 +1556,16 @@ async function submitAnual(body: HTMLElement) {
   const selectServicio = body.querySelector('#selectServicio') as HTMLSelectElement;
   const opt = selectServicio.selectedOptions[0];
   const frecuencia = opt?.dataset.frecuencia || '';
+  const frecuenciaBackend = frecuenciaParaBackend(frecuencia);
   const fechaInicio = (body.querySelector('[name="fecha_inicio_anual"]') as HTMLInputElement).value;
   const horaInicio = (body.querySelector('[name="hora_inicio_anual"]') as HTMLInputElement).value;
   const horaFin = (body.querySelector('[name="hora_fin_anual"]') as HTMLInputElement).value;
 
   if (!frecuencia || !fechaInicio) { mostrarToast('warning', 'Datos incompletos', 'Seleccione un servicio con frecuencia y fecha de inicio'); return; }
+  if (esFrecuenciaUnica(frecuencia)) {
+    mostrarToast('warning', 'Frecuencia no válida', 'Para frecuencia Única no aplica Programación Anual. Use modo Individual.');
+    return;
+  }
 
   // Recoger técnicos seleccionados
   const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
@@ -1251,12 +1584,12 @@ async function submitAnual(body: HTMLElement) {
     tecnicos_ids: tecnicosIds,
     id_supervisor: fd.get('id_supervisor') || null,
     id_vehiculo: fd.get('id_vehiculo') || null,
-    frecuencia,
+    frecuencia: frecuenciaBackend,
     fecha_inicio: fechaInicio,
     hora_inicio: horaInicio || '08:00',
     hora_fin: horaFin || '12:00',
     id_cliente_planta: idPlantaSel,
-    id_cliente_planta_area: parseInt(fd.get('id_cliente_planta_area') as string) || null,
+    id_cliente_planta_area: resolveAreaIdNuevaProgramacion(idPlantaSel),
     local_sede: getPlantaNombre(idPlantaSel) || '',
     direccion_completa: getPlantaDireccion(idPlantaSel) || '',
     observaciones: fd.get('observaciones') || '',
@@ -1346,7 +1679,7 @@ async function exportarPDF() {
 
 function clienteNombre(p: Programacion): string {
   const px = p as ProgramacionExtendida;
-  const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente;
+  const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente;
   return c ? (c.nombre_empresa || c.persona_contacto || '—') : '—';
 }
 
@@ -1354,7 +1687,7 @@ function getClientesUnicos(): { id: number; nombre: string }[] {
   const clientesMap = new Map<number, string>();
   programacionesData.forEach(p => {
     const px = p as ProgramacionExtendida;
-    const cliente = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente;
+    const cliente = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente;
     if (cliente && cliente.id) {
       const nombre = cliente.nombre_empresa || cliente.persona_contacto || '—';
       clientesMap.set(cliente.id, nombre);

@@ -77,7 +77,7 @@ class CotizacionController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $cotizacion = Cotizacion::with(['cliente', 'creador', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'detalles.planta', 'detalles.area', 'beneficios.catalogoCapAud'])
+        $cotizacion = Cotizacion::with(['cliente', 'creador', 'detalles.servicio', 'detalles.producto', 'detalles.catalogoCapAud', 'detalles.planta', 'beneficios.catalogoCapAud'])
                                 ->find($id);
 
         if (!$cotizacion) {
@@ -131,7 +131,8 @@ class CotizacionController extends Controller
             'detalles.*.fosfina_producto' => 'nullable|string|max:255',
             'detalles.*.fosfina_cantidad' => 'nullable|string|max:50',
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
-            'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'detalles.*.id_cliente_planta_area' => 'nullable|array',
+            'detalles.*.id_cliente_planta_area.*' => 'integer|exists:cliente_planta_area,id',
             'detalles.*.horas_capacitacion' => 'nullable|numeric|min:0',
             'detalles.*.num_participantes' => 'nullable|integer|min:1',
             'detalles.*.fecha_servicio' => 'nullable|date',
@@ -286,7 +287,8 @@ class CotizacionController extends Controller
             'detalles.*.fosfina_producto' => 'nullable|string|max:255',
             'detalles.*.fosfina_cantidad' => 'nullable|string|max:50',
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
-            'detalles.*.id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'detalles.*.id_cliente_planta_area' => 'nullable|array',
+            'detalles.*.id_cliente_planta_area.*' => 'integer|exists:cliente_planta_area,id',
             'detalles.*.horas_capacitacion' => 'nullable|numeric|min:0',
             'detalles.*.num_participantes' => 'nullable|integer|min:1',
             'detalles.*.fecha_servicio' => 'nullable|date',
@@ -532,7 +534,7 @@ class CotizacionController extends Controller
             'detalles.servicio', 
             'detalles.producto', 
             'detalles.catalogoCapAud', 
-            'creador',
+            'creador.cargo',
             'beneficios.catalogoCapAud'
         ])->find($id);
 
@@ -542,6 +544,13 @@ class CotizacionController extends Controller
                 'message' => 'Cotización no encontrada'
             ], 404);
         }
+
+        // Obtener el Gerente Comercial del Área de Gerencia
+        $gerenteComercial = \App\Models\Personal::whereHas('cargo', function($q) {
+            $q->where('nombre', 'Gerente Comercial');
+        })->whereHas('area', function($q) {
+            $q->where('nombre', 'Gerencia');
+        })->with(['cargo', 'area'])->first();
 
         $exponentes = collect();
         if (!empty($cotizacion->exponentes_ids)) {
@@ -556,7 +565,7 @@ class CotizacionController extends Controller
             default => 'CotizacionPDF',
         };
 
-        $pdf = Pdf::loadView($pdfView, compact('cotizacion', 'exponentes'))
+        $pdf = Pdf::loadView($pdfView, compact('cotizacion', 'exponentes', 'gerenteComercial'))
                   ->setPaper('a4', 'portrait');
 
         // Si se pasa parámetro descargar=true, descarga automáticamente

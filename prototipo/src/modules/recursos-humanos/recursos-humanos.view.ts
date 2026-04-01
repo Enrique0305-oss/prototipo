@@ -1955,6 +1955,7 @@ export function renderRecursosHumanos() {
       <button class="tab-btn" data-tab="marcar">Marcar Asistencia</button>
       <button class="tab-btn" data-tab="horarios">Horarios</button>
       <button class="tab-btn" data-tab="empleados">Empleados</button>
+      <button class="tab-btn" data-tab="tecnicos">Técnicos</button>
       <button class="tab-btn" data-tab="reportes">Reportes</button>
     </div>
 

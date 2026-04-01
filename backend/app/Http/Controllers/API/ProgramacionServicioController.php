@@ -796,7 +796,7 @@ class ProgramacionServicioController extends Controller
         $current = $inicio->copy();
 
         // Caso especial: Días de la semana
-        if (strtolower($frecuencia) === 'días de la semana' && $diasSemana) {
+        if ($this->esFrecuenciaDiasSemana($frecuencia) && $diasSemana) {
             // Mapeo de nombres de días a números de Carbon (1=Lunes, 7=Domingo)
             $mapaDias = [
                 'lunes' => Carbon::MONDAY,
@@ -872,6 +872,25 @@ class ProgramacionServicioController extends Controller
         }
 
         return $fechas;
+    }
+
+    /**
+     * Detecta si la frecuencia representa programación por días de la semana
+     * incluso cuando llega como texto extendido (ej: "2 días a la semana (...)").
+     */
+    private function esFrecuenciaDiasSemana(string $frecuencia): bool
+    {
+        $txt = mb_strtolower(trim($frecuencia), 'UTF-8');
+
+        if ($txt === 'días de la semana' || $txt === 'dias de la semana') {
+            return true;
+        }
+
+        if (str_contains($txt, 'dias a la semana') || str_contains($txt, 'días a la semana')) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
