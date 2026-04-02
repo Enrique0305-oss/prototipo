@@ -19,6 +19,7 @@ class ProgramacionAsesoria extends Model
         'hora_fin',
         'local_sede',
         'direccion_completa',
+        'modalidad_visita',
         'estado_ejecucion',
         'observaciones',
         'creado_por',

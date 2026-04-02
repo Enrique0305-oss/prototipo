@@ -194,6 +194,12 @@ class OrdenAsesoriaController extends Controller
         });
 
         $primerDetalle = $cotizacion->detalles->first();
+        $areaIdsPrimerDetalle = $primerDetalle?->id_cliente_planta_area ?? [];
+        if (!is_array($areaIdsPrimerDetalle)) {
+            $areaIdsPrimerDetalle = empty($areaIdsPrimerDetalle) ? [] : [$areaIdsPrimerDetalle];
+        }
+        $idClientePlanta = $primerDetalle?->id_cliente_planta ?? null;
+        $idClientePlantaArea = !empty($areaIdsPrimerDetalle) ? (int) $areaIdsPrimerDetalle[0] : null;
         $exponentesIds = array_values(array_filter((array) ($cotizacion->exponentes_ids ?? []), fn($id) => !empty($id)));
         $exponentes = empty($exponentesIds)
             ? collect([])
@@ -242,6 +248,10 @@ class OrdenAsesoriaController extends Controller
                     'meses_implementacion' => $primerDetalle->meses_implementacion,
                     'frecuencia_visita' => $primerDetalle->frecuencia_visita,
                 ] : null,
+                'id_cliente_planta' => $idClientePlanta,
+                'id_cliente_planta_area' => $idClientePlantaArea,
+                'planta_nombre' => $primerDetalle?->planta?->nombre,
+                'areas_nombres' => $primerDetalle?->areas_nombres ?? [],
             ],
         ]);
     }
@@ -299,6 +309,13 @@ class OrdenAsesoriaController extends Controller
             : ($validated['fecha_aceptacion'] ?? optional($cotizacion->fecha_emision)->format('Y-m-d'));
 
         $exponenteIds = $validated['exponentes'] ?? [];
+        $primerDetalle = $cotizacion->detalles->first();
+        $areaIdsPrimerDetalle = $primerDetalle?->id_cliente_planta_area ?? [];
+        if (!is_array($areaIdsPrimerDetalle)) {
+            $areaIdsPrimerDetalle = empty($areaIdsPrimerDetalle) ? [] : [$areaIdsPrimerDetalle];
+        }
+        $idClientePlanta = $primerDetalle?->id_cliente_planta ?? null;
+        $idClientePlantaArea = !empty($areaIdsPrimerDetalle) ? (int) $areaIdsPrimerDetalle[0] : null;
 
         try {
             DB::beginTransaction();
@@ -307,6 +324,8 @@ class OrdenAsesoriaController extends Controller
                 'numero_orden' => OrdenAsesoria::generarNumero(),
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
+                'id_cliente_planta' => $idClientePlanta,
+                'id_cliente_planta_area' => $idClientePlantaArea,
                 'id_servicio' => $validated['id_servicio'] ?? null,
                 'id_exponente' => !empty($exponenteIds) ? $exponenteIds[0] : null,
                 'fecha_servicio' => $validated['fecha_servicio'],

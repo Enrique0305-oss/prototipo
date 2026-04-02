@@ -16,6 +16,8 @@ class OrdenAsesoria extends Model
         'id_cliente',
         'id_servicio',
         'id_exponente',
+        'id_cliente_planta',
+        'id_cliente_planta_area',
         'fecha_servicio',
         'fecha_aceptacion',
         'hora_servicio',

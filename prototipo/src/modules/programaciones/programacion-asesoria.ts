@@ -6,11 +6,12 @@ import { programacionService } from './programaciones.service';
 import { mostrarToast } from '../../shared/toast';
 
 let asesoriasDisponibles: any[] = [];
-let personalData: any[] = [];
+let personalData: { id: number; nombre: string; apellidos: string }[] = [];
 let vehiculosData: any[] = [];
 let exponentesDisponiblesActual: any[] = [];
 let exponentesSeleccionadosIds: number[] = [];
 let frecuenciaFilasActuales: Array<{ mes: string; presencial: string; virtual: string; frecuencia: string }> = [];
+let asesoriaSeleccionadaActual: any = null;
 
 function nombreExponente(e: any): string {
   return `${e?.nombre || ''} ${e?.apellidos || ''}`.trim() || 'Exponente';
@@ -84,10 +85,20 @@ function addMonthsSafe(date: Date, months: number): Date {
   return result;
 }
 
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function inicioMesImplementacion(fechaInicio: Date, mes: number): Date {
+  if (mes === 1) return new Date(fechaInicio);
+  const base = addMonthsSafe(fechaInicio, mes - 1);
+  return new Date(base.getFullYear(), base.getMonth(), 1);
+}
+
+function finMesImplementacion(fechaInicio: Date, fechaFinGlobal: Date, mes: number, mesesTotales: number): Date {
+  if (mes === mesesTotales) return new Date(fechaFinGlobal);
+  if (mes === 1) return endOfMonth(fechaInicio);
+  return endOfMonth(inicioMesImplementacion(fechaInicio, mes));
 }
 
 function extraerMesNumero(mes: string, index: number): number {
@@ -155,6 +166,29 @@ function renderSelectorDiasPorMes(totalMeses: number) {
   }).join('');
 }
 
+function obtenerDiasPorMesSeleccionados(): Record<string, { presencial: number[]; virtual: number[] }> {
+  const resultado: Record<string, { presencial: number[]; virtual: number[] }> = {};
+  const meses = new Set<number>();
+
+  document.querySelectorAll('input.dia-presencial[data-mes], input.dia-virtual[data-mes]').forEach((el) => {
+    const mes = Number((el as HTMLInputElement).dataset.mes || 0);
+    if (mes > 0) meses.add(mes);
+  });
+
+  meses.forEach((mes) => {
+    resultado[String(mes)] = {
+      presencial: Array.from(document.querySelectorAll(`input.dia-presencial[data-mes="${mes}"]:checked`))
+        .map((el) => Number((el as HTMLInputElement).value))
+        .filter((n) => !Number.isNaN(n)),
+      virtual: Array.from(document.querySelectorAll(`input.dia-virtual[data-mes="${mes}"]:checked`))
+        .map((el) => Number((el as HTMLInputElement).value))
+        .filter((n) => !Number.isNaN(n)),
+    };
+  });
+
+  return resultado;
+}
+
 function obtenerFechasPorDias(inicio: Date, fin: Date, diasSemana: number[]): Date[] {
   if (diasSemana.length === 0) return [];
   const setDias = new Set(diasSemana);
@@ -176,6 +210,33 @@ function asignarFechasVisitas(candidatas: Date[], total: number): Date[] {
     salida.push(new Date(candidatas[i % candidatas.length]));
   }
   return salida;
+}
+
+function actualizarTablaFrecuenciaPorVisita() {
+  const tiempoFrecuenciaRows = document.getElementById('tiempoFrecuenciaRows');
+  if (!tiempoFrecuenciaRows || frecuenciaFilasActuales.length === 0) return;
+
+  // Actualizar cada fila con los días seleccionados
+  frecuenciaFilasActuales.forEach((fila, index) => {
+    const mesN = extraerMesNumero(fila.mes, index);
+    const diasPresenciales = obtenerDiasSeleccionadosPorMes('presencial', mesN).length;
+    const diasVirtuales = obtenerDiasSeleccionadosPorMes('virtual', mesN).length;
+
+    fila.presencial = String(diasPresenciales);
+    fila.virtual = String(diasVirtuales);
+    
+    // Actualizar la fila en la tabla
+    const filas = tiempoFrecuenciaRows.querySelectorAll('tr');
+    if (index < filas.length) {
+      const celdas = filas[index].querySelectorAll('td');
+      if (celdas.length >= 4) {
+        celdas[1].textContent = String(diasPresenciales);
+        celdas[2].textContent = String(diasVirtuales);
+      }
+    }
+  });
+
+  renderAgendaAutomatica();
 }
 
 function renderAgendaAutomatica() {
@@ -222,8 +283,8 @@ function renderAgendaAutomatica() {
     totalPresencial += totalMesPresencial;
     totalVirtual += totalMesVirtual;
 
-    const inicioMes = addMonthsSafe(fechaInicio, mes - 1);
-    const finMes = mes === meses ? fechaFin : addDays(addMonthsSafe(fechaInicio, mes), -1);
+    const inicioMes = inicioMesImplementacion(fechaInicio, mes);
+    const finMes = finMesImplementacion(fechaInicio, fechaFin, mes, meses);
 
     const diasPresencialMes = obtenerDiasSeleccionadosPorMes('presencial', mes);
     const diasVirtualMes = obtenerDiasSeleccionadosPorMes('virtual', mes);
@@ -405,6 +466,14 @@ function renderFormAsesoria(body: HTMLElement) {
           </div>
 
           <div class="prog-form-group">
+            <label class="prog-form-label">Asistente administrativo</label>
+            <select class="prog-form-control" id="supervisor">
+              <option value="">-- Seleccionar asistente administrativo --</option>
+              ${personalData.map((pe: { id: number; nombre: string; apellidos: string }) => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('')}
+            </select>
+          </div>
+
+          <div class="prog-form-group">
             <label class="prog-form-label">Vehículo (Transporte)</label>
             <select class="prog-form-control" id="vehiculo">
               <option value="">-- Seleccionar vehículo --</option>
@@ -557,6 +626,7 @@ function bindEventosAsesoria() {
       const aseId = (e.target as HTMLSelectElement).value;
       if (!aseId) {
         detalles!.style.display = 'none';
+        asesoriaSeleccionadaActual = null;
         const obsPlanta = document.getElementById('obsPlantaLabel');
         const obsArea = document.getElementById('obsAreaLabel');
         if (obsPlanta) obsPlanta.textContent = 'Sin selección';
@@ -592,6 +662,7 @@ function bindEventosAsesoria() {
 
       const asesoria = asesoriasDisponibles.find(a => a.id == aseId);
       if (!asesoria) return;
+      asesoriaSeleccionadaActual = asesoria;
 
       document.getElementById('detAseNombre')!.textContent = asesoria.asesoria_nombre || 'Sin nombre';
       document.getElementById('detAseModalidad')!.textContent = asesoria.modalidad || 'Sin especificar';
@@ -674,6 +745,7 @@ function bindEventosAsesoria() {
       const meses = Number((mesesRaw.match(/\d+/) || [0])[0]);
       renderSelectorDiasPorMes(meses);
 
+      actualizarTablaFrecuenciaPorVisita();
       renderAgendaAutomatica();
     });
   }
@@ -686,6 +758,7 @@ function bindEventosAsesoria() {
   form?.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
     if (target && (target.classList.contains('dia-presencial') || target.classList.contains('dia-virtual'))) {
+      actualizarTablaFrecuenciaPorVisita();
       renderAgendaAutomatica();
     }
   });
@@ -738,6 +811,9 @@ async function guardarAsesoriaProgramada(form: HTMLFormElement) {
     id_vehiculo: vehiculo?.value ? parseInt(vehiculo.value) : undefined,
     observaciones: observaciones.value || '',
     exponentes: exponentesSeleccionadosIds,
+    dias_por_mes: obtenerDiasPorMesSeleccionados(),
+    id_cliente_planta: asesoriaSeleccionadaActual?.id_cliente_planta ? Number(asesoriaSeleccionadaActual.id_cliente_planta) : undefined,
+    id_cliente_planta_area: asesoriaSeleccionadaActual?.id_cliente_planta_area ? Number(asesoriaSeleccionadaActual.id_cliente_planta_area) : undefined,
   };
 
   try {

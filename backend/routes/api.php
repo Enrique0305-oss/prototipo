@@ -317,6 +317,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/programacion-asesoria', [ProgramacionAsesoriaController::class, 'index']);
     Route::get('/programacion-asesoria/{id}', [ProgramacionAsesoriaController::class, 'show']);
     Route::post('/programacion-asesoria', [ProgramacionAsesoriaController::class, 'store']);
+    Route::put('/programacion-asesoria/{id}', [ProgramacionAsesoriaController::class, 'update']);
 
     // Almacén - Salidas por Programación
     Route::get('/almacen/salidas-programacion/pendientes', [SalidaProgramacionController::class, 'getPendientes']);

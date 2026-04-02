@@ -50,6 +50,13 @@ type ProgramacionExtendida = Programacion & {
   orden_capacitacion?: any;
   orden_asesoria?: any;
   exponentes?: any[];
+  modalidad?: string;
+  modalidad_visita?: string;
+  meses_implementacion?: number | null;
+  frecuencia_visita?: any;
+  dias_por_mes_calculado?: Record<string, { presencial: number[]; virtual: number[] }>;
+  resumen_por_mes?: Array<{ mes: number; presencial: number; virtual: number; frecuencia: string }>;
+  fecha_fin_programacion?: string | null;
 };
 
 function mapCapacitacionToProgramacion(cap: any): ProgramacionExtendida {
@@ -103,6 +110,11 @@ function mapAsesoriaToProgramacion(ase: any): ProgramacionExtendida {
     planta: ase.planta,
     area: ase.area,
     orden_asesoria: ase.ordenAsesoria || ase.orden_asesoria,
+    exponentes: ase.exponentes || [],
+    modalidad: ase.modalidad || ase.ordenAsesoria?.modalidad || ase.orden_asesoria?.modalidad,
+    modalidad_visita: ase.modalidad_visita || ase.modalidadVisita || ase.modalidad_visita,
+    meses_implementacion: ase.meses_implementacion ?? ase.ordenAsesoria?.meses_implementacion ?? ase.orden_asesoria?.meses_implementacion ?? null,
+    frecuencia_visita: ase.frecuencia_visita ?? ase.ordenAsesoria?.frecuencia_visita ?? ase.orden_asesoria?.frecuencia_visita ?? null,
     tipo_programacion: 'asesoria',
   } as ProgramacionExtendida;
 }
@@ -487,12 +499,16 @@ async function cargarDatosIniciales() {
 
 async function recargarProgramaciones() {
   try {
-    const [progRes, progCapRes, estRes] = await Promise.all([
+    const [progRes, progCapRes, progAseRes, estRes] = await Promise.all([
       programacionService.getAll({
         mes: fechaActual.getMonth() + 1,
         anio: fechaActual.getFullYear(),
       }),
       programacionService.getAllProgramacionCapacitacion({
+        mes: fechaActual.getMonth() + 1,
+        anio: fechaActual.getFullYear(),
+      }),
+      programacionService.getAllProgramacionAsesoria({
         mes: fechaActual.getMonth() + 1,
         anio: fechaActual.getFullYear(),
       }),
@@ -506,7 +522,8 @@ async function recargarProgramaciones() {
       tipo_programacion: 'servicio',
     })) as ProgramacionExtendida[];
     const programacionesCapacitacion = (progCapRes.data || []).map(mapCapacitacionToProgramacion);
-    programacionesData = [...programacionesServicio, ...programacionesCapacitacion] as Programacion[];
+    const programacionesAsesoria = (progAseRes.data || []).map(mapAsesoriaToProgramacion);
+    programacionesData = [...programacionesServicio, ...programacionesCapacitacion, ...programacionesAsesoria] as Programacion[];
     if (estRes.data) estadisticas = estRes.data;
   } catch (err) {
     console.error('Error recargando programaciones:', err);
@@ -647,6 +664,109 @@ function badgeTipoProgramacion(p: Programacion): string {
   return '';
 }
 
+function renderAccionesDetalle(p: Programacion): string {
+  return `
+    <div class="prog-modal-footer">
+      <button type="button" class="prog-btn-danger" id="btnEliminarProg">Eliminar</button>
+      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-warning" id="btnCancelarProg">Cancelar Programación</button>` : ''}
+      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" id="btnEditarProg">Editar</button>` : ''}
+      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" style="background:#10b981;" id="btnCompletarProg">Marcar Realizado</button>` : ''}
+    </div>`;
+}
+
+function badgeModalidadVisita(p: Programacion): string {
+  const px = p as ProgramacionExtendida;
+  const raw = String(px.modalidad_visita || '').trim().toLowerCase();
+  if (!raw) return '<span style="background:#e5e7eb;color:#475569;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Sin modalidad</span>';
+  if (raw.startsWith('pres')) {
+    return '<span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Presencial</span>';
+  }
+  if (raw.startsWith('vir')) {
+    return '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Virtual</span>';
+  }
+  return `<span style="background:#e5e7eb;color:#475569;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">${px.modalidad_visita}</span>`;
+}
+
+function badgeModalidadProgramacion(p: Programacion): string {
+  const px = p as ProgramacionExtendida;
+  const raw = (px as any).modalidad || (px as any).orden_asesoria?.modalidad || (px as any).ordenAsesoria?.modalidad || '';
+  const modalidad = String(raw).trim();
+  if (!modalidad) return '';
+  const texto = modalidad.toLowerCase().includes('hibr') ? 'Híbrido'
+    : modalidad.toLowerCase().includes('pres') ? 'Presencial'
+    : modalidad.toLowerCase().includes('virt') ? 'Virtual'
+    : modalidad;
+  return `<span style="background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">${texto}</span>`;
+}
+
+function normalizarFrecuenciaVisitaDetalle(frecuenciaVisita: any): Array<{ mes: string; presencial: number; virtual: number; frecuencia: string }> {
+  if (!frecuenciaVisita) return [];
+
+  let data = frecuenciaVisita;
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return [];
+    }
+  }
+
+  if (Array.isArray(data)) {
+    return data.map((item: any, index: number) => ({
+      mes: String(item?.mes ?? item?.mes_nombre ?? `Mes ${index + 1}`),
+      presencial: Number(item?.presencial ?? item?.p ?? 0),
+      virtual: Number(item?.virtual ?? item?.v ?? 0),
+      frecuencia: String(item?.frecuencia ?? item?.frecuencia_visita ?? item?.f ?? '-'),
+    }));
+  }
+
+  if (typeof data === 'object') {
+    return Object.entries(data).map(([mesKey, val]: [string, any]) => {
+      const matchMes = String(mesKey).match(/\d+/);
+      const mesLabel = matchMes ? `Mes ${matchMes[0]}` : String(mesKey).toUpperCase();
+      return {
+        mes: mesLabel,
+        presencial: Number(val?.p ?? val?.presencial ?? 0),
+        virtual: Number(val?.v ?? val?.virtual ?? 0),
+        frecuencia: String(val?.f ?? val?.frecuencia ?? '-'),
+      };
+    });
+  }
+
+  return [];
+}
+
+function nombreDiaCorto(day: number): string {
+  const dias = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+  return dias[day] || '-';
+}
+
+function normalizarDiasPorMesDetalle(diasPorMes: any): Record<string, { presencial: number[]; virtual: number[] }> {
+  if (!diasPorMes) return {};
+
+  let data = diasPorMes;
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof data !== 'object' || Array.isArray(data)) return {};
+
+  const salida: Record<string, { presencial: number[]; virtual: number[] }> = {};
+  Object.entries(data).forEach(([mes, val]: [string, any]) => {
+    const key = String(mes);
+    salida[key] = {
+      presencial: Array.isArray(val?.presencial) ? val.presencial.map((n: any) => Number(n)).filter((n: number) => n >= 0 && n <= 6) : [],
+      virtual: Array.isArray(val?.virtual) ? val.virtual.map((n: any) => Number(n)).filter((n: number) => n >= 0 && n <= 6) : [],
+    };
+  });
+
+  return salida;
+}
+
 function renderVistaMensual(): string {
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -674,7 +794,7 @@ function renderVistaMensual(): string {
         ${servicios.slice(0, 3).map(s => `
           <div class="prog-event ${getColorByState(s.estado_ejecucion)}" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
             <div class="prog-event-title">${clienteNombre(s)}</div>
-            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${nombreActividad(s)} ${badgeTipoProgramacion(s)}</div>
+            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)}</div>
             <div class="prog-event-time">${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
           </div>
         `).join('')}
@@ -742,7 +862,7 @@ function renderVistaSemanal(): string {
                   return `
                   <div class="prog-week-card prog-week-card-${color}" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
                     <div class="prog-week-card-title">${clienteNombre(s)}</div>
-                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${nombreActividad(s)} ${badgeTipoProgramacion(s)}</div>
+                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)}</div>
                     <div class="prog-week-card-time"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
                     <div class="prog-week-card-tech"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre).join(', ') : (s.tecnico ? s.tecnico.nombre : '—')}</div>
                     <span class="prog-week-card-badge">${s.estado_ejecucion}</span>
@@ -787,7 +907,7 @@ function renderVistaDiaria(): string {
                   <span class="prog-status-badge ${s.estado_ejecucion}">${s.estado_ejecucion}</span>
                 </div>
                 <div class="prog-day-service-details">
-                  <div><strong>Servicio:</strong> ${nombreActividad(s)} ${badgeTipoProgramacion(s)}</div>
+                  <div><strong>Actividad:</strong> ${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)}</div>
                   <div><strong>Técnico:</strong> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre + ' ' + t.apellidos).join(', ') : (s.tecnico ? s.tecnico.nombre + ' ' + s.tecnico.apellidos : 'Sin asignar')}</div>
                   <div><strong>Local:</strong> ${s.planta ? s.planta.nombre : (s.local_sede || '—')}</div>
                   ${s.vehiculo ? `<div><strong>Vehículo:</strong> ${s.vehiculo.placa} - ${s.vehiculo.marca} ${s.vehiculo.modelo}</div>` : ''}
@@ -870,14 +990,39 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
             <div class="prog-detalle-row"><div class="prog-detalle-label">Local:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
           </div>
           ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
+          ${renderAccionesDetalle(p)}
           <div class="prog-modal-footer"><button type="button" class="prog-btn-secondary" id="btnCerrarDetalleCap">Cerrar</button></div>
         </div>`;
       body.querySelector('#btnCerrarDetalleCap')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
+      body.querySelector('#btnEliminarProg')?.addEventListener('click', () => eliminarProg(p.id));
+      body.querySelector('#btnCancelarProg')?.addEventListener('click', () => cancelarProg(p.id));
+      body.querySelector('#btnEditarProg')?.addEventListener('click', () => abrirEdicion(p));
+      body.querySelector('#btnCompletarProg')?.addEventListener('click', () => completarProg(p.id));
       return;
     }
 
     if (tipo === 'asesoria') {
-      const exps = (p.ordenAsesoria?.exponentes || p.orden_asesoria?.exponentes || []).map((e: any) => `${e.nombre} ${e.apellidos}`).join(', ');
+      const mesesImplementacion = Number((p as ProgramacionExtendida).meses_implementacion || 0);
+      const filasFrecuencia = normalizarFrecuenciaVisitaDetalle((p as ProgramacionExtendida).frecuencia_visita);
+      const diasPorMes = normalizarDiasPorMesDetalle((p as ProgramacionExtendida).dias_por_mes_calculado);
+      const resumenPorMesRaw = (p as ProgramacionExtendida).resumen_por_mes;
+      const resumenPorMes: Array<{ mes: number; presencial: number; virtual: number; frecuencia: string }> = Array.isArray(resumenPorMesRaw) ? resumenPorMesRaw : [];
+      const totalPresencial = resumenPorMes.reduce((acc, it) => acc + Number(it.presencial || 0), 0);
+      const totalVirtual = resumenPorMes.reduce((acc, it) => acc + Number(it.virtual || 0), 0);
+      const fechaInicioLabel = new Date(normalizarFecha(p.fecha_programada) + 'T00:00:00').toLocaleDateString('es-PE');
+      const fechaFinLabel = (p as ProgramacionExtendida).fecha_fin_programacion
+        ? new Date(normalizarFecha((p as ProgramacionExtendida).fecha_fin_programacion || '') + 'T00:00:00').toLocaleDateString('es-PE')
+        : '—';
+      const modalidadVisitaRaw = String((p as ProgramacionExtendida).modalidad_visita || '').trim().toLowerCase();
+      const esPresencial = modalidadVisitaRaw.startsWith('pres');
+      const esVirtual = modalidadVisitaRaw.startsWith('vir');
+      const plantaAsesoria = p.planta ? p.planta.nombre : '—';
+      const areaAsesoria = p.area ? p.area.nombre : '—';
+      const expsProg = (p.exponentes || []).map((e: any) => `${e.nombre} ${e.apellidos}`.trim()).filter((x: string) => !!x);
+      const expsOrden = ((p.ordenAsesoria?.exponentes || p.orden_asesoria?.exponentes || []) as any[])
+        .map((e: any) => `${e.nombre} ${e.apellidos}`.trim())
+        .filter((x: string) => !!x);
+      const exps = (expsProg.length > 0 ? expsProg : expsOrden).join(', ');
       body.innerHTML = `
         <div class="prog-detalle-grid">
           <div class="prog-detalle-section">
@@ -885,6 +1030,14 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
             <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="background:#dbeafe;color:#0369a1;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">Asesoría</span></div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Orden:</div><div class="prog-detalle-value">${p.ordenAsesoria?.numero_orden || p.orden_asesoria?.numero_orden || '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Asesoría:</div><div class="prog-detalle-value">${p.asesoria_nombre || p.ordenAsesoria?.servicio?.nombre || p.orden_asesoria?.servicio?.nombre || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Modalidad de visita:</div><div class="prog-detalle-value">${badgeModalidadVisita(p)}</div></div>
+            ${esPresencial ? `
+              <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${plantaAsesoria}</div></div>
+              <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${areaAsesoria}</div></div>
+            ` : esVirtual ? `
+              <div class="prog-detalle-row"><div class="prog-detalle-label"> </div><div class="prog-detalle-value" style="color:#1d4ed8;font-weight:700;">Reunión virtual</div></div>
+            ` : ''}
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Tiempo de implementación:</div><div class="prog-detalle-value">${mesesImplementacion > 0 ? `${mesesImplementacion} ${mesesImplementacion === 1 ? 'mes' : 'meses'}` : '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${new Date(normalizarFecha(p.fecha_programada) + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
@@ -897,10 +1050,99 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
             <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? p.vehiculo.placa + ' - ' + p.vehiculo.marca + ' ' + p.vehiculo.modelo : '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Local:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
           </div>
+          <div class="prog-detalle-section prog-detalle-section-full">
+            <h3 class="prog-detalle-section-title">Frecuencia por Visita</h3>
+            ${filasFrecuencia.length > 0 ? `
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">Mes</th>
+                    <th style="padding:8px 10px;text-align:center;border:1px solid #e2e8f0;">P</th>
+                    <th style="padding:8px 10px;text-align:center;border:1px solid #e2e8f0;">V</th>
+                    <th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">Frecuencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${filasFrecuencia.map((fila) => `
+                    <tr>
+                      <td style="padding:8px 10px;border:1px solid #e2e8f0;">${fila.mes}</td>
+                      <td style="padding:8px 10px;border:1px solid #e2e8f0;text-align:center;">${fila.presencial}</td>
+                      <td style="padding:8px 10px;border:1px solid #e2e8f0;text-align:center;">${fila.virtual}</td>
+                      <td style="padding:8px 10px;border:1px solid #e2e8f0;">${fila.frecuencia}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div style="color:#64748b;font-size:12px;">Sin frecuencia registrada</div>'}
+          </div>
+          <div class="prog-detalle-section prog-detalle-section-full">
+            <h3 class="prog-detalle-section-title">Días por Mes para Asesorías (Presenciales y Virtuales)</h3>
+            ${Object.keys(diasPorMes).length > 0 ? `
+              <div style="display:grid;gap:10px;">
+                ${Object.entries(diasPorMes).map(([mes, dias]: [string, any]) => `
+                  <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#f8fafc;">
+                    <div style="font-weight:700;color:#334155;margin-bottom:8px;">Mes ${mes}</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                      <div>
+                        <div style="font-size:12px;color:#475569;font-weight:700;margin-bottom:6px;">Presenciales</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                          ${(dias.presencial || []).length > 0
+                            ? (dias.presencial || []).map((d: number) => `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">${nombreDiaCorto(d)}</span>`).join('')
+                            : '<span style="color:#94a3b8;font-size:12px;">Sin días</span>'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style="font-size:12px;color:#475569;font-weight:700;margin-bottom:6px;">Virtuales</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                          ${(dias.virtual || []).length > 0
+                            ? (dias.virtual || []).map((d: number) => `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">${nombreDiaCorto(d)}</span>`).join('')
+                            : '<span style="color:#94a3b8;font-size:12px;">Sin días</span>'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : '<div style="color:#64748b;font-size:12px;">Sin días registrados por mes</div>'}
+          </div>
+          <div class="prog-detalle-section prog-detalle-section-full">
+            <h3 class="prog-detalle-section-title">Resumen de Programación</h3>
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+              <div style="font-size:13px;color:#334155;font-weight:700;">Fecha fin de implementación: <span style="color:#0f766e;">${fechaFinLabel}</span></div>
+              <div style="font-size:12px;color:#475569;">Total planificado: ${totalPresencial} asesorías presenciales y ${totalVirtual} asesorías virtuales. Vigencia del ${fechaInicioLabel} al ${fechaFinLabel}.</div>
+            </div>
+            ${resumenPorMes.length > 0 ? `
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">Mes</th>
+                    <th style="padding:8px 10px;text-align:center;border:1px solid #e2e8f0;">Total P</th>
+                    <th style="padding:8px 10px;text-align:center;border:1px solid #e2e8f0;">Total V</th>
+                    <th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">Frecuencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${resumenPorMes.map((r: any) => `
+                    <tr>
+                      <td style="padding:8px 10px;border:1px solid #e2e8f0;">Mes ${r.mes}</td>
+                      <td style="padding:8px 10px;border:1px solid #e2e8f0;text-align:center;">${Number(r.presencial || 0)}</td>
+                      <td style="padding:8px 10px;border:1px solid #e2e8f0;text-align:center;">${Number(r.virtual || 0)}</td>
+                      <td style="padding:8px 10px;border:1px solid #e2e8f0;">${r.frecuencia || '-'}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div style="color:#64748b;font-size:12px;">Sin resumen disponible</div>'}
+          </div>
           ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
+          ${renderAccionesDetalle(p)}
           <div class="prog-modal-footer"><button type="button" class="prog-btn-secondary" id="btnCerrarDetalleAse">Cerrar</button></div>
         </div>`;
       body.querySelector('#btnCerrarDetalleAse')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
+      body.querySelector('#btnEliminarProg')?.addEventListener('click', () => eliminarProg(p.id));
+      body.querySelector('#btnCancelarProg')?.addEventListener('click', () => cancelarProg(p.id));
+      body.querySelector('#btnEditarProg')?.addEventListener('click', () => abrirEdicion({ ...(p as any), tipo_programacion: 'asesoria' } as Programacion));
+      body.querySelector('#btnCompletarProg')?.addEventListener('click', () => completarProg(p.id));
       return;
     }
 
@@ -1049,8 +1291,54 @@ async function abrirEdicion(p: Programacion) {
   const body = document.getElementById('modalDetalleBody');
   if (!body) return;
 
+  const px = p as ProgramacionExtendida;
+  const isAsesoria = px.tipo_programacion === 'asesoria' || !!px.orden_asesoria || !!(px as any).ordenAsesoria;
+  const ordenAsesoria = (px as any).ordenAsesoria || px.orden_asesoria || {};
+
+  const fechaActual = normalizarFecha(p.fecha_programada || '');
+  const [anioActual, mesActual, diaActual] = fechaActual.split('-').map((x) => parseInt(x || '0'));
+
+  const expsAsignados = (px.exponentes || []).map((e: any) => Number(e.id)).filter((n) => !Number.isNaN(n));
+  const expsOrden = (((px as any).ordenAsesoria?.exponentes || px.orden_asesoria?.exponentes || []) as any[])
+    .map((e: any) => ({ id: Number(e.id), nombre: e.nombre, apellidos: e.apellidos }))
+    .filter((e: any) => !Number.isNaN(e.id));
+  const expsActuales = (px.exponentes || [])
+    .map((e: any) => ({ id: Number(e.id), nombre: e.nombre, apellidos: e.apellidos }))
+    .filter((e: any) => !Number.isNaN(e.id));
+  const expsMap = new Map<number, any>();
+  [...expsOrden, ...expsActuales].forEach((e: any) => expsMap.set(Number(e.id), e));
+  if (isAsesoria) {
+    try {
+      const resExponentes = await programacionService.getAllExponentes();
+      const catalogo = extractList<any>(resExponentes)
+        .map((e: any) => ({ id: Number(e.id), nombre: e.nombre, apellidos: e.apellidos }))
+        .filter((e: any) => !Number.isNaN(e.id));
+      catalogo.forEach((e: any) => expsMap.set(Number(e.id), e));
+    } catch (err) {
+      console.warn('No se pudo cargar el catálogo completo de exponentes para edición:', err);
+    }
+  }
+
+  const expsOpciones = Array.from(expsMap.values()).sort((a: any, b: any) => {
+    const na = `${a?.nombre || ''} ${a?.apellidos || ''}`.trim().toLowerCase();
+    const nb = `${b?.nombre || ''} ${b?.apellidos || ''}`.trim().toLowerCase();
+    return na.localeCompare(nb);
+  });
+  let exponentesSeleccionadosEdicion = [...expsAsignados];
+
+  const idPlantaEdicion = p.id_cliente_planta
+    ?? ordenAsesoria?.id_cliente_planta
+    ?? (px as any).id_cliente_planta
+    ?? null;
+  const idAreaEdicion = p.id_cliente_planta_area
+    ?? ordenAsesoria?.id_cliente_planta_area
+    ?? (px as any).id_cliente_planta_area
+    ?? null;
+  const modalidadVisitaEdicion = String((px as any).modalidad_visita || (px as any).modalidadVisita || px.modalidad || ordenAsesoria?.modalidad || '').trim().toLowerCase();
+  const esVirtualEdicion = modalidadVisitaEdicion.startsWith('vir');
+
   // Cargar plantas del cliente
-  const idCliente = (p as any).orden_servicio?.id_cliente || (p as any).id_cliente;
+  const idCliente = (p as any).orden_servicio?.id_cliente || ordenAsesoria?.id_cliente || (p as any).id_cliente;
   if (idCliente) await cargarPlantasClienteProg(idCliente);
 
   body.innerHTML = `
@@ -1065,29 +1353,45 @@ async function abrirEdicion(p: Programacion) {
             </select>
           </div>
           <div class="prog-form-row">
-            <div class="prog-form-group"><label class="prog-form-label">Fecha</label><input type="date" class="prog-form-control" name="fecha_programada" value="${p.fecha_programada}"></div>
+            ${isAsesoria
+              ? `<div class="prog-form-group">
+                  <label class="prog-form-label">Día de programación</label>
+                  <input type="number" min="1" max="31" class="prog-form-control" name="dia_programada" value="${diaActual || 1}">
+                  <small style="display:block;margin-top:6px;color:#64748b;font-size:11px;">Mes fijo: ${mesActual ? String(mesActual).padStart(2, '0') : '--'}/${anioActual || '----'}</small>
+                </div>`
+              : `<div class="prog-form-group"><label class="prog-form-label">Fecha</label><input type="date" class="prog-form-control" name="fecha_programada" value="${p.fecha_programada}"></div>`}
             <div class="prog-form-group"><label class="prog-form-label">Hora Inicio</label><input type="time" class="prog-form-control" name="hora_inicio" value="${fmtH(p.hora_inicio)}"></div>
             <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin" value="${fmtH(p.hora_fin || '')}"></div>
           </div>
         </div>
         <div class="prog-form-section">
           <h3 class="prog-form-section-title">Recursos</h3>
-          <div class="prog-form-group">
-            <label class="prog-form-label">Técnicos Asignados <span style="font-weight:400;font-size:12px;color:#888;">(primero = principal)</span></label>
-            <div class="prog-tecnicos-list" id="editTecnicosCheckboxes" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
-              ${tecnicosData.map(t => {
-                const isAssigned = p.tecnicos?.some(pt => pt.id === t.id) || t.id === p.id_tecnico_asignado;
-                const isPrincipal = t.id === p.id_tecnico_asignado;
-                return `
-                <label class="prog-tecnico-check" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;">
-                  <input type="checkbox" name="tecnicos_ids" value="${t.id}" ${isAssigned ? 'checked' : ''} style="accent-color:#4f7cff;">
-                  <span style="font-weight:500;">${t.nombre} ${t.apellidos}</span>
-                  ${t.autorizado_conducir ? '<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;">Conductor</span>' : ''}
-                  <span class="prog-principal-badge" style="${isPrincipal ? '' : 'display:none;'}margin-left:auto;font-size:11px;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:600;">Principal</span>
-                </label>`;
-              }).join('')}
-            </div>
-          </div>
+          ${isAsesoria
+            ? `<div class="prog-form-group">
+                <label class="prog-form-label">Exponentes/Ponentes a Asignar <span class="prog-required">*</span></label>
+                <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#fafafa;">
+                  <div id="editExponentesSeleccionados" style="display:flex;flex-wrap:wrap;gap:8px;min-height:34px;margin-bottom:10px;"></div>
+                  <select class="prog-form-control" id="editSelectAgregarExponente">
+                    <option value="">+ Agregar exponente...</option>
+                  </select>
+                </div>
+              </div>`
+            : `<div class="prog-form-group">
+                <label class="prog-form-label">Técnicos Asignados <span style="font-weight:400;font-size:12px;color:#888;">(primero = principal)</span></label>
+                <div class="prog-tecnicos-list" id="editTecnicosCheckboxes" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
+                  ${tecnicosData.map(t => {
+                    const isAssigned = p.tecnicos?.some(pt => pt.id === t.id) || t.id === p.id_tecnico_asignado;
+                    const isPrincipal = t.id === p.id_tecnico_asignado;
+                    return `
+                    <label class="prog-tecnico-check" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;">
+                      <input type="checkbox" name="tecnicos_ids" value="${t.id}" ${isAssigned ? 'checked' : ''} style="accent-color:#4f7cff;">
+                      <span style="font-weight:500;">${t.nombre} ${t.apellidos}</span>
+                      ${t.autorizado_conducir ? '<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;">Conductor</span>' : ''}
+                      <span class="prog-principal-badge" style="${isPrincipal ? '' : 'display:none;'}margin-left:auto;font-size:11px;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:600;">Principal</span>
+                    </label>`;
+                  }).join('')}
+                </div>
+              </div>`}
           <div class="prog-form-group">
             <label class="prog-form-label">Asistente administrativo</label>
             <select class="prog-form-control" name="id_supervisor">
@@ -1104,12 +1408,19 @@ async function abrirEdicion(p: Programacion) {
           </div>
         </div>
         <div class="prog-form-section prog-form-section-full">
-          <h3 class="prog-form-section-title">Ubicación</h3>
-          <div class="prog-form-row">
-            <div class="prog-form-group"><label class="prog-form-label">Planta</label><select class="prog-form-control" name="id_cliente_planta" id="editPlantaSelect">${getPlantaOptionsProg(p.id_cliente_planta)}</select></div>
-            <div class="prog-form-group"><label class="prog-form-label">Área</label><select class="prog-form-control" name="id_cliente_planta_area" id="editAreaSelect">${getAreaOptionsProg(p.id_cliente_planta || null, p.id_cliente_planta_area)}</select></div>
-          </div>
-          <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="2">${p.observaciones || ''}</textarea></div>
+          <h3 class="prog-form-section-title">${esVirtualEdicion ? 'Observación' : 'Ubicación'}</h3>
+          ${esVirtualEdicion ? `
+            <div class="prog-form-group">
+              <label class="prog-form-label">Observaciones</label>
+              <textarea class="prog-form-control" name="observaciones" rows="4">${p.observaciones || ''}</textarea>
+            </div>
+          ` : `
+            <div class="prog-form-row">
+              <div class="prog-form-group"><label class="prog-form-label">Planta</label><select class="prog-form-control" name="id_cliente_planta" id="editPlantaSelect">${getPlantaOptionsProg(idPlantaEdicion)}</select></div>
+              <div class="prog-form-group"><label class="prog-form-label">Área</label><select class="prog-form-control" name="id_cliente_planta_area" id="editAreaSelect">${getAreaOptionsProg(idPlantaEdicion || null, idAreaEdicion)}</select></div>
+            </div>
+            <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="2">${p.observaciones || ''}</textarea></div>
+          `}
         </div>
       </div>
       <div class="prog-modal-footer">
@@ -1118,40 +1429,114 @@ async function abrirEdicion(p: Programacion) {
       </div>
     </form>`;
 
-  body.querySelector('#btnVolverDetalle')?.addEventListener('click', () => abrirModalDetalle(p.id));
+  body.querySelector('#btnVolverDetalle')?.addEventListener('click', () => abrirModalDetalle(p.id, isAsesoria ? 'asesoria' : (px.tipo_programacion === 'capacitacion' ? 'capacitacion' : 'servicio')));
 
   // Lógica de badge "Principal" para edición
-  setupPrincipalBadge(body.querySelector('#editTecnicosCheckboxes') as HTMLElement);
+  if (!isAsesoria) {
+    setupPrincipalBadge(body.querySelector('#editTecnicosCheckboxes') as HTMLElement);
+  }
 
-  // Cascada planta → área en edición
-  body.querySelector('#editPlantaSelect')?.addEventListener('change', (e) => {
-    const idPlanta = parseInt((e.target as HTMLSelectElement).value) || null;
-    const areaSel = body.querySelector('#editAreaSelect') as HTMLSelectElement;
-    if (areaSel) areaSel.innerHTML = getAreaOptionsProg(idPlanta);
-  });
+  if (isAsesoria) {
+    const contenedorExps = body.querySelector('#editExponentesSeleccionados') as HTMLElement | null;
+    const selectAgregarExps = body.querySelector('#editSelectAgregarExponente') as HTMLSelectElement | null;
+
+    const nombreExponente = (e: any) => `${(e?.nombre || '').trim()} ${(e?.apellidos || '').trim()}`.trim() || 'Exponente';
+
+    const renderExponentesEdicion = () => {
+      if (!contenedorExps || !selectAgregarExps) return;
+
+      const seleccionados = expsOpciones.filter((e: any) => exponentesSeleccionadosEdicion.includes(Number(e.id)));
+      if (seleccionados.length === 0) {
+        contenedorExps.innerHTML = '<p style="margin:0;color:#999;font-size:12px;">No hay exponentes seleccionados</p>';
+      } else {
+        contenedorExps.innerHTML = seleccionados.map((e: any) => `
+          <span style="display:inline-flex;align-items:center;gap:6px;background:#fef3c7;color:#92400e;border-radius:8px;padding:6px 10px;font-weight:600;font-size:13px;">
+            ${nombreExponente(e)}
+            <button type="button" data-remove-exponente-edit="${e.id}" style="border:none;background:transparent;cursor:pointer;color:#92400e;font-size:14px;line-height:1;padding:0;">×</button>
+          </span>
+        `).join('');
+      }
+
+      const idsSet = new Set(exponentesSeleccionadosEdicion);
+      selectAgregarExps.innerHTML = `
+        <option value="">+ Agregar exponente...</option>
+        ${expsOpciones
+          .filter((e: any) => !idsSet.has(Number(e.id)))
+          .map((e: any) => `<option value="${e.id}">${nombreExponente(e)}</option>`)
+          .join('')}
+      `;
+
+      contenedorExps.querySelectorAll('[data-remove-exponente-edit]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = Number((btn as HTMLElement).getAttribute('data-remove-exponente-edit'));
+          exponentesSeleccionadosEdicion = exponentesSeleccionadosEdicion.filter((x) => x !== id);
+          renderExponentesEdicion();
+        });
+      });
+    };
+
+    selectAgregarExps?.addEventListener('change', () => {
+      const id = Number(selectAgregarExps.value);
+      if (!id) return;
+      if (!exponentesSeleccionadosEdicion.includes(id)) {
+        exponentesSeleccionadosEdicion.push(id);
+      }
+      selectAgregarExps.value = '';
+      renderExponentesEdicion();
+    });
+
+    renderExponentesEdicion();
+  }
+
+  // Cascada planta → área en edición (solo presencial)
+  if (!esVirtualEdicion) {
+    body.querySelector('#editPlantaSelect')?.addEventListener('change', (e) => {
+      const idPlanta = parseInt((e.target as HTMLSelectElement).value) || null;
+      const areaSel = body.querySelector('#editAreaSelect') as HTMLSelectElement;
+      if (areaSel) areaSel.innerHTML = getAreaOptionsProg(idPlanta);
+    });
+  }
 
   body.querySelector('#formEditarProg')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
     const data: Record<string, any> = {};
-    fd.forEach((v, k) => { if (k !== 'tecnicos_ids') data[k] = v || null; });
+    fd.forEach((v, k) => {
+      if (k !== 'tecnicos_ids' && k !== 'exponentes_ids') data[k] = v || null;
+    });
 
     // Derivar local_sede y direccion_completa de planta si se seleccionó
-    const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || null;
+    const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || idPlantaEdicion || null;
+    const idAreaSel = parseInt(fd.get('id_cliente_planta_area') as string) || idAreaEdicion || null;
     data.id_cliente_planta = idPlantaSel;
-    data.id_cliente_planta_area = parseInt(fd.get('id_cliente_planta_area') as string) || null;
+    data.id_cliente_planta_area = idAreaSel;
     data.local_sede = getPlantaNombre(idPlantaSel) || '';
     data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
 
-    // Recoger técnicos
-    const checkedTecs = Array.from(body.querySelectorAll('#editTecnicosCheckboxes input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-    if (checkedTecs.length === 0) { mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico'); return; }
-    const tecnicosIds = checkedTecs.map(c => parseInt(c.value));
-    data.id_tecnico_asignado = tecnicosIds[0];
-    data.tecnicos_ids = tecnicosIds;
+    if (isAsesoria) {
+      // En asesoría solo se edita el día, preservando mes y año actuales.
+      const diaIngresado = parseInt((fd.get('dia_programada') as string) || `${diaActual || 1}`, 10);
+      const baseDate = new Date(anioActual, (mesActual || 1) - 1, 1);
+      const ultimoDia = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0).getDate();
+      const diaFinal = Math.max(1, Math.min(Number.isNaN(diaIngresado) ? (diaActual || 1) : diaIngresado, ultimoDia));
+      const fechaFinal = `${anioActual}-${String(mesActual).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
+      data.fecha_programada = fechaFinal;
+      data.exponentes = exponentesSeleccionadosEdicion;
+    } else {
+      // Recoger técnicos para programación de servicios
+      const checkedTecs = Array.from(body.querySelectorAll('#editTecnicosCheckboxes input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
+      if (checkedTecs.length === 0) { mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico'); return; }
+      const tecnicosIds = checkedTecs.map(c => parseInt(c.value));
+      data.id_tecnico_asignado = tecnicosIds[0];
+      data.tecnicos_ids = tecnicosIds;
+    }
 
     try {
-      await programacionService.update(p.id, data);
+      if (isAsesoria) {
+        await programacionService.updateProgramacionAsesoria(p.id, data);
+      } else {
+        await programacionService.update(p.id, data);
+      }
       cerrarModal('modalDetalleProgramacion');
       await recargarProgramaciones();
       mostrarToast('success', 'Actualizada', 'La programación fue actualizada correctamente');

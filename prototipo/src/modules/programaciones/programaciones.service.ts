@@ -162,6 +162,10 @@ export const programacionService = {
     return apiClient.get<ApiResponse<any>>(`/programacion-asesoria/${id}`);
   },
 
+  updateProgramacionAsesoria: async (id: number, data: Record<string, any>) => {
+    return apiClient.post<ApiResponse<any>>(`/programacion-asesoria/${id}`, { ...data, _method: 'PUT' });
+  },
+
   programarAsesoria: async (data: {
     id_orden_asesoria: number;
     id_supervisor?: number;
@@ -174,6 +178,7 @@ export const programacionService = {
     local_sede?: string;
     direccion_completa?: string;
     observaciones?: string;
+    dias_por_mes?: Record<string, { presencial: number[]; virtual: number[] }>;
   }) => {
     return apiClient.post<ApiResponse<Programacion>>('/programacion-asesoria', data);
   },
