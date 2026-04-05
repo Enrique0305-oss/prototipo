@@ -136,7 +136,7 @@ class ProgramacionServicioController extends Controller
             'direccion_completa'=> 'nullable|string|max:255',
             'coordenadas'       => 'nullable|string|max:50',
             'id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
-            'id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'id_cliente_planta_area' => 'nullable',
             'observaciones'     => 'nullable|string',
             'dias_semana'       => 'nullable|string|max:100',
         ]);
@@ -146,6 +146,8 @@ class ProgramacionServicioController extends Controller
             $idUsuario = $request->user()?->id;
 
             // Crear la programación
+            $areaIdsJson = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area'] ?? null);
+
             $prog = ProgramacionServicio::create([
                 'id_orden_servicio'  => $validated['id_orden_servicio'],
                 'id_servicio'        => $validated['id_servicio'],
@@ -159,7 +161,7 @@ class ProgramacionServicioController extends Controller
                 'direccion_completa' => $validated['direccion_completa'] ?? null,
                 'coordenadas'        => $validated['coordenadas'] ?? null,
                 'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
-                'id_cliente_planta_area' => $validated['id_cliente_planta_area'] ?? null,
+                'id_cliente_planta_area' => $areaIdsJson,
                 'estado_ejecucion'   => 'Programado',
                 'observaciones'      => $validated['observaciones'] ?? null,
                 'dias_semana'        => $validated['dias_semana'] ?? null,
@@ -228,7 +230,7 @@ class ProgramacionServicioController extends Controller
             'direccion_completa'  => 'nullable|string|max:255',
             'coordenadas'         => 'nullable|string|max:50',
             'id_cliente_planta'   => 'nullable|integer|exists:cliente_planta,id',
-            'id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'id_cliente_planta_area' => 'nullable',
             'observaciones'       => 'nullable|string',
             'dias_semana'         => 'nullable|string|max:100',
         ]);
@@ -255,6 +257,8 @@ class ProgramacionServicioController extends Controller
             $idUsuario = $request->user()?->id;
             $creadas = [];
 
+            $areaIdsJson = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area'] ?? null);
+
             foreach ($fechas as $fecha) {
                 $prog = ProgramacionServicio::create([
                     'id_orden_servicio'  => $validated['id_orden_servicio'],
@@ -269,7 +273,7 @@ class ProgramacionServicioController extends Controller
                     'direccion_completa' => $validated['direccion_completa'] ?? null,
                     'coordenadas'        => $validated['coordenadas'] ?? null,
                     'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
-                    'id_cliente_planta_area' => $validated['id_cliente_planta_area'] ?? null,
+                    'id_cliente_planta_area' => $areaIdsJson,
                     'estado_ejecucion'   => 'Programado',
                     'observaciones'      => $validated['observaciones'] ?? null,
                     'dias_semana'        => $validated['dias_semana'] ?? null,
@@ -371,7 +375,7 @@ class ProgramacionServicioController extends Controller
             'direccion_completa'  => 'nullable|string|max:255',
             'coordenadas'         => 'nullable|string|max:50',
             'id_cliente_planta'   => 'nullable|integer|exists:cliente_planta,id',
-            'id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
+            'id_cliente_planta_area' => 'nullable',
             'estado_ejecucion'    => 'sometimes|in:Programado,Confirmado,En Camino,En Ejecución,Realizado,Reprogramado,Cancelado',
             'observaciones'       => 'nullable|string',
         ]);
@@ -379,6 +383,10 @@ class ProgramacionServicioController extends Controller
         // Extraer tecnicos_ids antes del update masivo
         $tecnicosIds = $validated['tecnicos_ids'] ?? null;
         unset($validated['tecnicos_ids']);
+
+        if (array_key_exists('id_cliente_planta_area', $validated)) {
+            $validated['id_cliente_planta_area'] = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area']);
+        }
 
         $validated['modificado_por'] = $request->user()?->id;
         $prog->update($validated);
@@ -641,7 +649,7 @@ class ProgramacionServicioController extends Controller
             'hora_inicio'           => 'required',
             'hora_fin'              => 'nullable',
             'id_cliente_planta'     => 'nullable|integer|exists:cliente_planta,id',
-            'id_cliente_planta_area'=> 'nullable|integer|exists:cliente_planta_area,id',
+            'id_cliente_planta_area'=> 'nullable',
             'exponentes_ids'        => 'nullable|array',
             'exponentes_ids.*'      => 'integer|exists:exponentes,id',
             'observaciones'         => 'nullable|string',
@@ -676,6 +684,8 @@ class ProgramacionServicioController extends Controller
                 ], 422);
             }
 
+            $areaIdsJson = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area'] ?? null);
+
             // Crear programación
             $prog = ProgramacionServicio::create([
                 'id_orden_capacitacion' => $validated['id_orden_capacitacion'],
@@ -689,7 +699,7 @@ class ProgramacionServicioController extends Controller
                 'local_sede'            => 'Aula/Sede de Capacitación',
                 'direccion_completa'    => $ordenCap->cliente?->direccion,
                 'id_cliente_planta'     => $validated['id_cliente_planta'] ?? null,
-                'id_cliente_planta_area'=> $validated['id_cliente_planta_area'] ?? null,
+                'id_cliente_planta_area'=> $areaIdsJson,
                 'estado_ejecucion'      => 'Programado',
                 'observaciones'         => $validated['observaciones'] ?? null,
                 'creado_por'            => $idUsuario,
@@ -1019,5 +1029,40 @@ class ProgramacionServicioController extends Controller
         }
 
         $prog->tecnicos()->sync($syncData);
+    }
+
+    /**
+     * Normaliza id_cliente_planta_area para persistir en columna JSON.
+     * Acepta entero, string numérico, JSON string o array.
+     */
+    private function normalizeAreaIdsForJson($raw): ?string
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        if (is_int($raw) || is_float($raw) || (is_string($raw) && is_numeric($raw))) {
+            $raw = [(int) $raw];
+        } elseif (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $raw = $decoded;
+            } else {
+                return null;
+            }
+        }
+
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        $ids = collect($raw)
+            ->filter(fn($v) => is_numeric($v) && (int) $v > 0)
+            ->map(fn($v) => (int) $v)
+            ->unique()
+            ->values()
+            ->all();
+
+        return empty($ids) ? null : json_encode($ids);
     }
 }

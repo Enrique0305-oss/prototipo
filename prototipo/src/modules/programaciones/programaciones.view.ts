@@ -1895,6 +1895,58 @@ function renderFormNueva(body: HTMLElement) {
   body.querySelector('#btnCancelarNueva')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacion'));
 }
 
+/**
+ * Verifica si hay conflicto de horarios para un técnico en una fecha específica
+ */
+function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: string, horaInicio: string, horaFin: string): { hayConflicto: boolean; conflictoDetalle: string } {
+  // Convertir hora a minutos desde medianoche para comparación
+  const horaAMinutos = (hora: string | undefined | null): number => {
+    if (!hora) return 0;
+    const [h, m] = hora.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+  
+  const inicioNuevo = horaAMinutos(horaInicio);
+  const finNuevo = horaAMinutos(horaFin);
+  
+  // Buscar conflictos en programaciones existentes
+  for (const prog of programacionesData) {
+    // Ignorar programaciones canceladas
+    if (prog.estado_ejecucion === 'Cancelado') continue;
+    
+    // Verificar si el técnico es el mismo
+    const tieneAlMismo = tecnicosIds.includes(prog.id_tecnico_asignado) || 
+                         (Array.isArray((prog as any).tecnicos_ids) && 
+                          (prog as any).tecnicos_ids.some((t: number) => tecnicosIds.includes(t)));
+    
+    if (!tieneAlMismo) continue;
+    
+    // Verificar si la fecha es la misma
+    if (prog.fecha_programada !== fechaProgramada) continue;
+    
+    // Verificar si hay conflicto de horarios
+    const inicioExistente = horaAMinutos(prog.hora_inicio);
+    const finExistente = horaAMinutos(prog.hora_fin);
+    
+    // Hay conflicto si los rangos se solapan
+    // DOS horarios NO se solapan si: uno termina antes o al mismo tiempo que el otro comienza
+    const noHaySolapamiento = finNuevo <= inicioExistente || inicioNuevo >= finExistente;
+    
+    if (!noHaySolapamiento) {
+      // Extraer nombre del técnico asignado
+      const tecnicoInfo = tecnicosData.find(t => t.id === prog.id_tecnico_asignado);
+      const nombreTecnico = tecnicoInfo ? `${tecnicoInfo.nombre || ''} ${tecnicoInfo.apellidos || ''}`.trim() : `Técnico #${prog.id_tecnico_asignado}`;
+      
+      return {
+        hayConflicto: true,
+        conflictoDetalle: `El técnico "${nombreTecnico}" ya tiene un servicio programado el ${new Date(prog.fecha_programada + 'T00:00:00').toLocaleDateString('es-PE')} de ${prog.hora_inicio} a ${prog.hora_fin}. Por favor, selecciona otro técnico u otro horario.`
+      };
+    }
+  }
+  
+  return { hayConflicto: false, conflictoDetalle: '' };
+}
+
 async function submitIndividual(body: HTMLElement) {
   const fd = new FormData(body.querySelector('#formNuevaProg') as HTMLFormElement);
   const data: Record<string, any> = {};
@@ -1925,14 +1977,29 @@ async function submitIndividual(body: HTMLElement) {
     data.dias_semana = checkedDias.map(d => d.value).join(',');
   }
 
+  // ✅ VALIDAR CONFLICTOS DE HORARIOS ANTES DE GUARDAR
+  const validacion = verificarConflictosHorarios(tecnicosIds, data.fecha_programada, data.hora_inicio, data.hora_fin);
+  if (validacion.hayConflicto) {
+    mostrarToast('warning', 'Conflicto de Horarios', validacion.conflictoDetalle);
+    return;
+  }
+
   try {
     await programacionService.create(data);
     cerrarModal('modalNuevaProgramacion');
     await recargarProgramaciones();
     mostrarToast('success', 'Programación Creada', 'La programación fue registrada exitosamente');
   } catch (err: any) {
-    mostrarToast('error', 'Error', err?.response?.data?.message || 'No se pudo crear la programación');
-    console.error(err);
+    let message = err?.data?.message || err?.response?.data?.message || err?.message || 'No se pudo crear la programación';
+    const errors = err?.data?.errors || err?.response?.data?.errors;
+    if (errors && typeof errors === 'object') {
+      const detalles = Object.entries(errors)
+        .map(([campo, msgs]: [string, any]) => `${campo}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+        .join(' | ');
+      if (detalles) message = `${message}. ${detalles}`;
+    }
+    mostrarToast('error', 'Error', message);
+    console.error('Error creando programación individual:', err?.data || err);
   }
 }
 
