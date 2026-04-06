@@ -30,6 +30,16 @@ class Vehiculo extends Model
         return $this->hasMany(ProgramacionServicio::class, 'id_vehiculo');
     }
 
+    public function programacionesMantenimientoVehiculo()
+    {
+        return $this->hasMany(ProgramacionMantenimientoVehiculo::class, 'id_vehiculo');
+    }
+
+    public function mantenimientosVehiculo()
+    {
+        return $this->hasMany(MantenimientoVehiculo::class, 'id_vehiculo');
+    }
+
     // Scopes
     public function scopeDisponibles($query)
     {

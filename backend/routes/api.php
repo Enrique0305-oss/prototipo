@@ -17,6 +17,7 @@ use App\Http\Controllers\API\AreaController;
 use App\Http\Controllers\API\CargoController;
 use App\Http\Controllers\API\TecnicoController;
 use App\Http\Controllers\API\MantenimientoController;
+use App\Http\Controllers\API\MantenimientoVehiculoController;
 use App\Http\Controllers\API\ActividadMantenimientoController;
 use App\Http\Controllers\API\MulticimController;
 use App\Http\Controllers\API\ProyeccionesController;
@@ -227,6 +228,17 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/actividades-mantenimiento/{id}', [ActividadMantenimientoController::class, 'update']);
     Route::delete('/actividades-mantenimiento/{id}', [ActividadMantenimientoController::class, 'destroy']);
     Route::patch('/actividades-mantenimiento/{id}/reactivar', [ActividadMantenimientoController::class, 'reactivar']);  
+
+    // para los mantenimientos de vehículos :v
+    Route::get('/mantenimiento-vehiculo/estadisticas/resumen', [MantenimientoVehiculoController::class, 'estadisticas']);
+    Route::get('/mantenimiento-vehiculo/calendario', [MantenimientoVehiculoController::class, 'calendario']);
+    Route::get('/mantenimiento-vehiculo/vehiculo/{idVehiculo}/historial', [MantenimientoVehiculoController::class, 'historialVehiculo']);
+    Route::get('/mantenimiento-vehiculo', [MantenimientoVehiculoController::class, 'index']);
+    Route::get('/mantenimiento-vehiculo/{id}', [MantenimientoVehiculoController::class, 'show']);
+    Route::post('/mantenimiento-vehiculo', [MantenimientoVehiculoController::class, 'store']);
+    Route::put('/mantenimiento-vehiculo/{id}', [MantenimientoVehiculoController::class, 'update']);
+    Route::patch('/mantenimiento-vehiculo/{id}/marcar-realizado', [MantenimientoVehiculoController::class, 'marcarRealizado']);
+    Route::delete('/mantenimiento-vehiculo/{id}', [MantenimientoVehiculoController::class, 'destroy']);
 
     // para multi :v
     Route::get('/multicim', [MulticimController::class, 'index']);

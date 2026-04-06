@@ -282,6 +282,85 @@ export interface VehiculoFilters extends FilterParams {
   anio_hasta?: number;
 }
 
+export interface MantenimientoVehiculo {
+  id: number;
+  id_programacion?: number | null;
+  id_vehiculo: number;
+  motivo: string;
+  tipo_mantenimiento: 'Preventivo' | 'Correctivo';
+  fecha_programada: string;
+  fecha_realizado?: string | null;
+  kilometraje?: number | null;
+  observaciones?: string | null;
+  estado: 'Programado' | 'Realizado' | 'Vencido' | 'Cancelado';
+  vehiculo?: {
+    id_vehiculo: number;
+    placa: string;
+    marca: string;
+    modelo: string;
+    anio?: number;
+    estado?: string;
+  } | null;
+  programacion?: {
+    id: number;
+    anio: number;
+    frecuencia_meses: number;
+    fecha_inicio: string;
+    total_programados: number;
+  } | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MantenimientoVehiculoFilters extends FilterParams {
+  id_vehiculo?: number;
+  estado?: 'Programado' | 'Realizado' | 'Vencido' | 'Cancelado' | 'todos';
+  fecha_desde?: string;
+  fecha_hasta?: string;
+  mes?: number;
+  anio?: number;
+  buscar?: string;
+  orden?: 'recientes' | 'antiguos';
+}
+
+export interface EstadisticasMantenimientoVehiculo {
+  total: number;
+  programados: number;
+  realizados: number;
+  vencidos: number;
+  ultimo_mantenimiento?: MantenimientoVehiculo | null;
+  proximos_programados: MantenimientoVehiculo[];
+  por_vehiculo: Array<{
+    vehiculo: string;
+    total: number;
+  }>;
+}
+
+export interface CalendarioMantenimientoVehiculoDia {
+  dia: number;
+  fecha: string;
+  total: number;
+  programados: number;
+  realizados: number;
+  vencidos: number;
+  cancelados: number;
+  items: MantenimientoVehiculo[];
+}
+
+export interface CalendarioMantenimientoVehiculo {
+  anio: number;
+  mes: number;
+  total_dias: number;
+  resumen: {
+    total: number;
+    programados: number;
+    realizados: number;
+    vencidos: number;
+    cancelados: number;
+  };
+  dias: CalendarioMantenimientoVehiculoDia[];
+}
+
 export interface EstadisticasVehiculos {
   total_vehiculos: number;
   por_estado: Array<{

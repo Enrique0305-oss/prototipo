@@ -139,39 +139,170 @@ function getPlantaOptionsProg(selectedId?: number | null): string {
   return opts;
 }
 
-function getAreaOptionsProg(idPlanta: number | null, selectedId?: number | null): string {
-  return getAreaOptionsProgFiltrado(idPlanta, selectedId, null);
-}
-
-function getAreaOptionsProgFiltrado(
-  idPlanta: number | null,
-  selectedId?: number | null,
-  allowedAreaIds?: number[] | null,
-): string {
-  let opts = '<option value="">-- Área --</option>';
+function getAreaOptionsProgMultiple(idPlanta: number | null, selectedIds: number[] = []): string {
+  let opts = '';
   if (!idPlanta) return opts;
   const planta = plantasClienteDataProg.find((p: any) => p.id == idPlanta);
   if (!planta) return opts;
   const areas = planta.areas_activas || planta.areas || [];
-  const allowSet = allowedAreaIds && allowedAreaIds.length > 0 ? new Set(allowedAreaIds.map(Number)) : null;
+  const selectedSet = new Set(selectedIds.map(Number));
+
   areas.forEach((a: any) => {
     if (a.estado && a.estado !== 'Activo') return;
-    if (allowSet && !allowSet.has(Number(a.id))) return;
-    const sel = selectedId && a.id == selectedId ? 'selected' : '';
+    const sel = selectedSet.has(Number(a.id)) ? 'selected' : '';
     opts += `<option value="${a.id}" ${sel}>${a.nombre}</option>`;
   });
+
   return opts;
+}
+
+function getAreaIdsFromEditForm(container: HTMLElement): number[] {
+  const multi = container.querySelector('#editAreaSelect') as HTMLSelectElement | null;
+  if (!multi) return [];
+  return Array.from(multi.selectedOptions)
+    .map((opt) => parseInt(opt.value || '0', 10))
+    .filter((id) => id > 0);
+}
+
+function actualizarResumenAreasEdicion(container: HTMLElement) {
+  const multi = container.querySelector('#editAreaSelect') as HTMLSelectElement | null;
+  const resumen = container.querySelector('#editAreaSummary') as HTMLElement | null;
+  const toggle = container.querySelector('#editAreaToggle') as HTMLButtonElement | null;
+  if (!multi || !resumen || !toggle) return;
+
+  const ids = getAreaIdsFromEditForm(container);
+  if (ids.length === 0) {
+    resumen.textContent = 'Sin áreas seleccionadas';
+    resumen.style.color = '#94a3b8';
+    toggle.textContent = 'Seleccionar áreas';
+    return;
+  }
+
+  const labels = Array.from(multi.selectedOptions)
+    .map((opt) => (opt.text || '').trim())
+    .filter(Boolean);
+
+  toggle.textContent = `${ids.length} área(s)`;
+  resumen.style.color = '#334155';
+
+  const chips = labels.slice(0, 2)
+    .map((nombre) => `<span style="display:inline-block;background:#ecfeff;color:#0f766e;border:1px solid #99f6e4;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`)
+    .join('');
+
+  if (labels.length > 2) {
+    resumen.innerHTML = chips + `<span style="font-size:11px;color:#64748b;">+${labels.length - 2} más</span>`;
+  } else {
+    resumen.innerHTML = chips;
+  }
+}
+
+function renderAreaPickerOptionsEdicion(container: HTMLElement) {
+  const multi = container.querySelector('#editAreaSelect') as HTMLSelectElement | null;
+  const wrap = container.querySelector('#editAreaOptions') as HTMLElement | null;
+  if (!multi || !wrap) return;
+
+  if (multi.options.length === 0) {
+    wrap.innerHTML = '<div style="padding:6px 0;color:#94a3b8;font-size:12px;">Primero seleccione una planta</div>';
+    return;
+  }
+
+  wrap.innerHTML = Array.from(multi.options)
+    .map((opt, index) => {
+      return `<label style="display:flex;align-items:center;gap:7px;padding:4px 0;font-size:13px;color:#334155;cursor:pointer;">
+        <input type="checkbox" class="edit-area-check" data-index="${index}" ${opt.selected ? 'checked' : ''}>
+        <span>${opt.text}</span>
+      </label>`;
+    })
+    .join('');
+
+  wrap.querySelectorAll('.edit-area-check').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const idx = Number((e.currentTarget as HTMLInputElement).dataset.index || '-1');
+      if (idx < 0 || !multi.options[idx]) return;
+      multi.options[idx].selected = (e.currentTarget as HTMLInputElement).checked;
+      actualizarResumenAreasEdicion(container);
+    });
+  });
+}
+
+function bindAreaMultiInteractionsEdicion(container: HTMLElement) {
+  const panel = container.querySelector('#editAreaPanel') as HTMLElement | null;
+  const toggle = container.querySelector('#editAreaToggle') as HTMLButtonElement | null;
+  const btnAll = container.querySelector('#editAreaSelectAll') as HTMLButtonElement | null;
+  const btnClear = container.querySelector('#editAreaClearAll') as HTMLButtonElement | null;
+  const multi = container.querySelector('#editAreaSelect') as HTMLSelectElement | null;
+
+  if (!panel || !toggle || !multi) return;
+
+  toggle.onclick = (e) => {
+    e.preventDefault();
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  };
+
+  btnAll?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = true; });
+    renderAreaPickerOptionsEdicion(container);
+    actualizarResumenAreasEdicion(container);
+  });
+
+  btnClear?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = false; });
+    renderAreaPickerOptionsEdicion(container);
+    actualizarResumenAreasEdicion(container);
+  });
+
+  document.addEventListener('click', (ev) => {
+    if (!panel.contains(ev.target as Node) && !toggle.contains(ev.target as Node)) {
+      panel.style.display = 'none';
+    }
+  });
 }
 
 function normalizeAreaIds(input: any): number[] {
   if (input === null || input === undefined || input === '') return [];
 
   if (Array.isArray(input)) {
-    return input.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0);
+    return input
+      .flatMap((v: any) => {
+        if (v === null || v === undefined || v === '') return [];
+        if (typeof v === 'number') return [v];
+        if (typeof v === 'string') {
+          const n = Number(v.trim());
+          return Number.isFinite(n) ? [n] : [];
+        }
+        if (typeof v === 'object') {
+          const candidates = [
+            v.id,
+            v.id_area,
+            v.id_cliente_planta_area,
+            v.value,
+          ];
+          return candidates
+            .map((x) => Number(x))
+            .filter((n) => Number.isFinite(n));
+        }
+        return [];
+      })
+      .filter((v) => Number.isFinite(v) && v > 0);
   }
 
   if (typeof input === 'number') {
     return Number.isFinite(input) && input > 0 ? [input] : [];
+  }
+
+  if (typeof input === 'object') {
+    const candidates = [
+      (input as any).id,
+      (input as any).id_area,
+      (input as any).id_cliente_planta_area,
+      (input as any).value,
+    ];
+    return candidates
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && n > 0);
   }
 
   if (typeof input === 'string') {
@@ -968,6 +1099,17 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
     const p = res.data;
     if (!p) { body.innerHTML = '<p style="padding:24px;">No encontrado</p>'; return; }
 
+    const clienteIdDetalle = Number(
+      p?.orden_servicio?.cliente?.id
+      || p?.orden_capacitacion?.cliente?.id
+      || p?.ordenAsesoria?.cliente?.id
+      || p?.orden_asesoria?.cliente?.id
+      || 0,
+    );
+    if (clienteIdDetalle > 0) {
+      await cargarPlantasClienteProg(clienteIdDetalle);
+    }
+
     if (tipo === 'capacitacion') {
       const exps = (p.exponentes || []).map((e: any) => `${e.nombre} ${e.apellidos}`).join(', ');
       body.innerHTML = `
@@ -978,7 +1120,7 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
             <div class="prog-detalle-row"><div class="prog-detalle-label">Orden:</div><div class="prog-detalle-value">${p.orden_capacitacion?.numero_orden || '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Capacitación:</div><div class="prog-detalle-value">${p.capacitacion_nombre || p.orden_capacitacion?.servicio?.nombre || '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${new Date(normalizarFecha(p.fecha_programada) + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(p.fecha_programada)}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
           </div>
           <div class="prog-detalle-section">
@@ -1017,7 +1159,7 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       const esPresencial = modalidadVisitaRaw.startsWith('pres');
       const esVirtual = modalidadVisitaRaw.startsWith('vir');
       const plantaAsesoria = p.planta ? p.planta.nombre : '—';
-      const areaAsesoria = p.area ? p.area.nombre : '—';
+      const areaAsesoria = getAreasSeleccionadasLabel(p);
       const expsProg = (p.exponentes || []).map((e: any) => `${e.nombre} ${e.apellidos}`.trim()).filter((x: string) => !!x);
       const expsOrden = ((p.ordenAsesoria?.exponentes || p.orden_asesoria?.exponentes || []) as any[])
         .map((e: any) => `${e.nombre} ${e.apellidos}`.trim())
@@ -1039,7 +1181,7 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
             ` : ''}
             <div class="prog-detalle-row"><div class="prog-detalle-label">Tiempo de implementación:</div><div class="prog-detalle-value">${mesesImplementacion > 0 ? `${mesesImplementacion} ${mesesImplementacion === 1 ? 'mes' : 'meses'}` : '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${new Date(normalizarFecha(p.fecha_programada) + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(p.fecha_programada)}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
           </div>
           <div class="prog-detalle-section">
@@ -1153,14 +1295,14 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
           <div class="prog-detalle-row"><div class="prog-detalle-label">Servicio:</div><div class="prog-detalle-value">${p.servicio?.nombre || '—'}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">ODS:</div><div class="prog-detalle-value">${p.orden_servicio?.numero_orden || '—'}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
-          <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${new Date(p.fecha_programada + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+          <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(p.fecha_programada)}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(p.hora_inicio)} - ${fmtH(p.hora_fin || '')}</div></div>
         </div>
         <div class="prog-detalle-section">
           <h3 class="prog-detalle-section-title">Cliente y Ubicación</h3>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${clienteNombre(p)}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
-          <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${p.area ? p.area.nombre : '—'}</div></div>
+          <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${getAreasSeleccionadasLabel(p)}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.planta ? (p.planta.direccion || '—') : (p.direccion_completa || '—')}</div></div>
         </div>
         <div class="prog-detalle-section">
@@ -1173,6 +1315,10 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
           <div class="prog-detalle-row"><div class="prog-detalle-label">Asistente administrativo:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? p.vehiculo.placa + ' - ' + p.vehiculo.marca + ' ' + p.vehiculo.modelo : '—'}</div></div>
         </div>
+        <div class="prog-detalle-section">
+          <h3 class="prog-detalle-section-title">Observaciones</h3>
+          <div class="prog-detalle-observaciones">${(p.observaciones && String(p.observaciones).trim()) ? p.observaciones : 'Sin observaciones'}</div>
+        </div>
         ${p.insumos && p.insumos.length > 0 ? `
         <div class="prog-detalle-section prog-detalle-section-full">
           <h3 class="prog-detalle-section-title">Insumos / Productos</h3>
@@ -1183,7 +1329,6 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
             `).join('')}</tbody>
           </table>
         </div>` : ''}
-        ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
         <div class="prog-modal-footer">
           <button type="button" class="prog-btn-danger" id="btnEliminarProg">Eliminar</button>
           ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-warning" id="btnCancelarProg">Cancelar Servicio</button>` : ''}
@@ -1334,6 +1479,7 @@ async function abrirEdicion(p: Programacion) {
     ?? ordenAsesoria?.id_cliente_planta_area
     ?? (px as any).id_cliente_planta_area
     ?? null;
+  const areaIdsEdicion = normalizeAreaIds(idAreaEdicion);
   const modalidadVisitaEdicion = String((px as any).modalidad_visita || (px as any).modalidadVisita || px.modalidad || ordenAsesoria?.modalidad || '').trim().toLowerCase();
   const esVirtualEdicion = modalidadVisitaEdicion.startsWith('vir');
 
@@ -1359,7 +1505,7 @@ async function abrirEdicion(p: Programacion) {
                   <input type="number" min="1" max="31" class="prog-form-control" name="dia_programada" value="${diaActual || 1}">
                   <small style="display:block;margin-top:6px;color:#64748b;font-size:11px;">Mes fijo: ${mesActual ? String(mesActual).padStart(2, '0') : '--'}/${anioActual || '----'}</small>
                 </div>`
-              : `<div class="prog-form-group"><label class="prog-form-label">Fecha</label><input type="date" class="prog-form-control" name="fecha_programada" value="${p.fecha_programada}"></div>`}
+              : `<div class="prog-form-group"><label class="prog-form-label">Fecha</label><input type="date" class="prog-form-control" name="fecha_programada" value="${normalizarFecha(p.fecha_programada || '')}"></div>`}
             <div class="prog-form-group"><label class="prog-form-label">Hora Inicio</label><input type="time" class="prog-form-control" name="hora_inicio" value="${fmtH(p.hora_inicio)}"></div>
             <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin" value="${fmtH(p.hora_fin || '')}"></div>
           </div>
@@ -1417,7 +1563,23 @@ async function abrirEdicion(p: Programacion) {
           ` : `
             <div class="prog-form-row">
               <div class="prog-form-group"><label class="prog-form-label">Planta</label><select class="prog-form-control" name="id_cliente_planta" id="editPlantaSelect">${getPlantaOptionsProg(idPlantaEdicion)}</select></div>
-              <div class="prog-form-group"><label class="prog-form-label">Área</label><select class="prog-form-control" name="id_cliente_planta_area" id="editAreaSelect">${getAreaOptionsProg(idPlantaEdicion || null, idAreaEdicion)}</select></div>
+              <div class="prog-form-group">
+                <label class="prog-form-label">Área</label>
+                <select class="prog-form-control" name="id_cliente_planta_area" id="editAreaSelect" multiple style="display:none;">${getAreaOptionsProgMultiple(idPlantaEdicion || null, areaIdsEdicion)}</select>
+                <button type="button" id="editAreaToggle" class="prog-form-control" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;">
+                  <span>Seleccionar áreas</span>
+                  <span style="font-size:12px;">▼</span>
+                </button>
+                <div id="editAreaSummary" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin áreas seleccionadas</div>
+                <div id="editAreaPanel" style="display:none;position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;">
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                    <button type="button" id="editAreaSelectAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todas</button>
+                    <button type="button" id="editAreaClearAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+                  </div>
+                  <div id="editAreaOptions"></div>
+                </div>
+                <small style="display:block;margin-top:6px;color:#64748b;font-size:11px;">Puede seleccionar una o más áreas</small>
+              </div>
             </div>
             <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="2">${p.observaciones || ''}</textarea></div>
           `}
@@ -1490,10 +1652,18 @@ async function abrirEdicion(p: Programacion) {
 
   // Cascada planta → área en edición (solo presencial)
   if (!esVirtualEdicion) {
+    renderAreaPickerOptionsEdicion(body);
+    actualizarResumenAreasEdicion(body);
+    bindAreaMultiInteractionsEdicion(body);
+
     body.querySelector('#editPlantaSelect')?.addEventListener('change', (e) => {
       const idPlanta = parseInt((e.target as HTMLSelectElement).value) || null;
       const areaSel = body.querySelector('#editAreaSelect') as HTMLSelectElement;
-      if (areaSel) areaSel.innerHTML = getAreaOptionsProg(idPlanta);
+      if (areaSel) {
+        areaSel.innerHTML = getAreaOptionsProgMultiple(idPlanta, []);
+        renderAreaPickerOptionsEdicion(body);
+        actualizarResumenAreasEdicion(body);
+      }
     });
   }
 
@@ -1507,9 +1677,9 @@ async function abrirEdicion(p: Programacion) {
 
     // Derivar local_sede y direccion_completa de planta si se seleccionó
     const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || idPlantaEdicion || null;
-    const idAreaSel = parseInt(fd.get('id_cliente_planta_area') as string) || idAreaEdicion || null;
+    const idAreaSel = normalizeAreaIds(fd.getAll('id_cliente_planta_area'));
     data.id_cliente_planta = idPlantaSel;
-    data.id_cliente_planta_area = idAreaSel;
+    data.id_cliente_planta_area = idAreaSel.length > 0 ? idAreaSel : null;
     data.local_sede = getPlantaNombre(idPlantaSel) || '';
     data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
 
@@ -2133,6 +2303,66 @@ function clienteNombre(p: Programacion): string {
   const px = p as ProgramacionExtendida;
   const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente;
   return c ? (c.nombre_empresa || c.persona_contacto || '—') : '—';
+}
+
+function fmtFechaDetalle(fecha: string): string {
+  const base = normalizarFecha(fecha || '');
+  if (!base) return '—';
+  const parsed = new Date(`${base}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('es-PE', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function getAreasSeleccionadasLabel(p: Programacion): string {
+  const px = p as ProgramacionExtendida & {
+    areas?: Array<any>;
+    areas_seleccionadas?: Array<any>;
+    cliente_planta_areas?: Array<any>;
+    id_cliente_planta_area?: number | number[] | string | null;
+    orden_servicio?: any;
+  };
+
+  const nombres = new Set<string>();
+
+  if (p.area?.nombre) {
+    nombres.add(String(p.area.nombre));
+  }
+
+  const colecciones = [px.areas, px.areas_seleccionadas, px.cliente_planta_areas].filter(Array.isArray) as Array<Array<any>>;
+  colecciones.forEach((lista) => {
+    lista.forEach((item: any) => {
+      if (!item) return;
+      if (typeof item === 'string') {
+        if (item.trim()) nombres.add(item.trim());
+        return;
+      }
+      if (item.nombre && String(item.nombre).trim()) {
+        nombres.add(String(item.nombre).trim());
+      }
+    });
+  });
+
+  const ids = normalizeAreaIds(px.id_cliente_planta_area);
+
+  const idsDetalle = normalizeAreaIds(
+    px.orden_servicio?.detalles
+      ?.find((d: any) => Number(d?.id_servicio) === Number(p.id_servicio))
+      ?.id_cliente_planta_area,
+  );
+
+  const idsFinales = Array.from(new Set([...ids, ...idsDetalle]));
+  if (idsFinales.length > 0) {
+    const nombresPorIds = getAreaNombresPorIds(p.id_cliente_planta || null, idsFinales);
+    nombresPorIds.forEach((n) => nombres.add(n));
+  }
+
+  if (nombres.size === 0) return '—';
+  return Array.from(nombres).join(', ');
 }
 
 function getClientesUnicos(): { id: number; nombre: string }[] {
