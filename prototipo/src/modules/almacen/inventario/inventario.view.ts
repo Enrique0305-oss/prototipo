@@ -16,8 +16,8 @@ let currentFilters = {
 };
 
 const UNIDAD_OPTIONS = [
-  'Litros',
   'Mililitros',
+  'Miligramos',
   'Kilogramos',
   'Unidades',
   'Unidad',
@@ -25,6 +25,7 @@ const UNIDAD_OPTIONS = [
   'Cajas',
   'Galones',
   'Gramos',
+  'Rodajas',
 ];
 
 function renderUnidadOptions(selectedValue = ''): string {
@@ -1582,14 +1583,14 @@ function renderModalNuevoProducto(): string {
             </div>
 
             <div class="form-group">
-              <label for="producto-lote">Número de Lote *</label>
-              <input type="text" id="producto-lote" name="n_lote" required 
+              <label for="producto-lote">Número de Lote</label>
+              <input type="text" id="producto-lote" name="n_lote"
                      placeholder="Ej: L2026-001" class="form-input">
             </div>
 
             <div class="form-group">
-              <label for="producto-ubicacion">Ubicación *</label>
-              <input type="text" id="producto-ubicacion" name="ubicacion" required 
+              <label for="producto-ubicacion">Ubicación</label>
+              <input type="text" id="producto-ubicacion" name="ubicacion"
                      placeholder="Ej: Almacén A - Estante 3" class="form-input">
             </div>
 
@@ -1971,14 +1972,14 @@ function renderModalEditarProducto(producto: Producto): string {
             </div>
 
             <div class="form-group">
-              <label for="edit-lote">Número de Lote *</label>
-              <input type="text" id="edit-lote" name="n_lote" required 
+              <label for="edit-lote">Número de Lote</label>
+              <input type="text" id="edit-lote" name="n_lote"
                      value="${producto.n_lote}" class="form-input">
             </div>
 
             <div class="form-group">
-              <label for="edit-ubicacion">Ubicación *</label>
-              <input type="text" id="edit-ubicacion" name="ubicacion" required 
+              <label for="edit-ubicacion">Ubicación</label>
+              <input type="text" id="edit-ubicacion" name="ubicacion"
                      value="${producto.ubicacion}" class="form-input">
             </div>
 

@@ -104,8 +104,8 @@ class ProductoController extends Controller
             'descripcion' => 'required|string|max:255',
             'id_categoria' => 'required|exists:categoria,id',
             'fecha_vencim' => 'nullable|date',
-            'ubicacion' => 'required|string|max:100',
-            'n_lote' => 'required|string|max:50',
+            'ubicacion' => 'nullable|string|max:100',
+            'n_lote' => 'nullable|string|max:50',
             'unidad' => 'nullable|string|max:20',
             'precio_unitario' => 'nullable|numeric|min:0',
             'stock_seguridad' => 'required|integer|min:0',
@@ -117,8 +117,6 @@ class ProductoController extends Controller
             'descripcion.required' => 'La descripción del producto es requerida',
             'id_categoria.required' => 'La categoría es requerida',
             'id_categoria.exists' => 'La categoría seleccionada no existe',
-            'ubicacion.required' => 'La ubicación es requerida',
-            'n_lote.required' => 'El número de lote es requerido',
             'precio_unitario.numeric' => 'El precio debe ser un número válido',
             'stock_seguridad.required' => 'El stock de seguridad es requerido',
             'stock_seguridad.integer' => 'El stock de seguridad debe ser un número entero',
@@ -136,13 +134,18 @@ class ProductoController extends Controller
         $categoria = Categoria::find($request->id_categoria);
         $sku = $this->generarSKU($categoria->nombre ?? 'PRD', $request->descripcion);
 
+        // Si vienen vacíos, Laravel los convierte a null. Forzamos string vacío
+        // para compatibilidad con esquemas donde estas columnas siguen como NOT NULL.
+        $ubicacion = $request->input('ubicacion') ?? '';
+        $nLote = $request->input('n_lote') ?? '';
+
         $producto = Producto::create([
             'sku' => $sku,
             'descripcion' => $request->descripcion,
             'id_categoria' => $request->id_categoria,
             'fecha_vencim' => $request->fecha_vencim,
-            'ubicacion' => $request->ubicacion,
-            'n_lote' => $request->n_lote,
+            'ubicacion' => $ubicacion,
+            'n_lote' => $nLote,
             'unidad' => $request->unidad,
             'precio_unitario' => $request->precio_unitario,
             'estado' => $request->estado ?? 'Activo',
@@ -272,7 +275,7 @@ class ProductoController extends Controller
             'id_categoria' => 'sometimes|required|exists:categoria,id',
             'fecha_vencim' => 'nullable|date',
             'ubicacion' => 'nullable|string|max:100',
-            'n_lote' => 'sometimes|required|string|max:50',
+            'n_lote' => 'sometimes|nullable|string|max:50',
             'unidad' => 'nullable|string|max:20',
             'precio_unitario' => 'nullable|numeric|min:0',
             'stock_seguridad' => 'nullable|integer|min:0',
@@ -306,7 +309,7 @@ class ProductoController extends Controller
             );
         }
 
-        $producto->update($request->only([
+        $payload = $request->only([
             'descripcion',
             'id_categoria',
             'fecha_vencim',
@@ -318,7 +321,17 @@ class ProductoController extends Controller
             'ingre_activo',
             'plag_objetivo',
             'presentacion'
-        ]));
+        ]);
+
+        // Compatibilidad con columnas NOT NULL cuando el valor llega vacío y se convierte a null.
+        if (array_key_exists('ubicacion', $payload) && $payload['ubicacion'] === null) {
+            $payload['ubicacion'] = '';
+        }
+        if (array_key_exists('n_lote', $payload) && $payload['n_lote'] === null) {
+            $payload['n_lote'] = '';
+        }
+
+        $producto->update($payload);
 
         if ($request->has('stock_seguridad')) {
             $inventario = $producto->inventario;

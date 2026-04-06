@@ -761,9 +761,15 @@ function renderProgramacionAnualTab(): string {
           </div>
           <div>
             <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Motivo *</label>
-            <select id="prog-actividad" class="search-input" style="width:100%; padding:10px;" required>
-              <option value="">Seleccione motivo...</option>
-            </select>
+            <input
+              type="text"
+              id="prog-motivo"
+              class="search-input"
+              style="width:100%; padding:10px;"
+              placeholder="Describa el motivo del mantenimiento"
+              maxlength="255"
+              required
+            >
           </div>
           <div id="frecuencia-container">
             <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;" id="lbl-frecuencia">Frecuencia *</label>
@@ -926,7 +932,7 @@ function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
     </div>
   ` : '';
 
-  const motivo = prog.actividad?.motivo || prog.actividad?.categoria || 'N/A';
+  const motivo = prog.motivo || prog.actividad?.motivo || prog.actividad?.categoria || 'N/A';
   const tipo = prog.actividad?.tipo_mantenimiento || 'N/A';
 
   return `
@@ -1001,7 +1007,7 @@ function renderProgramacionesCalendario(anio: number, mes: number): string {
 
   programaciones.forEach((prog) => {
     const equipo = prog.equipo?.descripcion || 'Equipo';
-    const motivo = prog.actividad?.motivo || prog.actividad?.categoria || 'Motivo';
+    const motivo = prog.motivo || prog.actividad?.motivo || prog.actividad?.categoria || 'Motivo';
 
     prog.mantenimientos.forEach((m) => {
       const d = new Date(m.fecha);
@@ -1135,17 +1141,11 @@ async function cargarDropdownsProg() {
 }
 
 function actualizarOpcionesMotivoProgramacion() {
-  const progAct = document.getElementById('prog-actividad') as HTMLSelectElement;
-  if (!progAct) return;
+  const motivoInput = document.getElementById('prog-motivo') as HTMLInputElement | null;
+  if (!motivoInput) return;
 
-  const equipoId = Number((document.getElementById('prog-equipo') as HTMLSelectElement | null)?.value || 0) || undefined;
-  const motivos = filtrarMotivos(progTipoMantenimiento, equipoId);
-
-  progAct.innerHTML = '<option value="">Seleccione motivo...</option>' +
-    motivos.map(a => {
-      const sufijo = a.frecuencia_sugerida ? ` - ${a.frecuencia_sugerida}` : '';
-      return `<option value="${a.id}">${getMotivoLabel(a)}${sufijo}</option>`;
-    }).join('');
+  const tipo = progTipoMantenimiento === 'Correctivo' ? 'correctivo' : 'preventivo';
+  motivoInput.placeholder = `Describa el motivo del mantenimiento ${tipo}`;
 }
 
 function actualizarReglasProgramacion() {
@@ -1239,7 +1239,7 @@ function abrirPanelDetailDia(dia: number) {
   // Buscar todos los mantenimientos para este día
   programaciones.forEach((prog) => {
     const equipo = prog.equipo?.descripcion || 'Equipo';
-    const motivo = prog.actividad?.motivo || prog.actividad?.categoria || 'Motivo';
+    const motivo = prog.motivo || prog.actividad?.motivo || prog.actividad?.categoria || 'Motivo';
 
     prog.mantenimientos.forEach((m) => {
       const d = new Date(m.fecha);
@@ -1343,10 +1343,6 @@ function initProgramacionAnualEvents() {
     actualizarReglasProgramacion();
   });
 
-  document.getElementById('prog-equipo')?.addEventListener('change', () => {
-    actualizarOpcionesMotivoProgramacion();
-  });
-
   document.getElementById('prog-modo')?.addEventListener('change', () => {
     actualizarReglasProgramacion();
   });
@@ -1435,7 +1431,7 @@ function initProgramacionAnualEvents() {
     e.preventDefault();
 
     const id_equipo = Number((document.getElementById('prog-equipo') as HTMLSelectElement).value);
-    const id_actmanten = Number((document.getElementById('prog-actividad') as HTMLSelectElement).value);
+    const motivo = (document.getElementById('prog-motivo') as HTMLInputElement).value.trim();
     const anio = Number((document.getElementById('prog-anio') as HTMLInputElement).value);
     const frecuenciaRaw = (document.getElementById('prog-frecuencia') as HTMLSelectElement).value;
     const frecuencia_meses = Number(frecuenciaRaw);
@@ -1443,14 +1439,19 @@ function initProgramacionAnualEvents() {
     const fecha_inicio = (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value;
     const observaciones = (document.getElementById('prog-observaciones') as HTMLInputElement).value.trim();
 
-    if (!id_equipo || !id_actmanten || !anio || frecuenciaRaw === '' || !fecha_inicio) {
+    if (!id_equipo || !motivo || !anio || frecuenciaRaw === '' || !fecha_inicio) {
       mostrarToast('error', 'Atención', 'Complete todos los campos requeridos');
       return;
     }
 
     try {
       const resp = await mantenimientoService.programarAnual({
-        id_equipo, id_actmanten, anio, frecuencia_meses, fecha_inicio,
+        id_equipo,
+        motivo,
+        tipo_mantenimiento: progTipoMantenimiento,
+        anio,
+        frecuencia_meses,
+        fecha_inicio,
         modo_programacion,
         observaciones: observaciones || undefined,
       });
@@ -1464,7 +1465,7 @@ function initProgramacionAnualEvents() {
       progTipoMantenimiento = 'Preventivo';
       actualizarOpcionesMotivoProgramacion();
       actualizarReglasProgramacion();
-      (document.getElementById('prog-actividad') as HTMLSelectElement).value = '';
+      (document.getElementById('prog-motivo') as HTMLInputElement).value = '';
       (document.getElementById('prog-frecuencia') as HTMLSelectElement).value = '';
       (document.getElementById('prog-observaciones') as HTMLInputElement).value = '';
       const previewContainer = document.getElementById('preview-fechas-container');

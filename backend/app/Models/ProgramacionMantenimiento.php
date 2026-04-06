@@ -13,6 +13,7 @@ class ProgramacionMantenimiento extends Model
     protected $fillable = [
         'id_equipo',
         'id_actmanten',
+        'motivo',
         'anio',
         'modo_programacion',
         'frecuencia_meses',

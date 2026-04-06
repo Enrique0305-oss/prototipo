@@ -83,7 +83,8 @@ export const mantenimientoService = {
 
   programarAnual: async (data: {
     id_equipo: number;
-    id_actmanten: number;
+    motivo: string;
+    tipo_mantenimiento?: 'Preventivo' | 'Correctivo';
     anio: number;
     frecuencia_meses: number;
     fecha_inicio: string;

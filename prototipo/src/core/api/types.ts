@@ -412,6 +412,7 @@ export interface HistorialEquipo {
 export interface ProgramacionMantenimiento {
   id: number;
   equipo: { id: number; descripcion: string; marca: string; modelo: string } | null;
+  motivo?: string | null;
   actividad: {
     id: number;
     categoria: string;

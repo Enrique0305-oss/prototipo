@@ -355,13 +355,12 @@
                                 <th>Local / Sede</th>
                                 <th>Técnico(s)</th>
                                 <th>Vehículo</th>
-                                <th style="width:75px;">Estado</th>
+                                <th style="width:180px;">Observaciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($servicios->sortBy('hora_inicio') as $p)
                                 @php
-                                    $badgeClass = 'badge-' . str_replace(' ', '-', strtolower($p->estado_ejecucion));
                                     $cliente = $p->ordenServicio && $p->ordenServicio->cliente
                                         ? ($p->ordenServicio->cliente->nombre_empresa ?: $p->ordenServicio->cliente->persona_contacto)
                                         : '—';
@@ -377,7 +376,7 @@
                                     <td>{{ $p->local_sede ?: '—' }}</td>
                                     <td style="font-size:9px;">{{ $tecnicos }}</td>
                                     <td style="font-size:9px;">{{ $vehiculo }}</td>
-                                    <td><span class="badge {{ $badgeClass }}">{{ $p->estado_ejecucion }}</span></td>
+                                    <td>{{ $p->observaciones ?: '—' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -468,30 +467,6 @@
                                     </tr>
                                 @endif
                             </table>
-
-                            <div class="tech-section-title">Insumos asignados</div>
-                            @if($p->insumos && $p->insumos->count() > 0)
-                                <table class="insumos-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Producto</th>
-                                            <th style="width:90px; text-align:center;">Cantidad</th>
-                                            <th style="width:110px; text-align:center;">Utilizada</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($p->insumos as $ins)
-                                            <tr>
-                                                <td>{{ $ins->producto->descripcion ?? '—' }}</td>
-                                                <td style="text-align:center;">{{ $ins->cantidad_asignada }}</td>
-                                                <td style="text-align:center;">{{ $ins->cantidad_utilizada ?? '—' }}</td>
-                                            </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            @else
-                                <div class="insumos-empty">No hay insumos asignados para este servicio.</div>
-                            @endif
                         </div>
                     </div>
                 @endforeach

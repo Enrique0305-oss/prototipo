@@ -62,6 +62,7 @@ class ProgramacionMantenimientoController extends Controller
                     'marca' => $prog->equipo->marca,
                     'modelo' => $prog->equipo->modelo,
                 ] : null,
+                'motivo' => $prog->motivo,
                 'actividad' => $prog->actividad ? [
                     'id' => $prog->actividad->id,
                     'categoria' => $prog->actividad->categoria,
@@ -145,7 +146,8 @@ class ProgramacionMantenimientoController extends Controller
 
         $rules = [
             'id_equipo' => 'required|integer|exists:equipo,id',
-            'id_actmanten' => 'required|integer|exists:actividades_mantenieminto,id',
+            'motivo' => 'required|string|max:255',
+            'tipo_mantenimiento' => 'nullable|in:Preventivo,Correctivo',
             'anio' => 'required|integer|min:2024|max:2050',
             'modo_programacion' => 'nullable|in:Anual,Unica',
             'fecha_inicio' => 'required|date',
@@ -156,21 +158,34 @@ class ProgramacionMantenimientoController extends Controller
         $validated = $request->validate($rules, [
             'id_equipo.required' => 'El equipo es obligatorio',
             'id_equipo.exists' => 'El equipo seleccionado no existe',
-            'id_actmanten.required' => 'El motivo es obligatorio',
-            'id_actmanten.exists' => 'El motivo seleccionado no existe',
+            'motivo.required' => 'El motivo es obligatorio',
             'anio.required' => 'El año es obligatorio',
             'frecuencia_meses.required' => 'La frecuencia es obligatoria',
             'frecuencia_meses.in' => 'La frecuencia debe ser Unica (0), 1, 2, 3, 4, 6 o 12 meses',
             'fecha_inicio.required' => 'La fecha de inicio es obligatoria',
         ]);
 
-        $actividad = ActividadMantenimiento::find($validated['id_actmanten']);
+        $motivoTexto = trim((string) ($validated['motivo'] ?? ''));
+        $tipoMantenimiento = $validated['tipo_mantenimiento'] ?? 'Preventivo';
+
+        // Compatibilidad: usar o crear una actividad para mantener la integridad referencial.
+        $actividad = ActividadMantenimiento::query()
+            ->whereRaw('LOWER(TRIM(motivo)) = ?', [strtolower($motivoTexto)])
+            ->where('tipo_mantenimiento', $tipoMantenimiento)
+            ->first();
+
         if (!$actividad) {
-            return response()->json([
-                'success' => false,
-                'message' => 'El motivo seleccionado no existe.'
-            ], 422);
+            $actividad = ActividadMantenimiento::create([
+                'categoria' => 'Programado',
+                'motivo' => $motivoTexto,
+                'tipo_mantenimiento' => $tipoMantenimiento,
+                'tipo_equipo' => 'GENERAL',
+                'frecuencia_sugerida' => null,
+                'estado' => 'Activo',
+            ]);
         }
+
+        $validated['id_actmanten'] = $actividad->id;
 
         if (($actividad->tipo_mantenimiento ?? null) === 'Correctivo') {
             $modoProgramacion = 'Unica';
@@ -184,14 +199,14 @@ class ProgramacionMantenimientoController extends Controller
         // Verificar duplicado
         if ($modoProgramacion !== 'Unica') {
             $existe = ProgramacionMantenimiento::where('id_equipo', $validated['id_equipo'])
-                ->where('id_actmanten', $validated['id_actmanten'])
+                ->whereRaw('LOWER(TRIM(motivo)) = ?', [strtolower($motivoTexto)])
                 ->where('anio', $validated['anio'])
                 ->exists();
 
             if ($existe) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Ya existe una programación para este equipo, actividad y año.'
+                    'message' => 'Ya existe una programación para este equipo, motivo y año.'
                 ], 422);
             }
         }
@@ -225,6 +240,7 @@ class ProgramacionMantenimientoController extends Controller
         $programacion = ProgramacionMantenimiento::create([
             'id_equipo' => $validated['id_equipo'],
             'id_actmanten' => $validated['id_actmanten'],
+            'motivo' => $motivoTexto,
             'anio' => $validated['anio'],
             'modo_programacion' => $modoProgramacion,
             'frecuencia_meses' => $frecuencia,
