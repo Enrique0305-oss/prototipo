@@ -457,7 +457,7 @@
                                     <td>{{ $vehiculo }}</td>
                                 </tr>
                                 <tr>
-                                    <td class="tech-meta-label">Supervisor</td>
+                                    <td class="tech-meta-label">Asistente Administrativo</td>
                                     <td>{{ $supervisor }}</td>
                                 </tr>
                                 @if(!empty($p->observaciones))
