@@ -14,6 +14,7 @@ use App\Models\Tecnico;
 use App\Models\Vehiculo;
 use App\Models\Servicio;
 use App\Models\OrdenCapacitacionAuditoria;
+use App\Models\ProgramacionVisita;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -22,6 +23,30 @@ use Carbon\Carbon;
 
 class ProgramacionServicioController extends Controller
 {
+    private function normalizePersonalIds(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $value = $decoded;
+            }
+        }
+
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            return [(int) $value];
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map('intval', $value), fn (int $id) => $id > 0)));
+    }
+
     /**
      * Listar programaciones con filtros
      */
@@ -32,7 +57,6 @@ class ProgramacionServicioController extends Controller
             'servicio',
             'tecnico',
             'tecnicos',
-            'supervisor',
             'vehiculo',
             'insumos.producto',
             'planta',
@@ -102,7 +126,6 @@ class ProgramacionServicioController extends Controller
             'servicio',
             'tecnico',
             'tecnicos',
-            'supervisor',
             'vehiculo',
             'insumos.producto',
             'creador',
@@ -127,7 +150,8 @@ class ProgramacionServicioController extends Controller
             'id_tecnico_asignado' => 'required|integer|exists:tecnicos,id',
             'tecnicos_ids'      => 'nullable|array',
             'tecnicos_ids.*'    => 'integer|exists:tecnicos,id',
-            'id_supervisor'     => 'nullable|integer',
+            'id_supervisor'     => 'nullable|array',
+            'id_supervisor.*'   => 'integer|exists:personal,id',
             'id_vehiculo'       => 'nullable|integer|exists:vehiculos,id',
             'fecha_programada'  => 'required|date',
             'hora_inicio'       => 'required',
@@ -152,7 +176,7 @@ class ProgramacionServicioController extends Controller
                 'id_orden_servicio'  => $validated['id_orden_servicio'],
                 'id_servicio'        => $validated['id_servicio'],
                 'id_tecnico_asignado'=> $validated['id_tecnico_asignado'],
-                'id_supervisor'      => $validated['id_supervisor'] ?? null,
+                'id_supervisor'      => !empty($validated['id_supervisor']) ? $this->normalizePersonalIds($validated['id_supervisor']) : null,
                 'id_vehiculo'        => $validated['id_vehiculo'] ?? null,
                 'fecha_programada'   => $validated['fecha_programada'],
                 'hora_inicio'        => $validated['hora_inicio'],
@@ -188,7 +212,6 @@ class ProgramacionServicioController extends Controller
                 'servicio',
                 'tecnico',
                 'tecnicos',
-                'supervisor',
                 'vehiculo',
                 'insumos.producto',
                 'planta',
@@ -221,7 +244,8 @@ class ProgramacionServicioController extends Controller
             'id_tecnico_asignado' => 'required|integer|exists:tecnicos,id',
             'tecnicos_ids'        => 'nullable|array',
             'tecnicos_ids.*'      => 'integer|exists:tecnicos,id',
-            'id_supervisor'       => 'nullable|integer',
+            'id_supervisor'       => 'nullable|array',
+            'id_supervisor.*'     => 'integer|exists:personal,id',
             'id_vehiculo'         => 'nullable|integer|exists:vehiculos,id',
             'fecha_inicio'        => 'required|date',
             'hora_inicio'         => 'required',
@@ -264,7 +288,7 @@ class ProgramacionServicioController extends Controller
                     'id_orden_servicio'  => $validated['id_orden_servicio'],
                     'id_servicio'        => $validated['id_servicio'],
                     'id_tecnico_asignado'=> $validated['id_tecnico_asignado'],
-                    'id_supervisor'      => $validated['id_supervisor'] ?? null,
+                    'id_supervisor'      => !empty($validated['id_supervisor']) ? $this->normalizePersonalIds($validated['id_supervisor']) : null,
                     'id_vehiculo'        => $validated['id_vehiculo'] ?? null,
                     'fecha_programada'   => $fecha,
                     'hora_inicio'        => $validated['hora_inicio'],
@@ -366,7 +390,8 @@ class ProgramacionServicioController extends Controller
             'id_tecnico_asignado' => 'sometimes|integer|exists:tecnicos,id',
             'tecnicos_ids'        => 'nullable|array',
             'tecnicos_ids.*'      => 'integer|exists:tecnicos,id',
-            'id_supervisor'       => 'nullable|integer',
+            'id_supervisor'       => 'nullable|array',
+            'id_supervisor.*'     => 'integer|exists:personal,id',
             'id_vehiculo'         => 'nullable|integer',
             'fecha_programada'    => 'sometimes|date',
             'hora_inicio'         => 'sometimes',
@@ -402,7 +427,6 @@ class ProgramacionServicioController extends Controller
             'servicio',
             'tecnico',
             'tecnicos',
-            'supervisor',
             'vehiculo',
             'insumos.producto',
         ]);
@@ -643,7 +667,8 @@ class ProgramacionServicioController extends Controller
             'id_tecnico_asignado'   => 'required|integer|exists:tecnicos,id',
             'tecnicos_ids'          => 'nullable|array',
             'tecnicos_ids.*'        => 'integer|exists:tecnicos,id',
-            'id_supervisor'         => 'nullable|integer|exists:personal,id',
+            'id_supervisor'         => 'nullable|array',
+            'id_supervisor.*'       => 'integer|exists:personal,id',
             'id_vehiculo'           => 'nullable|integer|exists:vehiculos,id',
             'fecha_programada'      => 'required|date',
             'hora_inicio'           => 'required',
@@ -691,7 +716,7 @@ class ProgramacionServicioController extends Controller
                 'id_orden_capacitacion' => $validated['id_orden_capacitacion'],
                 'id_servicio'           => $idServicio,
                 'id_tecnico_asignado'   => $validated['id_tecnico_asignado'],
-                'id_supervisor'         => $validated['id_supervisor'] ?? null,
+                'id_supervisor'         => !empty($validated['id_supervisor']) ? $this->normalizePersonalIds($validated['id_supervisor']) : null,
                 'id_vehiculo'           => $validated['id_vehiculo'] ?? null,
                 'fecha_programada'      => $validated['fecha_programada'],
                 'hora_inicio'           => $validated['hora_inicio'],
@@ -726,7 +751,6 @@ class ProgramacionServicioController extends Controller
                 'servicio',
                 'tecnico',
                 'tecnicos',
-                'supervisor',
                 'vehiculo',
             ]);
 
@@ -937,14 +961,19 @@ class ProgramacionServicioController extends Controller
     {
         $vista = $request->input('vista', 'mensual'); // mensual | semanal | diaria
 
-        $query = ProgramacionServicio::with([
+        $queryServicios = ProgramacionServicio::with([
             'ordenServicio.cliente',
             'servicio',
             'tecnico',
             'tecnicos',
-            'supervisor',
             'vehiculo',
             'insumos.producto',
+        ]);
+
+        $queryVisitas = ProgramacionVisita::with([
+            'cliente',
+            'tecnico',
+            'vehiculo',
         ]);
 
         $orientation = 'landscape';
@@ -959,18 +988,22 @@ class ProgramacionServicioController extends Controller
         if ($vista === 'mensual') {
             $mes = $request->input('mes', now()->month);
             $anio = $request->input('anio', now()->year);
-            $query->whereMonth('fecha_programada', $mes)
-                  ->whereYear('fecha_programada', $anio);
+            $queryServicios->whereMonth('fecha_programada', $mes)
+                ->whereYear('fecha_programada', $anio);
+            $queryVisitas->whereMonth('fecha_programada', $mes)
+                ->whereYear('fecha_programada', $anio);
             $titulo = $monthNames[$mes - 1] . ' ' . $anio;
         } elseif ($vista === 'semanal') {
             // Se pasa fecha_inicio (lunes de la semana)
             $fechaInicio = $request->input('fecha_inicio', now()->startOfWeek()->format('Y-m-d'));
             $fechaFin = Carbon::parse($fechaInicio)->addDays(6)->format('Y-m-d');
-            $query->whereBetween('fecha_programada', [$fechaInicio, $fechaFin]);
+            $queryServicios->whereBetween('fecha_programada', [$fechaInicio, $fechaFin]);
+            $queryVisitas->whereBetween('fecha_programada', [$fechaInicio, $fechaFin]);
             $titulo = 'Semana del ' . Carbon::parse($fechaInicio)->format('d/m/Y') . ' al ' . Carbon::parse($fechaFin)->format('d/m/Y');
         } elseif ($vista === 'diaria') {
             $fecha = $request->input('fecha', now()->format('Y-m-d'));
-            $query->whereDate('fecha_programada', $fecha);
+            $queryServicios->whereDate('fecha_programada', $fecha);
+            $queryVisitas->whereDate('fecha_programada', $fecha);
             $titulo = Carbon::parse($fecha)->locale('es')->isoFormat('dddd D [de] MMMM [de] YYYY');
             $orientation = 'landscape';
         }
@@ -978,21 +1011,89 @@ class ProgramacionServicioController extends Controller
         // Filtro opcional: técnico
         if ($request->filled('id_tecnico')) {
             $idTec = $request->id_tecnico;
-            $query->where(function ($q) use ($idTec) {
+            $queryServicios->where(function ($q) use ($idTec) {
                 $q->where('id_tecnico_asignado', $idTec)
                   ->orWhereHas('tecnicos', fn($q2) => $q2->where('tecnicos.id', $idTec));
+            });
+
+            $queryVisitas->where(function ($q) use ($idTec) {
+                $q->where('id_tecnico_asignado', $idTec)
+                    ->orWhereJsonContains('tecnicos_ids', (int) $idTec);
             });
         }
 
         // Filtro opcional: estado
         if ($request->filled('estado')) {
             $estados = explode(',', $request->estado);
-            $query->whereIn('estado_ejecucion', $estados);
+            $queryServicios->whereIn('estado_ejecucion', $estados);
+            $queryVisitas->whereIn('estado_ejecucion', $estados);
         }
 
-        $programaciones = $query->orderBy('fecha_programada', 'asc')
-                                ->orderBy('hora_inicio', 'asc')
-                                ->get();
+        $programacionesServicios = $queryServicios->orderBy('fecha_programada', 'asc')
+            ->orderBy('hora_inicio', 'asc')
+            ->get();
+
+        $programacionesVisitas = $queryVisitas->orderBy('fecha_programada', 'asc')
+            ->orderBy('hora_inicio', 'asc')
+            ->get();
+
+        // Enriquecer visitas para que el blade reutilice la misma estructura de programación de servicio.
+        $tecnicoIdsVisitas = $programacionesVisitas
+            ->flatMap(function ($visita) {
+                $ids = collect($visita->tecnicos_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0);
+                if (!empty($visita->id_tecnico_asignado)) {
+                    $ids->push((int) $visita->id_tecnico_asignado);
+                }
+                return $ids;
+            })
+            ->unique()
+            ->values();
+
+        $tecnicosMap = $tecnicoIdsVisitas->isNotEmpty()
+            ? Tecnico::query()->whereIn('id', $tecnicoIdsVisitas)->get()->keyBy('id')
+            : collect();
+
+        $visitasCompatibles = $programacionesVisitas->map(function ($visita) use ($tecnicosMap) {
+            $ids = collect($visita->tecnicos_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0);
+            if (!empty($visita->id_tecnico_asignado)) {
+                $ids->push((int) $visita->id_tecnico_asignado);
+            }
+            $ids = $ids->unique()->values();
+
+            $tecnicos = $ids
+                ->map(fn($id) => $tecnicosMap->get($id))
+                ->filter()
+                ->values();
+
+            $visita->setRelation('tecnicos', $tecnicos);
+            $visita->setRelation('insumos', collect());
+            $visita->setRelation('ordenServicio', (object) [
+                'cliente' => (object) [
+                    'nombre_empresa' => $visita->cliente?->nombre_empresa,
+                    'persona_contacto' => $visita->cliente?->persona_contacto,
+                ],
+            ]);
+            $visita->setRelation('servicio', (object) [
+                'nombre' => $visita->tipo_visita ?: 'Visita',
+            ]);
+
+            return $visita;
+        });
+
+        $programaciones = $programacionesServicios
+            ->concat($visitasCompatibles)
+            ->sort(function ($a, $b) {
+                $fechaA = Carbon::parse($a->fecha_programada)->format('Y-m-d');
+                $fechaB = Carbon::parse($b->fecha_programada)->format('Y-m-d');
+                if ($fechaA !== $fechaB) {
+                    return $fechaA <=> $fechaB;
+                }
+
+                $horaA = Carbon::parse($a->hora_inicio)->format('H:i:s');
+                $horaB = Carbon::parse($b->hora_inicio)->format('H:i:s');
+                return $horaA <=> $horaB;
+            })
+            ->values();
 
         // Contadores por estado
         $contadores = $programaciones->groupBy('estado_ejecucion')->map->count()->toArray();

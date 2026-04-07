@@ -1,10 +1,11 @@
-// Programaciones View — conectado a API real
-import './programaciones.css';
-import { programacionService } from './programaciones.service';
-import { mostrarToast, confirmarAccion } from '../../shared/toast';
-import { clienteService } from '../../services/clienteService';
-import { renderModalProgramarCapacitacion, abrirModalProgramarCapacitacion } from './programacion-capacitacion';
-import { renderModalProgramarAsesoria, abrirModalProgramarAsesoria } from './programacion-asesoria';
+// Programación de Capacitación/Asesoría View — conectado a API real
+import '../programaciones.css';
+import './programacion-capacitacion-asesoria.css';
+import { programacionCapacitacionAsesoriaService as programacionService } from './programacion-capacitacion-asesoria.service';
+import { mostrarToast, confirmarAccion } from '../../../shared/toast';
+import { clienteService } from '../../../services/clienteService';
+import { renderModalProgramarCapacitacion, abrirModalProgramarCapacitacion } from '../programacion-capacitacion';
+import { renderModalProgramarAsesoria, abrirModalProgramarAsesoria } from '../programacion-asesoria';
 import type {
   Programacion,
   Tecnico,
@@ -14,7 +15,7 @@ import type {
   EstadoEjecucion,
   VistaProgramacion,
   SugerenciaSiguiente,
-} from './programaciones.types';
+} from './programacion-capacitacion-asesoria.types';
 
 // ═══════════ Estado global ═══════════
 
@@ -37,21 +38,6 @@ let filtrosVisibles = false;
 let plantasClienteDataProg: any[] = [];
 let areaIdsServicioSeleccionado: number[] = [];
 let plantaIdServicioSeleccionado: number | null = null;
-
-export type ProgramacionesModo = 'todos' | 'servicio' | 'capacitacion-asesoria';
-let programacionesModo: ProgramacionesModo = 'todos';
-
-export function configurarModoProgramaciones(modo: ProgramacionesModo) {
-  programacionesModo = modo;
-}
-
-function esModoServicio(): boolean {
-  return programacionesModo === 'servicio';
-}
-
-function esModoCapAse(): boolean {
-  return programacionesModo === 'capacitacion-asesoria';
-}
 
 function extractList<T = any>(response: any): T[] {
   const raw = response?.data ?? response;
@@ -451,15 +437,10 @@ function getPlantaNombre(idPlanta: number | null): string {
 
 // ═══════════ Render principal ═══════════
 
-export function renderProgramaciones(): string {
-  const titulo = esModoServicio()
-    ? 'Programación de Servicios'
-    : esModoCapAse()
-      ? 'Programación de Capacitación/Asesoría'
-      : 'Programación de Servicios';
-
-  const mostrarBtnNuevaServicio = !esModoCapAse();
-  const mostrarBtnCapAse = !esModoServicio();
+export function renderProgramacionCapacitacionAsesoria(): string {
+  const titulo = 'Programación de Capacitación/Asesoría';
+  const mostrarBtnNuevaServicio = false;
+  const mostrarBtnCapAse = true;
 
   return `
     <div class="prog-page-header">
@@ -554,7 +535,7 @@ export function renderProgramaciones(): string {
 
 // ═══════════ Inicialización ═══════════
 
-export async function initProgramacionesEvents(): Promise<void> {
+export async function initProgramacionCapacitacionAsesoriaEvents(): Promise<void> {
   await cargarDatosIniciales();
 
   renderSidebar();
@@ -611,21 +592,12 @@ async function cargarDatosIniciales() {
       anio: fechaActual.getFullYear(),
     };
 
-    const programacionesServicio = esModoCapAse() ? [] : (await programacionService.getAll(filtrosBase)).data || [];
-    const programacionesCapacitacion = esModoServicio() ? [] : (await programacionService.getAllProgramacionCapacitacion(filtrosBase)).data || [];
-    const programacionesAsesoria = esModoServicio() ? [] : (await programacionService.getAllProgramacionAsesoria(filtrosBase)).data || [];
-
-    const servicioMapeado = (programacionesServicio as any[]).map(p => ({
-      ...p,
-      fecha_programada: normalizarFecha(p.fecha_programada),
-      hora_inicio: normalizarHora(p.hora_inicio),
-      hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
-      tipo_programacion: 'servicio',
-    })) as ProgramacionExtendida[];
+    const programacionesCapacitacion = (await programacionService.getAllProgramacionCapacitacion(filtrosBase)).data || [];
+    const programacionesAsesoria = (await programacionService.getAllProgramacionAsesoria(filtrosBase)).data || [];
 
     const capMapeado = (programacionesCapacitacion as any[]).map(mapCapacitacionToProgramacion);
     const aseMapeado = (programacionesAsesoria as any[]).map(mapAsesoriaToProgramacion);
-    programacionesData = [...servicioMapeado, ...capMapeado, ...aseMapeado] as Programacion[];
+    programacionesData = [...capMapeado, ...aseMapeado] as Programacion[];
     const tecnicosRaw = extractList<Tecnico>(tecRes);
     const vehiculosRaw = extractList<Vehiculo>(vehRes);
 
@@ -647,12 +619,7 @@ async function cargarDatosIniciales() {
       .filter((v: Vehiculo) => v.id > 0);
     personalData = perRes.data || [];
 
-    if (esModoServicio()) {
-      const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
-      if (estRes.data) estadisticas = estRes.data;
-    } else {
-      estadisticas = construirEstadisticasDesdeLista(programacionesData);
-    }
+    estadisticas = construirEstadisticasDesdeLista(programacionesData);
   } catch (err) {
     console.error('Error cargando datos programaciones:', err);
   }
@@ -665,28 +632,14 @@ async function recargarProgramaciones() {
       anio: fechaActual.getFullYear(),
     };
 
-    const programacionesServicio = esModoCapAse() ? [] : (await programacionService.getAll(filtrosBase)).data || [];
-    const programacionesCapacitacion = esModoServicio() ? [] : (await programacionService.getAllProgramacionCapacitacion(filtrosBase)).data || [];
-    const programacionesAsesoria = esModoServicio() ? [] : (await programacionService.getAllProgramacionAsesoria(filtrosBase)).data || [];
-
-    const servicioMapeado = (programacionesServicio as any[]).map(p => ({
-      ...p,
-      fecha_programada: normalizarFecha(p.fecha_programada),
-      hora_inicio: normalizarHora(p.hora_inicio),
-      hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
-      tipo_programacion: 'servicio',
-    })) as ProgramacionExtendida[];
+    const programacionesCapacitacion = (await programacionService.getAllProgramacionCapacitacion(filtrosBase)).data || [];
+    const programacionesAsesoria = (await programacionService.getAllProgramacionAsesoria(filtrosBase)).data || [];
 
     const capMapeado = (programacionesCapacitacion as any[]).map(mapCapacitacionToProgramacion);
     const aseMapeado = (programacionesAsesoria as any[]).map(mapAsesoriaToProgramacion);
-    programacionesData = [...servicioMapeado, ...capMapeado, ...aseMapeado] as Programacion[];
+    programacionesData = [...capMapeado, ...aseMapeado] as Programacion[];
 
-    if (esModoServicio()) {
-      const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
-      if (estRes.data) estadisticas = estRes.data;
-    } else {
-      estadisticas = construirEstadisticasDesdeLista(programacionesData);
-    }
+    estadisticas = construirEstadisticasDesdeLista(programacionesData);
   } catch (err) {
     console.error('Error recargando programaciones:', err);
   }

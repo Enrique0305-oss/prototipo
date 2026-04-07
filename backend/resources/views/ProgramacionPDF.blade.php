@@ -429,7 +429,21 @@
                         $tecnicos = $p->tecnicos->count() > 0
                             ? $p->tecnicos->map(fn($t) => $t->nombre . ' ' . $t->apellidos)->implode(', ')
                             : ($p->tecnico ? $p->tecnico->nombre . ' ' . $p->tecnico->apellidos : '—');
-                        $supervisor = $p->supervisor ? $p->supervisor->nombre . ' ' . $p->supervisor->apellidos : 'No asignado';
+                        $personalAdmin = collect($p->personal_administrativo ?? [])
+                            ->map(function ($item) {
+                                if (is_array($item)) {
+                                    return trim(($item['nombre'] ?? '') . ' ' . ($item['apellidos'] ?? ''));
+                                }
+                                if (is_object($item)) {
+                                    return trim(($item->nombre ?? '') . ' ' . ($item->apellidos ?? ''));
+                                }
+                                return null;
+                            })
+                            ->filter()
+                            ->values();
+                        $supervisor = $personalAdmin->isNotEmpty()
+                            ? $personalAdmin->implode(', ')
+                            : ($p->supervisor ? $p->supervisor->nombre . ' ' . $p->supervisor->apellidos : 'No asignado');
                         $vehiculo = $p->vehiculo ? $p->vehiculo->placa . ' - ' . $p->vehiculo->marca . ' ' . $p->vehiculo->modelo : 'No asignado';
                     @endphp
                     <div class="tech-card">
@@ -457,7 +471,7 @@
                                     <td>{{ $vehiculo }}</td>
                                 </tr>
                                 <tr>
-                                    <td class="tech-meta-label">Asistente Administrativo</td>
+                                    <td class="tech-meta-label">Personal Administrativo</td>
                                     <td>{{ $supervisor }}</td>
                                 </tr>
                                 @if(!empty($p->observaciones))

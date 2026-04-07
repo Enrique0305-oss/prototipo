@@ -31,6 +31,7 @@ use App\Http\Controllers\API\ClientePlantaController;
 use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
+use App\Http\Controllers\API\ProgramacionVisitaController;
 use App\Http\Controllers\API\ProgramacionCapacitacionController;
 use App\Http\Controllers\API\ProgramacionAsesoriaController;
 use App\Http\Controllers\API\EntregaEppController;
@@ -317,6 +318,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'update']);
     Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
     Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
+
+    // Programación de Visitas (independiente)
+    Route::get('/programacion-visita', [ProgramacionVisitaController::class, 'index']);
+    Route::get('/programacion-visita/{id}', [ProgramacionVisitaController::class, 'show']);
+    Route::post('/programacion-visita', [ProgramacionVisitaController::class, 'store']);
+    Route::put('/programacion-visita/{id}', [ProgramacionVisitaController::class, 'update']);
+    Route::delete('/programacion-visita/{id}', [ProgramacionVisitaController::class, 'destroy']);
 
     // Programación de Capacitaciones (independiente)
     Route::get('/programacion-capacitacion/capacitaciones-disponibles', [ProgramacionCapacitacionController::class, 'getCapacitacionesDisponibles']);

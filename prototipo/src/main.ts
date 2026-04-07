@@ -6,7 +6,8 @@ import { authService } from './modules/auth/auth.service'
 // Inicializar guard de autenticación
 initAuthGuard();
 import { renderDashboard, cargarAlertaStockBajo, cargarAlertaMantenimiento, cargarAlertaCotizacionesSinOrden } from './modules/dashboard/dashboard.view'
-import { renderProgramaciones, initProgramacionesEvents } from './modules/programaciones/programaciones.view'
+import { renderProgramacionServicio, initProgramacionServicioEvents } from './modules/programaciones/programacion-servicio/programacion-servicio.view'
+import { renderProgramacionCapacitacionAsesoria, initProgramacionCapacitacionAsesoriaEvents } from './modules/programaciones/programacion-capacitacion-asesoria/programacion-capacitacion-asesoria.view'
 import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios } from './modules/recursos-humanos/recursos-humanos.view'
 import { renderTecnicosTab, cargarTecnicos } from './modules/recursos-humanos/tecnicos.view'
 // Almacén
@@ -73,6 +74,11 @@ const MENU_PERMISOS: Record<string, string[]> = {
   'Usuarios':          ['usuarios'],
 };
 
+const SUBMENU_PERMISOS: Record<string, string[]> = {
+  'Programaciones::Programación Servicio': ['programaciones-servicio', 'programaciones'],
+  'Programaciones::Programación Capacitación/Asesoría': ['programaciones-capacitacion-asesoria', 'programaciones'],
+};
+
 function filtrarMenuPorPermisos(items: typeof menuItems): typeof menuItems {
   return items.filter(item => {
     const permisosRequeridos = MENU_PERMISOS[item.name];
@@ -81,11 +87,20 @@ function filtrarMenuPorPermisos(items: typeof menuItems): typeof menuItems {
   });
 }
 
+function filtrarSubmenuPorPermisos(menuName: string, submenuItems: string[]): string[] {
+  return submenuItems.filter((sub) => {
+    const key = `${menuName}::${sub}`;
+    const permisosRequeridos = SUBMENU_PERMISOS[key];
+    if (!permisosRequeridos) return true;
+    return permisosRequeridos.some((p) => tieneAccesoModulo(p));
+  });
+}
+
 const menuItems = [
   { name: 'Dashboard', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>', submenu: [] },
   { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Mantenimiento', 'Inventario', 'Ajuste de Inventario', 'Proveedores', 'Órdenes de Compra', 'Entradas y Salidas', 'Entrega EPP', 'Gestión de Vehículos', 'Salidas Programación'] },
   { name: 'Servicios - Clientes', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>', submenu: [] },
-  { name: 'Programaciones', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>', submenu: [] },
+  { name: 'Programaciones', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>', submenu: ['Programación Servicio', 'Programación Capacitación/Asesoría'] },
   { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Clientes Potenciales', 'Cotizaciones', 'Aprobación Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Órdenes de Asesoría', 'Exponentes', 'Conversiones'] },
   { name: 'Finanzas', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>', submenu: [] },
   { name: 'Facturación', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>', submenu: [] },
@@ -119,7 +134,10 @@ function getMainContent() {
     setTimeout(() => initClientesLogisticaEvents(), 0);
     return html;
   } else if (activeMenu === 'Programaciones') {
-    return renderProgramaciones();
+    if (activeSubMenu === 'Programación Capacitación/Asesoría') {
+      return renderProgramacionCapacitacionAsesoria();
+    }
+    return renderProgramacionServicio();
   } else if (activeMenu === 'Comercial') {
     if (activeSubMenu === 'Clientes Potenciales') {
       const html = renderComercialProspectos();
@@ -194,7 +212,10 @@ function renderApp() {
   const userName = currentUser?.nombre || 'Usuario';
   const userRole = currentUser?.rol || 'Sin rol';
   const userInitials = userName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-  const visibleMenuItems = filtrarMenuPorPermisos(menuItems);
+  const visibleMenuItems = filtrarMenuPorPermisos(menuItems).map((item) => ({
+    ...item,
+    submenu: filtrarSubmenuPorPermisos(item.name, item.submenu),
+  }));
 
   app.innerHTML = `
     <div class="app-container">
@@ -405,7 +426,11 @@ if (activeMenu === 'Facturación') {
 
   // Inicializar eventos del módulo de Programaciones
   if (activeMenu === 'Programaciones') {
-    initProgramacionesEvents();
+    if (activeSubMenu === 'Programación Capacitación/Asesoría') {
+      initProgramacionCapacitacionAsesoriaEvents();
+    } else {
+      initProgramacionServicioEvents();
+    }
   }
 
   // Inicializar eventos del módulo de Inventario - Productos

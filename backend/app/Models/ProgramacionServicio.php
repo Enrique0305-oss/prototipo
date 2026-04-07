@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 class ProgramacionServicio extends Model
 {
     protected $table = 'programacion_servicio';
+
+    protected $appends = [
+        'personal_administrativo',
+    ];
     
     protected $fillable = [
         'id_orden_servicio',
@@ -48,6 +52,7 @@ class ProgramacionServicio extends Model
         'calificacion_cliente' => 'integer',
         'fecha_creacion' => 'datetime',
         'fecha_modificacion' => 'datetime',
+        'id_supervisor' => 'array',
     ];
 
     const CREATED_AT = 'fecha_creacion';
@@ -102,11 +107,6 @@ class ProgramacionServicio extends Model
         return $this->hasMany(ProgramacionTecnico::class, 'id_programacion');
     }
 
-    public function supervisor()
-    {
-        return $this->belongsTo(Personal::class, 'id_supervisor');
-    }
-
     public function vehiculo()
     {
         return $this->belongsTo(Vehiculo::class, 'id_vehiculo');
@@ -115,6 +115,49 @@ class ProgramacionServicio extends Model
     public function creador()
     {
         return $this->belongsTo(Personal::class, 'creado_por');
+    }
+
+    public function getPersonalAdministrativoAttribute(): array
+    {
+        $ids = $this->normalizePersonalIds($this->attributes['id_supervisor'] ?? null);
+        if (empty($ids)) {
+            return [];
+        }
+
+        return Personal::query()
+            ->whereIn('id', $ids)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'apellidos'])
+            ->map(fn (Personal $personal) => [
+                'id' => $personal->id,
+                'nombre' => $personal->nombre,
+                'apellidos' => $personal->apellidos,
+            ])
+            ->all();
+    }
+
+    private function normalizePersonalIds(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $value = $decoded;
+            }
+        }
+
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            return [(int) $value];
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map('intval', $value), fn (int $id) => $id > 0)));
     }
 
     public function insumos()

@@ -1,10 +1,9 @@
-// Programaciones View — conectado a API real
-import './programaciones.css';
-import { programacionService } from './programaciones.service';
-import { mostrarToast, confirmarAccion } from '../../shared/toast';
-import { clienteService } from '../../services/clienteService';
-import { renderModalProgramarCapacitacion, abrirModalProgramarCapacitacion } from './programacion-capacitacion';
-import { renderModalProgramarAsesoria, abrirModalProgramarAsesoria } from './programacion-asesoria';
+// Programación de Servicio View — conectado a API real
+import '../programaciones.css';
+import './programacion-servicio.css';
+import { programacionServicioService as programacionService } from './programacion-servicio.service';
+import { mostrarToast, confirmarAccion } from '../../../shared/toast';
+import { clienteService } from '../../../services/clienteService';
 import type {
   Programacion,
   Tecnico,
@@ -14,7 +13,7 @@ import type {
   EstadoEjecucion,
   VistaProgramacion,
   SugerenciaSiguiente,
-} from './programaciones.types';
+} from './programacion-servicio.types';
 
 // ═══════════ Estado global ═══════════
 
@@ -37,21 +36,8 @@ let filtrosVisibles = false;
 let plantasClienteDataProg: any[] = [];
 let areaIdsServicioSeleccionado: number[] = [];
 let plantaIdServicioSeleccionado: number | null = null;
-
-export type ProgramacionesModo = 'todos' | 'servicio' | 'capacitacion-asesoria';
-let programacionesModo: ProgramacionesModo = 'todos';
-
-export function configurarModoProgramaciones(modo: ProgramacionesModo) {
-  programacionesModo = modo;
-}
-
-function esModoServicio(): boolean {
-  return programacionesModo === 'servicio';
-}
-
-function esModoCapAse(): boolean {
-  return programacionesModo === 'capacitacion-asesoria';
-}
+let clientesAceptados: any[] = [];
+let plantasClienteVisita: any[] = [];
 
 function extractList<T = any>(response: any): T[] {
   const raw = response?.data ?? response;
@@ -61,9 +47,11 @@ function extractList<T = any>(response: any): T[] {
 }
 
 type ProgramacionExtendida = Programacion & {
-  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria';
+  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria' | 'visita';
   orden_capacitacion?: any;
   orden_asesoria?: any;
+  cliente?: any;
+  tipo_visita?: string;
   exponentes?: any[];
   modalidad?: string;
   modalidad_visita?: string;
@@ -73,66 +61,6 @@ type ProgramacionExtendida = Programacion & {
   resumen_por_mes?: Array<{ mes: number; presencial: number; virtual: number; frecuencia: string }>;
   fecha_fin_programacion?: string | null;
 };
-
-function mapCapacitacionToProgramacion(cap: any): ProgramacionExtendida {
-  return {
-    id: cap.id,
-    id_orden_servicio: 0,
-    id_servicio: cap.orden_capacitacion?.id_servicio || 0,
-    id_tecnico_asignado: 0,
-    id_supervisor: cap.id_supervisor,
-    id_vehiculo: cap.id_vehiculo,
-    fecha_programada: normalizarFecha(cap.fecha_programada),
-    hora_inicio: normalizarHora(cap.hora_inicio),
-    hora_fin: cap.hora_fin ? normalizarHora(cap.hora_fin) : cap.hora_fin,
-    local_sede: cap.local_sede,
-    direccion_completa: cap.direccion_completa,
-    id_cliente_planta: cap.id_cliente_planta,
-    id_cliente_planta_area: cap.id_cliente_planta_area,
-    estado_ejecucion: cap.estado_ejecucion,
-    observaciones: cap.observaciones,
-    servicio: cap.orden_capacitacion?.servicio,
-    supervisor: cap.supervisor,
-    vehiculo: cap.vehiculo,
-    planta: cap.planta,
-    area: cap.area,
-    orden_capacitacion: cap.orden_capacitacion,
-    exponentes: cap.exponentes || [],
-    tipo_programacion: 'capacitacion',
-  } as ProgramacionExtendida;
-}
-
-function mapAsesoriaToProgramacion(ase: any): ProgramacionExtendida {
-  return {
-    id: ase.id,
-    id_orden_servicio: 0,
-    id_servicio: ase.ordenAsesoria?.id_servicio || ase.orden_asesoria?.id_servicio || 0,
-    id_tecnico_asignado: 0,
-    id_supervisor: ase.id_supervisor,
-    id_vehiculo: ase.id_vehiculo,
-    fecha_programada: normalizarFecha(ase.fecha_programada),
-    hora_inicio: normalizarHora(ase.hora_inicio),
-    hora_fin: ase.hora_fin ? normalizarHora(ase.hora_fin) : ase.hora_fin,
-    local_sede: ase.local_sede,
-    direccion_completa: ase.direccion_completa,
-    id_cliente_planta: ase.id_cliente_planta,
-    id_cliente_planta_area: ase.id_cliente_planta_area,
-    estado_ejecucion: ase.estado_ejecucion,
-    observaciones: ase.observaciones,
-    servicio: ase.ordenAsesoria?.servicio || ase.orden_asesoria?.servicio,
-    supervisor: ase.supervisor,
-    vehiculo: ase.vehiculo,
-    planta: ase.planta,
-    area: ase.area,
-    orden_asesoria: ase.ordenAsesoria || ase.orden_asesoria,
-    exponentes: ase.exponentes || [],
-    modalidad: ase.modalidad || ase.ordenAsesoria?.modalidad || ase.orden_asesoria?.modalidad,
-    modalidad_visita: ase.modalidad_visita || ase.modalidadVisita || ase.modalidad_visita,
-    meses_implementacion: ase.meses_implementacion ?? ase.ordenAsesoria?.meses_implementacion ?? ase.orden_asesoria?.meses_implementacion ?? null,
-    frecuencia_visita: ase.frecuencia_visita ?? ase.ordenAsesoria?.frecuencia_visita ?? ase.orden_asesoria?.frecuencia_visita ?? null,
-    tipo_programacion: 'asesoria',
-  } as ProgramacionExtendida;
-}
 
 async function cargarPlantasClienteProg(idCliente: number) {
   try {
@@ -276,6 +204,320 @@ function bindAreaMultiInteractionsEdicion(container: HTMLElement) {
   });
 }
 
+function getAreaIdsFromVisitaForm(container: HTMLElement): number[] {
+  const multi = container.querySelector('#areasSelectVisita') as HTMLSelectElement | null;
+  if (!multi) return [];
+  return Array.from(multi.selectedOptions)
+    .map((opt) => parseInt(opt.value || '0', 10))
+    .filter((id) => id > 0);
+}
+
+function actualizarResumenAreasVisita(container: HTMLElement) {
+  const multi = container.querySelector('#areasSelectVisita') as HTMLSelectElement | null;
+  const resumen = container.querySelector('#visitaAreaSummary') as HTMLElement | null;
+  const toggle = container.querySelector('#visitaAreaToggle') as HTMLButtonElement | null;
+  if (!multi || !resumen || !toggle) return;
+
+  const ids = getAreaIdsFromVisitaForm(container);
+  if (ids.length === 0) {
+    resumen.textContent = 'Sin areas seleccionadas';
+    resumen.style.color = '#94a3b8';
+    toggle.textContent = 'Seleccionar areas';
+    return;
+  }
+
+  const labels = Array.from(multi.selectedOptions)
+    .map((opt) => (opt.text || '').trim())
+    .filter(Boolean);
+
+  toggle.textContent = `${ids.length} area(s)`;
+  resumen.style.color = '#334155';
+
+  const chips = labels.slice(0, 2)
+    .map((nombre) => `<span style="display:inline-block;background:#ecfeff;color:#0f766e;border:1px solid #99f6e4;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`)
+    .join('');
+
+  if (labels.length > 2) {
+    resumen.innerHTML = chips + `<span style="font-size:11px;color:#64748b;">+${labels.length - 2} mas</span>`;
+  } else {
+    resumen.innerHTML = chips;
+  }
+}
+
+function renderAreaPickerOptionsVisita(container: HTMLElement) {
+  const multi = container.querySelector('#areasSelectVisita') as HTMLSelectElement | null;
+  const wrap = container.querySelector('#visitaAreaOptions') as HTMLElement | null;
+  if (!multi || !wrap) return;
+
+  if (multi.options.length === 0) {
+    wrap.innerHTML = '<div style="padding:6px 0;color:#94a3b8;font-size:12px;">Primero seleccione una planta</div>';
+    return;
+  }
+
+  wrap.innerHTML = Array.from(multi.options)
+    .map((opt, index) => {
+      return `<label style="display:flex;align-items:center;gap:7px;padding:4px 0;font-size:13px;color:#334155;cursor:pointer;">
+        <input type="checkbox" class="visita-area-check" data-index="${index}" ${opt.selected ? 'checked' : ''}>
+        <span>${opt.text}</span>
+      </label>`;
+    })
+    .join('');
+
+  wrap.querySelectorAll('.visita-area-check').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const idx = Number((e.currentTarget as HTMLInputElement).dataset.index || '-1');
+      if (idx < 0 || !multi.options[idx]) return;
+      multi.options[idx].selected = (e.currentTarget as HTMLInputElement).checked;
+      actualizarResumenAreasVisita(container);
+    });
+  });
+}
+
+function bindAreaMultiInteractionsVisita(container: HTMLElement) {
+  const panel = container.querySelector('#visitaAreaPanel') as HTMLElement | null;
+  const toggle = container.querySelector('#visitaAreaToggle') as HTMLButtonElement | null;
+  const btnAll = container.querySelector('#visitaAreaSelectAll') as HTMLButtonElement | null;
+  const btnClear = container.querySelector('#visitaAreaClearAll') as HTMLButtonElement | null;
+  const multi = container.querySelector('#areasSelectVisita') as HTMLSelectElement | null;
+
+  if (!panel || !toggle || !multi) return;
+
+  toggle.onclick = (e) => {
+    e.preventDefault();
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  };
+
+  btnAll?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = true; });
+    renderAreaPickerOptionsVisita(container);
+    actualizarResumenAreasVisita(container);
+  });
+
+  btnClear?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = false; });
+    renderAreaPickerOptionsVisita(container);
+    actualizarResumenAreasVisita(container);
+  });
+
+  document.addEventListener('click', (ev) => {
+    if (!panel.contains(ev.target as Node) && !toggle.contains(ev.target as Node)) {
+      panel.style.display = 'none';
+    }
+  });
+}
+
+function getPersonalIdsFromVisitaForm(container: HTMLElement): number[] {
+  const multi = container.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement | null;
+  if (!multi) return [];
+  return Array.from(multi.selectedOptions)
+    .map((opt) => parseInt(opt.value || '0', 10))
+    .filter((id) => id > 0);
+}
+
+function actualizarResumenPersonalVisita(container: HTMLElement) {
+  const multi = container.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement | null;
+  const resumen = container.querySelector('#personalAdministrativoSummary') as HTMLElement | null;
+  const toggle = container.querySelector('#personalAdministrativoToggle') as HTMLButtonElement | null;
+  if (!multi || !resumen || !toggle) return;
+
+  const ids = getPersonalIdsFromVisitaForm(container);
+  if (ids.length === 0) {
+    resumen.textContent = 'Sin personal seleccionado';
+    resumen.style.color = '#94a3b8';
+    toggle.textContent = 'Seleccionar personal';
+    return;
+  }
+
+  const labels = Array.from(multi.selectedOptions)
+    .map((opt) => (opt.text || '').trim())
+    .filter(Boolean);
+
+  toggle.textContent = `${ids.length} persona(s)`;
+  resumen.style.color = '#334155';
+
+  const chips = labels.slice(0, 2)
+    .map((nombre) => `<span style="display:inline-block;background:#ecfeff;color:#0f766e;border:1px solid #99f6e4;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`)
+    .join('');
+
+  if (labels.length > 2) {
+    resumen.innerHTML = chips + `<span style="font-size:11px;color:#64748b;">+${labels.length - 2} más</span>`;
+  } else {
+    resumen.innerHTML = chips;
+  }
+}
+
+function renderPersonalPickerOptionsVisita(container: HTMLElement) {
+  const multi = container.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement | null;
+  const wrap = container.querySelector('#personalAdministrativoOptions') as HTMLElement | null;
+  if (!multi || !wrap) return;
+
+  if (multi.options.length === 0) {
+    wrap.innerHTML = '<div style="padding:6px 0;color:#94a3b8;font-size:12px;">No hay personal disponible</div>';
+    return;
+  }
+
+  wrap.innerHTML = Array.from(multi.options)
+    .map((opt, index) => {
+      return `<label style="display:flex;align-items:center;gap:7px;padding:4px 0;font-size:13px;color:#334155;cursor:pointer;">
+        <input type="checkbox" class="personal-admin-check" data-index="${index}" ${opt.selected ? 'checked' : ''}>
+        <span>${opt.text}</span>
+      </label>`;
+    })
+    .join('');
+
+  wrap.querySelectorAll('.personal-admin-check').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const idx = Number((e.currentTarget as HTMLInputElement).dataset.index || '-1');
+      if (idx < 0 || !multi.options[idx]) return;
+      multi.options[idx].selected = (e.currentTarget as HTMLInputElement).checked;
+      actualizarResumenPersonalVisita(container);
+    });
+  });
+}
+
+function bindPersonalMultiInteractionsVisita(container: HTMLElement) {
+  const panel = container.querySelector('#personalAdministrativoPanel') as HTMLElement | null;
+  const toggle = container.querySelector('#personalAdministrativoToggle') as HTMLButtonElement | null;
+  const btnAll = container.querySelector('#personalAdministrativoSelectAll') as HTMLButtonElement | null;
+  const btnClear = container.querySelector('#personalAdministrativoClearAll') as HTMLButtonElement | null;
+  const multi = container.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement | null;
+
+  if (!panel || !toggle || !multi) return;
+
+  toggle.onclick = (e) => {
+    e.preventDefault();
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  };
+
+  btnAll?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = true; });
+    renderPersonalPickerOptionsVisita(container);
+    actualizarResumenPersonalVisita(container);
+  });
+
+  btnClear?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = false; });
+    renderPersonalPickerOptionsVisita(container);
+    actualizarResumenPersonalVisita(container);
+  });
+
+  document.addEventListener('click', (ev) => {
+    if (!panel.contains(ev.target as Node) && !toggle.contains(ev.target as Node)) {
+      panel.style.display = 'none';
+    }
+  });
+}
+
+function getPersonalIdsFromServicioForm(container: HTMLElement): number[] {
+  const multi = container.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement | null;
+  if (!multi) return [];
+  return Array.from(multi.selectedOptions)
+    .map((opt) => parseInt(opt.value || '0', 10))
+    .filter((id) => id > 0);
+}
+
+function actualizarResumenPersonalServicio(container: HTMLElement) {
+  const multi = container.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement | null;
+  const resumen = container.querySelector('#personalAdministrativoSummaryServicio') as HTMLElement | null;
+  const toggle = container.querySelector('#personalAdministrativoToggleServicio') as HTMLButtonElement | null;
+  if (!multi || !resumen || !toggle) return;
+
+  const ids = getPersonalIdsFromServicioForm(container);
+  if (ids.length === 0) {
+    resumen.textContent = 'Sin personal seleccionado';
+    resumen.style.color = '#94a3b8';
+    toggle.textContent = 'Seleccionar personal';
+    return;
+  }
+
+  const labels = Array.from(multi.selectedOptions)
+    .map((opt) => (opt.text || '').trim())
+    .filter(Boolean);
+
+  toggle.textContent = `${ids.length} persona(s)`;
+  resumen.style.color = '#334155';
+
+  const chips = labels.slice(0, 2)
+    .map((nombre) => `<span style="display:inline-block;background:#ecfeff;color:#0f766e;border:1px solid #99f6e4;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`)
+    .join('');
+
+  if (labels.length > 2) {
+    resumen.innerHTML = chips + `<span style="font-size:11px;color:#64748b;">+${labels.length - 2} más</span>`;
+  } else {
+    resumen.innerHTML = chips;
+  }
+}
+
+function renderPersonalPickerOptionsServicio(container: HTMLElement) {
+  const multi = container.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement | null;
+  const wrap = container.querySelector('#personalAdministrativoOptionsServicio') as HTMLElement | null;
+  if (!multi || !wrap) return;
+
+  if (multi.options.length === 0) {
+    wrap.innerHTML = '<div style="padding:6px 0;color:#94a3b8;font-size:12px;">No hay personal disponible</div>';
+    return;
+  }
+
+  wrap.innerHTML = Array.from(multi.options)
+    .map((opt, index) => `
+      <label style="display:flex;align-items:center;gap:7px;padding:4px 0;font-size:13px;color:#334155;cursor:pointer;">
+        <input type="checkbox" class="personal-admin-check-servicio" data-index="${index}" ${opt.selected ? 'checked' : ''}>
+        <span>${opt.text}</span>
+      </label>`)
+    .join('');
+
+  wrap.querySelectorAll('.personal-admin-check-servicio').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const idx = Number((e.currentTarget as HTMLInputElement).dataset.index || '-1');
+      if (idx < 0 || !multi.options[idx]) return;
+      multi.options[idx].selected = (e.currentTarget as HTMLInputElement).checked;
+      actualizarResumenPersonalServicio(container);
+    });
+  });
+}
+
+function bindPersonalMultiInteractionsServicio(container: HTMLElement) {
+  const panel = container.querySelector('#personalAdministrativoPanelServicio') as HTMLElement | null;
+  const toggle = container.querySelector('#personalAdministrativoToggleServicio') as HTMLButtonElement | null;
+  const btnAll = container.querySelector('#personalAdministrativoSelectAllServicio') as HTMLButtonElement | null;
+  const btnClear = container.querySelector('#personalAdministrativoClearAllServicio') as HTMLButtonElement | null;
+  const multi = container.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement | null;
+
+  if (!panel || !toggle || !multi) return;
+
+  toggle.onclick = (e) => {
+    e.preventDefault();
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  };
+
+  btnAll?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = true; });
+    renderPersonalPickerOptionsServicio(container);
+    actualizarResumenPersonalServicio(container);
+  });
+
+  btnClear?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = false; });
+    renderPersonalPickerOptionsServicio(container);
+    actualizarResumenPersonalServicio(container);
+  });
+
+  document.addEventListener('click', (ev) => {
+    if (!panel.contains(ev.target as Node) && !toggle.contains(ev.target as Node)) {
+      panel.style.display = 'none';
+    }
+  });
+}
+
 function normalizeAreaIds(input: any): number[] {
   if (input === null || input === undefined || input === '') return [];
 
@@ -345,6 +587,49 @@ function normalizeAreaIds(input: any): number[] {
 
     const asNumber = Number(raw);
     return Number.isFinite(asNumber) && asNumber > 0 ? [asNumber] : [];
+  }
+
+  return [];
+}
+
+function normalizePersonalIds(input: any): number[] {
+  if (input === null || input === undefined || input === '') return [];
+
+  if (Array.isArray(input)) {
+    return input
+      .map((v: any) => Number(v?.id ?? v))
+      .filter((n: number) => Number.isFinite(n) && n > 0);
+  }
+
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && input > 0 ? [input] : [];
+  }
+
+  if (typeof input === 'object') {
+    const n = Number((input as any).id ?? (input as any).value);
+    return Number.isFinite(n) && n > 0 ? [n] : [];
+  }
+
+  if (typeof input === 'string') {
+    const raw = input.trim();
+    if (!raw) return [];
+
+    try {
+      const parsed = JSON.parse(raw);
+      return normalizePersonalIds(parsed);
+    } catch {
+      // continuar con parsing simple
+    }
+
+    if (raw.includes(',')) {
+      return raw
+        .split(',')
+        .map((v) => Number(v.trim()))
+        .filter((n) => Number.isFinite(n) && n > 0);
+    }
+
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? [n] : [];
   }
 
   return [];
@@ -451,15 +736,10 @@ function getPlantaNombre(idPlanta: number | null): string {
 
 // ═══════════ Render principal ═══════════
 
-export function renderProgramaciones(): string {
-  const titulo = esModoServicio()
-    ? 'Programación de Servicios'
-    : esModoCapAse()
-      ? 'Programación de Capacitación/Asesoría'
-      : 'Programación de Servicios';
-
-  const mostrarBtnNuevaServicio = !esModoCapAse();
-  const mostrarBtnCapAse = !esModoServicio();
+export function renderProgramacionServicio(): string {
+  const titulo = 'Programación de Servicios';
+  const mostrarBtnNuevaServicio = true;
+  const mostrarBtnCapAse = false;
 
   return `
     <div class="prog-page-header">
@@ -521,6 +801,37 @@ export function renderProgramaciones(): string {
         <div class="prog-modal-body" id="modalDetalleBody"></div>
       </div>
     </div>
+    <!-- Modal SELECTOR Tipo de Programación -->
+    <div class="prog-modal" id="modalSelectorTipoProgramacion" style="display:none;">
+      <div class="prog-modal-overlay"></div>
+      <div class="prog-modal-content" style="width:320px;max-width:90%;">
+        <div class="prog-modal-header">
+          <h2>Tipo de Programación</h2>
+          <button class="prog-modal-close" id="closeSelectorTipo">&times;</button>
+        </div>
+        <div class="prog-modal-body" style="padding:24px;text-align:center;display:flex;flex-direction:column;gap:16px;">
+          <button id="btnSelectorServicio" class="prog-btn-primary" style="width:100%;padding:16px;font-size:15px;font-weight:500;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;display:inline;"><path d="M6 9l6 4 6-4M9 13h6M9 17h6M4 5h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V7a2 2 0 012-2z"></path></svg>
+            Programación de Servicio
+          </button>
+          <button id="btnSelectorVisita" class="prog-btn-secondary" style="width:100%;padding:16px;font-size:15px;font-weight:500;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;display:inline;"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M16 11a4 4 0 11-8 0 4 4 0 018 0zM23 20.5v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"></path></svg>
+            Programación por Visita
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Modal Programación por VISITA -->
+    <div class="prog-modal" id="modalNuevaProgramacionVisita" style="display:none;">
+      <div class="prog-modal-overlay"></div>
+      <div class="prog-modal-content prog-modal-large">
+        <div class="prog-modal-header">
+          <h2>Nueva Programación por Visita</h2>
+          <button class="prog-modal-close" id="closeModalNuevaVisita">&times;</button>
+        </div>
+        <div class="prog-modal-body" id="modalNuevaVisitaBody"></div>
+      </div>
+    </div>
     <div class="prog-modal" id="modalNuevaProgramacion" style="display:none;">
       <div class="prog-modal-overlay"></div>
       <div class="prog-modal-content prog-modal-large">
@@ -542,19 +853,12 @@ export function renderProgramaciones(): string {
       </div>
     </div>
 
-    ${mostrarBtnCapAse ? `
-      <!-- Modal Programar Capacitación -->
-      ${renderModalProgramarCapacitacion()}
-
-      <!-- Modal Programar Asesoría -->
-      ${renderModalProgramarAsesoria()}
-    ` : ''}
   `;
 }
 
 // ═══════════ Inicialización ═══════════
 
-export async function initProgramacionesEvents(): Promise<void> {
+export async function initProgramacionServicioEvents(): Promise<void> {
   await cargarDatosIniciales();
 
   renderSidebar();
@@ -562,13 +866,16 @@ export async function initProgramacionesEvents(): Promise<void> {
   bindToggleFiltrosProg();
   applyEstadoFiltrosProg();
 
-  document.getElementById('btnNuevaProgramacion')?.addEventListener('click', abrirModalNueva);
-  document.getElementById('btnProgramarCapacitacion')?.addEventListener('click', () => {
-    abrirModalProgramarCapacitacion(tecnicosData, personalData, vehiculosData);
+  document.getElementById('btnNuevaProgramacion')?.addEventListener('click', abrirModalSelectorTipo);
+  document.getElementById('btnSelectorServicio')?.addEventListener('click', () => {
+    cerrarModal('modalSelectorTipoProgramacion');
+    abrirModalNueva();
   });
-  document.getElementById('btnProgramarAsesoria')?.addEventListener('click', () => {
-    abrirModalProgramarAsesoria(personalData, vehiculosData);
+  document.getElementById('btnSelectorVisita')?.addEventListener('click', () => {
+    cerrarModal('modalSelectorTipoProgramacion');
+    abrirModalNuevaVisita();
   });
+  document.getElementById('closeSelectorTipo')?.addEventListener('click', () => cerrarModal('modalSelectorTipoProgramacion'));
   document.getElementById('viewSelector')?.addEventListener('change', (e) => {
     vistaActual = (e.target as HTMLSelectElement).value as VistaProgramacion;
     renderCalendario();
@@ -578,24 +885,18 @@ export async function initProgramacionesEvents(): Promise<void> {
 
   document.getElementById('closeModalDetalle')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
   document.getElementById('closeModalNueva')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacion'));
+  document.getElementById('closeModalNuevaVisita')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacionVisita'));
   document.getElementById('closeModalSugerencia')?.addEventListener('click', () => cerrarModal('modalSugerencia'));
   document.querySelectorAll('.prog-modal-overlay').forEach(el => {
     el.addEventListener('click', () => {
+      cerrarModal('modalSelectorTipoProgramacion');
       cerrarModal('modalDetalleProgramacion');
       cerrarModal('modalNuevaProgramacion');
+      cerrarModal('modalNuevaProgramacionVisita');
       cerrarModal('modalSugerencia');
     });
   });
 
-  // Escuchar evento de capacitación programada para recargar
-  window.addEventListener('capacitacionProgramada', async () => {
-    await recargarProgramaciones();
-  });
-
-  // Escuchar evento de asesoría programada para recargar
-  window.addEventListener('asesoriaProgramada', async () => {
-    await recargarProgramaciones();
-  });
 }
 
 async function cargarDatosIniciales() {
@@ -611,9 +912,13 @@ async function cargarDatosIniciales() {
       anio: fechaActual.getFullYear(),
     };
 
-    const programacionesServicio = esModoCapAse() ? [] : (await programacionService.getAll(filtrosBase)).data || [];
-    const programacionesCapacitacion = esModoServicio() ? [] : (await programacionService.getAllProgramacionCapacitacion(filtrosBase)).data || [];
-    const programacionesAsesoria = esModoServicio() ? [] : (await programacionService.getAllProgramacionAsesoria(filtrosBase)).data || [];
+    const [resServicio, resVisita] = await Promise.all([
+      programacionService.getAll(filtrosBase),
+      programacionService.getAllProgramacionVisita(filtrosBase),
+    ]);
+
+    const programacionesServicio = resServicio.data || [];
+    const programacionesVisita = resVisita.data || [];
 
     const servicioMapeado = (programacionesServicio as any[]).map(p => ({
       ...p,
@@ -623,9 +928,15 @@ async function cargarDatosIniciales() {
       tipo_programacion: 'servicio',
     })) as ProgramacionExtendida[];
 
-    const capMapeado = (programacionesCapacitacion as any[]).map(mapCapacitacionToProgramacion);
-    const aseMapeado = (programacionesAsesoria as any[]).map(mapAsesoriaToProgramacion);
-    programacionesData = [...servicioMapeado, ...capMapeado, ...aseMapeado] as Programacion[];
+    const visitaMapeado = (programacionesVisita as any[]).map(p => ({
+      ...p,
+      fecha_programada: normalizarFecha(p.fecha_programada),
+      hora_inicio: normalizarHora(p.hora_inicio),
+      hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
+      tipo_programacion: 'visita',
+    })) as ProgramacionExtendida[];
+
+    programacionesData = [...servicioMapeado, ...visitaMapeado] as Programacion[];
     const tecnicosRaw = extractList<Tecnico>(tecRes);
     const vehiculosRaw = extractList<Vehiculo>(vehRes);
 
@@ -647,12 +958,8 @@ async function cargarDatosIniciales() {
       .filter((v: Vehiculo) => v.id > 0);
     personalData = perRes.data || [];
 
-    if (esModoServicio()) {
-      const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
-      if (estRes.data) estadisticas = estRes.data;
-    } else {
-      estadisticas = construirEstadisticasDesdeLista(programacionesData);
-    }
+    const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
+    if (estRes.data) estadisticas = estRes.data;
   } catch (err) {
     console.error('Error cargando datos programaciones:', err);
   }
@@ -665,9 +972,13 @@ async function recargarProgramaciones() {
       anio: fechaActual.getFullYear(),
     };
 
-    const programacionesServicio = esModoCapAse() ? [] : (await programacionService.getAll(filtrosBase)).data || [];
-    const programacionesCapacitacion = esModoServicio() ? [] : (await programacionService.getAllProgramacionCapacitacion(filtrosBase)).data || [];
-    const programacionesAsesoria = esModoServicio() ? [] : (await programacionService.getAllProgramacionAsesoria(filtrosBase)).data || [];
+    const [resServicio, resVisita] = await Promise.all([
+      programacionService.getAll(filtrosBase),
+      programacionService.getAllProgramacionVisita(filtrosBase),
+    ]);
+
+    const programacionesServicio = resServicio.data || [];
+    const programacionesVisita = resVisita.data || [];
 
     const servicioMapeado = (programacionesServicio as any[]).map(p => ({
       ...p,
@@ -677,16 +988,18 @@ async function recargarProgramaciones() {
       tipo_programacion: 'servicio',
     })) as ProgramacionExtendida[];
 
-    const capMapeado = (programacionesCapacitacion as any[]).map(mapCapacitacionToProgramacion);
-    const aseMapeado = (programacionesAsesoria as any[]).map(mapAsesoriaToProgramacion);
-    programacionesData = [...servicioMapeado, ...capMapeado, ...aseMapeado] as Programacion[];
+    const visitaMapeado = (programacionesVisita as any[]).map(p => ({
+      ...p,
+      fecha_programada: normalizarFecha(p.fecha_programada),
+      hora_inicio: normalizarHora(p.hora_inicio),
+      hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
+      tipo_programacion: 'visita',
+    })) as ProgramacionExtendida[];
 
-    if (esModoServicio()) {
-      const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
-      if (estRes.data) estadisticas = estRes.data;
-    } else {
-      estadisticas = construirEstadisticasDesdeLista(programacionesData);
-    }
+    programacionesData = [...servicioMapeado, ...visitaMapeado] as Programacion[];
+
+    const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
+    if (estRes.data) estadisticas = estRes.data;
   } catch (err) {
     console.error('Error recargando programaciones:', err);
   }
@@ -798,22 +1111,25 @@ function getProgramacionesFiltradas(): Programacion[] {
       const px = p as ProgramacionExtendida;
       return p.orden_servicio?.cliente?.id === filtroCliente
         || px.orden_capacitacion?.cliente?.id === filtroCliente
-        || px.orden_asesoria?.cliente?.id === filtroCliente;
+        || px.orden_asesoria?.cliente?.id === filtroCliente
+        || px.cliente?.id === filtroCliente;
     });
   }
-  return lista;
-}
 
-function construirEstadisticasDesdeLista(lista: Programacion[]): EstadisticasProgramacion {
-  return {
-    programados: lista.filter((p) => p.estado_ejecucion === 'Programado').length,
-    confirmados: lista.filter((p) => p.estado_ejecucion === 'Confirmado').length,
-    en_ejecucion: lista.filter((p) => p.estado_ejecucion === 'En Ejecución').length,
-    completados: lista.filter((p) => p.estado_ejecucion === 'Realizado').length,
-    reprogramados: lista.filter((p) => p.estado_ejecucion === 'Reprogramado').length,
-    cancelados: lista.filter((p) => p.estado_ejecucion === 'Cancelado').length,
-    total: lista.length,
+  const toMinutes = (hora: string | null | undefined): number => {
+    if (!hora) return 0;
+    const hhmm = String(hora).slice(0, 5);
+    const [h, m] = hhmm.split(':').map(Number);
+    return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
   };
+
+  return [...lista].sort((a, b) => {
+    const fechaA = String(a.fecha_programada || '');
+    const fechaB = String(b.fecha_programada || '');
+    if (fechaA !== fechaB) return fechaA.localeCompare(fechaB);
+
+    return toMinutes(a.hora_inicio) - toMinutes(b.hora_inicio);
+  });
 }
 
 function nombreActividad(p: Programacion): string {
@@ -823,6 +1139,9 @@ function nombreActividad(p: Programacion): string {
   }
   if (px.tipo_programacion === 'asesoria') {
     return px.orden_asesoria?.servicio?.nombre || p.servicio?.nombre || 'Asesoría';
+  }
+  if (px.tipo_programacion === 'visita') {
+    return px.tipo_visita || 'Visita';
   }
   return p.servicio?.nombre || 'Servicio';
 }
@@ -834,6 +1153,9 @@ function badgeTipoProgramacion(p: Programacion): string {
   }
   if (tipo === 'asesoria') {
     return '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Asesoría</span>';
+  }
+  if (tipo === 'visita') {
+    return '<span style="background:#ecfccb;color:#3f6212;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Visita</span>';
   }
   return '';
 }
@@ -1088,7 +1410,7 @@ function renderVistaDiaria(): string {
                 </div>
               </div>
             </div>
-          `).join('') : '<div class="prog-no-services">No hay servicios programados para este día</div>'}
+          `).join('') : '<div class="prog-no-services">No hay programaciones para este día</div>'}
         </div>
       </div>
     </div>`;
@@ -1116,7 +1438,7 @@ function enlazarEventosCalendario() {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = parseInt((el as HTMLElement).dataset.progId || '0');
-      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria';
+      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria' | 'visita';
       if (id) abrirModalDetalle(id, tipo);
     });
   });
@@ -1124,7 +1446,7 @@ function enlazarEventosCalendario() {
 
 // ═══════════ Modal Detalle ═══════════
 
-async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' = 'servicio') {
+async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' = 'servicio') {
   const modal = document.getElementById('modalDetalleProgramacion');
   const body = document.getElementById('modalDetalleBody');
   if (!modal || !body) return;
@@ -1138,6 +1460,8 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       ? await programacionService.getProgramacionCapacitacionById(id)
       : tipo === 'asesoria'
       ? await programacionService.getProgramacionAsesoriaById(id)
+      : tipo === 'visita'
+      ? await programacionService.getProgramacionVisitaById(id)
       : await programacionService.getById(id);
     const p = res.data;
     if (!p) { body.innerHTML = '<p style="padding:24px;">No encontrado</p>'; return; }
@@ -1147,6 +1471,8 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       || p?.orden_capacitacion?.cliente?.id
       || p?.ordenAsesoria?.cliente?.id
       || p?.orden_asesoria?.cliente?.id
+      || (p as any)?.cliente?.id
+      || (p as any)?.id_cliente
       || 0,
     );
     if (clienteIdDetalle > 0) {
@@ -1174,7 +1500,7 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
             <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? p.vehiculo.placa + ' - ' + p.vehiculo.marca + ' ' + p.vehiculo.modelo : '—'}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Local:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
           </div>
-          ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
+          ${p.observaciones ? `<div class="prog-detalle-section"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
           ${renderAccionesDetalle(p)}
           <div class="prog-modal-footer"><button type="button" class="prog-btn-secondary" id="btnCerrarDetalleCap">Cerrar</button></div>
         </div>`;
@@ -1331,6 +1657,46 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       return;
     }
 
+    if (tipo === 'visita') {
+      body.innerHTML = `
+        <div class="prog-detalle-grid">
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Programación de Visita</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="background:#ecfccb;color:#3f6212;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">Visita</span></div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo de visita:</div><div class="prog-detalle-value">${(p as any).tipo_visita || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(p.fecha_programada)}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
+          </div>
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Cliente y Ubicación</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${(p as any).cliente?.nombre_empresa || (p as any).cliente?.persona_contacto || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${getAreasSeleccionadasLabel(p)}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.planta ? (p.planta.direccion || '—') : (p.direccion_completa || '—')}</div></div>
+          </div>
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Recursos Asignados</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Técnico principal:</div><div class="prog-detalle-value">${p.tecnico ? `${p.tecnico.nombre} ${p.tecnico.apellidos}` : '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Personal Administrativo:</div><div class="prog-detalle-value">${getPersonalAdministrativoLabel(p)}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? `${p.vehiculo.placa} - ${p.vehiculo.marca} ${p.vehiculo.modelo}` : '—'}</div></div>
+          </div>
+          ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
+          <div class="prog-modal-footer">
+            <button type="button" class="prog-btn-danger" id="btnEliminarVisita">Eliminar</button>
+            ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-warning" id="btnCancelarVisita">Cancelar Programación</button>` : ''}
+            ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" id="btnEditarVisita">Editar</button>` : ''}
+            <button type="button" class="prog-btn-secondary" id="btnCerrarDetalleVisita">Cerrar</button>
+          </div>
+        </div>`;
+
+      body.querySelector('#btnCerrarDetalleVisita')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
+      body.querySelector('#btnEliminarVisita')?.addEventListener('click', () => eliminarVisita(p.id));
+      body.querySelector('#btnCancelarVisita')?.addEventListener('click', () => cancelarVisita(p.id));
+      body.querySelector('#btnEditarVisita')?.addEventListener('click', () => abrirEdicion({ ...(p as any), tipo_programacion: 'visita' } as Programacion));
+      return;
+    }
+
     body.innerHTML = `
       <div class="prog-detalle-grid" id="detalleView">
         <div class="prog-detalle-section">
@@ -1355,7 +1721,7 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
               ? p.tecnicos.map((t: any) => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;padding:2px 10px;border-radius:6px;margin:2px 4px 2px 0;font-size:13px;">${t.nombre} ${t.apellidos}${t.pivot?.rol === 'Principal' ? ' <span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:0 5px;border-radius:3px;font-weight:600;">Principal</span>' : ''}</span>`).join('')
               : (p.tecnico ? p.tecnico.nombre + ' ' + p.tecnico.apellidos : '—')
           }</div></div>
-          <div class="prog-detalle-row"><div class="prog-detalle-label">Asistente administrativo:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
+          <div class="prog-detalle-row"><div class="prog-detalle-label">Personal Administrativo:</div><div class="prog-detalle-value">${getPersonalAdministrativoLabel(p)}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? p.vehiculo.placa + ' - ' + p.vehiculo.marca + ' ' + p.vehiculo.modelo : '—'}</div></div>
         </div>
         <div class="prog-detalle-section">
@@ -1401,6 +1767,17 @@ async function eliminarProg(id: number) {
   } catch (err) { mostrarToast('error', 'Error', 'No se pudo eliminar la programación'); console.error(err); }
 }
 
+async function eliminarVisita(id: number) {
+  const ok = await confirmarAccion({ titulo: 'Eliminar Visita', mensaje: '¿Está seguro de eliminar esta visita? Esta acción no se puede deshacer.', tipo: 'error', textoConfirmar: 'Eliminar' });
+  if (!ok) return;
+  try {
+    await programacionService.deleteProgramacionVisita(id);
+    cerrarModal('modalDetalleProgramacion');
+    await recargarProgramaciones();
+    mostrarToast('success', 'Eliminada', 'La visita fue eliminada correctamente');
+  } catch (err) { mostrarToast('error', 'Error', 'No se pudo eliminar la visita'); console.error(err); }
+}
+
 async function cancelarProg(id: number) {
   const ok = await confirmarAccion({ titulo: 'Cancelar Programación', mensaje: '¿Está seguro de cancelar esta programación?', tipo: 'warning', textoConfirmar: 'Sí, cancelar' });
   if (!ok) return;
@@ -1410,6 +1787,17 @@ async function cancelarProg(id: number) {
     await recargarProgramaciones();
     mostrarToast('success', 'Cancelada', 'La programación fue cancelada');
   } catch (err) { mostrarToast('error', 'Error', 'No se pudo cancelar la programación'); console.error(err); }
+}
+
+async function cancelarVisita(id: number) {
+  const ok = await confirmarAccion({ titulo: 'Cancelar Visita', mensaje: '¿Está seguro de cancelar esta visita?', tipo: 'warning', textoConfirmar: 'Sí, cancelar' });
+  if (!ok) return;
+  try {
+    await programacionService.updateProgramacionVisita(id, { estado_ejecucion: 'Cancelado' });
+    cerrarModal('modalDetalleProgramacion');
+    await recargarProgramaciones();
+    mostrarToast('success', 'Cancelada', 'La visita fue cancelada');
+  } catch (err) { mostrarToast('error', 'Error', 'No se pudo cancelar la visita'); console.error(err); }
 }
 
 async function completarProg(id: number) {
@@ -1455,7 +1843,7 @@ function mostrarModalSugerencia(sug: SugerenciaSiguiente) {
         id_orden_servicio: sug.id_orden_servicio,
         id_servicio: sug.id_servicio,
         id_tecnico_asignado: sug.id_tecnico_asignado,
-        id_supervisor: sug.id_supervisor || null,
+        id_supervisor: Array.isArray(sug.id_supervisor) ? sug.id_supervisor : (sug.id_supervisor ? [sug.id_supervisor] : null),
         id_vehiculo: sug.id_vehiculo || null,
         tecnicos_ids: sug.tecnicos_ids || [sug.id_tecnico_asignado],
         fecha_programada: sug.fecha_sugerida,
@@ -1480,6 +1868,7 @@ async function abrirEdicion(p: Programacion) {
   if (!body) return;
 
   const px = p as ProgramacionExtendida;
+  const isVisita = px.tipo_programacion === 'visita' || !!(px as any).id_cliente;
   const isAsesoria = px.tipo_programacion === 'asesoria' || !!px.orden_asesoria || !!(px as any).ordenAsesoria;
   const ordenAsesoria = (px as any).ordenAsesoria || px.orden_asesoria || {};
 
@@ -1582,11 +1971,20 @@ async function abrirEdicion(p: Programacion) {
                 </div>
               </div>`}
           <div class="prog-form-group">
-            <label class="prog-form-label">Asistente administrativo</label>
-            <select class="prog-form-control" name="id_supervisor">
-              <option value="">Sin asistente administrativo</option>
-              ${personalData.map(pe => `<option value="${pe.id}" ${pe.id === p.id_supervisor ? 'selected' : ''}>${pe.nombre} ${pe.apellidos}</option>`).join('')}
-            </select>
+            <label class="prog-form-label">Personal Administrativo <span style="font-weight:400;font-size:12px;color:#888;">(puedes seleccionar uno o varios)</span></label>
+            <select class="prog-form-control" id="personalAdministrativoSelectServicio" name="id_supervisor" multiple style="display:none;"></select>
+            <button type="button" id="personalAdministrativoToggleServicio" class="prog-form-control" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;">
+              <span>Seleccionar personal</span>
+              <span style="font-size:12px;">▼</span>
+            </button>
+            <div id="personalAdministrativoSummaryServicio" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin personal seleccionado</div>
+            <div id="personalAdministrativoPanelServicio" style="display:none;position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="personalAdministrativoSelectAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todos</button>
+                <button type="button" id="personalAdministrativoClearAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="personalAdministrativoOptionsServicio"></div>
+            </div>
           </div>
           <div class="prog-form-group">
             <label class="prog-form-label">Vehículo</label>
@@ -1634,11 +2032,24 @@ async function abrirEdicion(p: Programacion) {
       </div>
     </form>`;
 
-  body.querySelector('#btnVolverDetalle')?.addEventListener('click', () => abrirModalDetalle(p.id, isAsesoria ? 'asesoria' : (px.tipo_programacion === 'capacitacion' ? 'capacitacion' : 'servicio')));
+  body.querySelector('#btnVolverDetalle')?.addEventListener('click', () => abrirModalDetalle(p.id, isAsesoria ? 'asesoria' : (isVisita ? 'visita' : (px.tipo_programacion === 'capacitacion' ? 'capacitacion' : 'servicio'))));
 
   // Lógica de badge "Principal" para edición
   if (!isAsesoria) {
     setupPrincipalBadge(body.querySelector('#editTecnicosCheckboxes') as HTMLElement);
+    const personalAdministrativoSelectEdit = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
+    if (personalAdministrativoSelectEdit) {
+      personalAdministrativoSelectEdit.innerHTML = personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('');
+      const personalAsignado = Array.isArray((p as any).personal_administrativo)
+        ? (p as any).personal_administrativo.map((item: any) => Number(item.id)).filter((id: number) => id > 0)
+        : normalizePersonalIds((p as any).id_supervisor);
+      Array.from(personalAdministrativoSelectEdit.options).forEach((opt) => {
+        opt.selected = personalAsignado.includes(Number(opt.value));
+      });
+    }
+    renderPersonalPickerOptionsServicio(body);
+    actualizarResumenPersonalServicio(body);
+    bindPersonalMultiInteractionsServicio(body);
   }
 
   if (isAsesoria) {
@@ -1715,7 +2126,7 @@ async function abrirEdicion(p: Programacion) {
     const fd = new FormData(e.target as HTMLFormElement);
     const data: Record<string, any> = {};
     fd.forEach((v, k) => {
-      if (k !== 'tecnicos_ids' && k !== 'exponentes_ids') data[k] = v || null;
+      if (k !== 'tecnicos_ids' && k !== 'exponentes_ids' && k !== 'id_supervisor') data[k] = v || null;
     });
 
     // Derivar local_sede y direccion_completa de planta si se seleccionó
@@ -1738,15 +2149,24 @@ async function abrirEdicion(p: Programacion) {
     } else {
       // Recoger técnicos para programación de servicios
       const checkedTecs = Array.from(body.querySelectorAll('#editTecnicosCheckboxes input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-      if (checkedTecs.length === 0) { mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico'); return; }
       const tecnicosIds = checkedTecs.map(c => parseInt(c.value));
-      data.id_tecnico_asignado = tecnicosIds[0];
-      data.tecnicos_ids = tecnicosIds;
+      if (!isVisita && checkedTecs.length === 0) {
+        mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico');
+        return;
+      }
+      data.id_tecnico_asignado = tecnicosIds.length > 0 ? tecnicosIds[0] : null;
+      data.tecnicos_ids = tecnicosIds.length > 0 ? tecnicosIds : null;
+      const personalAdministrativoEdit = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
+      data.id_supervisor = personalAdministrativoEdit && personalAdministrativoEdit.selectedOptions.length > 0
+        ? Array.from(personalAdministrativoEdit.selectedOptions).map(o => parseInt(o.value))
+        : null;
     }
 
     try {
       if (isAsesoria) {
         await programacionService.updateProgramacionAsesoria(p.id, data);
+      } else if (isVisita) {
+        await programacionService.updateProgramacionVisita(p.id, data);
       } else {
         await programacionService.update(p.id, data);
       }
@@ -1755,6 +2175,15 @@ async function abrirEdicion(p: Programacion) {
       mostrarToast('success', 'Actualizada', 'La programación fue actualizada correctamente');
     } catch (err) { mostrarToast('error', 'Error', 'No se pudieron guardar los cambios'); console.error(err); }
   });
+}
+
+// ═══════════ Modal Selector Tipo de Programación ═══════════
+
+function abrirModalSelectorTipo() {
+  const modal = document.getElementById('modalSelectorTipoProgramacion');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
 }
 
 // ═══════════ Modal Nueva Programación ═══════════
@@ -1879,11 +2308,20 @@ function renderFormNueva(body: HTMLElement) {
             </div>
           </div>
           <div class="prog-form-group">
-            <label class="prog-form-label">Asistente administrativo</label>
-            <select class="prog-form-control" name="id_supervisor">
-              <option value="">Sin asistente administrativo</option>
-              ${personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('')}
-            </select>
+            <label class="prog-form-label">Personal Administrativo <span style="font-weight:400;font-size:12px;color:#888;">(puedes seleccionar uno o varios)</span></label>
+            <select class="prog-form-control" id="personalAdministrativoSelectServicio" name="id_supervisor" multiple style="display:none;"></select>
+            <button type="button" id="personalAdministrativoToggleServicio" class="prog-form-control" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;">
+              <span>Seleccionar personal</span>
+              <span style="font-size:12px;">▼</span>
+            </button>
+            <div id="personalAdministrativoSummaryServicio" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin personal seleccionado</div>
+            <div id="personalAdministrativoPanelServicio" style="display:none;position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="personalAdministrativoSelectAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todos</button>
+                <button type="button" id="personalAdministrativoClearAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="personalAdministrativoOptionsServicio"></div>
+            </div>
           </div>
           <div class="prog-form-group">
             <label class="prog-form-label">Vehículo</label>
@@ -1913,9 +2351,16 @@ function renderFormNueva(body: HTMLElement) {
   const selectODS = body.querySelector('#selectODS') as HTMLSelectElement;
   const selectServicio = body.querySelector('#selectServicio') as HTMLSelectElement;
   const infoAreasServicio = body.querySelector('#infoAreasServicio') as HTMLElement;
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
 
   // Lógica de badge "Principal" para técnicos
   setupPrincipalBadge(body.querySelector('#tecnicosCheckboxes') as HTMLElement);
+  if (personalAdministrativoSelect) {
+    personalAdministrativoSelect.innerHTML = personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('');
+  }
+  renderPersonalPickerOptionsServicio(body);
+  actualizarResumenPersonalServicio(body);
+  bindPersonalMultiInteractionsServicio(body);
 
   selectODS?.addEventListener('change', async () => {
     areaIdsServicioSeleccionado = [];
@@ -2179,6 +2624,11 @@ async function submitIndividual(body: HTMLElement) {
   data.id_tecnico_asignado = tecnicosIds[0]; // Primero = principal
   data.tecnicos_ids = tecnicosIds;
 
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
+  data.id_supervisor = personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0
+    ? Array.from(personalAdministrativoSelect.selectedOptions).map(o => parseInt(o.value))
+    : null;
+
   // Recoger días de semana si está visible
   const diasGroup = body.querySelector('#diasSemanaGroup') as HTMLElement;
   if (diasGroup && diasGroup.style.display !== 'none') {
@@ -2216,6 +2666,295 @@ async function submitIndividual(body: HTMLElement) {
   }
 }
 
+// ═══════════ Modal Nueva Programación por Visita ═══════════
+
+async function abrirModalNuevaVisita() {
+  const modal = document.getElementById('modalNuevaProgramacionVisita');
+  const body = document.getElementById('modalNuevaVisitaBody');
+  if (!modal || !body) return;
+
+  body.innerHTML = '<p style="padding:24px;color:#999;">Cargando clientes...</p>';
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  try {
+    // Cargar clientes aceptados
+    const res = await clienteService.getAll({ estado: 'Acepta' });
+    clientesAceptados = extractList(res);
+  } catch (err) { 
+    console.error('Error cargando clientes:', err); 
+    clientesAceptados = []; 
+  }
+
+  renderFormVisita(body);
+}
+
+function renderFormVisita(body: HTMLElement) {
+  body.innerHTML = `
+    <form id="formNuevaVisita" class="prog-form">
+      <div class="prog-form-grid">
+
+        <!-- Cliente -->
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Cliente</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Cliente <span class="prog-required">*</span></label>
+            <select class="prog-form-control" name="id_cliente" id="selectClienteVisita" required>
+              <option value="">Seleccionar cliente...</option>
+              ${clientesAceptados.map(c => `<option value="${c.id}">${c.nombre_empresa || c.persona_contacto}</option>`).join('')}
+            </select>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Tipo de visita <span class="prog-required">*</span></label>
+            <select class="prog-form-control" name="tipo_visita" id="selectTipoVisita" required>
+              <option value="">Seleccionar tipo...</option>
+              <option value="Visita Técnica">Visita Técnica</option>
+              <option value="Inspección General">Inspección General</option>
+              <option value="Retiro de Roedor">Retiro de Roedor</option>
+              <option value="Inspección por Roedores">Inspección por Roedores</option>
+              <option value="Inspección por Insectos Voladores">Inspección por Insectos Voladores</option>
+              <option value="Inspección por Insectos Rastreros">Inspección por Insectos Rastreros</option>
+              <option value="Inspección: Evaluación de Riesgos">Inspección: Evaluación de Riesgos</option>
+            </select>
+          </div>
+          <div style="margin-top:-6px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;color:#475569;">
+            Aparte considerar programaciones de: Fabricación de láminas para trampas de luz, Armado de trampas de luz y Reparación de trampa de luz.
+          </div>
+        </div>
+
+        <!-- Tipo de Visita -->
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Tipo de Programación</h3>
+          <div style="margin-top:-6px;margin-bottom:10px;padding:8px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;color:#1e3a8a;">
+            Esta programación es única (no aplica modalidad de año completo).
+          </div>
+          <div class="prog-form-row">
+            <div class="prog-form-group"><label class="prog-form-label">Fecha <span class="prog-required">*</span></label><input type="date" class="prog-form-control" name="fecha_programada" required></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Inicio <span class="prog-required">*</span></label><input type="time" class="prog-form-control" name="hora_inicio" value="08:00" required></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin" value="12:00"></div>
+          </div>
+        </div>
+
+        <!-- Recursos -->
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Asignación de Recursos</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Técnicos <span style="font-weight:400;font-size:12px;color:#888;">(opcional, el primero marcado será el principal)</span></label>
+            <div class="prog-tecnicos-list" id="tecnicosCheckboxesVisita" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
+              ${tecnicosData.map(t => `
+                <label class="prog-tecnico-check" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;transition:background .15s;">
+                  <input type="checkbox" name="tecnicos_ids" value="${t.id}" style="accent-color:#4f7cff;">
+                  <span style="font-weight:500;">${t.nombre} ${t.apellidos}</span>
+                  ${t.autorizado_conducir ? '<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;">Conductor</span>' : ''}
+                  <span class="prog-principal-badge" style="display:none;margin-left:auto;font-size:11px;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:600;">Principal</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Personal Administrativo <span style="font-weight:400;font-size:12px;color:#888;">(puedes seleccionar uno o varios)</span></label>
+            <select class="prog-form-control" id="personalAdministrativoSelectVisita" name="id_supervisor" multiple style="display:none;"></select>
+            <button type="button" id="personalAdministrativoToggle" class="prog-form-control" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;">
+              <span>Seleccionar personal</span>
+              <span style="font-size:12px;">▼</span>
+            </button>
+            <div id="personalAdministrativoSummary" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin personal seleccionado</div>
+            <div id="personalAdministrativoPanel" style="display:none;position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="personalAdministrativoSelectAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todos</button>
+                <button type="button" id="personalAdministrativoClearAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="personalAdministrativoOptions"></div>
+            </div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Vehículo</label>
+            <select class="prog-form-control" name="id_vehiculo">
+              <option value="">Sin vehículo</option>
+              ${vehiculosData.map(v => `<option value="${v.id}">${v.placa} - ${v.marca} ${v.modelo}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <!-- Ubicación -->
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Ubicación</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Planta</label>
+            <select class="prog-form-control" name="id_cliente_planta" id="plantaSelectVisita">
+              <option value="">-- Planta --</option>
+            </select>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Áreas <span style="font-weight:400;font-size:12px;color:#888;">(puedes seleccionar una o más)</span></label>
+            <select class="prog-form-control" id="areasSelectVisita" name="id_cliente_planta_area" multiple style="display:none;"></select>
+            <button type="button" id="visitaAreaToggle" class="prog-form-control" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;">
+              <span>Seleccionar areas</span>
+              <span style="font-size:12px;">▼</span>
+            </button>
+            <div id="visitaAreaSummary" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin areas seleccionadas</div>
+            <div id="visitaAreaPanel" style="display:none;position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="visitaAreaSelectAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todas</button>
+                <button type="button" id="visitaAreaClearAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="visitaAreaOptions"></div>
+            </div>
+            <small style="display:block;margin-top:6px;color:#64748b;font-size:11px;">Puede seleccionar una o mas areas</small>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Observaciones</label>
+            <textarea class="prog-form-control" name="observaciones" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="prog-modal-footer">
+        <button type="button" class="prog-btn-secondary" id="btnCancelarVisita">Cancelar</button>
+        <button type="submit" class="prog-btn-primary" id="btnSubmitVisita">Crear Programación</button>
+      </div>
+    </form>`;
+
+  // ── Lógica de formulario ──
+  const selectCliente = body.querySelector('#selectClienteVisita') as HTMLSelectElement;
+  const plantaSelect = body.querySelector('#plantaSelectVisita') as HTMLSelectElement;
+  const areasSelect = body.querySelector('#areasSelectVisita') as HTMLSelectElement;
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement;
+
+  // Setup badge para técnicos
+  setupPrincipalBadge(body.querySelector('#tecnicosCheckboxesVisita') as HTMLElement);
+  renderAreaPickerOptionsVisita(body);
+  actualizarResumenAreasVisita(body);
+  bindAreaMultiInteractionsVisita(body);
+  if (personalAdministrativoSelect) {
+    personalAdministrativoSelect.innerHTML = personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('');
+  }
+  renderPersonalPickerOptionsVisita(body);
+  actualizarResumenPersonalVisita(body);
+  bindPersonalMultiInteractionsVisita(body);
+
+  // Cuando se selecciona cliente, cargar sus plantas
+  selectCliente?.addEventListener('change', async () => {
+    const clienteId = parseInt(selectCliente.value);
+    if (clienteId) {
+      await cargarPlantasClienteVisita(clienteId);
+      plantaSelect.innerHTML = '<option value="">-- Planta --</option>' +
+        plantasClienteVisita.map(p => {
+          if (p.estado !== 'Activo') return '';
+          return `<option value="${p.id}">${p.nombre}</option>`;
+        }).join('');
+      areasSelect.innerHTML = '';
+      renderAreaPickerOptionsVisita(body);
+      actualizarResumenAreasVisita(body);
+    } else {
+      plantaSelect.innerHTML = '<option value="">-- Planta --</option>';
+      areasSelect.innerHTML = '';
+      renderAreaPickerOptionsVisita(body);
+      actualizarResumenAreasVisita(body);
+    }
+  });
+
+  // Cuando se selecciona planta, cargar sus áreas
+  plantaSelect?.addEventListener('change', () => {
+    const plantaId = parseInt(plantaSelect.value);
+    if (plantaId) {
+      const planta = plantasClienteVisita.find(p => p.id === plantaId);
+      const areas = (planta?.areas_activas || planta?.areas || []).filter((a: any) => a.estado === 'Activo');
+      areasSelect.innerHTML = areas.map((a: any) => 
+        `<option value="${a.id}">${a.nombre}</option>`
+      ).join('');
+      renderAreaPickerOptionsVisita(body);
+      actualizarResumenAreasVisita(body);
+    } else {
+      areasSelect.innerHTML = '';
+      renderAreaPickerOptionsVisita(body);
+      actualizarResumenAreasVisita(body);
+    }
+  });
+
+  // Botones
+  body.querySelector('#btnCancelarVisita')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacionVisita'));
+  body.querySelector('#formNuevaVisita')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await submitVisitaIndividual(body);
+  });
+}
+
+async function cargarPlantasClienteVisita(idCliente: number) {
+  try {
+    const res = await clienteService.getPlantas(idCliente);
+    const raw = res.data || res;
+    plantasClienteVisita = (raw as any).data || raw;
+  } catch {
+    plantasClienteVisita = [];
+  }
+}
+
+async function submitVisitaIndividual(body: HTMLElement) {
+  const fd = new FormData(body.querySelector('#formNuevaVisita') as HTMLFormElement);
+  
+  const data: Record<string, any> = {
+    id_cliente: fd.get('id_cliente'),
+    tipo_visita: fd.get('tipo_visita'),
+  };
+
+  if (!data.tipo_visita) {
+    mostrarToast('warning', 'Campo requerido', 'Debe seleccionar el tipo de visita');
+    return;
+  }
+
+  // Recoger técnicos seleccionados
+  const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
+  const tecnicosIds = checkedTecs.map(c => parseInt(c.value));
+  data.id_tecnico_asignado = tecnicosIds.length > 0 ? tecnicosIds[0] : null; // Primero = principal
+  data.tecnicos_ids = tecnicosIds.length > 0 ? tecnicosIds : null;
+
+  // Recoger áreas seleccionadas
+  const areasSelect = body.querySelector('#areasSelectVisita') as HTMLSelectElement;
+  if (areasSelect && areasSelect.selectedOptions.length > 0) {
+    data.id_cliente_planta_area = Array.from(areasSelect.selectedOptions).map(o => parseInt(o.value));
+  }
+
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement;
+  if (personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0) {
+    data.id_supervisor = Array.from(personalAdministrativoSelect.selectedOptions).map(o => parseInt(o.value));
+  }
+
+  // Recoger datos comunes
+  data.id_cliente_planta = fd.get('id_cliente_planta') || null;
+  data.id_vehiculo = fd.get('id_vehiculo') || null;
+  data.observaciones = fd.get('observaciones') || '';
+
+  data.fecha_programada = fd.get('fecha_programada');
+  data.hora_inicio = fd.get('hora_inicio') || '08:00';
+  data.hora_fin = fd.get('hora_fin') || '12:00';
+
+  // Validar conflictos de horarios en la vista actual
+  const validacion = verificarConflictosHorarios(tecnicosIds, data.fecha_programada, data.hora_inicio, data.hora_fin);
+  if (validacion.hayConflicto) {
+    mostrarToast('warning', 'Conflicto de Horarios', validacion.conflictoDetalle);
+    return;
+  }
+
+  try {
+    await programacionService.createVisita(data);
+    cerrarModal('modalNuevaProgramacionVisita');
+    await recargarProgramaciones();
+    mostrarToast('success', 'Visita Programada', 'La programación de visita fue registrada exitosamente');
+  } catch (err: any) {
+    let message = err?.data?.message || err?.response?.data?.message || err?.message || 'No se pudo crear la programación';
+    const errors = err?.data?.errors || err?.response?.data?.errors;
+    if (errors && typeof errors === 'object') {
+      const detalles = Object.entries(errors)
+        .map(([campo, msgs]: [string, any]) => `${campo}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+        .join(' | ');
+      if (detalles) message = `${message}. ${detalles}`;
+    }
+    mostrarToast('error', 'Error', message);
+    console.error('Error creando visita:', err?.data || err);
+  }
+}
+
 async function submitAnual(body: HTMLElement) {
   const selectODS = body.querySelector('#selectODS') as HTMLSelectElement;
   const selectServicio = body.querySelector('#selectServicio') as HTMLSelectElement;
@@ -2247,7 +2986,6 @@ async function submitAnual(body: HTMLElement) {
     id_servicio: selectServicio.value,
     id_tecnico_asignado: tecnicosIds[0],
     tecnicos_ids: tecnicosIds,
-    id_supervisor: fd.get('id_supervisor') || null,
     id_vehiculo: fd.get('id_vehiculo') || null,
     frecuencia: frecuenciaBackend,
     fecha_inicio: fechaInicio,
@@ -2259,6 +2997,11 @@ async function submitAnual(body: HTMLElement) {
     direccion_completa: getPlantaDireccion(idPlantaSel) || '',
     observaciones: fd.get('observaciones') || '',
   };
+
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
+  data.id_supervisor = personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0
+    ? Array.from(personalAdministrativoSelect.selectedOptions).map(o => parseInt(o.value))
+    : null;
 
   // Recoger días de semana si está visible
   const diasGroup = body.querySelector('#diasSemanaGroup') as HTMLElement;
@@ -2344,7 +3087,7 @@ async function exportarPDF() {
 
 function clienteNombre(p: Programacion): string {
   const px = p as ProgramacionExtendida;
-  const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente;
+  const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente || px.cliente;
   return c ? (c.nombre_empresa || c.persona_contacto || '—') : '—';
 }
 
@@ -2408,11 +3151,22 @@ function getAreasSeleccionadasLabel(p: Programacion): string {
   return Array.from(nombres).join(', ');
 }
 
+function getPersonalAdministrativoLabel(p: Programacion): string {
+  const px = p as any;
+  const personal = Array.isArray(px.personal_administrativo) ? px.personal_administrativo : [];
+  if (personal.length === 0) return '—';
+
+  return personal.map((item: any) => {
+    const nombre = `${item?.nombre || ''} ${item?.apellidos || ''}`.trim() || '—';
+    return `<span style="display:inline-block;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`;
+  }).join('');
+}
+
 function getClientesUnicos(): { id: number; nombre: string }[] {
   const clientesMap = new Map<number, string>();
   programacionesData.forEach(p => {
     const px = p as ProgramacionExtendida;
-    const cliente = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente;
+    const cliente = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente || px.cliente;
     if (cliente && cliente.id) {
       const nombre = cliente.nombre_empresa || cliente.persona_contacto || '—';
       clientesMap.set(cliente.id, nombre);
