@@ -126,8 +126,9 @@ class MantenimientoVehiculoController extends Controller
         $validated = $request->validate([
             'id_vehiculo' => 'required|integer|exists:vehiculos,id',
             'motivo' => 'required|string|max:255',
-            'tipo_mantenimiento' => 'required|in:Preventivo,Correctivo',
+            'tipo_mantenimiento' => 'required|in:Preventivo,Correctivo,Limpieza',
             'fecha_programada' => 'required|date',
+            'frecuencia_meses' => 'nullable|integer|min:1|max:60',
             'kilometraje' => 'nullable|integer|min:0',
             'observaciones' => 'nullable|string|max:255',
         ], [
@@ -140,13 +141,16 @@ class MantenimientoVehiculoController extends Controller
 
         $vehiculo = Vehiculo::findOrFail($validated['id_vehiculo']);
         $fechaProgramada = Carbon::parse($validated['fecha_programada']);
+        $frecuenciaMeses = $validated['tipo_mantenimiento'] === 'Limpieza'
+            ? (int) ($validated['frecuencia_meses'] ?? 6)
+            : 0;
 
-        $mantenimiento = DB::transaction(function () use ($validated, $fechaProgramada) {
+        $mantenimiento = DB::transaction(function () use ($validated, $fechaProgramada, $frecuenciaMeses) {
             $programacion = ProgramacionMantenimientoVehiculo::create([
                 'id_vehiculo' => $validated['id_vehiculo'],
                 'motivo' => $validated['motivo'],
                 'anio' => (int) $fechaProgramada->year,
-                'frecuencia_meses' => 0,
+                'frecuencia_meses' => $frecuenciaMeses,
                 'fecha_inicio' => $fechaProgramada->toDateString(),
                 'total_programados' => 1,
                 'observaciones' => $validated['observaciones'] ?? null,
@@ -188,8 +192,9 @@ class MantenimientoVehiculoController extends Controller
         $validated = $request->validate([
             'id_vehiculo' => 'sometimes|integer|exists:vehiculos,id',
             'motivo' => 'sometimes|string|max:255',
-            'tipo_mantenimiento' => 'sometimes|in:Preventivo,Correctivo',
+            'tipo_mantenimiento' => 'sometimes|in:Preventivo,Correctivo,Limpieza',
             'fecha_programada' => 'sometimes|date',
+            'frecuencia_meses' => 'sometimes|nullable|integer|min:1|max:60',
             'kilometraje' => 'sometimes|nullable|integer|min:0',
             'observaciones' => 'sometimes|nullable|string|max:255',
             'estado' => 'sometimes|in:Programado,Realizado,Vencido,Cancelado',
@@ -205,6 +210,22 @@ class MantenimientoVehiculoController extends Controller
 
         if ($request->has('tipo_mantenimiento')) {
             $mantenimiento->tipo_mantenimiento = $validated['tipo_mantenimiento'];
+        }
+
+        $tipoMantenimientoActual = $request->has('tipo_mantenimiento')
+            ? $validated['tipo_mantenimiento']
+            : $mantenimiento->tipo_mantenimiento;
+
+        if ($mantenimiento->programacion) {
+            if ($tipoMantenimientoActual === 'Limpieza') {
+                if ($request->has('frecuencia_meses')) {
+                    $mantenimiento->programacion->frecuencia_meses = (int) $validated['frecuencia_meses'];
+                } elseif ((int) $mantenimiento->programacion->frecuencia_meses <= 0) {
+                    $mantenimiento->programacion->frecuencia_meses = 6;
+                }
+            } elseif ($request->has('tipo_mantenimiento') || $request->has('frecuencia_meses')) {
+                $mantenimiento->programacion->frecuencia_meses = 0;
+            }
         }
 
         if ($request->has('fecha_programada')) {
@@ -226,6 +247,8 @@ class MantenimientoVehiculoController extends Controller
                 $mantenimiento->programacion->observaciones = $validated['observaciones'];
                 $mantenimiento->programacion->save();
             }
+        } elseif ($mantenimiento->programacion && ($request->has('tipo_mantenimiento') || $request->has('frecuencia_meses'))) {
+            $mantenimiento->programacion->save();
         }
 
         if ($request->has('estado')) {

@@ -728,30 +728,26 @@
 
                         <div style="font-size: 13px; font-weight: 700; margin: 8px 0 8px 0;">{{ $letra }}) {{ strtoupper($grupo['servicio']) }}</div>
 
-                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+                        <div style="width: 100%; margin-bottom: 14px;">
                             @foreach($filas as $fila)
-                                <tr>
+                                @php
+                                    $anchoTarjeta = '30%';
+                                    $margenTarjeta = '2%';
+                                @endphp
+                                <div style="width: 100%; font-size: 0; margin-bottom: 10px;">
                                     @foreach($fila as $item)
-                                        <td style="width: 33.33%; border: 1px solid #333; text-align: center; vertical-align: middle; padding: 6px; height: 110px;">
-                                            @if(!empty($item['imagen']) && file_exists($item['imagen']))
-                                                <img src="{{ $item['imagen'] }}" style="max-width: 100%; max-height: 95px;">
-                                            @endif
-                                        </td>
+                                        <div style="display: inline-block; vertical-align: top; width: {{ $anchoTarjeta }}; margin-right: {{ $loop->last ? '0' : $margenTarjeta }}; border: 1px solid #333; box-sizing: border-box; page-break-inside: avoid;">
+                                            <div style="text-align: center; vertical-align: middle; padding: 6px; height: 110px; border-bottom: 1px solid #333;">
+                                                @if(!empty($item['imagen']) && file_exists($item['imagen']))
+                                                    <img src="{{ $item['imagen'] }}" style="max-width: 100%; max-height: 95px;">
+                                                @endif
+                                            </div>
+                                            <div style="font-size: 11px; font-weight: 600; padding: 3px 5px; text-transform: uppercase;">{{ $item['nombre'] }}</div>
+                                        </div>
                                     @endforeach
-                                    @for($i = count($fila); $i < 3; $i++)
-                                        <td style="width: 33.33%; border: 1px solid #333;"></td>
-                                    @endfor
-                                </tr>
-                                <tr>
-                                    @foreach($fila as $item)
-                                        <td style="border: 1px solid #333; font-size: 11px; font-weight: 600; padding: 3px 5px; text-transform: uppercase;">{{ $item['nombre'] }}</td>
-                                    @endforeach
-                                    @for($i = count($fila); $i < 3; $i++)
-                                        <td style="border: 1px solid #333;"></td>
-                                    @endfor
-                                </tr>
+                                </div>
                             @endforeach
-                        </table>
+                        </div>
                     @endforeach
                 @endif
             @endif

@@ -28,8 +28,9 @@ export const mantenimientoVehiculoService = {
   create: async (data: {
     id_vehiculo: number;
     motivo: string;
-    tipo_mantenimiento: 'Preventivo' | 'Correctivo';
+    tipo_mantenimiento: 'Preventivo' | 'Correctivo' | 'Limpieza';
     fecha_programada: string;
+    frecuencia_meses?: number;
     kilometraje?: number;
     observaciones?: string;
   }) => {

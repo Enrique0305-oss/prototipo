@@ -25,7 +25,8 @@ type VehiculoMantenimientoUI = {
   marca: string;
   modelo: string;
   motivo: string;
-  tipo: 'Preventivo' | 'Correctivo';
+  tipo: 'Preventivo' | 'Correctivo' | 'Limpieza';
+  frecuencia_meses?: number;
   fecha_programada: string;
   fecha_realizado?: string;
   kilometraje?: number;
@@ -134,6 +135,12 @@ function getVehiculoById(id: number): VehiculoUI | undefined {
 function normalizeMantenimientoVehiculo(item: Partial<VehiculoMantenimientoUI>): VehiculoMantenimientoUI {
   const fechaProgramada = item.fecha_programada || hoyIso();
   const estadoOriginal = item.estado || 'Programado';
+  const tipoOriginal = item.tipo || 'Preventivo';
+  const tipo: VehiculoMantenimientoUI['tipo'] =
+    tipoOriginal === 'Correctivo' || tipoOriginal === 'Limpieza' ? tipoOriginal : 'Preventivo';
+  const frecuenciaMeses = item.frecuencia_meses !== undefined && item.frecuencia_meses !== null && !Number.isNaN(Number(item.frecuencia_meses))
+    ? Number(item.frecuencia_meses)
+    : undefined;
   const estado: VehiculoMantenimientoEstado = estadoOriginal === 'Realizado' || estadoOriginal === 'Cancelado'
     ? estadoOriginal
     : esVencido(fechaProgramada) ? 'Vencido' : 'Programado';
@@ -145,7 +152,8 @@ function normalizeMantenimientoVehiculo(item: Partial<VehiculoMantenimientoUI>):
     marca: item.marca || '',
     modelo: item.modelo || '',
     motivo: item.motivo || '',
-    tipo: item.tipo === 'Correctivo' ? 'Correctivo' : 'Preventivo',
+    tipo,
+    frecuencia_meses: frecuenciaMeses,
     fecha_programada: fechaProgramada,
     fecha_realizado: item.fecha_realizado || '',
     kilometraje: item.kilometraje !== undefined && item.kilometraje !== null && !Number.isNaN(Number(item.kilometraje))
@@ -179,7 +187,8 @@ async function cargarMantenimientosVehiculoDesdeAPI() {
       marca: item.vehiculo?.marca || '',
       modelo: item.vehiculo?.modelo || '',
       motivo: item.motivo || '',
-      tipo: item.tipo_mantenimiento === 'Correctivo' ? 'Correctivo' : 'Preventivo',
+      tipo: item.tipo_mantenimiento || 'Preventivo',
+      frecuencia_meses: item.programacion?.frecuencia_meses ?? undefined,
       fecha_programada: item.fecha_programada || '',
       fecha_realizado: item.fecha_realizado || '',
       kilometraje: item.kilometraje ?? undefined,
@@ -234,7 +243,8 @@ async function cargarCalendarioMantenimientoVehiculoDesdeAPI() {
             marca: item.vehiculo?.marca || '',
             modelo: item.vehiculo?.modelo || '',
             motivo: item.motivo || '',
-            tipo: item.tipo_mantenimiento === 'Correctivo' ? 'Correctivo' : 'Preventivo',
+            tipo: item.tipo_mantenimiento || 'Preventivo',
+            frecuencia_meses: item.programacion?.frecuencia_meses ?? undefined,
             fecha_programada: item.fecha_programada || '',
             fecha_realizado: item.fecha_realizado || '',
             kilometraje: item.kilometraje ?? undefined,
@@ -670,6 +680,7 @@ function bindEvents() {
                 <select id="veh-mant-form-tipo" class="os-input">
                   <option value="Preventivo">Preventivo</option>
                   <option value="Correctivo">Correctivo</option>
+                  <option value="Limpieza">Limpieza</option>
                 </select>
               </div>
               <div class="os-field">
@@ -679,6 +690,12 @@ function bindEvents() {
               <div class="os-field">
                 <label>Kilometraje</label>
                 <input id="veh-mant-form-km" class="os-input" type="number" min="0" step="1" />
+                <small style="display:block;margin-top:6px;color:#a16207;font-size:12px;">Aviso: se recomienda mantenimiento básico cada 5000 km.</small>
+              </div>
+              <div class="os-field" id="veh-mant-form-frecuencia-wrap" style="display:none;">
+                <label>Frecuencia (meses)</label>
+                <input id="veh-mant-form-frecuencia" class="os-input" type="number" min="1" step="1" value="6" />
+                <small style="display:block;margin-top:6px;color:#475569;font-size:12px;">Para Limpieza la frecuencia sugerida es cada 6 meses, puedes editarla.</small>
               </div>
               <div class="os-field" style="grid-column:1/-1;">
                 <label>Observaciones</label>
@@ -1017,7 +1034,10 @@ function bindEvents() {
     (document.getElementById('veh-mant-form-tipo') as HTMLSelectElement).value = item?.tipo || 'Preventivo';
     (document.getElementById('veh-mant-form-fecha') as HTMLInputElement).value = item?.fecha_programada || hoyIso();
     (document.getElementById('veh-mant-form-km') as HTMLInputElement).value = item?.kilometraje ? String(item.kilometraje) : '';
+    (document.getElementById('veh-mant-form-frecuencia') as HTMLInputElement).value = item?.frecuencia_meses ? String(item.frecuencia_meses) : '6';
     (document.getElementById('veh-mant-form-obs') as HTMLTextAreaElement).value = item?.observaciones || '';
+
+    actualizarCamposTipoMantenimiento();
 
     modal.style.display = 'flex';
   }
@@ -1031,9 +1051,11 @@ function bindEvents() {
     const id = Number((document.getElementById('veh-mant-form-id') as HTMLInputElement).value || 0);
     const idVehiculo = Number((document.getElementById('veh-mant-form-vehiculo') as HTMLSelectElement).value || 0);
     const motivo = (document.getElementById('veh-mant-form-motivo') as HTMLInputElement).value.trim();
-    const tipo = (document.getElementById('veh-mant-form-tipo') as HTMLSelectElement).value as 'Preventivo' | 'Correctivo';
+    const tipo = (document.getElementById('veh-mant-form-tipo') as HTMLSelectElement).value as 'Preventivo' | 'Correctivo' | 'Limpieza';
     const fechaProgramada = (document.getElementById('veh-mant-form-fecha') as HTMLInputElement).value;
     const kilometrajeValor = (document.getElementById('veh-mant-form-km') as HTMLInputElement).value;
+    const frecuenciaValor = (document.getElementById('veh-mant-form-frecuencia') as HTMLInputElement)?.value || '';
+    const frecuenciaMeses = tipo === 'Limpieza' && frecuenciaValor ? Number(frecuenciaValor) : undefined;
     const observaciones = (document.getElementById('veh-mant-form-obs') as HTMLTextAreaElement).value.trim();
 
     const vehiculo = getVehiculoById(idVehiculo);
@@ -1048,6 +1070,7 @@ function bindEvents() {
         modelo: vehiculo?.modelo || '',
         motivo,
         tipo,
+        frecuencia_meses: frecuenciaMeses,
         fecha_programada: fechaProgramada,
         kilometraje: kilometrajeValor ? Number(kilometrajeValor) : undefined,
         observaciones,
@@ -1072,12 +1095,18 @@ function bindEvents() {
       return;
     }
 
+    if (payload.tipo === 'Limpieza' && (!payload.frecuencia_meses || payload.frecuencia_meses < 1)) {
+      mostrarToast('error', 'Validación', 'Para tipo Limpieza debe ingresar una frecuencia válida en meses');
+      return;
+    }
+
     if (id > 0) {
       await mantenimientoVehiculoService.update(id, {
         id_vehiculo: payload.id_vehiculo,
         motivo: payload.motivo,
         tipo_mantenimiento: payload.tipo,
         fecha_programada: payload.fecha_programada,
+        frecuencia_meses: payload.tipo === 'Limpieza' ? payload.frecuencia_meses : 0,
         kilometraje: payload.kilometraje,
         observaciones: payload.observaciones,
       } as any);
@@ -1088,6 +1117,7 @@ function bindEvents() {
         motivo: payload.motivo,
         tipo_mantenimiento: payload.tipo,
         fecha_programada: payload.fecha_programada,
+        frecuencia_meses: payload.tipo === 'Limpieza' ? payload.frecuencia_meses : 0,
         kilometraje: payload.kilometraje,
         observaciones: payload.observaciones,
       });
@@ -1210,6 +1240,7 @@ function bindEvents() {
     });
 
     document.getElementById('veh-mant-form-save')?.addEventListener('click', guardarMantenimientoVehiculo);
+    document.getElementById('veh-mant-form-tipo')?.addEventListener('change', actualizarCamposTipoMantenimiento);
 
     document.querySelectorAll<HTMLButtonElement>('.veh-mant-edit').forEach((btn) => {
       btn.onclick = () => {
@@ -1250,6 +1281,22 @@ function bindEvents() {
         renderDetalleDiaVehiculos(dia);
       };
     });
+  }
+
+  function actualizarCamposTipoMantenimiento() {
+    const tipoSelect = document.getElementById('veh-mant-form-tipo') as HTMLSelectElement | null;
+    const frecuenciaWrap = document.getElementById('veh-mant-form-frecuencia-wrap') as HTMLElement | null;
+    const frecuenciaInput = document.getElementById('veh-mant-form-frecuencia') as HTMLInputElement | null;
+    if (!tipoSelect || !frecuenciaWrap || !frecuenciaInput) return;
+
+    if (tipoSelect.value === 'Limpieza') {
+      frecuenciaWrap.style.display = 'block';
+      if (!frecuenciaInput.value) frecuenciaInput.value = '6';
+      return;
+    }
+
+    frecuenciaWrap.style.display = 'none';
+    frecuenciaInput.value = '6';
   }
 
   function bindVehiculosHistorialEvents() {

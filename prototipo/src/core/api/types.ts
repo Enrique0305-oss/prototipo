@@ -287,9 +287,10 @@ export interface MantenimientoVehiculo {
   id_programacion?: number | null;
   id_vehiculo: number;
   motivo: string;
-  tipo_mantenimiento: 'Preventivo' | 'Correctivo';
+  tipo_mantenimiento: 'Preventivo' | 'Correctivo' | 'Limpieza';
   fecha_programada: string;
   fecha_realizado?: string | null;
+  frecuencia_meses?: number | null;
   kilometraje?: number | null;
   observaciones?: string | null;
   estado: 'Programado' | 'Realizado' | 'Vencido' | 'Cancelado';
