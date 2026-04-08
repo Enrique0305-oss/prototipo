@@ -219,18 +219,54 @@
                 </p>
                 <p><strong>Frecuencia de visita:</strong></p>
                 @if($frecuenciaOrdenada->isNotEmpty())
-                    @foreach($frecuenciaOrdenada as $mesKey => $frecuenciaMes)
-                        @php
-                            preg_match('/\d+/', (string) $mesKey, $m);
-                            $numeroMes = isset($m[0]) ? (int) $m[0] : null;
-                            $presencial = (int) ($frecuenciaMes['p'] ?? 0);
-                            $virtual = (int) ($frecuenciaMes['v'] ?? 0);
-                            $frecuenciaFila = trim((string) ($frecuenciaMes['f'] ?? ''));
-                        @endphp
-                        <p style="margin: 0 0 2px 0;">
-                            - {{ $numeroMes ? $numeroMes . 'er MES.' : strtoupper((string) $mesKey) . '.' }}- {{ $presencial }} presencial y {{ $virtual }} virtual{{ $frecuenciaFila !== '' ? ' - ' . $frecuenciaFila : '' }}
-                        </p>
-                    @endforeach
+                    @php
+                        $itemsList = [];
+                        foreach($frecuenciaOrdenada as $key => $value) {
+                            $itemsList[] = ['key' => $key, 'value' => $value];
+                        }
+                        $count = count($itemsList);
+                        $halfCount = ceil($count / 2);
+                    @endphp
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="width: 50%; vertical-align: top; padding-right: 10px;">
+                                @foreach($itemsList as $index => $item)
+                                    @if($index < $halfCount)
+                                        @php
+                                            $mesKey = $item['key'];
+                                            $frecuenciaMes = $item['value'];
+                                            preg_match('/\d+/', (string) $mesKey, $m);
+                                            $numeroMes = isset($m[0]) ? (int) $m[0] : null;
+                                            $presencial = (int) ($frecuenciaMes['p'] ?? 0);
+                                            $virtual = (int) ($frecuenciaMes['v'] ?? 0);
+                                            $frecuenciaFila = trim((string) ($frecuenciaMes['f'] ?? ''));
+                                        @endphp
+                                        <p style="margin: 0 0 4px 0; font-size: 12px;">
+                                            - {{ $numeroMes ? $numeroMes . 'er MES.' : strtoupper((string) $mesKey) . '.' }} {{ $presencial }} presencial y {{ $virtual }} virtual{{ $frecuenciaFila !== '' ? ' - ' . $frecuenciaFila : '' }}
+                                        </p>
+                                    @endif
+                                @endforeach
+                            </td>
+                            <td style="width: 50%; vertical-align: top; padding-left: 10px;">
+                                @foreach($itemsList as $index => $item)
+                                    @if($index >= $halfCount)
+                                        @php
+                                            $mesKey = $item['key'];
+                                            $frecuenciaMes = $item['value'];
+                                            preg_match('/\d+/', (string) $mesKey, $m);
+                                            $numeroMes = isset($m[0]) ? (int) $m[0] : null;
+                                            $presencial = (int) ($frecuenciaMes['p'] ?? 0);
+                                            $virtual = (int) ($frecuenciaMes['v'] ?? 0);
+                                            $frecuenciaFila = trim((string) ($frecuenciaMes['f'] ?? ''));
+                                        @endphp
+                                        <p style="margin: 0 0 4px 0; font-size: 12px;">
+                                            - {{ $numeroMes ? $numeroMes . 'er MES.' : strtoupper((string) $mesKey) . '.' }} {{ $presencial }} presencial y {{ $virtual }} virtual{{ $frecuenciaFila !== '' ? ' - ' . $frecuenciaFila : '' }}
+                                        </p>
+                                    @endif
+                                @endforeach
+                            </td>
+                        </tr>
+                    </table>
                 @else
                     <p>No definida</p>
                 @endif
@@ -281,7 +317,6 @@
                     <tr>
                         <th>Código</th>
                         <th style="width: 40%;">Temas</th>
-                        <th>Tiempo de Duración</th>
                         <th>Precio a Pagar</th>
                     </tr>
                 </thead>
@@ -303,7 +338,6 @@
                                 <br><small style="color: #6CB52D;"><em>Frecuencia: {{ $detalle->frecuencia_sugerida }}</em></small>
                             @endif
                         </td>
-                        <td class="text-center">{{ $detalle->horas_capacitacion }}</td>
                         <td class="text-right">S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
                     </tr>
                     @endforeach
