@@ -1127,7 +1127,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           <input type="date" id="cot-cap-fecha-servicio" class="form-control" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
         </div>
         <div class="form-group">
-          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Horas</label>
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Horas Capacitación</label>
           <input type="number" id="cot-cap-horas" class="form-control" value="0" min="0" step="0.5" style="width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
         </div>
         <div class="form-group">
@@ -1244,7 +1244,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
         ${tipoFijo === 'Asesoria' ? `
         <div class="propuesta-tecnica-container" style="margin-bottom: 25px; background: #fff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Propuesta Técnica (Objetivos)</h3>
+                <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Propuesta Técnica</h3>
                 <button type="button" id="btn-toggle-propuesta" style="font-size: 12px; padding: 5px 10px; cursor: pointer; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px;">
                     Mostrar/Ocultar Editor
                 </button>
@@ -1260,7 +1260,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
 
             <div id="editor-wrapper" style="display: block;">
                 <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Use el editor para dar formato a los objetivos y actividades tal cual aparecerán en el PDF.</p>
-                <div id="editor-propuesta" style="height: 200px; background: #fff;"></div>
+                <div id="editor-propuesta" style="height: 700px; background: #fff;"></div>
             </div>
         </div>
           ` : ''}

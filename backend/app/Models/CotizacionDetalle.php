@@ -37,7 +37,7 @@ class CotizacionDetalle extends Model
     protected $casts = [
         'cantidad' => 'integer',
         'precio_unitario' => 'decimal:2',
-        'horas_capacitacion' => 'decimal:2',
+        'horas_capacitacion' => 'integer',
         'num_participantes' => 'integer',
         'fecha_servicio' => 'date',
         'medida_tanque' => 'array',
