@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Tecnico extends Model
 {
@@ -19,7 +20,8 @@ class Tecnico extends Model
         'especialidad',
         'autorizado_conducir',
         'carga_maxima_semanal',
-        'estado'
+        'estado',
+        'id_exponente_vinculado',
     ];
 
     protected $casts = [
@@ -48,5 +50,10 @@ class Tecnico extends Model
     public function scopeAutorizadosConducir($query)
     {
         return $query->where('autorizado_conducir', true);
+    }
+
+    public function exponenteVinculado(): BelongsTo
+    {
+        return $this->belongsTo(Exponente::class, 'id_exponente_vinculado');
     }
 }

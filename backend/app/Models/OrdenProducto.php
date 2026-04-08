@@ -60,6 +60,14 @@ class OrdenProducto extends Model
     {
         return $this->hasMany(Proyeccion::class, 'id_orden_producto');
     }
+
+    public function salidasKardex()
+    {
+        return $this->hasMany(Kardex::class, 'id_referencia', 'id')
+            ->where('motivo', 'Orden Producto')
+            ->where('tipo_movimiento', 'Salida');
+    }
+
     // Generar número de orden
     public static function generarNumero()
     {

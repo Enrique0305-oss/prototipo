@@ -38,6 +38,7 @@ let areaIdsServicioSeleccionado: number[] = [];
 let plantaIdServicioSeleccionado: number | null = null;
 let clientesAceptados: any[] = [];
 let plantasClienteVisita: any[] = [];
+let ordenesFabricacionDisponiblesData: any[] = [];
 
 function extractList<T = any>(response: any): T[] {
   const raw = response?.data ?? response;
@@ -47,11 +48,16 @@ function extractList<T = any>(response: any): T[] {
 }
 
 type ProgramacionExtendida = Programacion & {
-  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria' | 'visita';
+  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion';
   orden_capacitacion?: any;
   orden_asesoria?: any;
   cliente?: any;
   tipo_visita?: string;
+  id_orden_fabricacion?: number;
+  orden_fabricacion?: any;
+  motivo_fabricacion?: string;
+  productos_fabricacion?: number[];
+  receta_fabricacion?: any[];
   exponentes?: any[];
   modalidad?: string;
   modalidad_visita?: string;
@@ -818,6 +824,10 @@ export function renderProgramacionServicio(): string {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;display:inline;"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M16 11a4 4 0 11-8 0 4 4 0 018 0zM23 20.5v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"></path></svg>
             Programación por Visita
           </button>
+          <button id="btnSelectorFabricacion" class="prog-btn-secondary" style="width:100%;padding:16px;font-size:15px;font-weight:500;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;display:inline;"><path d="M14.7 6.3l3 3-8.49 8.49-3.53.5.5-3.53L14.7 6.3z"></path><path d="M16 3l5 5"></path><path d="M3 21h18"></path></svg>
+            Programación por Fabricación
+          </button>
         </div>
       </div>
     </div>
@@ -826,7 +836,7 @@ export function renderProgramacionServicio(): string {
       <div class="prog-modal-overlay"></div>
       <div class="prog-modal-content prog-modal-large">
         <div class="prog-modal-header">
-          <h2>Nueva Programación por Visita</h2>
+          <h2 id="tituloModalNuevaVisita">Nueva Programación por Visita</h2>
           <button class="prog-modal-close" id="closeModalNuevaVisita">&times;</button>
         </div>
         <div class="prog-modal-body" id="modalNuevaVisitaBody"></div>
@@ -875,6 +885,10 @@ export async function initProgramacionServicioEvents(): Promise<void> {
     cerrarModal('modalSelectorTipoProgramacion');
     abrirModalNuevaVisita();
   });
+  document.getElementById('btnSelectorFabricacion')?.addEventListener('click', () => {
+    cerrarModal('modalSelectorTipoProgramacion');
+    abrirModalNuevaFabricacion();
+  });
   document.getElementById('closeSelectorTipo')?.addEventListener('click', () => cerrarModal('modalSelectorTipoProgramacion'));
   document.getElementById('viewSelector')?.addEventListener('change', (e) => {
     vistaActual = (e.target as HTMLSelectElement).value as VistaProgramacion;
@@ -912,13 +926,15 @@ async function cargarDatosIniciales() {
       anio: fechaActual.getFullYear(),
     };
 
-    const [resServicio, resVisita] = await Promise.all([
+    const [resServicio, resVisita, resFabricacion] = await Promise.all([
       programacionService.getAll(filtrosBase),
       programacionService.getAllProgramacionVisita(filtrosBase),
+      programacionService.getAllProgramacionFabricacion(filtrosBase),
     ]);
 
     const programacionesServicio = resServicio.data || [];
     const programacionesVisita = resVisita.data || [];
+    const programacionesFabricacion = resFabricacion.data || [];
 
     const servicioMapeado = (programacionesServicio as any[]).map(p => ({
       ...p,
@@ -936,7 +952,15 @@ async function cargarDatosIniciales() {
       tipo_programacion: 'visita',
     })) as ProgramacionExtendida[];
 
-    programacionesData = [...servicioMapeado, ...visitaMapeado] as Programacion[];
+    const fabricacionMapeado = (programacionesFabricacion as any[]).map(p => ({
+      ...p,
+      fecha_programada: normalizarFecha(p.fecha_programada),
+      hora_inicio: normalizarHora(p.hora_inicio),
+      hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
+      tipo_programacion: 'fabricacion',
+    })) as ProgramacionExtendida[];
+
+    programacionesData = [...servicioMapeado, ...visitaMapeado, ...fabricacionMapeado] as Programacion[];
     const tecnicosRaw = extractList<Tecnico>(tecRes);
     const vehiculosRaw = extractList<Vehiculo>(vehRes);
 
@@ -972,13 +996,15 @@ async function recargarProgramaciones() {
       anio: fechaActual.getFullYear(),
     };
 
-    const [resServicio, resVisita] = await Promise.all([
+    const [resServicio, resVisita, resFabricacion] = await Promise.all([
       programacionService.getAll(filtrosBase),
       programacionService.getAllProgramacionVisita(filtrosBase),
+      programacionService.getAllProgramacionFabricacion(filtrosBase),
     ]);
 
     const programacionesServicio = resServicio.data || [];
     const programacionesVisita = resVisita.data || [];
+    const programacionesFabricacion = resFabricacion.data || [];
 
     const servicioMapeado = (programacionesServicio as any[]).map(p => ({
       ...p,
@@ -996,7 +1022,15 @@ async function recargarProgramaciones() {
       tipo_programacion: 'visita',
     })) as ProgramacionExtendida[];
 
-    programacionesData = [...servicioMapeado, ...visitaMapeado] as Programacion[];
+    const fabricacionMapeado = (programacionesFabricacion as any[]).map(p => ({
+      ...p,
+      fecha_programada: normalizarFecha(p.fecha_programada),
+      hora_inicio: normalizarHora(p.hora_inicio),
+      hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
+      tipo_programacion: 'fabricacion',
+    })) as ProgramacionExtendida[];
+
+    programacionesData = [...servicioMapeado, ...visitaMapeado, ...fabricacionMapeado] as Programacion[];
 
     const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
     if (estRes.data) estadisticas = estRes.data;
@@ -1143,6 +1177,9 @@ function nombreActividad(p: Programacion): string {
   if (px.tipo_programacion === 'visita') {
     return px.tipo_visita || 'Visita';
   }
+  if (px.tipo_programacion === 'fabricacion') {
+    return 'Fabricación';
+  }
   return p.servicio?.nombre || 'Servicio';
 }
 
@@ -1156,6 +1193,9 @@ function badgeTipoProgramacion(p: Programacion): string {
   }
   if (tipo === 'visita') {
     return '<span style="background:#ecfccb;color:#3f6212;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Visita</span>';
+  }
+  if (tipo === 'fabricacion') {
+    return '<span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Fabricación</span>';
   }
   return '';
 }
@@ -1438,7 +1478,7 @@ function enlazarEventosCalendario() {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = parseInt((el as HTMLElement).dataset.progId || '0');
-      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria' | 'visita';
+      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion';
       if (id) abrirModalDetalle(id, tipo);
     });
   });
@@ -1446,7 +1486,7 @@ function enlazarEventosCalendario() {
 
 // ═══════════ Modal Detalle ═══════════
 
-async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' = 'servicio') {
+async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion' = 'servicio') {
   const modal = document.getElementById('modalDetalleProgramacion');
   const body = document.getElementById('modalDetalleBody');
   if (!modal || !body) return;
@@ -1460,6 +1500,8 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       ? await programacionService.getProgramacionCapacitacionById(id)
       : tipo === 'asesoria'
       ? await programacionService.getProgramacionAsesoriaById(id)
+      : tipo === 'fabricacion'
+      ? await programacionService.getProgramacionFabricacionById(id)
       : tipo === 'visita'
       ? await programacionService.getProgramacionVisitaById(id)
       : await programacionService.getById(id);
@@ -1657,23 +1699,32 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       return;
     }
 
-    if (tipo === 'visita') {
+    if (tipo === 'visita' || tipo === 'fabricacion') {
+      const esFabricacion = (p as any).tipo_programacion === 'fabricacion' || tipo === 'fabricacion';
+      const recetaFabricacion = Array.isArray((p as any).receta_fabricacion) ? (p as any).receta_fabricacion : [];
       body.innerHTML = `
         <div class="prog-detalle-grid">
           <div class="prog-detalle-section">
-            <h3 class="prog-detalle-section-title">Programación de Visita</h3>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="background:#ecfccb;color:#3f6212;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">Visita</span></div></div>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo de visita:</div><div class="prog-detalle-value">${(p as any).tipo_visita || '—'}</div></div>
+            <h3 class="prog-detalle-section-title">${esFabricacion ? 'Programación por Fabricación' : 'Programación de Visita'}</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="${esFabricacion ? 'background:#e0e7ff;color:#3730a3;' : 'background:#ecfccb;color:#3f6212;'}padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">${esFabricacion ? 'Fabricación' : 'Visita'}</span></div></div>
+            ${esFabricacion ? `<div class="prog-detalle-row"><div class="prog-detalle-label">Orden:</div><div class="prog-detalle-value">${(p as any).orden_fabricacion?.codigo || ('#' + ((p as any).id_orden_fabricacion || '')) || '—'}</div></div>` : ''}
+            ${esFabricacion
+              ? `<div class="prog-detalle-row"><div class="prog-detalle-label">Motivo:</div><div class="prog-detalle-value">${(p as any).motivo_fabricacion || '—'}</div></div>`
+              : `<div class="prog-detalle-row"><div class="prog-detalle-label">Tipo de visita:</div><div class="prog-detalle-value">${(p as any).tipo_visita || '—'}</div></div>`}
             <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(p.fecha_programada)}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
           </div>
           <div class="prog-detalle-section">
-            <h3 class="prog-detalle-section-title">Cliente y Ubicación</h3>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${(p as any).cliente?.nombre_empresa || (p as any).cliente?.persona_contacto || '—'}</div></div>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${getAreasSeleccionadasLabel(p)}</div></div>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.planta ? (p.planta.direccion || '—') : (p.direccion_completa || '—')}</div></div>
+            <h3 class="prog-detalle-section-title">${esFabricacion ? 'Resumen de Fabricación' : 'Cliente y Ubicación'}</h3>
+            ${esFabricacion ? `
+              <div class="prog-detalle-row"><div class="prog-detalle-label">Productos:</div><div class="prog-detalle-value">${recetaFabricacion.map((item: any) => item?.descripcion).filter(Boolean).join(', ') || '—'}</div></div>
+            ` : `
+              <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${(p as any).cliente?.nombre_empresa || (p as any).cliente?.persona_contacto || '—'}</div></div>
+              <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
+              <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${getAreasSeleccionadasLabel(p)}</div></div>
+              <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.planta ? (p.planta.direccion || '—') : (p.direccion_completa || '—')}</div></div>
+            `}
           </div>
           <div class="prog-detalle-section">
             <h3 class="prog-detalle-section-title">Recursos Asignados</h3>
@@ -1681,11 +1732,26 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
             <div class="prog-detalle-row"><div class="prog-detalle-label">Personal Administrativo:</div><div class="prog-detalle-value">${getPersonalAdministrativoLabel(p)}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Vehículo:</div><div class="prog-detalle-value">${p.vehiculo ? `${p.vehiculo.placa} - ${p.vehiculo.marca} ${p.vehiculo.modelo}` : '—'}</div></div>
           </div>
+          ${esFabricacion ? `
+            <div class="prog-detalle-section prog-detalle-section-full">
+              <h3 class="prog-detalle-section-title">Receta de Productos</h3>
+              ${recetaFabricacion.length > 0 ? recetaFabricacion.map((prod: any) => `
+                <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px;background:#f8fafc;">
+                  <div style="font-weight:700;color:#1e293b;margin-bottom:8px;">${prod?.descripcion || 'Producto'}</div>
+                  ${(Array.isArray(prod?.receta) && prod.receta.length > 0)
+                    ? `<ul style="margin:0;padding-left:18px;color:#334155;font-size:13px;display:grid;gap:6px;">
+                        ${prod.receta.map((r: any) => `<li><strong>${r?.insumo?.descripcion || 'Insumo'}</strong>: ${Number(r?.cantidad || 0)} ${r?.unidad || r?.insumo?.unidad || ''}</li>`).join('')}
+                      </ul>`
+                    : '<div style="font-size:12px;color:#64748b;">No tiene receta configurada.</div>'}
+                </div>
+              `).join('') : '<div style="font-size:12px;color:#64748b;">Sin receta asociada.</div>'}
+            </div>
+          ` : ''}
           ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
           <div class="prog-modal-footer">
             <button type="button" class="prog-btn-danger" id="btnEliminarVisita">Eliminar</button>
             ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-warning" id="btnCancelarVisita">Cancelar Programación</button>` : ''}
-            ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" id="btnEditarVisita">Editar</button>` : ''}
+            ${!esFabricacion && !['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" id="btnEditarVisita">Editar</button>` : ''}
             <button type="button" class="prog-btn-secondary" id="btnCerrarDetalleVisita">Cerrar</button>
           </div>
         </div>`;
@@ -1771,7 +1837,12 @@ async function eliminarVisita(id: number) {
   const ok = await confirmarAccion({ titulo: 'Eliminar Visita', mensaje: '¿Está seguro de eliminar esta visita? Esta acción no se puede deshacer.', tipo: 'error', textoConfirmar: 'Eliminar' });
   if (!ok) return;
   try {
-    await programacionService.deleteProgramacionVisita(id);
+    const prog = programacionesData.find((x) => x.id === id) as ProgramacionExtendida | undefined;
+    if (prog?.tipo_programacion === 'fabricacion') {
+      await programacionService.deleteProgramacionFabricacion(id);
+    } else {
+      await programacionService.deleteProgramacionVisita(id);
+    }
     cerrarModal('modalDetalleProgramacion');
     await recargarProgramaciones();
     mostrarToast('success', 'Eliminada', 'La visita fue eliminada correctamente');
@@ -1793,7 +1864,12 @@ async function cancelarVisita(id: number) {
   const ok = await confirmarAccion({ titulo: 'Cancelar Visita', mensaje: '¿Está seguro de cancelar esta visita?', tipo: 'warning', textoConfirmar: 'Sí, cancelar' });
   if (!ok) return;
   try {
-    await programacionService.updateProgramacionVisita(id, { estado_ejecucion: 'Cancelado' });
+    const prog = programacionesData.find((x) => x.id === id) as ProgramacionExtendida | undefined;
+    if (prog?.tipo_programacion === 'fabricacion') {
+      await programacionService.updateProgramacionFabricacion(id, { estado_ejecucion: 'Cancelado' });
+    } else {
+      await programacionService.updateProgramacionVisita(id, { estado_ejecucion: 'Cancelado' });
+    }
     cerrarModal('modalDetalleProgramacion');
     await recargarProgramaciones();
     mostrarToast('success', 'Cancelada', 'La visita fue cancelada');
@@ -2661,7 +2737,7 @@ async function submitIndividual(body: HTMLElement) {
         .join(' | ');
       if (detalles) message = `${message}. ${detalles}`;
     }
-    mostrarToast('error', 'Error', message);
+    mostrarErrorProgramacion(message);
     console.error('Error creando programación individual:', err?.data || err);
   }
 }
@@ -2671,7 +2747,10 @@ async function submitIndividual(body: HTMLElement) {
 async function abrirModalNuevaVisita() {
   const modal = document.getElementById('modalNuevaProgramacionVisita');
   const body = document.getElementById('modalNuevaVisitaBody');
+  const titulo = document.getElementById('tituloModalNuevaVisita');
   if (!modal || !body) return;
+
+  if (titulo) titulo.textContent = 'Nueva Programación por Visita';
 
   body.innerHTML = '<p style="padding:24px;color:#999;">Cargando clientes...</p>';
   modal.style.display = 'flex';
@@ -2687,6 +2766,170 @@ async function abrirModalNuevaVisita() {
   }
 
   renderFormVisita(body);
+}
+
+async function abrirModalNuevaFabricacion() {
+  const modal = document.getElementById('modalNuevaProgramacionVisita');
+  const body = document.getElementById('modalNuevaVisitaBody');
+  const titulo = document.getElementById('tituloModalNuevaVisita');
+  if (!modal || !body) return;
+
+  if (titulo) titulo.textContent = 'Nueva Programación por Fabricación';
+
+  body.innerHTML = '<p style="padding:24px;color:#999;">Cargando ordenes de fabricacion disponibles...</p>';
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const res = await programacionService.getOrdenesFabricacionDisponibles();
+    ordenesFabricacionDisponiblesData = extractList<any>(res);
+  } catch (err) {
+    console.error('Error cargando ordenes de fabricacion:', err);
+    ordenesFabricacionDisponiblesData = [];
+  }
+
+  renderFormFabricacion(body);
+}
+
+function renderFormFabricacion(body: HTMLElement) {
+  body.innerHTML = `
+    <form id="formNuevaFabricacion" class="prog-form">
+      <div class="prog-form-grid">
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Datos de Fabricación</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Orden de Fabricación <span class="prog-required">*</span></label>
+            <select class="prog-form-control" id="selectOrdenFabricacion" name="id_orden_fabricacion" required>
+              <option value="">Seleccionar orden...</option>
+              ${ordenesFabricacionDisponiblesData.map((of) => `<option value="${of.id}">${of.codigo} - ${of.motivo || 'Sin motivo'}</option>`).join('')}
+            </select>
+            <small style="display:block;margin-top:6px;color:#64748b;font-size:11px;">Solo se muestran ordenes confirmadas y aun no programadas.</small>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Motivo de la Orden</label>
+            <input type="text" class="prog-form-control" id="ofMotivoReadonly" readonly placeholder="Se autocompleta al seleccionar la orden">
+          </div>
+          <div class="prog-form-row">
+            <div class="prog-form-group"><label class="prog-form-label">Fecha <span class="prog-required">*</span></label><input type="date" class="prog-form-control" name="fecha_programada" required></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Inicio <span class="prog-required">*</span></label><input type="time" class="prog-form-control" name="hora_inicio" value="08:00" required></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin" value="12:00"></div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Observaciones</label>
+            <textarea class="prog-form-control" name="observaciones" rows="2"></textarea>
+          </div>
+        </div>
+
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Asignación de Recursos</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Técnicos <span style="font-weight:400;font-size:12px;color:#888;">(el primero marcado será el principal)</span></label>
+            <div class="prog-tecnicos-list" id="tecnicosCheckboxesVisita" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
+              ${tecnicosData.map(t => `
+                <label class="prog-tecnico-check" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;transition:background .15s;">
+                  <input type="checkbox" name="tecnicos_ids" value="${t.id}" style="accent-color:#4f7cff;">
+                  <span style="font-weight:500;">${t.nombre} ${t.apellidos}</span>
+                  ${t.autorizado_conducir ? '<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;">Conductor</span>' : ''}
+                  <span class="prog-principal-badge" style="display:none;margin-left:auto;font-size:11px;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:600;">Principal</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Personal Administrativo <span style="font-weight:400;font-size:12px;color:#888;">(opcional)</span></label>
+            <select class="prog-form-control" id="personalAdministrativoSelectVisita" name="id_supervisor" multiple style="display:none;"></select>
+            <button type="button" id="personalAdministrativoToggle" class="prog-form-control" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;">
+              <span>Seleccionar personal</span>
+              <span style="font-size:12px;">▼</span>
+            </button>
+            <div id="personalAdministrativoSummary" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin personal seleccionado</div>
+            <div id="personalAdministrativoPanel" style="display:none;position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="personalAdministrativoSelectAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todos</button>
+                <button type="button" id="personalAdministrativoClearAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="personalAdministrativoOptions"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="prog-form-section prog-form-section-full">
+          <h3 class="prog-form-section-title">Productos e Insumos de la Orden</h3>
+          <div style="padding:10px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;font-size:12px;color:#3730a3;margin-bottom:10px;">
+            Al seleccionar una orden, se cargan automaticamente los productos, cantidades a fabricar e insumos requeridos.
+          </div>
+          <div id="fabricacionOrdenResumen" style="display:grid;gap:12px;max-height:330px;overflow:auto;padding-right:4px;">
+            <div style="font-size:13px;color:#64748b;">Seleccione una orden para visualizar su detalle.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="prog-modal-footer">
+        <button type="button" class="prog-btn-secondary" id="btnCancelarFabricacion">Cancelar</button>
+        <button type="submit" class="prog-btn-primary" id="btnSubmitFabricacion">Crear Programación</button>
+      </div>
+    </form>
+  `;
+
+  setupPrincipalBadge(body.querySelector('#tecnicosCheckboxesVisita') as HTMLElement);
+
+  if (ordenesFabricacionDisponiblesData.length === 0) {
+    mostrarToast('warning', 'Sin ordenes disponibles', 'No hay ordenes de fabricacion confirmadas pendientes de programar');
+  }
+
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement;
+  if (personalAdministrativoSelect) {
+    personalAdministrativoSelect.innerHTML = personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('');
+  }
+  renderPersonalPickerOptionsVisita(body);
+  actualizarResumenPersonalVisita(body);
+  bindPersonalMultiInteractionsVisita(body);
+
+  body.querySelector('#selectOrdenFabricacion')?.addEventListener('change', (e) => {
+    const id = Number((e.target as HTMLSelectElement).value || 0);
+    renderResumenOrdenFabricacion(body, id);
+  });
+
+  body.querySelector('#btnCancelarFabricacion')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacionVisita'));
+  body.querySelector('#formNuevaFabricacion')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await submitFabricacionIndividual(body);
+  });
+}
+
+function renderResumenOrdenFabricacion(body: HTMLElement, idOrden: number) {
+  const box = body.querySelector('#fabricacionOrdenResumen') as HTMLElement | null;
+  const inputMotivo = body.querySelector('#ofMotivoReadonly') as HTMLInputElement | null;
+  if (!box) return;
+
+  const orden = ordenesFabricacionDisponiblesData.find((of) => Number(of.id) === Number(idOrden));
+  if (!orden) {
+    if (inputMotivo) inputMotivo.value = '';
+    box.innerHTML = '<div style="font-size:13px;color:#64748b;">Seleccione una orden para visualizar su detalle.</div>';
+    return;
+  }
+
+  if (inputMotivo) inputMotivo.value = orden.motivo || '';
+
+  const detalles = Array.isArray(orden.detalles) ? orden.detalles : [];
+  if (detalles.length === 0) {
+    box.innerHTML = '<div style="font-size:13px;color:#64748b;">La orden no tiene detalles registrados.</div>';
+    return;
+  }
+
+  box.innerHTML = detalles.map((det: any) => `
+    <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#fff;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+        <div style="font-size:14px;font-weight:700;color:#1e293b;">${det?.producto?.descripcion || 'Producto'}</div>
+        <div style="font-size:12px;color:#1e3a8a;background:#dbeafe;padding:2px 8px;border-radius:999px;">Cantidad: ${Number(det?.cantidad || 0)}</div>
+      </div>
+      <div style="margin-top:8px;display:grid;gap:6px;">
+        ${Array.isArray(det?.insumos_requeridos) && det.insumos_requeridos.length > 0
+          ? det.insumos_requeridos.map((r: any) => `<div style="font-size:12px;color:#334155;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:7px;padding:6px 8px;"><strong>${r?.descripcion || 'Insumo'}</strong>: ${Number(r?.cantidad_requerida || 0)} ${r?.unidad || ''}</div>`).join('')
+          : '<div style="font-size:12px;color:#64748b;">Sin insumos calculados</div>'}
+      </div>
+    </div>
+  `).join('');
 }
 
 function renderFormVisita(body: HTMLElement) {
@@ -2950,8 +3193,67 @@ async function submitVisitaIndividual(body: HTMLElement) {
         .join(' | ');
       if (detalles) message = `${message}. ${detalles}`;
     }
-    mostrarToast('error', 'Error', message);
+    mostrarErrorProgramacion(message);
     console.error('Error creando visita:', err?.data || err);
+  }
+}
+
+async function submitFabricacionIndividual(body: HTMLElement) {
+  const form = body.querySelector('#formNuevaFabricacion') as HTMLFormElement | null;
+  if (!form) return;
+
+  const fd = new FormData(form);
+  const idOrdenFabricacion = parseInt(String(fd.get('id_orden_fabricacion') || '0'), 10);
+  if (!idOrdenFabricacion) {
+    mostrarToast('warning', 'Campo requerido', 'Debe seleccionar una orden de fabricacion');
+    return;
+  }
+
+  const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
+  const tecnicosIds = checkedTecs.map(c => parseInt(c.value, 10)).filter((id) => id > 0);
+  if (tecnicosIds.length === 0) {
+    mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico');
+    return;
+  }
+
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement;
+
+  const data: Record<string, any> = {
+    tipo_programacion: 'fabricacion',
+    id_orden_fabricacion: idOrdenFabricacion,
+    id_tecnico_asignado: tecnicosIds[0],
+    tecnicos_ids: tecnicosIds,
+    id_supervisor: personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0
+      ? Array.from(personalAdministrativoSelect.selectedOptions).map((o) => parseInt(o.value, 10)).filter((id) => id > 0)
+      : null,
+    fecha_programada: fd.get('fecha_programada'),
+    hora_inicio: fd.get('hora_inicio') || '08:00',
+    hora_fin: fd.get('hora_fin') || '12:00',
+    observaciones: fd.get('observaciones') || '',
+  };
+
+  const validacion = verificarConflictosHorarios(tecnicosIds, data.fecha_programada, data.hora_inicio, data.hora_fin);
+  if (validacion.hayConflicto) {
+    mostrarToast('warning', 'Conflicto de Horarios', validacion.conflictoDetalle);
+    return;
+  }
+
+  try {
+    await programacionService.createFabricacion(data);
+    cerrarModal('modalNuevaProgramacionVisita');
+    await recargarProgramaciones();
+    mostrarToast('success', 'Fabricación Programada', 'La programación por fabricación fue registrada exitosamente');
+  } catch (err: any) {
+    let message = err?.data?.message || err?.response?.data?.message || err?.message || 'No se pudo crear la programación de fabricación';
+    const errors = err?.data?.errors || err?.response?.data?.errors;
+    if (errors && typeof errors === 'object') {
+      const detalles = Object.entries(errors)
+        .map(([campo, msgs]: [string, any]) => `${campo}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+        .join(' | ');
+      if (detalles) message = `${message}. ${detalles}`;
+    }
+    mostrarErrorProgramacion(message);
+    console.error('Error creando fabricación:', err?.data || err);
   }
 }
 
@@ -3029,7 +3331,7 @@ async function submitAnual(body: HTMLElement) {
         .join(' | ');
       if (detalles) message = `${message}. ${detalles}`;
     }
-    mostrarToast('error', 'Error', message);
+    mostrarErrorProgramacion(message);
     console.error(err);
   }
 }
@@ -3039,6 +3341,19 @@ async function submitAnual(body: HTMLElement) {
 function cerrarModal(id: string) {
   const modal = document.getElementById(id);
   if (modal) { modal.style.display = 'none'; document.body.style.overflow = 'auto'; }
+}
+
+function esConflictoAgendaMensaje(message: string): boolean {
+  return (message || '').toLowerCase().includes('conflicto de agenda');
+}
+
+function mostrarErrorProgramacion(message: string) {
+  if (esConflictoAgendaMensaje(message)) {
+    mostrarToast('warning', 'Advertencia', message, 10000);
+    return;
+  }
+
+  mostrarToast('error', 'Error', message);
 }
 
 function getColorByState(estado: string): string {
@@ -3087,6 +3402,9 @@ async function exportarPDF() {
 
 function clienteNombre(p: Programacion): string {
   const px = p as ProgramacionExtendida;
+  if (px.tipo_programacion === 'fabricacion') {
+    return 'PRODUCTOS';
+  }
   const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente || px.cliente;
   return c ? (c.nombre_empresa || c.persona_contacto || '—') : '—';
 }

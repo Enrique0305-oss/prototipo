@@ -1,11 +1,13 @@
 // Comercial - Exponentes View (mismo patrón que Proveedores)
 import './exponentes.css';
 import { exponenteService, type Exponente } from '../../../services/exponenteService';
+import { tecnicoService } from '../../../services/tecnicoService';
 import { mostrarToast, confirmarAccion } from '../../../shared/toast';
 
 let exponentesData: Exponente[] = [];
 let filtroSearch = '';
 let filtroEstado = '';
+let tecnicosCatalogo: Array<{ id: number; nombre: string; apellidos?: string | null; estado?: string }> = [];
 
 export function renderComercialExponentes(): string {
   return `
@@ -85,6 +87,7 @@ export function renderComercialExponentes(): string {
 }
 
 export async function initExponentesEvents(): Promise<void> {
+  await cargarCatalogoTecnicos();
   await cargarExponentes();
   document.getElementById('btnNuevoExponente')?.addEventListener('click', () => abrirModal(null));
   document.getElementById('expSearchInput')?.addEventListener('input', (e) => {
@@ -97,6 +100,29 @@ export async function initExponentesEvents(): Promise<void> {
   });
   document.getElementById('closeModalExp')?.addEventListener('click', cerrarModal);
   document.querySelector('#modalExponente .exp-modal-overlay')?.addEventListener('click', cerrarModal);
+}
+
+async function cargarCatalogoTecnicos() {
+  try {
+    const resp = await tecnicoService.getAll({ estado: 'todos' } as any);
+    const raw = (resp as any).data || resp;
+    tecnicosCatalogo = ((raw?.data || raw || []) as any[]).map((t: any) => ({
+      id: Number(t.id || 0),
+      nombre: t.nombre || '',
+      apellidos: t.apellidos || '',
+      estado: t.estado || 'Activo',
+    })).filter((t) => t.id > 0);
+  } catch {
+    tecnicosCatalogo = [];
+  }
+}
+
+function opcionesTecnicos(selectedId?: number | null): string {
+  const opts = tecnicosCatalogo
+    .filter((t) => t.estado !== 'Inactivo' || (selectedId && t.id === selectedId))
+    .map((t) => `<option value="${t.id}" ${selectedId === t.id ? 'selected' : ''}>${t.nombre} ${t.apellidos || ''}</option>`)
+    .join('');
+  return `<option value="">Seleccione...</option>${opts}`;
 }
 
 async function cargarExponentes() {
@@ -259,6 +285,14 @@ function abrirModal(exp: Exponente | null) {
           </select>
         </div>
       </div>
+      <div class="exp-form-group exp-col-2">
+        <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <input type="checkbox" id="exp-es-tecnico" ${exp?.id_tecnico_vinculado ? 'checked' : ''}> También es técnico
+        </label>
+        <select name="id_tecnico_vinculado" id="exp-tecnico-vinculado" class="exp-input" ${exp?.id_tecnico_vinculado ? '' : 'disabled'}>
+          ${opcionesTecnicos(exp?.id_tecnico_vinculado || null)}
+        </select>
+      </div>
       <div class="exp-form-group">
         <label>Notas</label>
         <textarea name="notas" class="exp-input" rows="2">${exp?.notas || ''}</textarea>
@@ -272,6 +306,17 @@ function abrirModal(exp: Exponente | null) {
 
   document.getElementById('cancelarModalExp')?.addEventListener('click', cerrarModal);
   document.getElementById('formExponente')?.addEventListener('submit', (e) => guardarExponente(e, exp?.id));
+
+  const chk = document.getElementById('exp-es-tecnico') as HTMLInputElement | null;
+  const sel = document.getElementById('exp-tecnico-vinculado') as HTMLSelectElement | null;
+  if (chk && sel) {
+    chk.addEventListener('change', () => {
+      sel.disabled = !chk.checked;
+      if (!chk.checked) {
+        sel.value = '';
+      }
+    });
+  }
 }
 
 async function guardarExponente(e: Event, id?: number) {
@@ -281,6 +326,9 @@ async function guardarExponente(e: Event, id?: number) {
   btn.disabled = true; btn.textContent = 'Guardando...';
   const data: Record<string, any> = {};
   new FormData(form).forEach((v, k) => { data[k] = v; });
+  const chkTecnico = document.getElementById('exp-es-tecnico') as HTMLInputElement | null;
+  const idTecnicoRaw = Number((document.getElementById('exp-tecnico-vinculado') as HTMLSelectElement | null)?.value || 0);
+  data.id_tecnico_vinculado = chkTecnico?.checked && idTecnicoRaw > 0 ? idTecnicoRaw : null;
   try {
     if (id) {
       await exponenteService.update(id, data);

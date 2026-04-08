@@ -573,7 +573,6 @@ function renderGestionEquiposTab() {
             <th>MARCA</th>
             <th>MODELO</th>
             <th>SERIE</th>
-            <th>ENCARGADO</th>
             <th>RESPONSABLE</th>
             <th>CONTACTO</th>
             <th>ESTADO</th>
@@ -581,7 +580,7 @@ function renderGestionEquiposTab() {
           </tr>
         </thead>
         <tbody id="equipos-tbody">
-          <tr><td colspan="10" style="text-align:center; padding:40px; color:#94a3b8;">Cargando equipos...</td></tr>
+          <tr><td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">Cargando equipos...</td></tr>
         </tbody>
       </table>
     </div>
@@ -614,10 +613,6 @@ function renderGestionEquiposTab() {
             <div>
               <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">N° Serie *</label>
               <input type="number" id="equipo-serie" class="search-input" style="width:100%;" required placeholder="Ej: 100234">
-            </div>
-            <div>
-              <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Encargado *</label>
-              <input type="text" id="equipo-encargado" class="search-input" style="width:100%;" required placeholder="Nombre del encargado">
             </div>
             <div>
               <label style="display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:4px;">Responsable *</label>
@@ -1608,7 +1603,6 @@ async function cargarEquipos() {
         <td>${eq.marca}</td>
         <td>${eq.modelo}</td>
         <td><span style="font-family:monospace; background:#f1f5f9; padding:2px 8px; border-radius:4px;">${eq.serie}</span></td>
-        <td>${eq.encargado}</td>
         <td>${eq.responsable}</td>
         <td>${eq.contacto}</td>
         <td>
@@ -1687,7 +1681,6 @@ function bindAccionesEquipos() {
         (document.getElementById('equipo-marca') as HTMLInputElement).value = eq.marca;
         (document.getElementById('equipo-modelo') as HTMLInputElement).value = eq.modelo;
         (document.getElementById('equipo-serie') as HTMLInputElement).value = String(eq.serie);
-        (document.getElementById('equipo-encargado') as HTMLInputElement).value = eq.encargado;
         (document.getElementById('equipo-responsable') as HTMLInputElement).value = eq.responsable;
         (document.getElementById('equipo-contacto') as HTMLInputElement).value = String(eq.contacto);
 
@@ -1759,7 +1752,6 @@ function limpiarFormEquipo() {
   (document.getElementById('equipo-marca') as HTMLInputElement).value = '';
   (document.getElementById('equipo-modelo') as HTMLInputElement).value = '';
   (document.getElementById('equipo-serie') as HTMLInputElement).value = '';
-  (document.getElementById('equipo-encargado') as HTMLInputElement).value = '';
   (document.getElementById('equipo-responsable') as HTMLInputElement).value = '';
   (document.getElementById('equipo-contacto') as HTMLInputElement).value = '';
   (document.getElementById('equipo-imagen-input') as HTMLInputElement).value = '';
@@ -1879,12 +1871,12 @@ function initGestionEquiposEvents() {
       marca: (document.getElementById('equipo-marca') as HTMLInputElement).value.trim(),
       modelo: (document.getElementById('equipo-modelo') as HTMLInputElement).value.trim(),
       serie: Number((document.getElementById('equipo-serie') as HTMLInputElement).value),
-      encargado: (document.getElementById('equipo-encargado') as HTMLInputElement).value.trim(),
       responsable: (document.getElementById('equipo-responsable') as HTMLInputElement).value.trim(),
       contacto: Number((document.getElementById('equipo-contacto') as HTMLInputElement).value),
+      encargado: (document.getElementById('equipo-responsable') as HTMLInputElement).value.trim(),
     };
 
-    if (!data.descripcion || !data.marca || !data.modelo || !data.serie || !data.encargado || !data.responsable || !data.contacto) {
+    if (!data.descripcion || !data.marca || !data.modelo || !data.serie || !data.responsable || !data.contacto) {
       mostrarToast('error', 'Atención', 'Complete todos los campos requeridos');
       return;
     }

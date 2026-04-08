@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\OrdenAsesoria;
 use App\Models\ProgramacionAsesoria;
+use App\Services\ScheduleConflictService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -518,8 +519,27 @@ class ProgramacionAsesoriaController extends Controller
             }
 
             $programacionesCreadas = [];
+            $exponentesAsignados = $validated['exponentes'] ?? [];
 
             foreach ($fechasProgramacion as $indice => $infoFecha) {
+                if (!empty($exponentesAsignados)) {
+                    $conflicto = ScheduleConflictService::validarExponentes(
+                        $exponentesAsignados,
+                        $infoFecha['fecha'] ?? $validated['fecha_programada'],
+                        $validated['hora_inicio'] ?? null,
+                        $validated['hora_fin'] ?? null
+                    );
+
+                    if ($conflicto) {
+                        DB::rollBack();
+                        return response()->json([
+                            'success' => false,
+                            'message' => $conflicto['mensaje'],
+                            'conflicto' => $conflicto,
+                        ], 422);
+                    }
+                }
+
                 $programacion = ProgramacionAsesoria::create([
                     'id_orden_asesoria' => $validated['id_orden_asesoria'],
                     'id_supervisor' => $validated['id_supervisor'] ?? null,
@@ -598,6 +618,10 @@ class ProgramacionAsesoriaController extends Controller
         try {
             $programacion = ProgramacionAsesoria::with(['ordenAsesoria.cliente', 'exponentes'])->findOrFail($id);
 
+            $exponentesFinales = array_key_exists('exponentes', $validated)
+                ? ($validated['exponentes'] ?? [])
+                : $programacion->exponentes->pluck('id')->map(fn ($v) => (int) $v)->all();
+
             $payload = [
                 'id_supervisor' => $validated['id_supervisor'] ?? null,
                 'id_vehiculo' => $validated['id_vehiculo'] ?? null,
@@ -631,6 +655,25 @@ class ProgramacionAsesoriaController extends Controller
                     0,
                     $fechaActual->timezone
                 )->format('Y-m-d');
+            }
+
+            if (!empty($exponentesFinales)) {
+                $conflicto = ScheduleConflictService::validarExponentes(
+                    $exponentesFinales,
+                    (string) ($payload['fecha_programada'] ?? $programacion->fecha_programada),
+                    $payload['hora_inicio'] ?? $programacion->hora_inicio,
+                    array_key_exists('hora_fin', $payload) ? ($payload['hora_fin'] ?? null) : $programacion->hora_fin,
+                    ['programacion_asesoria' => (int) $programacion->id]
+                );
+
+                if ($conflicto) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => $conflicto['mensaje'],
+                        'conflicto' => $conflicto,
+                    ], 422);
+                }
             }
 
             $programacion->update($payload);

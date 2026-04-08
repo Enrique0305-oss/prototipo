@@ -1,4 +1,5 @@
 import { tecnicoService } from '../../services/tecnicoService';
+import { exponenteService } from '../../services/exponenteService';
 import { mostrarToast } from '../../shared/toast';
 
 type TecnicoUI = {
@@ -13,7 +14,17 @@ type TecnicoUI = {
   carga_maxima_semanal: number;
   estado: 'Activo' | 'Inactivo' | 'Licencia';
   programaciones_count?: number;
+  id_exponente_vinculado?: number | null;
 };
+
+type ExponenteMini = {
+  id: number;
+  nombre: string;
+  apellidos?: string | null;
+  estado?: string;
+};
+
+let exponentesCatalogo: ExponenteMini[] = [];
 
 function esc(s: string): string {
   return (s || '')
@@ -39,6 +50,9 @@ function getFormDataTecnico(): any {
   const especialidad = (document.getElementById('tec-form-especialidad') as HTMLInputElement).value.trim();
   const autorizado_conducir = (document.getElementById('tec-form-conduce') as HTMLInputElement).checked;
   const carga_maxima_semanal = Number((document.getElementById('tec-form-carga') as HTMLInputElement).value || 40);
+  const esExponente = (document.getElementById('tec-form-es-exponente') as HTMLInputElement).checked;
+  const idExponenteRaw = Number((document.getElementById('tec-form-exponente-id') as HTMLSelectElement).value || 0);
+  const id_exponente_vinculado = esExponente && idExponenteRaw > 0 ? idExponenteRaw : null;
 
   return {
     id,
@@ -51,13 +65,27 @@ function getFormDataTecnico(): any {
       especialidad: especialidad || null,
       autorizado_conducir,
       carga_maxima_semanal,
+      id_exponente_vinculado,
     },
   };
 }
 
-function abrirModalTecnico(t?: TecnicoUI) {
+function renderOpcionesExponentes(selectedId?: number | null): string {
+  const opciones = exponentesCatalogo
+    .filter((e) => e.estado !== 'Inactivo' || (selectedId && e.id === selectedId))
+    .map((e) => `<option value="${e.id}" ${selectedId === e.id ? 'selected' : ''}>${esc(`${e.nombre} ${e.apellidos || ''}`.trim())}</option>`)
+    .join('');
+
+  return `<option value="">Seleccione...</option>${opciones}`;
+}
+
+async function abrirModalTecnico(t?: TecnicoUI) {
   const modal = document.getElementById('tecnicos-modal') as HTMLElement | null;
   if (!modal) return;
+
+  if (exponentesCatalogo.length === 0) {
+    await cargarCatalogoExponentes();
+  }
 
   (document.getElementById('tec-form-title') as HTMLElement).textContent = t ? 'Editar Técnico' : 'Nuevo Técnico';
   (document.getElementById('tec-form-id') as HTMLInputElement).value = t ? String(t.id) : '';
@@ -69,6 +97,21 @@ function abrirModalTecnico(t?: TecnicoUI) {
   (document.getElementById('tec-form-especialidad') as HTMLInputElement).value = t?.especialidad || '';
   (document.getElementById('tec-form-conduce') as HTMLInputElement).checked = !!t?.autorizado_conducir;
   (document.getElementById('tec-form-carga') as HTMLInputElement).value = String(t?.carga_maxima_semanal ?? 40);
+
+  const chkExponente = document.getElementById('tec-form-es-exponente') as HTMLInputElement;
+  const selExponente = document.getElementById('tec-form-exponente-id') as HTMLSelectElement;
+  const selectedId = t?.id_exponente_vinculado ?? null;
+
+  chkExponente.checked = !!selectedId;
+  selExponente.innerHTML = renderOpcionesExponentes(selectedId);
+  selExponente.disabled = !chkExponente.checked;
+
+  chkExponente.onchange = () => {
+    selExponente.disabled = !chkExponente.checked;
+    if (!chkExponente.checked) {
+      selExponente.value = '';
+    }
+  };
 
   modal.style.display = 'flex';
 }
@@ -99,6 +142,21 @@ async function guardarTecnico() {
   } catch (e: any) {
     const msg = e?.data?.message || e?.message || 'No se pudo guardar el técnico';
     mostrarToast('error', 'Error', msg);
+  }
+}
+
+async function cargarCatalogoExponentes() {
+  try {
+    const resp = await exponenteService.getAll({ estado: 'Activo' });
+    const raw = (resp as any).data || resp;
+    exponentesCatalogo = ((raw?.data || raw || []) as any[]).map((e: any) => ({
+      id: Number(e.id || 0),
+      nombre: e.nombre || '',
+      apellidos: e.apellidos || '',
+      estado: e.estado || 'Activo',
+    })).filter((e) => e.id > 0);
+  } catch {
+    exponentesCatalogo = [];
   }
 }
 
@@ -162,7 +220,7 @@ function renderFilaTecnico(t: TecnicoUI): string {
 
 function bindTecnicosEvents(tecnicos: TecnicoUI[]) {
   const btnNuevo = document.getElementById('tecnicos-btn-nuevo');
-  if (btnNuevo) btnNuevo.onclick = () => abrirModalTecnico();
+  if (btnNuevo) btnNuevo.onclick = () => { abrirModalTecnico(); };
 
   const btnFiltrar = document.getElementById('tecnicos-btn-filtrar');
   if (btnFiltrar) btnFiltrar.onclick = () => { cargarTecnicos(); };
@@ -190,7 +248,9 @@ function bindTecnicosEvents(tecnicos: TecnicoUI[]) {
     btn.onclick = () => {
       const id = Number(btn.dataset.id || 0);
       const t = tecnicos.find((x) => x.id === id);
-      if (t) abrirModalTecnico(t);
+      if (t) {
+        abrirModalTecnico(t);
+      }
     };
   });
 
@@ -293,6 +353,12 @@ export function renderTecnicosTab(): string {
                 <input id="tec-form-conduce" type="checkbox" /> Autorizado a conducir
               </label>
             </div>
+            <div class="os-field" style="grid-column:1 / span 2;">
+              <label style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                <input id="tec-form-es-exponente" type="checkbox" /> También es exponente
+              </label>
+              <select id="tec-form-exponente-id" class="os-input" disabled></select>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -323,6 +389,7 @@ export async function cargarTecnicos() {
         especialidad: especialidad || undefined,
         autorizado_conducir: conduce === '' ? undefined : conduce === '1',
       }),
+      exponentesCatalogo.length === 0 ? cargarCatalogoExponentes() : Promise.resolve(),
     ]);
 
     const rawStats = (respStats as any).data || respStats;
@@ -349,6 +416,7 @@ export async function cargarTecnicos() {
       carga_maxima_semanal: Number(t.carga_maxima_semanal || 0),
       estado: t.estado || 'Activo',
       programaciones_count: Number(t.programaciones_count || 0),
+      id_exponente_vinculado: t.id_exponente_vinculado ? Number(t.id_exponente_vinculado) : null,
     }));
 
     if (list.length === 0) {

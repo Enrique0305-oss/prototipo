@@ -23,12 +23,14 @@ class Producto extends Model
         'imagen',
         'ingre_activo',
         'plag_objetivo',
-        'presentacion'
+        'presentacion',
+        'es_fabricable',
     ];
 
     protected $casts = [
         'fecha_vencim' => 'date',
         'precio_unitario' => 'decimal:2',
+        'es_fabricable' => 'boolean',
     ];
 
     // Relaciones
@@ -40,6 +42,11 @@ class Producto extends Model
     public function inventario()
     {
         return $this->hasOne(Inventario::class, 'id_productos');
+    }
+
+    public function recetaDetalles()
+    {
+        return $this->hasMany(ProductoRecetaDetalle::class, 'id_producto_final');
     }
 
     // Scopes

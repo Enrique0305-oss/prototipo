@@ -2,6 +2,7 @@ import { apiClient } from '../core/api/api.client';
 import type {
   ApiResponse,
   Producto,
+  ProductoRecetaDetalle,
   ProductoFilters,
   PaginationParams,
   EstadisticasProductos,
@@ -17,6 +18,10 @@ export const productoService = {
     return apiClient.get<ApiResponse<Producto[]>>('/productos', filters);
   },
 
+  getFabricablesConReceta: async () => {
+    return apiClient.get<ApiResponse<Producto[]>>('/productos/fabricables/lista');
+  },
+
   create: async (data: {
     descripcion: string;
     id_categoria: number;
@@ -29,6 +34,8 @@ export const productoService = {
     ingre_activo?: string;
     plag_objetivo?: string;
     presentacion?: string;
+    es_fabricable?: boolean;
+    receta?: ProductoRecetaDetalle[];
     estado?: 'Activo' | 'Inactivo';
   }) => {
     return apiClient.post<ApiResponse<Producto>>('/productos', data);
@@ -43,6 +50,14 @@ export const productoService = {
       ...data,
       _method: 'PUT',
     });
+  },
+
+  getReceta: async (id: number) => {
+    return apiClient.get<ApiResponse<{ id_producto: number; es_fabricable: boolean; receta: ProductoRecetaDetalle[] }>>(`/productos/${id}/receta`);
+  },
+
+  syncReceta: async (id: number, receta: ProductoRecetaDetalle[]) => {
+    return apiClient.post<ApiResponse<null>>(`/productos/${id}/receta/sync`, { receta });
   },
 
   delete: async (id: number) => {

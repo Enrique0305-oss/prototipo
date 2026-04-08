@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Producto;
 use App\Models\Categoria;
 use App\Models\Inventario;
+use App\Models\ProductoRecetaDetalle;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ProductoController extends Controller
@@ -22,9 +24,9 @@ class ProductoController extends Controller
         $query = Producto::with(['categoria', 'inventario']);
 
         // Filtro por estado (Activo/Inactivo)
-        if ($request->has('estado')) {
+        if ($request->has('estado') && $request->estado !== 'all') {
             $query->where('estado', $request->estado);
-        } else {
+        } elseif (!$request->has('estado')) {
             // Por defecto solo mostrar productos activos
             $query->where('estado', 'Activo');
         }
@@ -77,6 +79,7 @@ class ProductoController extends Controller
                 'ingre_activo' => $producto->ingre_activo,
                 'plag_objetivo' => $producto->plag_objetivo,
                 'presentacion' => $producto->presentacion,
+                'es_fabricable' => (bool) $producto->es_fabricable,
                 'categoria' => $producto->categoria ? [
                     'id' => $producto->categoria->id,
                     'nombre' => $producto->categoria->nombre,
@@ -92,6 +95,55 @@ class ProductoController extends Controller
         return response()->json([
             'success' => true,
             'data' => $data
+        ]);
+    }
+
+    /**
+     * Listar productos fabricables activos con su receta.
+     */
+    public function fabricables(): JsonResponse
+    {
+        $productos = Producto::with(['inventario', 'recetaDetalles.insumo.inventario'])
+            ->where('estado', 'Activo')
+            ->where('es_fabricable', true)
+            ->orderBy('descripcion', 'asc')
+            ->get();
+
+        $data = $productos->map(function (Producto $producto) {
+            return [
+                'id' => $producto->id,
+                'sku' => $producto->sku,
+                'descripcion' => $producto->descripcion,
+                'unidad' => $producto->unidad,
+                'es_fabricable' => (bool) $producto->es_fabricable,
+                'inventario' => $producto->inventario ? [
+                    'cantidad_disponible' => $producto->inventario->cantidad_disponible,
+                    'stock_seguridad' => $producto->inventario->stock_seguridad,
+                    'cantidad_total' => $producto->inventario->Cantidad_total,
+                ] : null,
+                'receta' => $producto->recetaDetalles->map(function ($detalle) {
+                    return [
+                        'id' => $detalle->id,
+                        'id_producto_insumo' => $detalle->id_producto_insumo,
+                        'cantidad' => (float) $detalle->cantidad,
+                        'unidad' => $detalle->unidad,
+                        'observacion' => $detalle->observacion,
+                        'insumo' => $detalle->insumo ? [
+                            'id' => $detalle->insumo->id,
+                            'descripcion' => $detalle->insumo->descripcion,
+                            'unidad' => $detalle->insumo->unidad,
+                            'inventario' => $detalle->insumo->inventario ? [
+                                'cantidad_disponible' => $detalle->insumo->inventario->cantidad_disponible,
+                            ] : null,
+                        ] : null,
+                    ];
+                })->values(),
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
         ]);
     }
 
@@ -112,7 +164,13 @@ class ProductoController extends Controller
             'estado' => 'nullable|in:Activo,Inactivo',
             'ingre_activo' => 'nullable|string|max:500',
             'plag_objetivo' => 'nullable|string|max:500',
-            'presentacion' => 'nullable|string|max:500'
+            'presentacion' => 'nullable|string|max:500',
+            'es_fabricable' => 'sometimes|boolean',
+            'receta' => 'sometimes|array',
+            'receta.*.id_producto_insumo' => 'required_with:receta|integer|exists:productos,id|distinct',
+            'receta.*.cantidad' => 'required_with:receta|numeric|min:0.001',
+            'receta.*.unidad' => 'nullable|string|max:20',
+            'receta.*.observacion' => 'nullable|string|max:255',
         ], [
             'descripcion.required' => 'La descripción del producto es requerida',
             'id_categoria.required' => 'La categoría es requerida',
@@ -139,30 +197,47 @@ class ProductoController extends Controller
         $ubicacion = $request->input('ubicacion') ?? '';
         $nLote = $request->input('n_lote') ?? '';
 
-        $producto = Producto::create([
-            'sku' => $sku,
-            'descripcion' => $request->descripcion,
-            'id_categoria' => $request->id_categoria,
-            'fecha_vencim' => $request->fecha_vencim,
-            'ubicacion' => $ubicacion,
-            'n_lote' => $nLote,
-            'unidad' => $request->unidad,
-            'precio_unitario' => $request->precio_unitario,
-            'estado' => $request->estado ?? 'Activo',
-            'ingre_activo' => $request->ingre_activo,
-            'plag_objetivo' => $request->plag_objetivo,
-            'presentacion' => $request->presentacion,
-        ]);
+        DB::beginTransaction();
+        try {
+            $producto = Producto::create([
+                'sku' => $sku,
+                'descripcion' => $request->descripcion,
+                'id_categoria' => $request->id_categoria,
+                'fecha_vencim' => $request->fecha_vencim,
+                'ubicacion' => $ubicacion,
+                'n_lote' => $nLote,
+                'unidad' => $request->unidad,
+                'precio_unitario' => $request->precio_unitario,
+                'estado' => $request->estado ?? 'Activo',
+                'ingre_activo' => $request->ingre_activo,
+                'plag_objetivo' => $request->plag_objetivo,
+                'presentacion' => $request->presentacion,
+                'es_fabricable' => (bool) $request->boolean('es_fabricable'),
+            ]);
 
-        Inventario::create([
-            'id_productos' => $producto->id,
-            'cantidad_disponible' => 0,
-            'stock_seguridad' => $request->stock_seguridad,
-            'Tipo' => 'Entrada',
-            'Cantidad_total' => 0,
-        ]);
+            Inventario::create([
+                'id_productos' => $producto->id,
+                'cantidad_disponible' => 0,
+                'stock_seguridad' => $request->stock_seguridad,
+                'Tipo' => 'Entrada',
+                'Cantidad_total' => 0,
+            ]);
 
-        $producto->load(['categoria', 'inventario']);
+            if ($producto->es_fabricable) {
+                $this->syncRecetaProducto($producto, $request->input('receta', []));
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo crear el producto',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        $producto->load(['categoria', 'inventario', 'recetaDetalles.insumo.inventario']);
 
         return response()->json([
             'success' => true,
@@ -212,7 +287,7 @@ class ProductoController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $producto = Producto::with(['categoria', 'inventario'])->find($id);
+        $producto = Producto::with(['categoria', 'inventario', 'recetaDetalles.insumo.inventario'])->find($id);
 
         if (!$producto) {
             return response()->json([
@@ -237,6 +312,24 @@ class ProductoController extends Controller
             'ingre_activo' => $producto->ingre_activo,
             'plag_objetivo' => $producto->plag_objetivo,
             'presentacion' => $producto->presentacion,
+            'es_fabricable' => (bool) $producto->es_fabricable,
+            'receta' => $producto->recetaDetalles->map(function ($detalle) {
+                return [
+                    'id' => $detalle->id,
+                    'id_producto_insumo' => $detalle->id_producto_insumo,
+                    'cantidad' => (float) $detalle->cantidad,
+                    'unidad' => $detalle->unidad,
+                    'observacion' => $detalle->observacion,
+                    'insumo' => $detalle->insumo ? [
+                        'id' => $detalle->insumo->id,
+                        'descripcion' => $detalle->insumo->descripcion,
+                        'unidad' => $detalle->insumo->unidad,
+                        'inventario' => $detalle->insumo->inventario ? [
+                            'cantidad_disponible' => $detalle->insumo->inventario->cantidad_disponible,
+                        ] : null,
+                    ] : null,
+                ];
+            })->values(),
             'categoria' => $producto->categoria ? [
                 'id' => $producto->categoria->id,
                 'nombre' => $producto->categoria->nombre,
@@ -283,6 +376,12 @@ class ProductoController extends Controller
             'ingre_activo' => 'nullable|string|max:500',
             'plag_objetivo' => 'nullable|string|max:500',
             'presentacion' => 'nullable|string|max:500',
+            'es_fabricable' => 'sometimes|boolean',
+            'receta' => 'sometimes|array',
+            'receta.*.id_producto_insumo' => 'required_with:receta|integer|exists:productos,id|distinct',
+            'receta.*.cantidad' => 'required_with:receta|numeric|min:0.001',
+            'receta.*.unidad' => 'nullable|string|max:20',
+            'receta.*.observacion' => 'nullable|string|max:255',
 
         ]);
 
@@ -320,7 +419,8 @@ class ProductoController extends Controller
             'estado',
             'ingre_activo',
             'plag_objetivo',
-            'presentacion'
+            'presentacion',
+            'es_fabricable',
         ]);
 
         // Compatibilidad con columnas NOT NULL cuando el valor llega vacío y se convierte a null.
@@ -331,26 +431,49 @@ class ProductoController extends Controller
             $payload['n_lote'] = '';
         }
 
-        $producto->update($payload);
+        DB::beginTransaction();
+        try {
+            $producto->update($payload);
 
-        if ($request->has('stock_seguridad')) {
-            $inventario = $producto->inventario;
-            if ($inventario) {
-                $inventario->update([
-                    'stock_seguridad' => $request->stock_seguridad,
-                ]);
-            } else {
-                Inventario::create([
-                    'id_productos' => $producto->id,
-                    'cantidad_disponible' => 0,
-                    'stock_seguridad' => $request->stock_seguridad,
-                    'Tipo' => 'Entrada',
-                    'Cantidad_total' => 0,
-                ]);
+            if ($request->has('stock_seguridad')) {
+                $inventario = $producto->inventario;
+                if ($inventario) {
+                    $inventario->update([
+                        'stock_seguridad' => $request->stock_seguridad,
+                    ]);
+                } else {
+                    Inventario::create([
+                        'id_productos' => $producto->id,
+                        'cantidad_disponible' => 0,
+                        'stock_seguridad' => $request->stock_seguridad,
+                        'Tipo' => 'Entrada',
+                        'Cantidad_total' => 0,
+                    ]);
+                }
             }
+
+            $fabricableActual = (bool) ($request->has('es_fabricable') ? $request->boolean('es_fabricable') : $producto->es_fabricable);
+            if ($request->has('receta')) {
+                if ($fabricableActual) {
+                    $this->syncRecetaProducto($producto, $request->input('receta', []));
+                } else {
+                    $producto->recetaDetalles()->delete();
+                }
+            } elseif ($request->has('es_fabricable') && !$request->boolean('es_fabricable')) {
+                $producto->recetaDetalles()->delete();
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo actualizar el producto',
+                'error' => $e->getMessage(),
+            ], 500);
         }
 
-        $producto->load(['categoria', 'inventario']);
+        $producto->load(['categoria', 'inventario', 'recetaDetalles.insumo.inventario']);
 
         return response()->json([
             'success' => true,
@@ -411,6 +534,128 @@ class ProductoController extends Controller
             'message' => 'Producto reactivado exitosamente',
             'data' => $producto
         ]);
+    }
+
+    /**
+     * Obtener receta (insumos) de un producto fabricable
+     */
+    public function receta($id): JsonResponse
+    {
+        $producto = Producto::with(['recetaDetalles.insumo.inventario'])->find($id);
+
+        if (!$producto) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Producto no encontrado',
+            ], 404);
+        }
+
+        $data = $producto->recetaDetalles->map(function ($detalle) {
+            return [
+                'id' => $detalle->id,
+                'id_producto_insumo' => $detalle->id_producto_insumo,
+                'cantidad' => (float) $detalle->cantidad,
+                'unidad' => $detalle->unidad,
+                'observacion' => $detalle->observacion,
+                'insumo' => $detalle->insumo ? [
+                    'id' => $detalle->insumo->id,
+                    'descripcion' => $detalle->insumo->descripcion,
+                    'unidad' => $detalle->insumo->unidad,
+                    'inventario' => $detalle->insumo->inventario ? [
+                        'cantidad_disponible' => $detalle->insumo->inventario->cantidad_disponible,
+                    ] : null,
+                ] : null,
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id_producto' => $producto->id,
+                'es_fabricable' => (bool) $producto->es_fabricable,
+                'receta' => $data,
+            ],
+        ]);
+    }
+
+    /**
+     * Sincronizar receta de un producto
+     */
+    public function syncReceta(Request $request, $id): JsonResponse
+    {
+        $producto = Producto::find($id);
+
+        if (!$producto) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Producto no encontrado',
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'receta' => 'required|array',
+            'receta.*.id_producto_insumo' => 'required|integer|exists:productos,id|distinct',
+            'receta.*.cantidad' => 'required|numeric|min:0.001',
+            'receta.*.unidad' => 'nullable|string|max:20',
+            'receta.*.observacion' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Errores de validación',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $producto->es_fabricable = true;
+            $producto->save();
+
+            $this->syncRecetaProducto($producto, $request->input('receta', []));
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo guardar la receta',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Receta actualizada correctamente',
+        ]);
+    }
+
+    private function syncRecetaProducto(Producto $producto, array $receta): void
+    {
+        $rows = collect($receta)
+            ->filter(fn ($item) => !empty($item['id_producto_insumo']) && !empty($item['cantidad']))
+            ->map(function ($item) use ($producto) {
+                $idInsumo = (int) $item['id_producto_insumo'];
+                if ($idInsumo === (int) $producto->id) {
+                    throw new \InvalidArgumentException('Un producto no puede consumirse a sí mismo en su receta');
+                }
+
+                return [
+                    'id_producto_final' => $producto->id,
+                    'id_producto_insumo' => $idInsumo,
+                    'cantidad' => (float) $item['cantidad'],
+                    'unidad' => $item['unidad'] ?? null,
+                    'observacion' => $item['observacion'] ?? null,
+                ];
+            })
+            ->values();
+
+        $producto->recetaDetalles()->delete();
+
+        if ($rows->isNotEmpty()) {
+            ProductoRecetaDetalle::insert($rows->all());
+        }
     }
 
     /**

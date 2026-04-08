@@ -32,11 +32,15 @@ use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
 use App\Http\Controllers\API\ProgramacionVisitaController;
+use App\Http\Controllers\API\ProgramacionFabricacionController;
+use App\Http\Controllers\API\EntradaDevolucionFabricacionController;
+use App\Http\Controllers\API\OrdenFabricacionController;
 use App\Http\Controllers\API\ProgramacionCapacitacionController;
 use App\Http\Controllers\API\ProgramacionAsesoriaController;
 use App\Http\Controllers\API\EntregaEppController;
 use App\Http\Controllers\API\ProveedorController;
 use App\Http\Controllers\API\SalidaProgramacionController;
+use App\Http\Controllers\API\SalidaProgramacionFabricacionController;
 use App\Http\Controllers\API\OrdenCompraController;
 use App\Http\Controllers\API\PersonalController;
 use App\Http\Controllers\API\InventarioAjusteController;
@@ -152,8 +156,11 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // para los productos :v
     Route::get('/productos/estadisticas/resumen', [ProductoController::class, 'estadisticas']);
+    Route::get('/productos/fabricables/lista', [ProductoController::class, 'fabricables']);
     Route::get('/productos', [ProductoController::class, 'index']);
     Route::get('/productos/{id}', [ProductoController::class, 'show']);
+    Route::get('/productos/{id}/receta', [ProductoController::class, 'receta']);
+    Route::post('/productos/{id}/receta/sync', [ProductoController::class, 'syncReceta']);
     Route::post('/productos', [ProductoController::class, 'store']);
     Route::put('/productos/{id}', [ProductoController::class, 'update']);
     Route::delete('/productos/{id}', [ProductoController::class, 'destroy']);
@@ -326,6 +333,26 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/programacion-visita/{id}', [ProgramacionVisitaController::class, 'update']);
     Route::delete('/programacion-visita/{id}', [ProgramacionVisitaController::class, 'destroy']);
 
+    // Programación de Fabricación (independiente)
+    Route::get('/programacion-fabricacion/ordenes-disponibles', [OrdenFabricacionController::class, 'disponibles']);
+    Route::get('/programacion-fabricacion', [ProgramacionFabricacionController::class, 'index']);
+    Route::get('/programacion-fabricacion/{id}', [ProgramacionFabricacionController::class, 'show']);
+    Route::post('/programacion-fabricacion', [ProgramacionFabricacionController::class, 'store']);
+    Route::put('/programacion-fabricacion/{id}', [ProgramacionFabricacionController::class, 'update']);
+    Route::delete('/programacion-fabricacion/{id}', [ProgramacionFabricacionController::class, 'destroy']);
+
+    // Almacén - Órdenes de Fabricación
+    Route::get('/almacen/ordenes-fabricacion/salidas-programacion/pendientes', [SalidaProgramacionFabricacionController::class, 'getPendientes']);
+    Route::get('/almacen/ordenes-fabricacion', [OrdenFabricacionController::class, 'index']);
+    Route::get('/almacen/ordenes-fabricacion/{id}', [OrdenFabricacionController::class, 'show']);
+    Route::get('/almacen/ordenes-fabricacion/{id}/salidas-programacion', [SalidaProgramacionFabricacionController::class, 'getByOrdenFabricacion']);
+    Route::post('/almacen/ordenes-fabricacion/salidas-programacion/confirmar', [SalidaProgramacionFabricacionController::class, 'confirmarSalida']);
+    Route::get('/almacen/ordenes-fabricacion/entrada-devolucion/pendientes', [EntradaDevolucionFabricacionController::class, 'pendientes']);
+    Route::post('/almacen/ordenes-fabricacion/entrada-devolucion', [EntradaDevolucionFabricacionController::class, 'registrar']);
+    Route::post('/almacen/ordenes-fabricacion', [OrdenFabricacionController::class, 'store']);
+    Route::put('/almacen/ordenes-fabricacion/{id}', [OrdenFabricacionController::class, 'update']);
+    Route::delete('/almacen/ordenes-fabricacion/{id}', [OrdenFabricacionController::class, 'destroy']);
+
     // Programación de Capacitaciones (independiente)
     Route::get('/programacion-capacitacion/capacitaciones-disponibles', [ProgramacionCapacitacionController::class, 'getCapacitacionesDisponibles']);
     Route::get('/programacion-capacitacion', [ProgramacionCapacitacionController::class, 'index']);
@@ -347,6 +374,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/almacen/salidas-programacion/{id}/pdf-entrega', [SalidaProgramacionController::class, 'generarPdfEntrega']);
     Route::post('/almacen/salidas-programacion/confirmar', [SalidaProgramacionController::class, 'confirmarSalida']);
     Route::post('/almacen/salidas-programacion/devolver', [SalidaProgramacionController::class, 'registrarDevolucion']);
+
+    // Almacén - Salidas por Orden de Producto (solo salida)
+    Route::get('/almacen/salidas-orden-producto/pendientes', [OrdenProductoController::class, 'salidasPendientes']);
+    Route::get('/almacen/salidas-orden-producto/historial', [OrdenProductoController::class, 'salidasHistorial']);
+    Route::get('/almacen/salidas-orden-producto/{id}', [OrdenProductoController::class, 'salidaDetalle']);
+    Route::post('/almacen/salidas-orden-producto/confirmar', [OrdenProductoController::class, 'confirmarSalida']);
 
     // Proveedores
     Route::get('/proveedores', [ProveedorController::class, 'index']);

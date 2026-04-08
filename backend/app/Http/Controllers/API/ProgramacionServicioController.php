@@ -15,6 +15,7 @@ use App\Models\Vehiculo;
 use App\Models\Servicio;
 use App\Models\OrdenCapacitacionAuditoria;
 use App\Models\ProgramacionVisita;
+use App\Services\ScheduleConflictService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -169,6 +170,25 @@ class ProgramacionServicioController extends Controller
         try {
             $idUsuario = $request->user()?->id;
 
+            $tecnicosAsignados = $this->normalizeTecnicosIds($validated['id_tecnico_asignado'] ?? null, $validated['tecnicos_ids'] ?? []);
+            if (!empty($tecnicosAsignados)) {
+                $conflicto = ScheduleConflictService::validarTecnicos(
+                    $tecnicosAsignados,
+                    $validated['fecha_programada'],
+                    $validated['hora_inicio'] ?? null,
+                    $validated['hora_fin'] ?? null
+                );
+
+                if ($conflicto) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => $conflicto['mensaje'],
+                        'conflicto' => $conflicto,
+                    ], 422);
+                }
+            }
+
             // Crear la programación
             $areaIdsJson = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area'] ?? null);
 
@@ -284,6 +304,25 @@ class ProgramacionServicioController extends Controller
             $areaIdsJson = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area'] ?? null);
 
             foreach ($fechas as $fecha) {
+                $tecnicosAsignados = $this->normalizeTecnicosIds($validated['id_tecnico_asignado'] ?? null, $validated['tecnicos_ids'] ?? []);
+                if (!empty($tecnicosAsignados)) {
+                    $conflicto = ScheduleConflictService::validarTecnicos(
+                        $tecnicosAsignados,
+                        $fecha,
+                        $validated['hora_inicio'] ?? null,
+                        $validated['hora_fin'] ?? null
+                    );
+
+                    if ($conflicto) {
+                        DB::rollBack();
+                        return response()->json([
+                            'success' => false,
+                            'message' => $conflicto['mensaje'],
+                            'conflicto' => $conflicto,
+                        ], 422);
+                    }
+                }
+
                 $prog = ProgramacionServicio::create([
                     'id_orden_servicio'  => $validated['id_orden_servicio'],
                     'id_servicio'        => $validated['id_servicio'],
@@ -408,6 +447,30 @@ class ProgramacionServicioController extends Controller
         // Extraer tecnicos_ids antes del update masivo
         $tecnicosIds = $validated['tecnicos_ids'] ?? null;
         unset($validated['tecnicos_ids']);
+
+        $principal = $validated['id_tecnico_asignado'] ?? $prog->id_tecnico_asignado;
+        $listaTecnicos = $tecnicosIds !== null
+            ? $tecnicosIds
+            : $prog->tecnicos()->pluck('tecnicos.id')->map(fn ($id) => (int) $id)->all();
+
+        $tecnicosFinales = $this->normalizeTecnicosIds($principal, $listaTecnicos);
+        if (!empty($tecnicosFinales)) {
+            $conflicto = ScheduleConflictService::validarTecnicos(
+                $tecnicosFinales,
+                (string) ($validated['fecha_programada'] ?? $prog->fecha_programada),
+                $validated['hora_inicio'] ?? $prog->hora_inicio,
+                array_key_exists('hora_fin', $validated) ? ($validated['hora_fin'] ?? null) : $prog->hora_fin,
+                ['programacion_servicio' => (int) $prog->id]
+            );
+
+            if ($conflicto) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $conflicto['mensaje'],
+                    'conflicto' => $conflicto,
+                ], 422);
+            }
+        }
 
         if (array_key_exists('id_cliente_planta_area', $validated)) {
             $validated['id_cliente_planta_area'] = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area']);
@@ -685,6 +748,43 @@ class ProgramacionServicioController extends Controller
             $idUsuario = $request->user()?->id;
             $ordenCap = OrdenCapacitacionAuditoria::findOrFail($validated['id_orden_capacitacion']);
             $idServicio = $ordenCap->id_servicio;
+
+            $tecnicosAsignados = $this->normalizeTecnicosIds($validated['id_tecnico_asignado'] ?? null, $validated['tecnicos_ids'] ?? []);
+            if (!empty($tecnicosAsignados)) {
+                $conflictoTecnicos = ScheduleConflictService::validarTecnicos(
+                    $tecnicosAsignados,
+                    $validated['fecha_programada'],
+                    $validated['hora_inicio'] ?? null,
+                    $validated['hora_fin'] ?? null
+                );
+
+                if ($conflictoTecnicos) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => $conflictoTecnicos['mensaje'],
+                        'conflicto' => $conflictoTecnicos,
+                    ], 422);
+                }
+            }
+
+            if (!empty($validated['exponentes_ids'])) {
+                $conflictoExponentes = ScheduleConflictService::validarExponentes(
+                    $validated['exponentes_ids'],
+                    $validated['fecha_programada'],
+                    $validated['hora_inicio'] ?? null,
+                    $validated['hora_fin'] ?? null
+                );
+
+                if ($conflictoExponentes) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => $conflictoExponentes['mensaje'],
+                        'conflicto' => $conflictoExponentes,
+                    ], 422);
+                }
+            }
 
             if (empty($idServicio)) {
                 $idServicio = Servicio::where('estado', 'activo')->value('id');
@@ -1130,6 +1230,16 @@ class ProgramacionServicioController extends Controller
         }
 
         $prog->tecnicos()->sync($syncData);
+    }
+
+    private function normalizeTecnicosIds(?int $principalId, array $tecnicosIds): array
+    {
+        $ids = $tecnicosIds;
+        if (!empty($principalId)) {
+            $ids[] = $principalId;
+        }
+
+        return array_values(array_unique(array_filter(array_map('intval', $ids), fn (int $id) => $id > 0)));
     }
 
     /**

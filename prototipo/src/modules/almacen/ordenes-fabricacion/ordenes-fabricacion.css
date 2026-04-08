@@ -1,0 +1,274 @@
+.of-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.of-grid-full {
+  grid-column: 1 / -1;
+}
+
+.of-form {
+  display: grid;
+  gap: 12px;
+}
+
+.of-section {
+  border: 1px solid #dbe6f0;
+  border-radius: 12px;
+  padding: 14px;
+  background: #f8fbff;
+}
+
+.of-section-tight {
+  padding: 12px;
+}
+
+.of-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.of-section-title {
+  margin: 0 0 10px 0;
+  color: #1f2a37;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.of-grid-header {
+  row-gap: 8px;
+}
+
+.of-detalles-container {
+  display: grid;
+  gap: 8px;
+}
+
+.of-detalle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px 40px;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid #dbe6f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.of-actions-group {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.of-icon-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #334155;
+}
+
+.of-icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.of-icon-btn-blue {
+  color: #2563eb;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.of-icon-btn-amber {
+  color: #d97706;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.of-icon-btn-green {
+  color: #16a34a;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.of-icon-btn-red {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.of-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.of-detalle-row .prov-label {
+  margin-bottom: 4px;
+}
+
+.of-btn-delete-row {
+  height: 38px;
+  align-self: end;
+}
+
+.of-detail-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 10px;
+}
+
+.sp-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+
+.sp-tab {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.sp-tab.active {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.of-detail-tab {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+
+  .sp-tabs {
+    flex-direction: column;
+  }
+
+  .of-actions-group {
+    flex-wrap: wrap;
+  }
+  color: #334155;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.of-detail-tab.active {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.of-tab-panel {
+  display: none;
+}
+
+.of-tab-panel.active {
+  display: block;
+}
+
+.of-insumos-mini-list {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.of-insumos-mini-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.of-stock-ok {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.of-stock-low {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.of-btn-confirmar-salida[disabled] {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.of-detalles-table td,
+.of-detalles-table th {
+  padding: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.of-resumen-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  max-height: 190px;
+  overflow: auto;
+}
+
+.of-resumen-box .muted,
+.of-resumen-box p {
+  margin: 0;
+}
+
+.of-link-btn {
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .of-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .of-section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .of-section-head .prov-btn-secondary {
+    width: 100%;
+  }
+
+  .of-detalle-row {
+    grid-template-columns: 1fr;
+  }
+
+  .of-btn-delete-row {
+    width: 44px;
+    justify-self: end;
+  }
+
+  .of-detail-tabs {
+    flex-direction: column;
+  }
+
+  .of-insumos-mini-list li {
+    flex-direction: column;
+    gap: 2px;
+  }
+}

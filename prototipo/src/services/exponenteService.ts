@@ -12,6 +12,7 @@ export interface Exponente {
   notas: string | null;
   estado: 'Activo' | 'Inactivo';
   presentacion: string | null;
+  id_tecnico_vinculado?: number | null;
 }
 
 export const exponenteService = {

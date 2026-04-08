@@ -38,6 +38,10 @@ export const programacionServicioService = {
 		return apiClient.post<ApiResponse<any>>('/programacion-visita', data);
 	},
 
+	createFabricacion: async (data: Record<string, any>) => {
+		return apiClient.post<ApiResponse<any>>('/programacion-fabricacion', data);
+	},
+
 	update: async (id: number, data: Record<string, any>) => {
 		return apiClient.post<ApiResponse<Programacion>>(`/programacion-servicio/${id}`, { ...data, _method: 'PUT' });
 	},
@@ -108,6 +112,18 @@ export const programacionServicioService = {
 		return apiClient.get<ApiResponse<any>>(`/programacion-visita/${id}`);
 	},
 
+	getAllProgramacionFabricacion: async (filtros?: FiltroProgramacion) => {
+		return apiClient.get<ApiResponse<any[]>>('/programacion-fabricacion', filtros as any);
+	},
+
+	getOrdenesFabricacionDisponibles: async () => {
+		return apiClient.get<ApiResponse<any[]>>('/programacion-fabricacion/ordenes-disponibles');
+	},
+
+	getProgramacionFabricacionById: async (id: number) => {
+		return apiClient.get<ApiResponse<any>>(`/programacion-fabricacion/${id}`);
+	},
+
 	updateProgramacionAsesoria: async (id: number, data: Record<string, any>) => {
 		return apiClient.post<ApiResponse<any>>(`/programacion-asesoria/${id}`, { ...data, _method: 'PUT' });
 	},
@@ -118,6 +134,14 @@ export const programacionServicioService = {
 
 	deleteProgramacionVisita: async (id: number) => {
 		return apiClient.delete<ApiResponse<null>>(`/programacion-visita/${id}`);
+	},
+
+	updateProgramacionFabricacion: async (id: number, data: Record<string, any>) => {
+		return apiClient.post<ApiResponse<any>>(`/programacion-fabricacion/${id}`, { ...data, _method: 'PUT' });
+	},
+
+	deleteProgramacionFabricacion: async (id: number) => {
+		return apiClient.delete<ApiResponse<null>>(`/programacion-fabricacion/${id}`);
 	},
 
 	getAllExponentes: async () => {

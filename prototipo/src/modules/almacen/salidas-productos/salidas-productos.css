@@ -1,0 +1,54 @@
+.sp-subtitle {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.sp-empty,
+.sp-error,
+.sp-loading {
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.sp-error {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.sp-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.sp-info-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.sp-materiales-title {
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 10px;
+}
+
+.sp-materiales-table {
+  margin-bottom: 14px;
+}
+
+.sp-obs-group label {
+  display: block;
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 6px;
+}

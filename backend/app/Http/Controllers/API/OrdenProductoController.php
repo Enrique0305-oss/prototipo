@@ -10,6 +10,7 @@ use App\Models\CotizacionDetalle;
 use App\Models\Multicim;
 use App\Models\Inventario;
 use App\Models\Kardex;
+use App\Models\Producto;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -208,26 +209,6 @@ class OrdenProductoController extends Controller
         try {
             DB::beginTransaction();
 
-            // Validar stock suficiente para cada producto
-            $erroresStock = [];
-            foreach ($validated['detalles'] as $detalle) {
-                $inventario = Inventario::where('id_productos', $detalle['id_producto'])->first();
-                $disponible = $inventario ? $inventario->cantidad_disponible : 0;
-                if ($disponible < $detalle['cantidad']) {
-                    $producto = \App\Models\Producto::find($detalle['id_producto']);
-                    $erroresStock[] = "{$producto->descripcion}: solicitas {$detalle['cantidad']}, disponible {$disponible}";
-                }
-            }
-
-            if (!empty($erroresStock)) {
-                DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Stock insuficiente',
-                    'errors' => $erroresStock,
-                ], 422);
-            }
-
             // Calcular subtotal, IGV y total
             $subtotalCalc = 0;
             foreach ($validated['detalles'] as $detalle) {
@@ -257,8 +238,7 @@ class OrdenProductoController extends Controller
                 'observaciones' => $validated['observaciones'] ?? null,
             ]);
 
-            // Crear detalles + descontar inventario + registrar kardex
-            $idUsuario = $request->user()?->id;
+            // Crear detalles (sin descontar stock automático)
             foreach ($validated['detalles'] as $detalle) {
                 $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
                 
@@ -268,18 +248,6 @@ class OrdenProductoController extends Controller
                     'cantidad' => $detalle['cantidad'],
                     'precio_unitario' => $detalle['precio_unitario'],
                     'subtotal' => $subtotal,
-                ]);
-
-                // Registrar salida en kardex y descontar stock
-                Kardex::registrarMovimiento([
-                    'id_producto' => $detalle['id_producto'],
-                    'tipo_movimiento' => 'Salida',
-                    'cantidad' => $detalle['cantidad'],
-                    'motivo' => 'Orden Producto',
-                    'referencia' => $orden->numero_orden,
-                    'id_referencia' => $orden->id,
-                    'id_usuario' => $idUsuario,
-                    'observacion' => "Salida por {$orden->numero_orden}",
                 ]);
             }
 
@@ -377,44 +345,10 @@ class OrdenProductoController extends Controller
 
             // Si se actualizan detalles
             if (isset($validated['detalles'])) {
-                // 1. Revertir stock de los detalles anteriores (devolver al inventario)
-                $idUsuario = $request->user()?->id;
-                foreach ($orden->detalles as $detalleAnterior) {
-                    Kardex::registrarMovimiento([
-                        'id_producto' => $detalleAnterior->id_producto,
-                        'tipo_movimiento' => 'Entrada',
-                        'cantidad' => $detalleAnterior->cantidad,
-                        'motivo' => 'Ajuste Orden Producto',
-                        'referencia' => $orden->numero_orden,
-                        'id_referencia' => $orden->id,
-                        'id_usuario' => $idUsuario,
-                        'observacion' => "Devolución por edición de {$orden->numero_orden}",
-                    ]);
-                }
-
-                // 2. Validar stock para los nuevos detalles
-                $erroresStock = [];
-                foreach ($validated['detalles'] as $detalle) {
-                    $inventario = Inventario::where('id_productos', $detalle['id_producto'])->first();
-                    $disponible = $inventario ? $inventario->cantidad_disponible : 0;
-                    if ($disponible < $detalle['cantidad']) {
-                        $producto = \App\Models\Producto::find($detalle['id_producto']);
-                        $erroresStock[] = "{$producto->descripcion}: solicitas {$detalle['cantidad']}, disponible {$disponible}";
-                    }
-                }
-
-                if (!empty($erroresStock)) {
-                    DB::rollBack();
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Stock insuficiente para los nuevos detalles',
-                        'errors' => $erroresStock,
-                    ], 422);
-                }
-
+                // Reemplazar detalles, sin tocar stock (se confirma desde Almacén)
                 $orden->detalles()->delete();
 
-                // 3. Crear nuevos detalles + descontar stock
+                // Crear nuevos detalles
                 $subtotalCalc = 0;
                 foreach ($validated['detalles'] as $detalle) {
                     $subtotal = $detalle['cantidad'] * $detalle['precio_unitario'];
@@ -426,17 +360,6 @@ class OrdenProductoController extends Controller
                         'cantidad' => $detalle['cantidad'],
                         'precio_unitario' => $detalle['precio_unitario'],
                         'subtotal' => $subtotal,
-                    ]);
-
-                    Kardex::registrarMovimiento([
-                        'id_producto' => $detalle['id_producto'],
-                        'tipo_movimiento' => 'Salida',
-                        'cantidad' => $detalle['cantidad'],
-                        'motivo' => 'Orden Producto',
-                        'referencia' => $orden->numero_orden,
-                        'id_referencia' => $orden->id,
-                        'id_usuario' => $idUsuario,
-                        'observacion' => "Salida por edición de {$orden->numero_orden}",
                     ]);
                 }
 
@@ -491,21 +414,6 @@ class OrdenProductoController extends Controller
         try {
             DB::beginTransaction();
 
-            // Restaurar stock por cada detalle antes de eliminar
-            $idUsuario = request()->user()?->id;
-            foreach ($orden->detalles as $detalle) {
-                Kardex::registrarMovimiento([
-                    'id_producto' => $detalle->id_producto,
-                    'tipo_movimiento' => 'Entrada',
-                    'cantidad' => $detalle->cantidad,
-                    'motivo' => 'Anulación Orden Producto',
-                    'referencia' => $orden->numero_orden,
-                    'id_referencia' => $orden->id,
-                    'id_usuario' => $idUsuario,
-                    'observacion' => "Devolución por anulación de {$orden->numero_orden}",
-                ]);
-            }
-
             // Eliminar detalles
             $orden->detalles()->delete();
             
@@ -549,6 +457,186 @@ class OrdenProductoController extends Controller
             'success' => true,
             'data' => $stats
         ]);
+    }
+
+    /**
+     * Almacén - Salidas de productos pendientes por confirmar
+     */
+    public function salidasPendientes(Request $request): JsonResponse
+    {
+        $query = OrdenProducto::with([
+            'cliente',
+            'emisor',
+            'detalles.producto.inventario',
+        ])
+        ->whereDoesntHave('salidasKardex')
+        ->orderBy('fecha_envio', 'desc');
+
+        if ($request->filled('fecha_desde')) {
+            $query->whereDate('fecha_envio', '>=', $request->fecha_desde);
+        }
+        if ($request->filled('fecha_hasta')) {
+            $query->whereDate('fecha_envio', '<=', $request->fecha_hasta);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $query->get(),
+        ]);
+    }
+
+    /**
+     * Almacén - Historial de salidas de órdenes de producto confirmadas
+     */
+    public function salidasHistorial(Request $request): JsonResponse
+    {
+        $query = OrdenProducto::with([
+            'cliente',
+            'emisor',
+            'detalles.producto',
+            'salidasKardex',
+        ])
+        ->whereHas('salidasKardex')
+        ->orderBy('fecha_envio', 'desc');
+
+        if ($request->filled('fecha_desde')) {
+            $query->whereDate('fecha_envio', '>=', $request->fecha_desde);
+        }
+        if ($request->filled('fecha_hasta')) {
+            $query->whereDate('fecha_envio', '<=', $request->fecha_hasta);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $query->get(),
+        ]);
+    }
+
+    /**
+     * Almacén - Detalle de orden de producto para confirmar salida
+     */
+    public function salidaDetalle(int $id): JsonResponse
+    {
+        $orden = OrdenProducto::with([
+            'cliente',
+            'emisor',
+            'detalles.producto.inventario',
+            'salidasKardex',
+        ])->find($id);
+
+        if (!$orden) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Orden de producto no encontrada',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $orden,
+        ]);
+    }
+
+    /**
+     * Almacén - Confirmar salida de productos de una orden de producto
+     * Solo registra SALIDA en Kardex (sin devoluciones automáticas)
+     */
+    public function confirmarSalida(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'id_orden_producto' => 'required|integer|exists:orden_producto,id',
+            'detalles' => 'required|array|min:1',
+            'detalles.*.id_producto' => 'required|integer|exists:productos,id',
+            'detalles.*.cantidad_entregada' => 'required|integer|min:1',
+            'observacion' => 'nullable|string|max:500',
+        ]);
+
+        $idOrden = (int) $validated['id_orden_producto'];
+        $detallesSalida = $validated['detalles'];
+        $observacion = $validated['observacion'] ?? '';
+        $idUsuario = $request->user()?->id;
+
+        DB::beginTransaction();
+        try {
+            $orden = OrdenProducto::with('detalles')->findOrFail($idOrden);
+
+            if ($orden->salidasKardex()->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La salida de esta orden ya fue confirmada',
+                ], 422);
+            }
+
+            $detallesOrden = $orden->detalles->keyBy('id_producto');
+            if ($detallesOrden->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La orden no tiene productos para entregar',
+                ], 422);
+            }
+
+            foreach ($detallesSalida as $item) {
+                $idProducto = (int) $item['id_producto'];
+                $cantidadEntregada = (int) $item['cantidad_entregada'];
+
+                $detalleOrden = $detallesOrden->get($idProducto);
+                if (!$detalleOrden) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "El producto #{$idProducto} no pertenece a la orden",
+                    ], 422);
+                }
+
+                if ($cantidadEntregada > (int) $detalleOrden->cantidad) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "La cantidad entregada del producto #{$idProducto} excede la cantidad de la orden",
+                    ], 422);
+                }
+
+                $inventario = Inventario::where('id_productos', $idProducto)->first();
+                $disponible = $inventario ? (int) $inventario->cantidad_disponible : 0;
+                if ($disponible < $cantidadEntregada) {
+                    $producto = Producto::find($idProducto);
+                    $nombre = $producto?->descripcion ?? "#{$idProducto}";
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Stock insuficiente para {$nombre}. Disponible {$disponible}, solicitado {$cantidadEntregada}",
+                    ], 422);
+                }
+            }
+
+            foreach ($detallesSalida as $item) {
+                $idProducto = (int) $item['id_producto'];
+                $cantidadEntregada = (int) $item['cantidad_entregada'];
+
+                Kardex::registrarMovimiento([
+                    'id_producto' => $idProducto,
+                    'tipo_movimiento' => 'Salida',
+                    'cantidad' => $cantidadEntregada,
+                    'motivo' => 'Orden Producto',
+                    'referencia' => $orden->numero_orden,
+                    'id_referencia' => $orden->id,
+                    'id_usuario' => $idUsuario,
+                    'observacion' => trim("Salida confirmada por almacén. {$observacion}"),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Salida confirmada correctamente y registrada en Kardex',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al confirmar salida de productos',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

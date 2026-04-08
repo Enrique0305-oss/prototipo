@@ -952,7 +952,7 @@
                         <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
                         la actividad</li>
                         <li>El presupuesto se basa en la metodología actualmente vigente. Sin embargo, si se determina que es 
-                        necesario evaluar otras opciones de eliminación mediante an+alisis de tendencia, se aplcar+a un recargo adicional correspondiente</li>
+                        necesario evaluar otras opciones de eliminación mediante análisis de tendencia, se aplcará un recargo adicional correspondiente</li>
                         <li>Vigencia de la oferta: 15 días</li>
                     @else
                         <li>Mensualmente se evalúan los comportamientos de las plagas objeto del control con el propósito de determinar la efectividad de las actividades y realizar las mejoras que correspondan para garantizar mantener niveles mínimos de presencia de plagas.</li>

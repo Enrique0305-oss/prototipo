@@ -27,6 +27,7 @@ export const tecnicoService = {
     correo?: string | null;
     carga_maxima_semanal: number;
     autorizado_conducir: boolean;
+    id_exponente_vinculado?: number | null;
   }) => {
     return apiClient.post<ApiResponse<Tecnico>>('/tecnicos', data);
   },

@@ -3,16 +3,22 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\Exponente;
 use App\Models\Tecnico;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class TecnicoController extends Controller
 {
 
     public function index(Request $request): JsonResponse
     {
-        $query = Tecnico::query()->withCount('programaciones');
+        $query = Tecnico::query()
+            ->withCount('programaciones')
+            ->with(['exponenteVinculado:id,nombre,apellidos']);
 
         // Filtro por estado (default: solo activos)
         $estado = $request->get('estado', 'Activo');
@@ -72,7 +78,8 @@ class TecnicoController extends Controller
             'correo' => 'nullable|email|max:100',
             'especialidad' => 'nullable|string|max:100',
             'autorizado_conducir' => 'nullable|boolean',
-            'carga_maxima_semanal' => 'nullable|integer|min:1|max:168'
+            'carga_maxima_semanal' => 'nullable|integer|min:1|max:168',
+            'id_exponente_vinculado' => 'nullable|integer|exists:exponentes,id|unique:tecnicos,id_exponente_vinculado',
         ], [
             'nombre.required' => 'El nombre es obligatorio',
             'apellidos.required' => 'Los apellidos son obligatorios',
@@ -84,17 +91,28 @@ class TecnicoController extends Controller
             'carga_maxima_semanal.max' => 'La carga semanal no puede exceder 168 horas'
         ]);
 
-        $tecnico = Tecnico::create([
-            'nombre' => $request->nombre,
-            'apellidos' => $request->apellidos,
-            'dni' => $request->dni,
-            'celular' => $request->celular,
-            'correo' => $request->correo,
-            'especialidad' => $request->especialidad,
-            'autorizado_conducir' => $request->autorizado_conducir ?? false,
-            'carga_maxima_semanal' => $request->carga_maxima_semanal ?? 40,
-            'estado' => 'Activo'
-        ]);
+        $tecnico = DB::transaction(function () use ($request) {
+            $nuevo = Tecnico::create([
+                'nombre' => $request->nombre,
+                'apellidos' => $request->apellidos,
+                'dni' => $request->dni,
+                'celular' => $request->celular,
+                'correo' => $request->correo,
+                'especialidad' => $request->especialidad,
+                'autorizado_conducir' => $request->autorizado_conducir ?? false,
+                'carga_maxima_semanal' => $request->carga_maxima_semanal ?? 40,
+                'estado' => 'Activo',
+                'id_exponente_vinculado' => $request->input('id_exponente_vinculado') ?: null,
+            ]);
+
+            if ($request->filled('id_exponente_vinculado')) {
+                $this->syncVinculoExponente($nuevo, (int) $nuevo->id_exponente_vinculado);
+            }
+
+            return $nuevo;
+        });
+
+        $tecnico->load(['exponenteVinculado:id,nombre,apellidos']);
 
         return response()->json([
             'success' => true,
@@ -105,7 +123,9 @@ class TecnicoController extends Controller
 
     public function show($id): JsonResponse
     {
-        $tecnico = Tecnico::withCount('programaciones')->find($id);
+        $tecnico = Tecnico::withCount('programaciones')
+            ->with(['exponenteVinculado:id,nombre,apellidos'])
+            ->find($id);
 
         if (!$tecnico) {
             return response()->json([
@@ -139,7 +159,14 @@ class TecnicoController extends Controller
             'correo' => 'sometimes|nullable|email|max:100',
             'especialidad' => 'sometimes|nullable|string|max:100',
             'autorizado_conducir' => 'sometimes|boolean',
-            'carga_maxima_semanal' => 'sometimes|integer|min:1|max:168'
+            'carga_maxima_semanal' => 'sometimes|integer|min:1|max:168',
+            'id_exponente_vinculado' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                'exists:exponentes,id',
+                Rule::unique('tecnicos', 'id_exponente_vinculado')->ignore($id),
+            ],
         ], [
             'dni.size' => 'El DNI debe tener exactamente 8 dígitos',
             'dni.unique' => 'Ya existe otro técnico con este DNI',
@@ -150,15 +177,24 @@ class TecnicoController extends Controller
 
         // Actualizar solo los campos enviados
         $camposActualizables = ['nombre', 'apellidos', 'dni', 'celular', 'correo', 
-                                'especialidad', 'autorizado_conducir', 'carga_maxima_semanal'];
+                                'especialidad', 'autorizado_conducir', 'carga_maxima_semanal', 'id_exponente_vinculado'];
         
-        foreach ($camposActualizables as $campo) {
-            if ($request->has($campo)) {
-                $tecnico->$campo = $request->$campo;
+        DB::transaction(function () use ($request, $camposActualizables, $tecnico) {
+            foreach ($camposActualizables as $campo) {
+                if ($request->has($campo)) {
+                    $tecnico->$campo = $request->$campo;
+                }
             }
-        }
 
-        $tecnico->save();
+            $tecnico->save();
+
+            if ($request->has('id_exponente_vinculado')) {
+                $nuevoId = $request->input('id_exponente_vinculado');
+                $this->syncVinculoExponente($tecnico, $nuevoId ? (int) $nuevoId : null);
+            }
+        });
+
+        $tecnico->load(['exponenteVinculado:id,nombre,apellidos']);
 
         return response()->json([
             'success' => true,
@@ -317,5 +353,49 @@ class TecnicoController extends Controller
                 'top_tecnicos_mas_asignados' => $topTecnicos
             ]
         ]);
+    }
+
+    private function syncVinculoExponente(Tecnico $tecnico, ?int $nuevoExponenteId): void
+    {
+        $tecnico->refresh();
+        $actualExponenteId = $tecnico->id_exponente_vinculado ? (int) $tecnico->id_exponente_vinculado : null;
+
+        if ($actualExponenteId && $actualExponenteId !== $nuevoExponenteId) {
+            Exponente::query()
+                ->where('id', $actualExponenteId)
+                ->where('id_tecnico_vinculado', $tecnico->id)
+                ->update(['id_tecnico_vinculado' => null]);
+
+            $tecnico->id_exponente_vinculado = null;
+            $tecnico->save();
+        }
+
+        if (!$nuevoExponenteId) {
+            return;
+        }
+
+        $exponente = Exponente::findOrFail($nuevoExponenteId);
+        $tecnicoLigado = $exponente->id_tecnico_vinculado ? (int) $exponente->id_tecnico_vinculado : null;
+
+        if ($tecnicoLigado && $tecnicoLigado !== (int) $tecnico->id) {
+            throw ValidationException::withMessages([
+                'id_exponente_vinculado' => 'El exponente seleccionado ya está vinculado a otro técnico.',
+            ]);
+        }
+
+        Tecnico::query()
+            ->where('id_exponente_vinculado', $nuevoExponenteId)
+            ->where('id', '!=', $tecnico->id)
+            ->update(['id_exponente_vinculado' => null]);
+
+        if ((int) ($tecnico->id_exponente_vinculado ?? 0) !== $nuevoExponenteId) {
+            $tecnico->id_exponente_vinculado = $nuevoExponenteId;
+            $tecnico->save();
+        }
+
+        if ((int) ($exponente->id_tecnico_vinculado ?? 0) !== (int) $tecnico->id) {
+            $exponente->id_tecnico_vinculado = (int) $tecnico->id;
+            $exponente->save();
+        }
     }
 }

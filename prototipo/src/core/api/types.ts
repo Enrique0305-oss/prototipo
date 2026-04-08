@@ -191,6 +191,8 @@ export interface Producto {
   ingre_activo?: string;
   plag_objetivo?: string;
   presentacion?: string;
+  es_fabricable?: boolean;
+  receta?: ProductoRecetaDetalle[];
   estado: 'Activo' | 'Inactivo';
   imagen?: string | null;
   imagen_url?: string | null;
@@ -200,6 +202,22 @@ export interface Producto {
     stock_seguridad: number;
     cantidad_total: number;
   };
+}
+
+export interface ProductoRecetaDetalle {
+  id?: number;
+  id_producto_insumo: number;
+  cantidad: number;
+  unidad?: string | null;
+  observacion?: string | null;
+  insumo?: {
+    id: number;
+    descripcion: string;
+    unidad?: string;
+    inventario?: {
+      cantidad_disponible: number;
+    } | null;
+  } | null;
 }
 
 export interface ProductoFilters extends FilterParams {
@@ -392,6 +410,7 @@ export interface Tecnico {
   email?: string;
   carga_maxima_semanal: number; // en horas
   autorizado_conducir: boolean;
+  id_exponente_vinculado?: number | null;
   estado: 'Activo' | 'Inactivo' | 'Licencia';
   created_at?: string;
   updated_at?: string;

@@ -3,40 +3,38 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\ClientePlanta;
-use App\Models\ProgramacionVisita;
+use App\Models\OrdenFabricacion;
+use App\Models\ProgramacionFabricacion;
 use App\Services\ScheduleConflictService;
 use Illuminate\Http\Request;
 
-class ProgramacionVisitaController extends Controller
+class ProgramacionFabricacionController extends Controller
 {
-    private function normalizeIds(mixed $value): array
+    private function buildRecetaFromOrden(OrdenFabricacion $orden): array
     {
-        if ($value === null || $value === '') {
-            return [];
-        }
+        return $orden->detalles->map(function ($detalle) {
+            return [
+                'id' => $detalle->id_producto_final,
+                'descripcion' => $detalle->producto?->descripcion,
+                'cantidad_a_fabricar' => (float) $detalle->cantidad,
+                'receta' => $detalle->receta_snapshot ?? [],
+                'insumos_requeridos' => $detalle->insumos_requeridos ?? [],
+            ];
+        })->values()->all();
+    }
 
-        if (is_string($value)) {
-            $decoded = json_decode($value, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $value = $decoded;
-            }
-        }
-
-        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
-            return [(int) $value];
-        }
-
-        if (!is_array($value)) {
-            return [];
-        }
-
-        return array_values(array_unique(array_filter(array_map('intval', $value), fn (int $id) => $id > 0)));
+    private function extractProductosFromOrden(OrdenFabricacion $orden): array
+    {
+        return $orden->detalles
+            ->pluck('id_producto_final')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     public function index(Request $request)
     {
-        $query = ProgramacionVisita::with(['cliente', 'tecnico', 'vehiculo', 'planta']);
+        $query = ProgramacionFabricacion::with(['tecnico', 'ordenFabricacion.detalles.producto']);
 
         if ($request->filled('fecha')) {
             $query->whereDate('fecha_programada', $request->fecha);
@@ -51,10 +49,6 @@ class ProgramacionVisitaController extends Controller
 
         if ($request->filled('fecha_inicio') && $request->filled('fecha_fin')) {
             $query->whereBetween('fecha_programada', [$request->fecha_inicio, $request->fecha_fin]);
-        }
-
-        if ($request->filled('id_cliente')) {
-            $query->where('id_cliente', $request->id_cliente);
         }
 
         if ($request->filled('id_tecnico')) {
@@ -77,8 +71,7 @@ class ProgramacionVisitaController extends Controller
 
     public function show($id)
     {
-        $programacion = ProgramacionVisita::with(['cliente', 'tecnico', 'vehiculo', 'planta'])
-            ->findOrFail($id);
+        $programacion = ProgramacionFabricacion::with(['tecnico', 'ordenFabricacion.detalles.producto'])->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -89,25 +82,29 @@ class ProgramacionVisitaController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'id_cliente' => 'required|integer|exists:cliente,id',
-            'tipo_visita' => 'required|string|max:120',
+            'id_orden_fabricacion' => 'required|integer|exists:orden_fabricacion,id',
             'id_tecnico_asignado' => 'nullable|integer|exists:tecnicos,id',
             'tecnicos_ids' => 'nullable|array',
             'tecnicos_ids.*' => 'integer|exists:tecnicos,id',
             'id_supervisor' => 'nullable|array',
             'id_supervisor.*' => 'integer|exists:personal,id',
-            'id_vehiculo' => 'nullable|integer|exists:vehiculos,id',
-            'id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
-            'id_cliente_planta_area' => 'nullable|array',
-            'id_cliente_planta_area.*' => 'integer|exists:cliente_planta_area,id',
             'fecha_programada' => 'required|date',
             'hora_inicio' => 'required',
             'hora_fin' => 'nullable',
             'observaciones' => 'nullable|string',
         ]);
 
-        $idUsuario = $request->user()?->id;
-        $planta = null;
+        $orden = OrdenFabricacion::with(['detalles.producto'])
+            ->findOrFail((int) $validated['id_orden_fabricacion']);
+
+        if (in_array($orden->estado, ['Anulada', 'Fabricada'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La orden de fabricacion seleccionada no puede programarse por su estado actual.',
+            ], 422);
+        }
+
+        $productoIds = $this->extractProductosFromOrden($orden);
 
         $tecnicosAsignados = $this->normalizeIds(array_merge(
             [$validated['id_tecnico_asignado'] ?? null],
@@ -131,59 +128,71 @@ class ProgramacionVisitaController extends Controller
             }
         }
 
-        if (!empty($validated['id_cliente_planta'])) {
-            $planta = ClientePlanta::find($validated['id_cliente_planta']);
-        }
-
-        $programacion = ProgramacionVisita::create([
-            'id_cliente' => $validated['id_cliente'],
-            'tipo_visita' => $validated['tipo_visita'],
+        $programacion = ProgramacionFabricacion::create([
+            'id_orden_fabricacion' => $orden->id,
+            'motivo_fabricacion' => $orden->motivo ?: ('Orden ' . $orden->codigo),
+            'productos_fabricacion' => $productoIds,
+            'receta_fabricacion' => $this->buildRecetaFromOrden($orden),
             'id_tecnico_asignado' => $validated['id_tecnico_asignado'] ?? null,
             'tecnicos_ids' => !empty($validated['tecnicos_ids']) ? array_values(array_unique(array_map('intval', $validated['tecnicos_ids']))) : null,
             'id_supervisor' => !empty($validated['id_supervisor']) ? array_values(array_unique(array_map('intval', $validated['id_supervisor']))) : null,
-            'id_vehiculo' => $validated['id_vehiculo'] ?? null,
-            'id_cliente_planta' => $validated['id_cliente_planta'] ?? null,
-            'id_cliente_planta_area' => !empty($validated['id_cliente_planta_area']) ? array_values(array_unique(array_map('intval', $validated['id_cliente_planta_area']))) : null,
             'fecha_programada' => $validated['fecha_programada'],
             'hora_inicio' => $validated['hora_inicio'],
             'hora_fin' => $validated['hora_fin'] ?? null,
-            'local_sede' => $planta?->nombre,
-            'direccion_completa' => $planta?->direccion,
             'estado_ejecucion' => 'Programado',
             'observaciones' => $validated['observaciones'] ?? null,
-            'creado_por' => $idUsuario,
+            'creado_por' => $request->user()?->id,
         ]);
 
-        $programacion->load(['cliente', 'tecnico', 'vehiculo', 'planta']);
+        if ($orden->estado === 'Confirmada') {
+            $orden->update(['estado' => 'Programada']);
+        }
+
+        $programacion->load(['tecnico', 'ordenFabricacion.detalles.producto']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Programación de visita creada exitosamente',
+            'message' => 'Programación de fabricación creada exitosamente',
             'data' => $programacion,
         ], 201);
     }
 
     public function update(Request $request, $id)
     {
-        $programacion = ProgramacionVisita::findOrFail($id);
+        $programacion = ProgramacionFabricacion::findOrFail($id);
 
         $validated = $request->validate([
-            'tipo_visita' => 'sometimes|required|string|max:120',
+            'id_orden_fabricacion' => 'sometimes|required|integer|exists:orden_fabricacion,id',
+            'motivo_fabricacion' => 'sometimes|required|string|max:255',
+            'productos_fabricacion' => 'sometimes|array|min:1',
+            'productos_fabricacion.*' => 'integer|exists:productos,id',
             'id_tecnico_asignado' => 'sometimes|nullable|integer|exists:tecnicos,id',
             'tecnicos_ids' => 'nullable|array',
             'tecnicos_ids.*' => 'integer|exists:tecnicos,id',
             'id_supervisor' => 'nullable|array',
             'id_supervisor.*' => 'integer|exists:personal,id',
-            'id_vehiculo' => 'nullable|integer|exists:vehiculos,id',
-            'id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
-            'id_cliente_planta_area' => 'nullable|array',
-            'id_cliente_planta_area.*' => 'integer|exists:cliente_planta_area,id',
             'fecha_programada' => 'sometimes|required|date',
             'hora_inicio' => 'sometimes|required',
             'hora_fin' => 'nullable',
             'estado_ejecucion' => 'nullable|in:Programado,Confirmado,En Camino,En Ejecución,Realizado,Reprogramado,Cancelado',
             'observaciones' => 'nullable|string',
         ]);
+
+        if (array_key_exists('id_orden_fabricacion', $validated)) {
+            $orden = OrdenFabricacion::with(['detalles.producto'])
+                ->findOrFail((int) $validated['id_orden_fabricacion']);
+
+            if (in_array($orden->estado, ['Anulada', 'Fabricada'], true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La orden de fabricacion seleccionada no puede usarse en programacion.',
+                ], 422);
+            }
+
+            $validated['productos_fabricacion'] = $this->extractProductosFromOrden($orden);
+            $validated['receta_fabricacion'] = $this->buildRecetaFromOrden($orden);
+            $validated['motivo_fabricacion'] = $orden->motivo ?: ('Orden ' . $orden->codigo);
+        }
 
         if (array_key_exists('tecnicos_ids', $validated)) {
             $validated['tecnicos_ids'] = !empty($validated['tecnicos_ids'])
@@ -197,18 +206,8 @@ class ProgramacionVisitaController extends Controller
                 : null;
         }
 
-        if (array_key_exists('id_cliente_planta_area', $validated)) {
-            $validated['id_cliente_planta_area'] = !empty($validated['id_cliente_planta_area'])
-                ? array_values(array_unique(array_map('intval', $validated['id_cliente_planta_area'])))
-                : null;
-        }
-
-        if (array_key_exists('id_cliente_planta', $validated)) {
-            $planta = !empty($validated['id_cliente_planta'])
-                ? ClientePlanta::find($validated['id_cliente_planta'])
-                : null;
-            $validated['local_sede'] = $planta?->nombre;
-            $validated['direccion_completa'] = $planta?->direccion;
+        if (array_key_exists('productos_fabricacion', $validated) && !array_key_exists('id_orden_fabricacion', $validated)) {
+            $validated['productos_fabricacion'] = array_values(array_unique(array_map('intval', $validated['productos_fabricacion'] ?? [])));
         }
 
         $tecnicosFinales = $this->normalizeIds(array_merge(
@@ -222,7 +221,7 @@ class ProgramacionVisitaController extends Controller
                 (string) ($validated['fecha_programada'] ?? $programacion->fecha_programada),
                 $validated['hora_inicio'] ?? $programacion->hora_inicio,
                 array_key_exists('hora_fin', $validated) ? ($validated['hora_fin'] ?? null) : $programacion->hora_fin,
-                ['programacion_visita' => (int) $programacion->id]
+                ['programacion_fabricacion' => (int) $programacion->id]
             );
 
             if ($conflicto) {
@@ -235,24 +234,42 @@ class ProgramacionVisitaController extends Controller
         }
 
         $programacion->update($validated);
-        $programacion->load(['cliente', 'tecnico', 'vehiculo', 'planta']);
+        $programacion->load(['tecnico', 'ordenFabricacion.detalles.producto']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Programación de visita actualizada exitosamente',
+            'message' => 'Programación de fabricación actualizada exitosamente',
             'data' => $programacion,
         ]);
     }
 
     public function destroy($id)
     {
-        $programacion = ProgramacionVisita::findOrFail($id);
+        $programacion = ProgramacionFabricacion::findOrFail($id);
+        $idOrden = $programacion->id_orden_fabricacion;
         $programacion->delete();
+
+        if ($idOrden) {
+            $orden = OrdenFabricacion::find($idOrden);
+            if ($orden && $orden->estado === 'Programada') {
+                $tieneProgramacionesActivas = ProgramacionFabricacion::query()
+                    ->where('id_orden_fabricacion', $idOrden)
+                    ->where('estado_ejecucion', '!=', 'Cancelado')
+                    ->exists();
+                if (!$tieneProgramacionesActivas) {
+                    $orden->update(['estado' => 'Confirmada']);
+                }
+            }
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Programación de visita eliminada exitosamente',
+            'message' => 'Programación de fabricación eliminada exitosamente',
         ]);
     }
 
+    private function normalizeIds(array $ids): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', $ids), fn (int $id) => $id > 0)));
+    }
 }

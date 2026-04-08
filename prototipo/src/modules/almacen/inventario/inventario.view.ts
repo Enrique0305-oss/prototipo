@@ -3,7 +3,7 @@ import { categoriaService } from '../../../services/categoriaService';
 import { mostrarToast } from '../../../shared/toast';
 import { kardexService, type KardexMovimiento } from '../../../services/kardexService';
 import { inventarioAjusteService, type InventarioAjuste } from '../../../services/inventarioAjusteService';
-import type { Producto, EstadisticasProductos, Categoria } from '../../../core/api/types';
+import type { Producto, EstadisticasProductos, Categoria, ProductoRecetaDetalle } from '../../../core/api/types';
 
 // Estado global para el módulo de inventario
 let productosData: Producto[] = [];
@@ -14,6 +14,17 @@ let currentFilters = {
   estado: '',
   id_categoria: null as number | null,
 };
+let recetaProductosData: Producto[] = [];
+
+type RecetaDraftItem = {
+  id_producto_insumo: number | null;
+  cantidad: number;
+  unidad: string;
+  observacion: string;
+};
+
+let recetaDraftNuevo: RecetaDraftItem[] = [];
+let recetaDraftEditar: RecetaDraftItem[] = [];
 
 const UNIDAD_OPTIONS = [
   'Mililitros',
@@ -1644,6 +1655,19 @@ function renderModalNuevoProducto(): string {
               <input type="text" id="producto-presentacion" name="presentacion"
                      placeholder="Ej: 250ml" class="form-input">
             </div>
+
+            <div class="form-group" style="grid-column: 1 / -1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #f8fafc;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <label style="display:flex; align-items:center; gap:8px; margin:0; font-weight:600; color:#334155;">
+                  <input type="checkbox" id="producto-es-fabricable" name="es_fabricable">
+                  Este producto se fabrica con productos de almacén
+                </label>
+                <button type="button" id="btn-configurar-receta-nuevo" class="btn-secondary" disabled>
+                  Configurar receta
+                </button>
+              </div>
+              <div id="nuevo-receta-resumen" style="margin-top:8px; color:#64748b; font-size:12px;">Sin receta configurada</div>
+            </div>
           </div>
 
           <!-- Campo de imagen -->
@@ -1702,7 +1726,244 @@ function renderizarFiltroCategorias() {
   select.innerHTML = `<option value="">Todas las categorías</option>${optionsHTML}`;
 }
 
+function getRecetaDraft(contexto: 'nuevo' | 'editar'): RecetaDraftItem[] {
+  return contexto === 'nuevo' ? recetaDraftNuevo : recetaDraftEditar;
+}
+
+function setRecetaDraft(contexto: 'nuevo' | 'editar', receta: RecetaDraftItem[]) {
+  if (contexto === 'nuevo') {
+    recetaDraftNuevo = receta;
+  } else {
+    recetaDraftEditar = receta;
+  }
+}
+
+function actualizarResumenReceta(contexto: 'nuevo' | 'editar') {
+  const resumenId = contexto === 'nuevo' ? 'nuevo-receta-resumen' : 'edit-receta-resumen';
+  const btnId = contexto === 'nuevo' ? 'btn-configurar-receta-nuevo' : 'btn-configurar-receta-edit';
+  const checkId = contexto === 'nuevo' ? 'producto-es-fabricable' : 'edit-es-fabricable';
+
+  const resumen = document.getElementById(resumenId);
+  const btn = document.getElementById(btnId) as HTMLButtonElement;
+  const check = document.getElementById(checkId) as HTMLInputElement;
+  const receta = getRecetaDraft(contexto);
+
+  if (resumen) {
+    resumen.textContent = receta.length
+      ? `Receta configurada con ${receta.length} producto(s)`
+      : 'Sin receta configurada';
+  }
+
+  if (btn) {
+    btn.disabled = !check?.checked;
+  }
+}
+
+async function asegurarProductosParaReceta() {
+  try {
+    const response = await productoService.getAll({ estado: 'all' as any });
+    if (response.success && response.data) {
+      recetaProductosData = response.data;
+    }
+  } catch (error) {
+    console.error('No se pudo cargar productos para receta:', error);
+  }
+}
+
+async function abrirModalReceta(contexto: 'nuevo' | 'editar', idProductoFinal?: number) {
+  await asegurarProductosParaReceta();
+
+  const modalId = 'modal-receta-producto';
+  const modalPrevio = document.getElementById(modalId);
+  if (modalPrevio) modalPrevio.remove();
+
+  const html = `
+    <div id="${modalId}" class="modal-overlay" style="display:flex; padding:24px; box-sizing:border-box;">
+      <div class="modal-container" style="max-width: 980px; width: min(980px, 100%); border-radius:18px; overflow:hidden; box-shadow:0 24px 60px rgba(15,23,42,.18);">
+        <div class="modal-header" style="padding:24px 28px; border-bottom:1px solid #e2e8f0; display:flex; align-items:flex-start; justify-content:space-between; gap:16px;">
+          <div>
+          <h2>Configurar receta del producto</h2>
+          <p style="margin:8px 0 0; color:#64748b; font-size:13px; line-height:1.4; max-width: 640px;">Define los productos y cantidades requeridas para fabricar una unidad del producto. Cada fila corresponde a un componente de la receta.</p>
+          </div>
+          <button class="modal-close" id="btn-cerrar-modal-receta" style="flex:0 0 auto;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="padding:24px 28px; display:flex; flex-direction:column; gap:16px; background:#f8fafc;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px;">
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <strong style="font-size:14px; color:#1e293b;">Receta de fabricación</strong>
+              <span style="color:#64748b; font-size:12px;">Agrega productos de almacén. Puedes editar cantidades y observaciones por fila.</span>
+            </div>
+            <button type="button" class="btn-secondary" id="btn-agregar-fila-receta" style="white-space:nowrap;">
+              + Agregar producto
+            </button>
+          </div>
+          <div class="table-container" style="max-height: 420px; overflow:auto; background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:12px;">
+            <table class="op-table" style="min-width: 880px; margin:0;">
+              <thead>
+                <tr>
+                  <th style="width:38%;">Producto</th>
+                  <th style="width:17%;">Cantidad</th>
+                  <th style="width:17%;">Unidad</th>
+                  <th style="width:20%;">Observación</th>
+                  <th style="width:8%;">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="receta-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer" style="display:flex; gap:12px; justify-content:flex-end; padding:20px 28px 24px; border-top:1px solid #e2e8f0; background:#fff;">
+          <button type="button" class="btn-secondary" id="btn-cancelar-modal-receta">Cancelar</button>
+          <button type="button" class="btn-primary" id="btn-guardar-modal-receta">Guardar receta</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  const modal = document.getElementById(modalId)!;
+
+  const renderFilas = () => {
+    const body = document.getElementById('receta-body');
+    if (!body) return;
+
+    const receta = getRecetaDraft(contexto);
+    const insumos = recetaProductosData.filter((p) => p.id !== idProductoFinal);
+
+    if (!receta.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align:center; color:#94a3b8; padding:28px 18px;">Aún no agregaste productos.</td>
+        </tr>
+      `;
+      return;
+    }
+
+    body.innerHTML = receta.map((item, index) => {
+      const options = insumos.map((p) => {
+        const selected = item.id_producto_insumo === p.id ? 'selected' : '';
+        return `<option value="${p.id}" ${selected}>${p.descripcion}</option>`;
+      }).join('');
+
+      return `
+        <tr>
+          <td style="padding:12px; vertical-align:top;">
+            <select class="form-input receta-insumo" data-index="${index}" style="min-width:260px;">
+              <option value="">Seleccionar producto</option>
+              ${options}
+            </select>
+          </td>
+          <td style="padding:12px; vertical-align:top;">
+            <input type="number" class="form-input receta-cantidad" data-index="${index}" min="0.001" step="0.001" value="${item.cantidad || ''}" style="min-width:120px;">
+          </td>
+          <td style="padding:12px; vertical-align:top;">
+            <select class="form-input receta-unidad" data-index="${index}" style="min-width:150px;">
+              <option value="">Unidad</option>
+              ${renderUnidadOptions(item.unidad || '')}
+            </select>
+          </td>
+          <td style="padding:12px; vertical-align:top;">
+            <input type="text" class="form-input receta-observacion" data-index="${index}" value="${item.observacion || ''}" placeholder="Opcional" style="min-width:200px;">
+          </td>
+          <td style="padding:12px; vertical-align:top; text-align:center;">
+            <button type="button" class="btn-secondary receta-eliminar" data-index="${index}" style="padding:6px 10px; min-width:40px;">X</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    body.querySelectorAll('.receta-insumo').forEach((el) => {
+      el.addEventListener('change', (e) => {
+        const idx = Number((e.target as HTMLElement).getAttribute('data-index'));
+        receta[idx].id_producto_insumo = Number((e.target as HTMLSelectElement).value || 0) || null;
+        setRecetaDraft(contexto, [...receta]);
+      });
+    });
+
+    body.querySelectorAll('.receta-cantidad').forEach((el) => {
+      el.addEventListener('input', (e) => {
+        const idx = Number((e.target as HTMLElement).getAttribute('data-index'));
+        receta[idx].cantidad = Number((e.target as HTMLInputElement).value || 0);
+        setRecetaDraft(contexto, [...receta]);
+      });
+    });
+
+    body.querySelectorAll('.receta-unidad').forEach((el) => {
+      el.addEventListener('change', (e) => {
+        const idx = Number((e.target as HTMLElement).getAttribute('data-index'));
+        receta[idx].unidad = (e.target as HTMLSelectElement).value || '';
+        setRecetaDraft(contexto, [...receta]);
+      });
+    });
+
+    body.querySelectorAll('.receta-observacion').forEach((el) => {
+      el.addEventListener('input', (e) => {
+        const idx = Number((e.target as HTMLElement).getAttribute('data-index'));
+        receta[idx].observacion = (e.target as HTMLInputElement).value || '';
+        setRecetaDraft(contexto, [...receta]);
+      });
+    });
+
+    body.querySelectorAll('.receta-eliminar').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        const idx = Number((e.target as HTMLElement).getAttribute('data-index'));
+        receta.splice(idx, 1);
+        setRecetaDraft(contexto, [...receta]);
+        renderFilas();
+      });
+    });
+  };
+
+  renderFilas();
+
+  document.getElementById('btn-agregar-fila-receta')?.addEventListener('click', () => {
+    const receta = getRecetaDraft(contexto);
+    receta.push({
+      id_producto_insumo: null,
+      cantidad: 0,
+      unidad: '',
+      observacion: '',
+    });
+    setRecetaDraft(contexto, [...receta]);
+    renderFilas();
+
+    const body = document.getElementById('receta-body');
+    body?.parentElement?.scrollTo({ top: body.parentElement.scrollHeight, behavior: 'smooth' });
+  });
+
+  const cerrar = () => modal.remove();
+
+  document.getElementById('btn-cerrar-modal-receta')?.addEventListener('click', cerrar);
+  document.getElementById('btn-cancelar-modal-receta')?.addEventListener('click', cerrar);
+  modal.addEventListener('click', (e) => { if (e.target === modal) cerrar(); });
+
+  document.getElementById('btn-guardar-modal-receta')?.addEventListener('click', () => {
+    const receta = getRecetaDraft(contexto);
+    const invalida = receta.some((r) => !r.id_producto_insumo || !r.cantidad || r.cantidad <= 0);
+    if (invalida) {
+      mostrarToast('warning', 'Receta incompleta', 'Completa producto y cantidad en todas las filas');
+      return;
+    }
+
+    const ids = receta.map((r) => r.id_producto_insumo).filter(Boolean);
+    if (new Set(ids).size !== ids.length) {
+      mostrarToast('warning', 'Receta inválida', 'No repitas el mismo producto en la receta');
+      return;
+    }
+
+    actualizarResumenReceta(contexto);
+    cerrar();
+  });
+}
+
 function abrirModalNuevoProducto() {
+  recetaDraftNuevo = [];
+
   // Cargar categorías si aún no se han cargado
   if (categoriasData.length === 0) {
     cargarCategorias().then(() => {
@@ -1737,6 +1998,20 @@ function abrirModalNuevoProducto() {
       const form = document.getElementById('form-nuevo-producto') as HTMLFormElement;
       if (form) {
         form.addEventListener('submit', handleSubmitNuevoProducto);
+      }
+
+      const checkFabricable = document.getElementById('producto-es-fabricable') as HTMLInputElement;
+      const btnReceta = document.getElementById('btn-configurar-receta-nuevo') as HTMLButtonElement;
+      if (checkFabricable && btnReceta) {
+        checkFabricable.addEventListener('change', () => {
+          if (!checkFabricable.checked) {
+            recetaDraftNuevo = [];
+          }
+          actualizarResumenReceta('nuevo');
+        });
+
+        btnReceta.addEventListener('click', () => abrirModalReceta('nuevo'));
+        actualizarResumenReceta('nuevo');
       }
 
       // Zona de imagen: click y preview
@@ -1789,6 +2064,7 @@ function cerrarModalNuevoProducto() {
   const modal = document.getElementById('modal-nuevo-producto');
   if (modal) {
     modal.style.display = 'none';
+    recetaDraftNuevo = [];
     const form = document.getElementById('form-nuevo-producto') as HTMLFormElement;
     if (form) {
       form.reset();
@@ -1815,6 +2091,9 @@ async function handleSubmitNuevoProducto(e: Event) {
     n_lote: formData.get('n_lote') as string,
     ubicacion: formData.get('ubicacion') as string,
   };
+
+  const esFabricable = (formData.get('es_fabricable') as string) === 'on';
+  data.es_fabricable = esFabricable;
 
   const stockSeguridad = formData.get('stock_seguridad') as string;
   if (!stockSeguridad || stockSeguridad === '' || Number.isNaN(Number(stockSeguridad))) {
@@ -1850,6 +2129,20 @@ async function handleSubmitNuevoProducto(e: Event) {
 
   const estado = formData.get('estado') as string;
   if (estado) data.estado = estado;
+
+  if (esFabricable) {
+    if (!recetaDraftNuevo.length) {
+      mostrarToast('warning', 'Receta requerida', 'Si el producto es fabricable, configura al menos un producto en la receta');
+      return;
+    }
+
+    data.receta = recetaDraftNuevo.map((item) => ({
+      id_producto_insumo: Number(item.id_producto_insumo),
+      cantidad: Number(item.cantidad),
+      unidad: item.unidad || null,
+      observacion: item.observacion || null,
+    }));
+  }
 
   console.log('Datos a enviar:', data);
 
@@ -2034,6 +2327,19 @@ function renderModalEditarProducto(producto: Producto): string {
               <input type="text" id="edit-presentacion" name="presentacion"
                      value="${producto.presentacion || ''}" placeholder="Ej: 250ml" class="form-input">
             </div>
+
+            <div class="form-group" style="grid-column: 1 / -1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #f8fafc;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <label style="display:flex; align-items:center; gap:8px; margin:0; font-weight:600; color:#334155;">
+                  <input type="checkbox" id="edit-es-fabricable" name="es_fabricable" ${producto.es_fabricable ? 'checked' : ''}>
+                  Este producto se fabrica con productos de almacén
+                </label>
+                <button type="button" id="btn-configurar-receta-edit" class="btn-secondary" ${producto.es_fabricable ? '' : 'disabled'}>
+                  Configurar receta
+                </button>
+              </div>
+              <div id="edit-receta-resumen" style="margin-top:8px; color:#64748b; font-size:12px;">Sin receta configurada</div>
+            </div>
           </div>
 
           <!-- Campo de imagen -->
@@ -2081,24 +2387,27 @@ async function abrirModalEditarProducto(id: number) {
     await cargarCategorias();
   }
 
-  // Buscar producto en los datos cargados o traer del API
-  let producto = productosData.find(p => p.id === id);
-  if (!producto) {
-    try {
-      const response = await productoService.getById(id);
-      if (response.success && response.data) {
-        producto = response.data;
-      }
-    } catch (error) {
-      mostrarToast('error', 'Error', 'No se pudo cargar el producto');
-      return;
+  let producto: Producto | undefined;
+  try {
+    const response = await productoService.getById(id);
+    if (response.success && response.data) {
+      producto = response.data;
     }
+  } catch (error) {
+    producto = productosData.find(p => p.id === id);
   }
 
   if (!producto) {
     mostrarToast('error', 'Error', 'Producto no encontrado');
     return;
   }
+
+  recetaDraftEditar = (producto.receta || []).map((item: ProductoRecetaDetalle) => ({
+    id_producto_insumo: item.id_producto_insumo,
+    cantidad: Number(item.cantidad || 0),
+    unidad: item.unidad || item.insumo?.unidad || '',
+    observacion: item.observacion || '',
+  }));
 
   // Eliminar modal anterior si existe
   const modalAnterior = document.getElementById('modal-editar-producto');
@@ -2113,6 +2422,20 @@ async function abrirModalEditarProducto(id: number) {
   document.getElementById('btn-cerrar-editar')?.addEventListener('click', () => modal.remove());
   document.getElementById('btn-cancelar-editar')?.addEventListener('click', () => modal.remove());
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  const checkFabricable = document.getElementById('edit-es-fabricable') as HTMLInputElement;
+  const btnReceta = document.getElementById('btn-configurar-receta-edit') as HTMLButtonElement;
+  if (checkFabricable && btnReceta) {
+    checkFabricable.addEventListener('change', () => {
+      if (!checkFabricable.checked) {
+        recetaDraftEditar = [];
+      }
+      actualizarResumenReceta('editar');
+    });
+
+    btnReceta.addEventListener('click', () => abrirModalReceta('editar', producto!.id));
+    actualizarResumenReceta('editar');
+  }
 
   // Zona de imagen: click, preview y eliminar
   const zonaImagenEdit = document.getElementById('zona-imagen-editar');
@@ -2215,6 +2538,30 @@ async function abrirModalEditarProducto(id: number) {
     if (estado) data.estado = estado;
 
     const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    const esFabricable = (formData.get('es_fabricable') as string) === 'on';
+    data.es_fabricable = esFabricable;
+
+    if (esFabricable) {
+      if (!recetaDraftEditar.length) {
+        mostrarToast('warning', 'Receta requerida', 'Si el producto es fabricable, configura al menos un producto en la receta');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Guardar Cambios';
+        }
+        return;
+      }
+
+      data.receta = recetaDraftEditar.map((item) => ({
+        id_producto_insumo: Number(item.id_producto_insumo),
+        cantidad: Number(item.cantidad),
+        unidad: item.unidad || null,
+        observacion: item.observacion || null,
+      }));
+    } else {
+      data.receta = [];
+    }
+
     if (submitBtn) {
       submitBtn.disabled = true;
       submitBtn.innerHTML = 'Guardando...';

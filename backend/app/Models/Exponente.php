@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Exponente extends Model
 {
@@ -21,6 +22,7 @@ class Exponente extends Model
         'institucion',
         'notas',
         'estado',
+        'id_tecnico_vinculado',
     ];
 
     public function ordenes()
@@ -36,5 +38,10 @@ class Exponente extends Model
     public function getNombreCompletoAttribute(): string
     {
         return trim($this->nombre . ' ' . $this->apellidos);
+    }
+
+    public function tecnicoVinculado(): BelongsTo
+    {
+        return $this->belongsTo(Tecnico::class, 'id_tecnico_vinculado');
     }
 }

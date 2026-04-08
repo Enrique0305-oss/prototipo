@@ -12,6 +12,19 @@ let exponentesDisponiblesActual: any[] = [];
 let exponentesSeleccionadosIds: number[] = [];
 let exponentesCatalogo: any[] = [];
 
+function esConflictoAgendaMensaje(message: string): boolean {
+  return (message || '').toLowerCase().includes('conflicto de agenda');
+}
+
+function mostrarErrorCapacitacion(message: string) {
+  if (esConflictoAgendaMensaje(message)) {
+    mostrarToast('warning', 'Advertencia', message, 10000);
+    return;
+  }
+
+  mostrarToast('error', 'Error', message);
+}
+
 function nombreExponente(e: any): string {
   return `${e?.nombre || ''} ${e?.apellidos || ''}`.trim() || 'Exponente';
 }
@@ -452,11 +465,11 @@ async function guardarCapacitacionProgramada(form: HTMLFormElement) {
       // Emitir evento para recargar
       window.dispatchEvent(new Event('capacitacionProgramada'));
     } else {
-      mostrarToast('error', 'Error', result.message || 'No se pudo guardar');
+      mostrarErrorCapacitacion(result.message || 'No se pudo guardar');
     }
   } catch (error: any) {
     const mensaje = error?.data?.message || error?.response?.data?.message || error?.message || 'Error al guardar';
-    mostrarToast('error', 'Error', mensaje);
+    mostrarErrorCapacitacion(mensaje);
     console.error('Error programar capacitación:', error);
   } finally {
     const btnSubmit = form.querySelector('button[type="submit"]') as HTMLButtonElement;

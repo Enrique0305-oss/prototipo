@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\OrdenCapacitacionAuditoria;
 use App\Models\ProgramacionCapacitacion;
+use App\Services\ScheduleConflictService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -163,6 +164,22 @@ class ProgramacionCapacitacionController extends Controller
 
         DB::beginTransaction();
         try {
+            $conflicto = ScheduleConflictService::validarExponentes(
+                $validated['exponentes_ids'] ?? [],
+                $validated['fecha_programada'],
+                $validated['hora_inicio'] ?? null,
+                $validated['hora_fin'] ?? null
+            );
+
+            if ($conflicto) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => $conflicto['mensaje'],
+                    'conflicto' => $conflicto,
+                ], 422);
+            }
+
             $ordenCap = OrdenCapacitacionAuditoria::with('cliente')->findOrFail($validated['id_orden_capacitacion']);
 
             $yaProgramada = ProgramacionCapacitacion::where('id_orden_capacitacion', $ordenCap->id)

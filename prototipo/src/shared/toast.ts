@@ -17,7 +17,7 @@ function cerrarToast(toast: HTMLElement) {
   setTimeout(() => toast.remove(), 300);
 }
 
-export function mostrarToast(tipo: ToastTipo, titulo: string, mensaje: string) {
+export function mostrarToast(tipo: ToastTipo, titulo: string, mensaje: string, duracionMs: number = 4000) {
   // Crear contenedor si no existe
   let container = document.getElementById('toast-container');
   if (!container) {
@@ -51,8 +51,8 @@ export function mostrarToast(tipo: ToastTipo, titulo: string, mensaje: string) {
     closeBtn.addEventListener('click', () => cerrarToast(toast));
   }
 
-  // Auto-cerrar después de 4 segundos
-  setTimeout(() => cerrarToast(toast), 4000);
+  // Auto-cerrar según duración configurada
+  setTimeout(() => cerrarToast(toast), duracionMs);
 }
 
 // ============================================================
