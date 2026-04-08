@@ -13,6 +13,34 @@ use App\Models\Multicim;
 
 class CotizacionController extends Controller
 {
+    private function normalizarMedidaTanque(array $detalle): array
+    {
+        $medidas = $detalle['medida_tanque'] ?? null;
+
+        if (is_string($medidas)) {
+            $medidas = [$medidas];
+        }
+
+        if (!is_array($medidas)) {
+            $medidas = [];
+        }
+
+        $medidas = array_values(array_filter(array_map(function ($valor) {
+            return trim((string) $valor);
+        }, $medidas), function ($valor) {
+            return $valor !== '';
+        }));
+
+        if (empty($medidas)) {
+            $medidaUnica = trim((string)($detalle['medida_tanque'] ?? ''));
+            if ($medidaUnica !== '') {
+                $medidas = [$medidaUnica];
+            }
+        }
+
+        return $medidas;
+    }
+
     /**
      * Listar todas las cotizaciones
      */
@@ -127,7 +155,7 @@ class CotizacionController extends Controller
             'detalles.*.modalidad_sugerida' => 'nullable|string',
             'detalles.*.op_tecnicos' => 'nullable|string|max:255',
             'detalles.*.supervisor' => 'nullable|string|max:255',
-            'detalles.*.medida_tanque' => 'nullable|string|max:50',
+            'detalles.*.medida_tanque' => 'nullable',
             'detalles.*.fosfina_producto' => 'nullable|string|max:255',
             'detalles.*.fosfina_cantidad' => 'nullable|string|max:50',
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
@@ -194,7 +222,7 @@ class CotizacionController extends Controller
                     'modalidad_sugerida' => $detalle['modalidad_sugerida'] ?? null,
                     'op_tecnicos' => $detalle['op_tecnicos'] ?? null,
                     'supervisor' => $detalle['supervisor'] ?? null,
-                    'medida_tanque' => $detalle['medida_tanque'] ?? null,
+                    'medida_tanque' => $this->normalizarMedidaTanque($detalle) ?: null,
                     'fosfina_producto' => $detalle['fosfina_producto'] ?? null,
                     'fosfina_cantidad' => $detalle['fosfina_cantidad'] ?? null,
                     'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
@@ -283,7 +311,7 @@ class CotizacionController extends Controller
             'detalles.*.modalidad_sugerida' => 'nullable|string',
             'detalles.*.op_tecnicos' => 'nullable|string|max:255',
             'detalles.*.supervisor' => 'nullable|string|max:255',
-            'detalles.*.medida_tanque' => 'nullable|string|max:50',
+            'detalles.*.medida_tanque' => 'nullable',
             'detalles.*.fosfina_producto' => 'nullable|string|max:255',
             'detalles.*.fosfina_cantidad' => 'nullable|string|max:50',
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
@@ -348,7 +376,7 @@ class CotizacionController extends Controller
                     'modalidad_sugerida' => $detalle['modalidad_sugerida'] ?? null,
                     'op_tecnicos' => $detalle['op_tecnicos'] ?? null,
                     'supervisor' => $detalle['supervisor'] ?? null,
-                    'medida_tanque' => $detalle['medida_tanque'] ?? null,
+                    'medida_tanque' => $this->normalizarMedidaTanque($detalle) ?: null,
                     'fosfina_producto' => $detalle['fosfina_producto'] ?? null,
                     'fosfina_cantidad' => $detalle['fosfina_cantidad'] ?? null,
                     'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,

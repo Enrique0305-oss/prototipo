@@ -74,7 +74,7 @@ export interface DetalleCotizacion {
   modalidad_sugerida?: string | null;
   op_tecnicos?: string | null;
   supervisor?: string | null;
-  medida_tanque?: string | null;
+  medida_tanque?: string | string[] | null;
   fosfina_producto?: string | null;
   fosfina_cantidad?: string | null;
   servicio?: any;

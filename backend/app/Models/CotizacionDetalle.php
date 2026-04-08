@@ -40,6 +40,7 @@ class CotizacionDetalle extends Model
         'horas_capacitacion' => 'decimal:2',
         'num_participantes' => 'integer',
         'fecha_servicio' => 'date',
+        'medida_tanque' => 'array',
         'meses_implementacion' => 'integer',
         'frecuencia_visita' => 'array',
         'id_cliente_planta_area' => 'array',

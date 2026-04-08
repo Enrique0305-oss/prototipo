@@ -7,6 +7,49 @@ import type {
   EstadisticasCotizaciones,
 } from '../core/api/types';
 
+function sanitizeFilenamePart(value: string): string {
+  return (value || '')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function toNumeroCorto(numeroCotizacion?: string): string {
+  const raw = String(numeroCotizacion || '').trim();
+  const m = raw.match(/^(?:COT-)?(\d{4})-(\d+)$/i);
+  if (!m) return raw;
+  const year2 = m[1].slice(-2);
+  const correlativo = String(parseInt(m[2], 10) || 0).padStart(3, '0');
+  return `${correlativo}-${year2}`;
+}
+
+function getServicioNombreParaArchivo(cotizacion: any): string {
+  const detalles = Array.isArray(cotizacion?.detalles) ? cotizacion.detalles : [];
+  const nombres = Array.from(new Set(
+    detalles
+      .map((d: any) => String(d?.servicio?.nombre || '').trim())
+      .filter((n: string) => n.length > 0)
+  )) as string[];
+
+  if (nombres.length === 1) {
+    return nombres[0];
+  }
+
+  return 'Control de Plagas';
+}
+
+function buildServicioPdfFilename(cotizacion: any): string {
+  const numero = toNumeroCorto(cotizacion?.numero_cotizacion || cotizacion?.numero || '');
+  const cliente = String(cotizacion?.cliente?.nombre_empresa || cotizacion?.cliente_nombre || '').trim();
+  const servicio = getServicioNombreParaArchivo(cotizacion);
+
+  const numeroSafe = sanitizeFilenamePart(numero || String(cotizacion?.id || ''));
+  const servicioSafe = sanitizeFilenamePart(servicio || 'Control de Plagas');
+  const clienteSafe = sanitizeFilenamePart(cliente || 'CLIENTE');
+
+  return `Envío de propuesta de servicio N°${numeroSafe} - QSCI Consulting - ${servicioSafe}-${clienteSafe}.pdf`;
+}
+
 type CotizacionPayload = {
   id_cliente: number;
   id_multicim: number;
@@ -36,7 +79,7 @@ type CotizacionPayload = {
     modalidad_sugerida?: string | null;
     op_tecnicos?: string | null;
     supervisor?: string | null;
-    medida_tanque?: string | null;
+    medida_tanque?: string | string[] | null;
     fosfina_producto?: string | null;
     fosfina_cantidad?: string | null;
     id_cliente_planta?: number | null;
@@ -78,7 +121,21 @@ export const cotizacionService = {
   },
 
   downloadPDF: async (id: number, filename?: string) => {
-    const defaultFilename = filename || `cotizacion_${id}.pdf`;
+    let defaultFilename = filename || `cotizacion_${id}.pdf`;
+
+    if (!filename) {
+      try {
+        const res = await apiClient.get<ApiResponse<Cotizacion>>(`/cotizaciones/${id}`);
+        const cotizacion = (res as any)?.data || res;
+        const tipo = String(cotizacion?.tipo_cotizacion || cotizacion?.tipo || '').toLowerCase();
+        if (tipo === 'servicio') {
+          defaultFilename = buildServicioPdfFilename(cotizacion);
+        }
+      } catch {
+        // Si falla el fetch del detalle, se mantiene el nombre por defecto.
+      }
+    }
+
     return apiClient.downloadFile(`/cotizaciones/${id}/pdf`, defaultFilename);
   },
 

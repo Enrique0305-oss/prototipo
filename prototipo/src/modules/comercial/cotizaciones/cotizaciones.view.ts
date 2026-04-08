@@ -93,6 +93,21 @@ let equiposDisponiblesReceta: any[] = [];
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
+type MedidaTanqueArea = {
+  areaId: number | null;
+  areaNombre: string;
+  medida: string;
+};
+
+function escapeHtml(texto: string): string {
+  return (texto || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function esServicioLimpiezaConMedida(nombreServicio: string): boolean {
   const servicioUpper = (nombreServicio || '').toUpperCase();
   return (
@@ -105,6 +120,112 @@ function esServicioLimpiezaConMedida(nombreServicio: string): boolean {
 
 function esServicioFosfina(nombreServicio: string): boolean {
   return (nombreServicio || '').toUpperCase().includes('FOSFINA');
+}
+
+function getMedidasTanqueIniciales(detalle: any): string[] {
+  const medidasRaw = Array.isArray(detalle?.medida_tanque)
+    ? detalle.medida_tanque
+    : (detalle?.medida_tanque ? [detalle.medida_tanque] : []);
+
+  const medidas = medidasRaw
+    .map((valor: any) => String(valor || '').trim())
+    .filter((valor: string) => valor.length > 0);
+
+  if (medidas.length > 0) {
+    return medidas;
+  }
+
+  const medidaUnica = String(detalle?.medida_tanque || '').trim();
+  return medidaUnica ? [medidaUnica] : [];
+}
+
+function getServicioEspecialLimpiezaSeleccionado(panelEl: HTMLElement): {
+  fila: HTMLElement;
+  areas: MedidaTanqueArea[];
+} | null {
+  const filas = panelEl.querySelectorAll('#detalle-cotizacion-body tr');
+
+  for (const fila of filas) {
+    const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement | null;
+    const servicioNombre = itemSelect?.options[itemSelect.selectedIndex]?.textContent?.trim() || '';
+    if (!esServicioLimpiezaConMedida(servicioNombre)) {
+      continue;
+    }
+
+    const areaMulti = fila.querySelector('.area-input-multi') as HTMLSelectElement | null;
+    const areaSingle = fila.querySelector('.area-input') as HTMLSelectElement | null;
+
+    if (areaMulti) {
+      const areas = Array.from(areaMulti.selectedOptions).map((opt) => ({
+        areaId: parseInt(opt.value || '0', 10) || null,
+        areaNombre: opt.textContent?.trim() || '',
+        medida: '',
+      })).filter((area) => area.areaNombre !== '' || area.areaId !== null);
+
+      return { fila: fila as HTMLElement, areas };
+    }
+
+    if (areaSingle) {
+      const areaId = parseInt(areaSingle.value || '0', 10) || null;
+      const areaNombre = areaSingle.selectedIndex > 0 ? (areaSingle.options[areaSingle.selectedIndex]?.textContent?.trim() || '') : '';
+
+      return {
+        fila: fila as HTMLElement,
+        areas: areaNombre || areaId
+          ? [{ areaId, areaNombre, medida: '' }]
+          : [],
+      };
+    }
+
+    return { fila: fila as HTMLElement, areas: [] };
+  }
+
+  return null;
+}
+
+function leerMedidasTanqueDesdeSeccion(panelEl: HTMLElement): string[] {
+  const contenedor = panelEl.querySelector('#contenedor-medidas-tanque') as HTMLElement | null;
+  if (!contenedor) return [];
+
+  return Array.from(contenedor.querySelectorAll('.medida-tanque-input'))
+    .map((input) => (input as HTMLInputElement).value.trim())
+    .filter((valor) => valor.length > 0);
+}
+
+function renderMedidasTanqueInputs(panelEl: HTMLElement) {
+  const seccion = panelEl.querySelector('#seccion-limpieza-cisternas') as HTMLElement | null;
+  const contenedor = panelEl.querySelector('#contenedor-medidas-tanque') as HTMLElement | null;
+  if (!seccion || !contenedor) return;
+
+  const servicio = getServicioEspecialLimpiezaSeleccionado(panelEl);
+  if (!servicio || servicio.areas.length === 0) {
+    contenedor.innerHTML = '<small style="color:#64748b;">Seleccione una o más áreas para ingresar las medidas de los tanques.</small>';
+    return;
+  }
+
+  const medidasPrevias = new Map<string, string>();
+  contenedor.querySelectorAll('.medida-tanque-input').forEach((input) => {
+    const el = input as HTMLInputElement;
+    const key = el.dataset.areaKey || '';
+    if (key) {
+      medidasPrevias.set(key, el.value.trim());
+    }
+  });
+
+  const medidasIniciales = Array.isArray((seccion as any)._medidasTanqueIniciales)
+    ? (seccion as any)._medidasTanqueIniciales as string[]
+    : [];
+
+  contenedor.innerHTML = servicio.areas.map((area, index) => {
+    const key = String(area.areaId ?? index);
+    const valorPrevio = medidasPrevias.get(key) ?? medidasIniciales[index] ?? '';
+    return `
+      <div style="display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr);gap:10px;align-items:center;margin-bottom:8px;">
+        <label style="font-size:13px;font-weight:600;color:#334155;">${escapeHtml(area.areaNombre || `Área ${index + 1}`)}</label>
+        <input type="text" class="input medida-tanque-input" data-area-key="${escapeHtml(key)}" data-area-id="${area.areaId ?? ''}" data-area-nombre="${escapeHtml(area.areaNombre)}" style="width:100%;" placeholder="" value="${escapeHtml(valorPrevio)}">
+      </div>
+    `;
+  }).join('');
 }
 
 function normalizarDiaNombre(texto: string): string {
@@ -960,9 +1081,9 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           <label for="input-supervisor" style="font-size:13px;font-weight:500;">Supervisor</label>
           <input type="number" min="0" id="input-supervisor" class="input" style="width:80px;margin-left:8px;" value="0">
         </div>
-        <div>
-          <label for="input-medida-tanque" style="font-size:13px;font-weight:500;">Medida</label>
-          <input type="text" id="input-medida-tanque" class="input" style="width:180px;margin-left:8px;" placeholder="Ej: 2m x 1.5m x 1m" value="">
+        <div style="min-width:320px;">
+          <label style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Medidas por área</label>
+          <div id="contenedor-medidas-tanque" style="display:grid;gap:8px;"></div>
         </div>
       </div>
 
@@ -978,7 +1099,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
             <input type="text" id="input-cantidad-fosfina" class="input" style="width:120px;" placeholder="Ej: 1" value="">
           </div>
           <div>
-            <label for="input-medida-tanque-fosfina" style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Medida tanque</label>
+            <label for="input-medida-tanque-fosfina" style="font-size:13px;font-weight:500;display:block;margin-bottom:6px;">Volumen</label>
             <input type="text" id="input-medida-tanque-fosfina" class="input" style="width:200px;" placeholder="Ej: 10" value="">
           </div>
         </div>
@@ -1895,6 +2016,10 @@ function actualizarResumenAreasFila(fila: HTMLElement) {
     resumen.innerHTML = 'Sin áreas seleccionadas';
     resumen.style.color = '#94a3b8';
     if (toggle) toggle.textContent = 'Seleccionar áreas';
+    const panelEl = fila.closest('[id^="cotiz-panel-"]') as HTMLElement | null;
+    if (panelEl && panelEl.querySelector('#seccion-limpieza-cisternas')) {
+      actualizarSeccionLimpiezaCisternas(panelEl);
+    }
     return;
   }
 
@@ -1907,10 +2032,18 @@ function actualizarResumenAreasFila(fila: HTMLElement) {
 
   if (seleccionadas.length > 3) {
     resumen.innerHTML = `${chips}<span style="font-size:11px;color:#64748b;">+${seleccionadas.length - 3} más</span>`;
+    const panelEl = fila.closest('[id^="cotiz-panel-"]') as HTMLElement | null;
+    if (panelEl && panelEl.querySelector('#seccion-limpieza-cisternas')) {
+      actualizarSeccionLimpiezaCisternas(panelEl);
+    }
     return;
   }
 
   resumen.innerHTML = chips;
+  const panelEl = fila.closest('[id^="cotiz-panel-"]') as HTMLElement | null;
+  if (panelEl && panelEl.querySelector('#seccion-limpieza-cisternas')) {
+    actualizarSeccionLimpiezaCisternas(panelEl);
+  }
 }
 
 function renderAreaPickerOptions(fila: HTMLElement) {
@@ -2225,11 +2358,15 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
 
   const opTecnicosDetalle = detalles.find((d: any) => d?.op_tecnicos)?.op_tecnicos || '';
   const supervisorDetalle = detalles.find((d: any) => d?.supervisor)?.supervisor || '';
-  const medidaTanqueDetalle = detalles.find((d: any) => d?.medida_tanque)?.medida_tanque || '';
   const detalleFosfina = detalles.find((d: any) => {
     const nombre = String(d?.servicio?.nombre || '').toUpperCase();
     return nombre.includes('FOSFINA');
   });
+  const detalleLimpiezaEspecial = detalles.find((d: any) => {
+    const nombre = String(d?.servicio?.nombre || '').toUpperCase();
+    return esServicioLimpiezaConMedida(nombre);
+  });
+  const medidasTanqueDetalle = detalleLimpiezaEspecial ? getMedidasTanqueIniciales(detalleLimpiezaEspecial) : [];
 
   for (const detalle of detalles) {
     agregarLineaDetalle(tipo);
@@ -2296,16 +2433,16 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
     if (seccionLimpieza) {
       const opInput = seccionLimpieza.querySelector('#input-op-tecnicos') as HTMLInputElement | null;
       const supInput = seccionLimpieza.querySelector('#input-supervisor') as HTMLInputElement | null;
-      const medidaInput = seccionLimpieza.querySelector('#input-medida-tanque') as HTMLInputElement | null;
       const productoFosfinaInput = seccionLimpieza.querySelector('#input-producto-fosfina') as HTMLInputElement | null;
       const cantidadFosfinaInput = seccionLimpieza.querySelector('#input-cantidad-fosfina') as HTMLInputElement | null;
       const medidaFosfinaInput = seccionLimpieza.querySelector('#input-medida-tanque-fosfina') as HTMLInputElement | null;
       if (opInput) opInput.value = String(opTecnicosDetalle || 0);
       if (supInput) supInput.value = String(supervisorDetalle || 0);
-      if (medidaInput) medidaInput.value = String(medidaTanqueDetalle || '');
       if (productoFosfinaInput) productoFosfinaInput.value = String(detalleFosfina?.fosfina_producto || '');
       if (cantidadFosfinaInput) cantidadFosfinaInput.value = String(detalleFosfina?.fosfina_cantidad || '');
       if (medidaFosfinaInput) medidaFosfinaInput.value = String(detalleFosfina?.medida_tanque || '');
+      (seccionLimpieza as any)._medidasTanqueIniciales = medidasTanqueDetalle;
+      actualizarSeccionLimpiezaCisternas(panelEl);
     }
 
     recetaServicioRows = Array.isArray(cotizacion?.receta_servicio)
@@ -2567,6 +2704,7 @@ function actualizarSeccionLimpiezaCisternas(panelEl: HTMLElement) {
   if (!seccion) return;
   const bloqueLimpieza = panelEl.querySelector('#bloque-limpieza-cisternas') as HTMLElement | null;
   const bloqueFosfina = panelEl.querySelector('#bloque-fosfina') as HTMLElement | null;
+  const contenedorMedidas = panelEl.querySelector('#contenedor-medidas-tanque') as HTMLElement | null;
   const tbody = panelEl.querySelector('#detalle-cotizacion-body') as HTMLElement;
   if (!tbody) return;
   const filas = tbody.querySelectorAll('tr');
@@ -2588,6 +2726,14 @@ function actualizarSeccionLimpiezaCisternas(panelEl: HTMLElement) {
   seccion.style.display = (tieneLimpiezaCisternas || tieneFosfina) ? 'block' : 'none';
   if (bloqueLimpieza) bloqueLimpieza.style.display = tieneLimpiezaCisternas ? 'flex' : 'none';
   if (bloqueFosfina) bloqueFosfina.style.display = tieneFosfina ? 'block' : 'none';
+  if (contenedorMedidas) {
+    contenedorMedidas.style.display = tieneLimpiezaCisternas ? 'block' : 'none';
+    if (tieneLimpiezaCisternas) {
+      renderMedidasTanqueInputs(panelEl);
+    } else {
+      contenedorMedidas.innerHTML = '';
+    }
+  }
 }
 
 function calcularSubtotalLinea(lineaId: string) {
@@ -3060,9 +3206,10 @@ async function guardarCotizacion(tipoFijo?: string) {
   const supervisorGlobal = seccionLimpiezaVisible
     ? ((seccionLimpieza.querySelector('#input-supervisor') as HTMLInputElement | null)?.value?.trim() || null)
     : null;
-  const medidaTanqueGlobal = seccionLimpiezaVisible
-    ? ((seccionLimpieza.querySelector('#input-medida-tanque') as HTMLInputElement | null)?.value?.trim() || null)
-    : null;
+  const medidasTanqueGlobal = seccionLimpiezaVisible
+    ? leerMedidasTanqueDesdeSeccion(panelActivoElement)
+    : [];
+  const medidaTanqueGlobal = medidasTanqueGlobal.length > 0 ? medidasTanqueGlobal[0] : null;
   const productoFosfinaGlobal = seccionLimpiezaVisible
     ? ((seccionLimpieza.querySelector('#input-producto-fosfina') as HTMLInputElement | null)?.value?.trim() || null)
     : null;
@@ -3137,6 +3284,9 @@ async function guardarCotizacion(tipoFijo?: string) {
     const medidaTanque = esFosfina
       ? medidaTanqueFosfinaGlobal
       : (esServicioLimpiezaConMedida(servicioNombre) ? medidaTanqueGlobal : null);
+    const medidasTanque = esServicioLimpiezaConMedida(servicioNombre)
+      ? medidasTanqueGlobal
+      : (esFosfina && medidaTanqueFosfinaGlobal ? [medidaTanqueFosfinaGlobal] : []);
     const plantaVal = parseInt((linea.querySelector('.planta-input') as HTMLSelectElement)?.value || '0') || null;
     const areaIds = getAreaIdsFromRow(linea, tipoCotizacion);
     const horasCapacitacion = esCapacitacion ? horasCapacitacionGlobal : null;
@@ -3166,7 +3316,9 @@ async function guardarCotizacion(tipoFijo?: string) {
       modalidad_sugerida: modalidad,
       op_tecnicos: opTecnicos,
       supervisor,
-      medida_tanque: medidaTanque,
+      medida_tanque: esServicioLimpiezaConMedida(servicioNombre)
+        ? (medidasTanque.length > 0 ? medidasTanque : null)
+        : medidaTanque,
       fosfina_producto: fosfinaProducto,
       fosfina_cantidad: fosfinaCantidad,
       id_cliente_planta: plantaVal,

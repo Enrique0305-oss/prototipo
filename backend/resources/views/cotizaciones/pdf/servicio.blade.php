@@ -292,7 +292,12 @@
                     $cantidadFosfina = trim((string)($detalleFosfina?->fosfina_cantidad ?? ''));
                     $tratamientoFosfina = $detalleFosfina?->servicio?->nombre ?? 'DESINSECTACIÓN QUÍMICA CON FOSFINA';
                     $productosFosfina = trim((string)($detalleFosfina?->fosfina_producto ?? ''));
-                    $medidaTanqueFosfina = trim((string)($detalleFosfina?->medida_tanque ?? ''));
+                    $medidasTanqueFosfinaRaw = $detalleFosfina?->medida_tanque;
+                    if (is_array($medidasTanqueFosfinaRaw)) {
+                        $medidaTanqueFosfina = trim((string)($medidasTanqueFosfinaRaw[0] ?? ''));
+                    } else {
+                        $medidaTanqueFosfina = trim((string)($medidasTanqueFosfinaRaw ?? ''));
+                    }
                     if ($productosFosfina === '') { $productosFosfina = '—'; }
                     if ($cantidadFosfina === '') { $cantidadFosfina = '—'; }
 
@@ -325,7 +330,7 @@
                             <td style="text-align: center;">{{ $productosFosfina }}</td>
                         </tr>
                         <tr>
-                            <th>MEDIDA TANQUE</th>
+                            <th>VOLUMEN</th>
                             <td style="text-align: center;">{{ $medidaTanqueFosfina !== '' ? $medidaTanqueFosfina . ' m³ ' : '—' }}</td>
                         </tr>
                     </tbody>
@@ -394,6 +399,12 @@
                                     $areas = $planta->areasActivas()->whereIn('id', $areaIds)->get();
                                     if ($areas->isEmpty()) {
                                         $areas = $planta->areas()->whereIn('id', $areaIds)->get();
+                                    }
+                                    if ($areas->count() > 1) {
+                                        $areas = $areas->sortBy(function ($area) use ($areaIds) {
+                                            $posicion = array_search($area->id, $areaIds, true);
+                                            return $posicion === false ? PHP_INT_MAX : $posicion;
+                                        })->values();
                                     }
                                 }
                                 
@@ -475,7 +486,34 @@
                                 }
                                 $nombreServicioDetalle = mb_strtoupper((string)($servicio?->nombre ?? ''));
                                 $esDetalleTrampaGrasa = str_contains($nombreServicioDetalle, 'LIMPIEZA DE TRAMPA DE GRASA');
-                                $medidaDetalle = trim((string)($detalle->medida_tanque ?? '' ));
+                                $medidasTanqueRaw = $detalle->medida_tanque ?? null;
+                                $medidasTanqueDetalle = [];
+                                if (is_array($medidasTanqueRaw)) {
+                                    $medidasTanqueDetalle = array_values(array_filter(array_map(function ($valor) {
+                                        return trim((string) $valor);
+                                    }, $medidasTanqueRaw), function ($valor) {
+                                        return $valor !== '';
+                                    }));
+                                } else {
+                                    $medidaDetalle = trim((string)($medidasTanqueRaw ?? ''));
+                                    if ($medidaDetalle !== '') {
+                                        $medidasTanqueDetalle = [$medidaDetalle];
+                                    }
+                                }
+                                $medidaDetalle = count($medidasTanqueDetalle) > 0 ? $medidasTanqueDetalle[0] : '';
+                                $medidasTanqueConAreas = [];
+                                if (count($medidasTanqueDetalle) > 0) {
+                                    foreach ($areas as $indice => $area) {
+                                        $medidaArea = $medidasTanqueDetalle[$indice] ?? end($medidasTanqueDetalle);
+                                        $medidaArea = trim((string) $medidaArea);
+                                        if ($medidaArea === '') {
+                                            continue;
+                                        }
+                                        $medidasTanqueConAreas[] = count($areas) > 1
+                                            ? trim($area->nombre . ': ' . $medidaArea . ' m³')
+                                            : trim($medidaArea . ' m³');
+                                    }
+                                }
                             @endphp 
                             <tr>
                                 <td style="font-weight: 600;">
@@ -497,11 +535,23 @@
                                         @endif
                                     </td>  
                                     <td style="text-align: center;">
-                                        {{ $medidaDetalle !== '' ? $medidaDetalle . ' m³ ' : '—' }}
+                                        @if(count($medidasTanqueConAreas) > 0)
+                                            @foreach($medidasTanqueConAreas as $medidaConArea)
+                                                <div>{{ $medidaConArea }}</div>
+                                            @endforeach
+                                        @else
+                                            {{ $medidaDetalle !== '' ? $medidaDetalle . ' m³' : '—' }}
+                                        @endif
                                     </td>
                                 @elseif($hayDetalleTrampaGrasa)
                                     <td style="text-align: center;">
-                                        {{ $medidaDetalle !== '' ? $medidaDetalle . ' m³ ' : '—' }}
+                                        @if(count($medidasTanqueConAreas) > 0)
+                                            @foreach($medidasTanqueConAreas as $medidaConArea)
+                                                <div>{{ $medidaConArea }}</div>
+                                            @endforeach
+                                        @else
+                                            {{ $medidaDetalle !== '' ? $medidaDetalle . ' m³' : '—' }}
+                                        @endif
                                     </td>
                                 @else
                                     <td>
