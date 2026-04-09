@@ -1590,9 +1590,9 @@ export async function cargarHorarios() {
           <thead>
             <tr>
               <th>EMPLEADO</th>
-              <th>ÃREA</th>
-              <th>DÃAS LABORALES</th>
-              <th>DÃAS DESCANSO</th>
+              <th>ÁREA</th>
+              <th>DÍAS LABORALES</th>
+              <th>DÍAS DESCANSO</th>
               <th>ESTADO</th>
               <th>ACCIONES</th>
             </tr>

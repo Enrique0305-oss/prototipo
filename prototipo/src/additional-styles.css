@@ -721,6 +721,27 @@
   color: var(--text-dark);
 }
 
+/* Stat Boxes Container - Grid 4 columnas ancho completo */
+.stat-boxes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 100%;
+  margin: 0 0 24px 0;
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .stat-boxes {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stat-boxes {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* User Badge */
 .user-badge {
   display: flex;

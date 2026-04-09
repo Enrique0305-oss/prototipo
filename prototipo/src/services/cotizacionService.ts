@@ -38,16 +38,92 @@ function getServicioNombreParaArchivo(cotizacion: any): string {
   return 'Control de Plagas';
 }
 
-function buildServicioPdfFilename(cotizacion: any): string {
+function getCapacitacionNombreParaArchivo(cotizacion: any): string {
+  const detalles = Array.isArray(cotizacion?.detalles) ? cotizacion.detalles : [];
+  const nombres = Array.from(new Set(
+    detalles
+      .map((d: any) => String(d?.catalogo_cap_aud?.nombre || d?.descripcion_manual || '').trim())
+      .filter((n: string) => n.length > 0)
+  )) as string[];
+
+  if (nombres.length === 1) {
+    return nombres[0];
+  }
+
+  return 'Plan de Capacitaciones';
+}
+function getAsesoriaNombreParaArchivo(cotizacion: any): string {
+  const detalles = Array.isArray(cotizacion?.detalles) ? cotizacion.detalles : [];
+  const nombres = Array.from(new Set(
+    detalles
+      .map((d: any) => String(d?.catalogo_cap_aud?.nombre || d?.descripcion_manual || '').trim())
+      .filter((n: string) => n.length > 0)
+  )) as string[];
+
+  if (nombres.length === 1) {
+    return nombres[0];
+  }
+
+  return 'Plan de Asesorías';
+}
+
+function getProductoNombreParaArchivo(cotizacion: any): string {
+  const detalles = Array.isArray(cotizacion?.detalles) ? cotizacion.detalles : [];
+  const nombres = Array.from(new Set(
+    detalles
+      .map((d: any) => String(d?.producto?.descripcion || d?.descripcion_manual || '').trim())
+      .filter((n: string) => n.length > 0)
+  )) as string[];
+
+  if (nombres.length === 0) {
+    return 'Productos';
+  }
+  if (nombres.length === 1) {
+    return nombres[0];
+  }
+  if (nombres.length === 2) {
+    return `${nombres[0]} y ${nombres[1]}`;
+  }
+
+  return 'PRODUCTOS';
+}
+
+function buildPdfFilename(cotizacion: any, tipo: string): string {
   const numero = toNumeroCorto(cotizacion?.numero_cotizacion || cotizacion?.numero || '');
   const cliente = String(cotizacion?.cliente?.nombre_empresa || cotizacion?.cliente_nombre || '').trim();
-  const servicio = getServicioNombreParaArchivo(cotizacion);
+  
+  let nombre = '';
+  let tipoTexto = 'servicio';
+  
+  switch (tipo.toLowerCase()) {
+    case 'capacitacion':
+      nombre = getCapacitacionNombreParaArchivo(cotizacion);
+      tipoTexto = 'capacitación';
+      break;
+    case 'asesoria':
+      nombre = getAsesoriaNombreParaArchivo(cotizacion);
+      tipoTexto = 'asesoría';
+      break;
+    case 'producto':
+      nombre = getProductoNombreParaArchivo(cotizacion);
+      tipoTexto = 'producto';
+      break;
+    case 'servicio':
+    default:
+      nombre = getServicioNombreParaArchivo(cotizacion);
+      tipoTexto = 'servicio';
+      break;
+  }
 
   const numeroSafe = sanitizeFilenamePart(numero || String(cotizacion?.id || ''));
-  const servicioSafe = sanitizeFilenamePart(servicio || 'Control de Plagas');
+  const nombreSafe = sanitizeFilenamePart(nombre || 'Propuesta');
   const clienteSafe = sanitizeFilenamePart(cliente || 'CLIENTE');
 
-  return `Envío de propuesta de servicio N°${numeroSafe} - QSCI Consulting - ${servicioSafe}-${clienteSafe}.pdf`;
+  return `Envío de propuesta de ${tipoTexto} N°${numeroSafe} - QSCI Consulting - ${nombreSafe}-${clienteSafe}.pdf`;
+}
+
+function buildServicioPdfFilename(cotizacion: any): string {
+  return buildPdfFilename(cotizacion, 'servicio');
 }
 
 type CotizacionPayload = {
@@ -128,9 +204,7 @@ export const cotizacionService = {
         const res = await apiClient.get<ApiResponse<Cotizacion>>(`/cotizaciones/${id}`);
         const cotizacion = (res as any)?.data || res;
         const tipo = String(cotizacion?.tipo_cotizacion || cotizacion?.tipo || '').toLowerCase();
-        if (tipo === 'servicio') {
-          defaultFilename = buildServicioPdfFilename(cotizacion);
-        }
+        defaultFilename = buildPdfFilename(cotizacion, tipo);
       } catch {
         // Si falla el fetch del detalle, se mantiene el nombre por defecto.
       }
