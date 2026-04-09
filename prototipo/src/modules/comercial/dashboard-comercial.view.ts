@@ -321,6 +321,59 @@ function getClienteFecha(cliente: Cliente): string {
   return cliente.fecha_registro || '';
 }
 
+function getClienteEstadoNormalizado(estado: string | undefined): 'Contactado' | 'Acepta' | 'No acepta' {
+  const value = (estado || '').trim().toLowerCase();
+
+  if (value.includes('no') && value.includes('acepta')) return 'No acepta';
+  if (value.includes('rechaz')) return 'No acepta';
+  if (value.includes('acepta')) return 'Acepta';
+  if (value.includes('program')) return 'Contactado';
+  if (value.includes('contact')) return 'Contactado';
+
+  return 'Contactado';
+}
+
+function getClienteFechaNormalizada(cliente: Cliente): string {
+  const fechaBruta = cliente.fecha_registro || (cliente as any).created_at || '';
+  const fecha = new Date(fechaBruta);
+  if (Number.isNaN(fecha.getTime())) return '';
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getClientesPotencialesPorMes(clientes: Cliente[], range: ComercialDateRange) {
+  const normalizado = normalizeRange(range);
+  const filtrados = filterByRange(clientes, getClienteFecha, normalizado);
+  const grouped = new Map<string, { Contactado: number; Acepta: number; 'No acepta': number }>();
+
+  filtrados.forEach((cliente) => {
+    const monthKey = getClienteFechaNormalizada(cliente);
+    if (!monthKey) return;
+
+    if (!grouped.has(monthKey)) {
+      grouped.set(monthKey, { Contactado: 0, Acepta: 0, 'No acepta': 0 });
+    }
+
+    const bucket = grouped.get(monthKey)!;
+    const estado = getClienteEstadoNormalizado(cliente.estado);
+    bucket[estado] += 1;
+  });
+
+  const labels = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b)).map((key) => {
+    const [year, month] = key.split('-');
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    return date.toLocaleDateString('es-PE', { month: 'short', year: 'numeric' });
+  });
+
+  const keysSorted = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+
+  return {
+    labels,
+    contactado: keysSorted.map((key) => grouped.get(key)?.Contactado || 0),
+    acepta: keysSorted.map((key) => grouped.get(key)?.Acepta || 0),
+    noAcepta: keysSorted.map((key) => grouped.get(key)?.['No acepta'] || 0),
+  };
+}
+
 function isDateInRange(value: string | undefined, range: ComercialDateRange): boolean {
   if (range.preset === 'all') return true;
   if (!value) return false;
@@ -481,6 +534,7 @@ function renderCharts(data: ComercialDashboardData): void {
   const porTipo = getCotizacionesPorTipo(data.cotizaciones);
   const porCliente = getResumenClientesPorCotizacion(data.cotizaciones);
   const ordenesPorTipo = data.estadisticasOrdenes.porTipo;
+  const prospectosPorMes = getClientesPotencialesPorMes(dashboardSource?.clientes || [], dashboardRange);
 
   createOrReplaceChart('comercial-chart-estados', {
     type: 'doughnut',
@@ -581,6 +635,45 @@ function renderCharts(data: ComercialDashboardData): void {
       }],
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+  });
+
+  createOrReplaceChart('comercial-chart-prospectos', {
+    type: 'bar',
+    data: {
+      labels: prospectosPorMes.labels,
+      datasets: [
+        {
+          label: 'Contactado',
+          data: prospectosPorMes.contactado,
+          backgroundColor: '#f59e0b',
+          borderRadius: 8,
+          stack: 'prospectos',
+        },
+        {
+          label: 'Acepta',
+          data: prospectosPorMes.acepta,
+          backgroundColor: '#16a34a',
+          borderRadius: 8,
+          stack: 'prospectos',
+        },
+        {
+          label: 'No acepta',
+          data: prospectosPorMes.noAcepta,
+          backgroundColor: '#ef4444',
+          borderRadius: 8,
+          stack: 'prospectos',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e2e8f0' } },
+      },
+    },
   });
 }
 
@@ -758,6 +851,8 @@ export function renderComercialDashboard() {
         <section style="grid-column:span 6;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Cotizaciones por tipo</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Servicio, producto, capacitación y asesoría.</p></div></div><div style="height:280px;"><canvas id="comercial-chart-tipos"></canvas></div></section>
         <section style="grid-column:span 6;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Top clientes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Clientes con mayor valor cotizado.</p></div></div><div style="height:280px;"><canvas id="comercial-chart-clientes"></canvas></div></section>
         <section style="grid-column:span 5;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Órdenes por tipo</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Servicio, producto, capacitación y asesoría.</p></div></div><div style="height:280px;"><canvas id="comercial-chart-ordenes"></canvas></div></section>
+        <section style="grid-column:span 7;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Clientes potenciales por mes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Distribución mensual por estados programado, acepta y no acepta.</p></div></div><div style="height:320px;"><canvas id="comercial-chart-prospectos"></canvas></div></section>
+        <section style="grid-column:span 7;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Clientes potenciales por mes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Distribución mensual por estados contactado, acepta y no acepta.</p></div></div><div style="height:320px;"><canvas id="comercial-chart-prospectos"></canvas></div></section>
         <section style="grid-column:span 7;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Cotizaciones recientes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Últimos registros comerciales emitidos.</p></div></div><div class="table-container"><table class="data-table"><thead><tr><th>NÚMERO</th><th>CLIENTE</th><th>FECHA</th><th>TIPO</th><th>TOTAL</th><th>ESTADO</th></tr></thead><tbody id="comercial-cotizaciones-body"><tr><td colspan="6" style="text-align:center;padding:24px;color:#64748b;">Cargando cotizaciones...</td></tr></tbody></table></div></section>
         <section style="grid-column:span 5;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Alertas comerciales</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Puntos que requieren seguimiento.</p></div></div><ul id="comercial-alertas-body" style="margin:0;padding-left:18px;color:#334155;display:flex;flex-direction:column;gap:10px;line-height:1.45;"><li>Cargando alertas...</li></ul></section>
         <section style="grid-column:span 12;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Órdenes recientes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Actividad de servicio, producto, capacitación y asesoría.</p></div></div><div class="table-container"><table class="data-table"><thead><tr><th>NÚMERO</th><th>CLIENTE</th><th>TIPO</th><th>FECHA</th><th>TOTAL</th><th>ESTADO</th></tr></thead><tbody id="comercial-ordenes-body"><tr><td colspan="6" style="text-align:center;padding:24px;color:#64748b;">Cargando órdenes...</td></tr></tbody></table></div></section>

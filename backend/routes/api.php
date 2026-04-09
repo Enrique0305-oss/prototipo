@@ -33,6 +33,7 @@ use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
 use App\Http\Controllers\API\ProgramacionVisitaController;
 use App\Http\Controllers\API\ProgramacionFabricacionController;
+use App\Http\Controllers\API\ProgramacionOtroController;
 use App\Http\Controllers\API\EntradaDevolucionFabricacionController;
 use App\Http\Controllers\API\OrdenFabricacionController;
 use App\Http\Controllers\API\ProgramacionCapacitacionController;
@@ -340,6 +341,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/programacion-fabricacion', [ProgramacionFabricacionController::class, 'store']);
     Route::put('/programacion-fabricacion/{id}', [ProgramacionFabricacionController::class, 'update']);
     Route::delete('/programacion-fabricacion/{id}', [ProgramacionFabricacionController::class, 'destroy']);
+
+    // Programación de Otros (independiente, sin cliente)
+    Route::get('/programacion-otros', [ProgramacionOtroController::class, 'index']);
+    Route::get('/programacion-otros/{id}', [ProgramacionOtroController::class, 'show']);
+    Route::post('/programacion-otros', [ProgramacionOtroController::class, 'store']);
+    Route::put('/programacion-otros/{id}', [ProgramacionOtroController::class, 'update']);
+    Route::delete('/programacion-otros/{id}', [ProgramacionOtroController::class, 'destroy']);
 
     // Almacén - Órdenes de Fabricación
     Route::get('/almacen/ordenes-fabricacion/salidas-programacion/pendientes', [SalidaProgramacionFabricacionController::class, 'getPendientes']);

@@ -28,6 +28,55 @@ class AsistenciaController extends Controller
         return $dias[Carbon::now()->format('l')] ?? 'Lunes';
     }
 
+    /**
+     * Cierra automáticamente una asistencia abierta cuando ya llegó la hora de salida asignada.
+     */
+    private function cerrarAsistenciaAutomaticaSiCorresponde(RrhhAsistencia $asistencia, Carbon $momentoReferencia): void
+    {
+        if ($asistencia->hora_salida || !$asistencia->hora_entrada || !$asistencia->hora_esperada_salida) {
+            return;
+        }
+
+        $fechaAsistencia = Carbon::parse($asistencia->fecha)->toDateString();
+        $horaSalidaProgramada = Carbon::parse($fechaAsistencia . ' ' . $asistencia->hora_esperada_salida);
+
+        if ($momentoReferencia->lt($horaSalidaProgramada)) {
+            return;
+        }
+
+        $horaEntrada = Carbon::parse($fechaAsistencia . ' ' . $asistencia->hora_entrada);
+        $minutosTrabajados = $horaSalidaProgramada->gt($horaEntrada)
+            ? $horaEntrada->diffInMinutes($horaSalidaProgramada)
+            : 0;
+
+        $horasTrabajadas = round($minutosTrabajados / 60, 2);
+
+        if ($asistencia->exceso_almuerzo_minutos > 0) {
+            $horasTrabajadas = max(0, round($horasTrabajadas - ($asistencia->exceso_almuerzo_minutos / 60), 2));
+        }
+
+        $tiempoExtraMinutos = 0;
+        if ($asistencia->horas_extra_asignadas && $asistencia->hora_inicio_extra) {
+            $horaInicioExtra = Carbon::parse($fechaAsistencia . ' ' . $asistencia->hora_inicio_extra);
+            if ($horaSalidaProgramada->gt($horaInicioExtra)) {
+                $tiempoExtraMinutos = (int) $horaInicioExtra->diffInMinutes($horaSalidaProgramada);
+            }
+        }
+
+        $estado = $asistencia->estado;
+        if ($estado === 'Incompleto') {
+            $estado = 'Puntual';
+        }
+
+        $asistencia->update([
+            'hora_salida' => $horaSalidaProgramada->format('H:i:s'),
+            'horas_trabajadas' => $horasTrabajadas,
+            'tiempo_extra_minutos' => $tiempoExtraMinutos,
+            'estado' => $estado,
+            'fecha_modificacion' => $momentoReferencia,
+        ]);
+    }
+
     public function miEstado(Request $request)
     {
         $idPersonal = $request->user()?->id ?? $request->query('id_personal', 1);
@@ -96,6 +145,12 @@ class AsistenciaController extends Controller
             ->where('fecha', $hoy)
             ->where('tipo_registro', 'Oficina')
             ->first();
+
+        // Auto-cierre si la asistencia sigue abierta y ya llegó su hora de salida programada.
+        if ($asistenciaHoy) {
+            $this->cerrarAsistenciaAutomaticaSiCorresponde($asistenciaHoy, $ahora);
+            $asistenciaHoy->refresh();
+        }
 
         // Calcular el estado del botón de salida
         $horaSalidaEsperada = Carbon::parse($hoy . ' ' . $horario->hora_salida_esperada);
@@ -377,12 +432,23 @@ class AsistenciaController extends Controller
     public function listaAdmin(Request $request)
     {
         $fecha = $request->query('fecha', Carbon::now()->toDateString());
+        $ahora = Carbon::now();
+        $hoy = $ahora->toDateString();
 
-        $registros = RrhhAsistencia::with(['personal.area'])
+        $asistencias = RrhhAsistencia::with(['personal.area'])
             ->where('fecha', $fecha)
             ->where('tipo_registro', 'Oficina')
             ->orderBy('hora_entrada')
-            ->get()
+            ->get();
+
+        if ($fecha === $hoy) {
+            foreach ($asistencias as $asistencia) {
+                $this->cerrarAsistenciaAutomaticaSiCorresponde($asistencia, $ahora);
+                $asistencia->refresh();
+            }
+        }
+
+        $registros = $asistencias
             ->map(function ($a) {
                 return [
                     'id' => $a->id,

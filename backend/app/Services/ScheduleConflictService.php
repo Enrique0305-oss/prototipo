@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Exponente;
+use App\Models\Personal;
 use App\Models\Tecnico;
 use Illuminate\Support\Facades\DB;
 
@@ -92,6 +93,16 @@ class ScheduleConflictService
             . ($idProgramacion > 0 ? ' #' . $idProgramacion : '')
             . ' en ese horario (' . $horario . ').';
         return $conflictoVinculado;
+    }
+
+    public static function validarPersonal(array $personalIds, string $fecha, ?string $horaInicio, ?string $horaFin = null, array $ignore = []): ?array
+    {
+        $personal = self::normalizeIds($personalIds);
+        if (empty($personal)) {
+            return null;
+        }
+
+        return self::buscarConflictoPersonalDirecto($personal, $fecha, $horaInicio, $horaFin, $ignore);
     }
 
     private static function buscarConflictoTecnicoDirecto(array $tecnicoIds, string $fecha, ?string $horaInicio, ?string $horaFin, array $ignore): ?array
@@ -203,6 +214,223 @@ class ScheduleConflictService
                     $idConflicto,
                     $mapNombres[$idConflicto] ?? ('Técnico #' . $idConflicto),
                     'tecnico'
+                );
+            }
+        }
+
+        $otros = DB::table('programacion_otros')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_tecnico_asignado', 'tecnicos_ids')
+            ->whereDate('fecha_programada', $fecha)
+            ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->when(isset($ignore['programacion_otros']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_otros']))
+            ->get();
+
+        foreach ($otros as $row) {
+            $asignados = [(int) ($row->id_tecnico_asignado ?? 0)];
+            $asignados = array_merge($asignados, self::extractIdsFromJsonColumn($row->tecnicos_ids ?? null));
+            $asignados = self::normalizeIds($asignados);
+
+            $idConflicto = self::firstIntersectingId($tecnicoIds, $asignados);
+            if (!$idConflicto) {
+                continue;
+            }
+
+            if (self::timeOverlaps($horaInicio, $horaFin, $row->hora_inicio, $row->hora_fin)) {
+                return self::buildConflict(
+                    'Otros',
+                    'programacion_otros',
+                    (int) $row->id,
+                    $fecha,
+                    $row->hora_inicio,
+                    $row->hora_fin,
+                    $idConflicto,
+                    $mapNombres[$idConflicto] ?? ('Técnico #' . $idConflicto),
+                    'tecnico'
+                );
+            }
+        }
+
+        return null;
+    }
+
+    private static function buscarConflictoPersonalDirecto(array $personalIds, string $fecha, ?string $horaInicio, ?string $horaFin, array $ignore): ?array
+    {
+        $mapNombres = Personal::query()
+            ->whereIn('id', $personalIds)
+            ->get(['id', 'nombre', 'apellidos'])
+            ->mapWithKeys(fn (Personal $p) => [(int) $p->id => trim(($p->nombre ?? '') . ' ' . ($p->apellidos ?? ''))])
+            ->all();
+
+        $servicios = DB::table('programacion_servicio')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor')
+            ->whereDate('fecha_programada', $fecha)
+            ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->when(isset($ignore['programacion_servicio']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_servicio']))
+            ->get();
+
+        foreach ($servicios as $row) {
+            $asignados = self::extractIdsFromJsonColumn($row->id_supervisor ?? null);
+            $idConflicto = self::firstIntersectingId($personalIds, $asignados);
+            if (!$idConflicto) {
+                continue;
+            }
+
+            if (self::timeOverlaps($horaInicio, $horaFin, $row->hora_inicio, $row->hora_fin)) {
+                return self::buildConflict(
+                    'Servicio',
+                    'programacion_servicio',
+                    (int) $row->id,
+                    $fecha,
+                    $row->hora_inicio,
+                    $row->hora_fin,
+                    $idConflicto,
+                    $mapNombres[$idConflicto] ?? ('Personal #' . $idConflicto),
+                    'personal'
+                );
+            }
+        }
+
+        $visitas = DB::table('programacion_visita')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor')
+            ->whereDate('fecha_programada', $fecha)
+            ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->when(isset($ignore['programacion_visita']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_visita']))
+            ->get();
+
+        foreach ($visitas as $row) {
+            $asignados = self::extractIdsFromJsonColumn($row->id_supervisor ?? null);
+            $idConflicto = self::firstIntersectingId($personalIds, $asignados);
+            if (!$idConflicto) {
+                continue;
+            }
+
+            if (self::timeOverlaps($horaInicio, $horaFin, $row->hora_inicio, $row->hora_fin)) {
+                return self::buildConflict(
+                    'Visita',
+                    'programacion_visita',
+                    (int) $row->id,
+                    $fecha,
+                    $row->hora_inicio,
+                    $row->hora_fin,
+                    $idConflicto,
+                    $mapNombres[$idConflicto] ?? ('Personal #' . $idConflicto),
+                    'personal'
+                );
+            }
+        }
+
+        $fabricaciones = DB::table('programacion_fabricacion')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor')
+            ->whereDate('fecha_programada', $fecha)
+            ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->when(isset($ignore['programacion_fabricacion']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_fabricacion']))
+            ->get();
+
+        foreach ($fabricaciones as $row) {
+            $asignados = self::extractIdsFromJsonColumn($row->id_supervisor ?? null);
+            $idConflicto = self::firstIntersectingId($personalIds, $asignados);
+            if (!$idConflicto) {
+                continue;
+            }
+
+            if (self::timeOverlaps($horaInicio, $horaFin, $row->hora_inicio, $row->hora_fin)) {
+                return self::buildConflict(
+                    'Fabricación',
+                    'programacion_fabricacion',
+                    (int) $row->id,
+                    $fecha,
+                    $row->hora_inicio,
+                    $row->hora_fin,
+                    $idConflicto,
+                    $mapNombres[$idConflicto] ?? ('Personal #' . $idConflicto),
+                    'personal'
+                );
+            }
+        }
+
+        $otros = DB::table('programacion_otros')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor')
+            ->whereDate('fecha_programada', $fecha)
+            ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->when(isset($ignore['programacion_otros']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_otros']))
+            ->get();
+
+        foreach ($otros as $row) {
+            $asignados = self::extractIdsFromJsonColumn($row->id_supervisor ?? null);
+            $idConflicto = self::firstIntersectingId($personalIds, $asignados);
+            if (!$idConflicto) {
+                continue;
+            }
+
+            if (self::timeOverlaps($horaInicio, $horaFin, $row->hora_inicio, $row->hora_fin)) {
+                return self::buildConflict(
+                    'Otros',
+                    'programacion_otros',
+                    (int) $row->id,
+                    $fecha,
+                    $row->hora_inicio,
+                    $row->hora_fin,
+                    $idConflicto,
+                    $mapNombres[$idConflicto] ?? ('Personal #' . $idConflicto),
+                    'personal'
+                );
+            }
+        }
+
+        $capacitaciones = DB::table('programacion_capacitacion')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor')
+            ->whereDate('fecha_programada', $fecha)
+            ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->when(isset($ignore['programacion_capacitacion']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_capacitacion']))
+            ->get();
+
+        foreach ($capacitaciones as $row) {
+            $asignados = self::extractIdsFromJsonColumn($row->id_supervisor ?? null);
+            $idConflicto = self::firstIntersectingId($personalIds, $asignados);
+            if (!$idConflicto) {
+                continue;
+            }
+
+            if (self::timeOverlaps($horaInicio, $horaFin, $row->hora_inicio, $row->hora_fin)) {
+                return self::buildConflict(
+                    'Capacitación',
+                    'programacion_capacitacion',
+                    (int) $row->id,
+                    $fecha,
+                    $row->hora_inicio,
+                    $row->hora_fin,
+                    $idConflicto,
+                    $mapNombres[$idConflicto] ?? ('Personal #' . $idConflicto),
+                    'personal'
+                );
+            }
+        }
+
+        $asesorias = DB::table('programacion_asesoria')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor')
+            ->whereDate('fecha_programada', $fecha)
+            ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->when(isset($ignore['programacion_asesoria']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_asesoria']))
+            ->get();
+
+        foreach ($asesorias as $row) {
+            $asignados = self::extractIdsFromJsonColumn($row->id_supervisor ?? null);
+            $idConflicto = self::firstIntersectingId($personalIds, $asignados);
+            if (!$idConflicto) {
+                continue;
+            }
+
+            if (self::timeOverlaps($horaInicio, $horaFin, $row->hora_inicio, $row->hora_fin)) {
+                return self::buildConflict(
+                    'Asesoría',
+                    'programacion_asesoria',
+                    (int) $row->id,
+                    $fecha,
+                    $row->hora_inicio,
+                    $row->hora_fin,
+                    $idConflicto,
+                    $mapNombres[$idConflicto] ?? ('Personal #' . $idConflicto),
+                    'personal'
                 );
             }
         }
@@ -367,6 +595,35 @@ class ScheduleConflictService
     private static function normalizeIds(array $ids): array
     {
         return array_values(array_unique(array_filter(array_map('intval', $ids), fn (int $id) => $id > 0)));
+    }
+
+    private static function extractIdsFromJsonColumn(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_array($value)) {
+            return self::normalizeIds($value);
+        }
+
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            return [(int) $value];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                if (is_array($decoded)) {
+                    return self::normalizeIds($decoded);
+                }
+                if (is_int($decoded) || (is_string($decoded) && ctype_digit($decoded))) {
+                    return [(int) $decoded];
+                }
+            }
+        }
+
+        return [];
     }
 
     private static function firstIntersectingId(array $left, array $right): ?int
