@@ -885,9 +885,9 @@ body {
 }
 
 /* Badge adicionales para cotizaciones */
-.badge.badge-blue {
-  background: #dbeafe;
-  color: #1e40af;
+.badge.blue {
+  background: #fbcfe8;
+  color: #be123c;
 }
 
 .badge.badge-warning {
