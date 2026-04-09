@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Inventario;
 use App\Models\Kardex;
+use App\Models\EntradaDevolucionFabricacion;
 use App\Models\ProgramacionFabricacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -200,6 +201,21 @@ class SalidaProgramacionFabricacionController extends Controller
                         : 'Salida confirmada por almacén.',
                 ]);
             }
+
+            EntradaDevolucionFabricacion::firstOrCreate(
+                ['id_programacion_fabricacion' => $programacion->id],
+                [
+                    'id_orden_fabricacion' => (int) $programacion->id_orden_fabricacion,
+                    'cantidad_esperada_total' => collect($programacion->ordenFabricacion?->detalles ?? [])->sum('cantidad'),
+                    'cantidad_producida_total' => 0,
+                    'motivo_diferencia' => null,
+                    'tiene_sobrante_materia_prima' => false,
+                    'observaciones' => null,
+                    'creado_por' => $idUsuario,
+                    'estado' => 'Pendiente',
+                    'fecha_realizado' => null,
+                ]
+            );
 
             if ($programacion->estado_ejecucion === 'Programado') {
                 $programacion->update(['estado_ejecucion' => 'Confirmado']);

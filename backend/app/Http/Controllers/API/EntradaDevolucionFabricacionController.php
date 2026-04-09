@@ -8,7 +8,6 @@ use App\Models\EntradaDevolucionFabricacion;
 use App\Models\Inventario;
 use App\Models\Kardex;
 use App\Models\ProgramacionFabricacion;
-use App\Models\Producto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -16,47 +15,37 @@ class EntradaDevolucionFabricacionController extends Controller
 {
     public function pendientes(Request $request)
     {
-        $query = ProgramacionFabricacion::with(['tecnico', 'ordenFabricacion.detalles.producto'])
-            ->whereHas('ordenFabricacion', function ($ordenQuery) {
-                $ordenQuery->whereIn('estado', ['Confirmada', 'Programada']);
-            })
-            ->where('estado_ejecucion', '!=', 'Cancelado')
-            ->whereDoesntHave('entradaDevolucionFabricacion')
-            ->whereHas('ordenFabricacion');
+        $query = EntradaDevolucionFabricacion::with([
+            'ordenFabricacion.detalles.producto',
+            'programacionFabricacion.tecnico',
+            'detalles.producto',
+        ]);
+
+        if ($request->filled('estado')) {
+            $query->where('estado', $request->estado);
+        }
 
         if ($request->filled('fecha_desde')) {
-            $query->whereDate('fecha_programada', '>=', $request->fecha_desde);
+            $query->whereDate('created_at', '>=', $request->fecha_desde);
         }
 
         if ($request->filled('fecha_hasta')) {
-            $query->whereDate('fecha_programada', '<=', $request->fecha_hasta);
+            $query->whereDate('created_at', '<=', $request->fecha_hasta);
         }
 
-        if (!$request->filled('fecha_desde') && !$request->filled('fecha_hasta')) {
-            $query->whereDate('fecha_programada', '>=', now()->subDays(30));
-        }
-
-        $programaciones = $query->orderBy('fecha_programada', 'asc')
-            ->orderBy('hora_inicio', 'asc')
+        $registros = $query
+            ->orderByRaw("CASE WHEN estado = 'Pendiente' THEN 0 ELSE 1 END")
+            ->orderByDesc('created_at')
             ->get();
 
-        $programaciones = $programaciones->filter(function (ProgramacionFabricacion $programacion) {
-            return Kardex::query()
-                ->where('referencia', $this->buildReferenciaSalida($programacion->id))
-                ->where('tipo_movimiento', 'Salida')
-                ->exists();
-        })->values();
-
-        $data = $programaciones->map(function (ProgramacionFabricacion $programacion) {
-            $salidaConfirmada = Kardex::query()
-                ->where('referencia', $this->buildReferenciaSalida($programacion->id))
-                ->where('tipo_movimiento', 'Salida')
-                ->exists();
-
+        $data = $registros->map(function (EntradaDevolucionFabricacion $registro) {
+            $programacion = $registro->programacionFabricacion;
             $resumen = $this->buildResumenProgramacion($programacion);
 
             return [
-                'id' => $programacion->id,
+                'id' => $registro->id,
+                'id_entrada_devolucion_fabricacion' => $registro->id,
+                'id_programacion_fabricacion' => $programacion->id,
                 'id_orden_fabricacion' => $programacion->id_orden_fabricacion,
                 'codigo_orden' => $programacion->ordenFabricacion?->codigo,
                 'fecha_orden' => $programacion->ordenFabricacion?->fecha_orden,
@@ -65,14 +54,33 @@ class EntradaDevolucionFabricacionController extends Controller
                 'hora_inicio' => $programacion->hora_inicio,
                 'hora_fin' => $programacion->hora_fin,
                 'estado_ejecucion' => $programacion->estado_ejecucion,
+                'estado' => $registro->estado,
+                'fecha_realizado' => $registro->fecha_realizado,
+                'observaciones' => $registro->observaciones,
                 'tecnico' => $programacion->tecnico ? [
                     'id' => $programacion->tecnico->id,
                     'nombre' => $programacion->tecnico->nombre,
                     'apellido' => $programacion->tecnico->apellido,
                 ] : null,
-                'salida_confirmada' => $salidaConfirmada,
+                'salida_confirmada' => true,
                 'productos_esperados' => $resumen['productos_esperados'],
                 'insumos_sugeridos' => $resumen['insumos_sugeridos'],
+                'detalles' => $registro->detalles->map(function (DetalleEntradaDevolucionFabricacion $detalle) {
+                    return [
+                        'id' => $detalle->id,
+                        'tipo' => $detalle->tipo,
+                        'id_producto' => $detalle->id_producto,
+                        'cantidad' => (float) $detalle->cantidad,
+                        'observacion' => $detalle->observacion,
+                        'producto' => $detalle->producto ? [
+                            'id' => $detalle->producto->id,
+                            'descripcion' => $detalle->producto->descripcion,
+                            'unidad' => $detalle->producto->unidad,
+                        ] : null,
+                    ];
+                })->values(),
+                'cantidad_esperada_total' => (float) $registro->cantidad_esperada_total,
+                'cantidad_producida_total' => (float) $registro->cantidad_producida_total,
             ];
         })->values();
 
@@ -85,7 +93,7 @@ class EntradaDevolucionFabricacionController extends Controller
     public function registrar(Request $request)
     {
         $validated = $request->validate([
-            'id_programacion_fabricacion' => 'required|integer|exists:programacion_fabricacion,id',
+            'id_entrada_devolucion_fabricacion' => 'required|integer|exists:entrada_devolucion_fabricacion,id',
             'productos' => 'required|array|min:1',
             'productos.*.id_producto_final' => 'required|integer|exists:productos,id',
             'productos.*.cantidad_producida' => 'required|numeric|min:0.001',
@@ -97,8 +105,10 @@ class EntradaDevolucionFabricacionController extends Controller
             'devoluciones.*.cantidad_devuelta' => 'required_with:devoluciones|numeric|min:0.001',
         ]);
 
-        $programacion = ProgramacionFabricacion::with(['ordenFabricacion.detalles.producto', 'entradaDevolucionFabricacion'])
-            ->findOrFail((int) $validated['id_programacion_fabricacion']);
+        $registro = EntradaDevolucionFabricacion::with(['ordenFabricacion.detalles.producto', 'programacionFabricacion.tecnico', 'detalles.producto'])
+            ->findOrFail((int) $validated['id_entrada_devolucion_fabricacion']);
+
+        $programacion = $registro->programacionFabricacion;
 
         if (!$programacion->ordenFabricacion) {
             return response()->json([
@@ -107,10 +117,10 @@ class EntradaDevolucionFabricacionController extends Controller
             ], 422);
         }
 
-        if ($programacion->entradaDevolucionFabricacion) {
+        if ($registro->estado === 'Realizado') {
             return response()->json([
                 'success' => false,
-                'message' => 'Esta programacion ya fue cerrada con entrada/devolucion.',
+                'message' => 'Este cierre ya fue realizado.',
             ], 422);
         }
 
@@ -168,16 +178,17 @@ class EntradaDevolucionFabricacionController extends Controller
 
         DB::beginTransaction();
         try {
-            $entrada = EntradaDevolucionFabricacion::create([
-                'id_orden_fabricacion' => $programacion->id_orden_fabricacion,
-                'id_programacion_fabricacion' => $programacion->id,
+            $registro->fill([
                 'cantidad_esperada_total' => collect($resumen['productos_esperados'])->sum('cantidad_esperada'),
                 'cantidad_producida_total' => collect($validated['productos'])->sum('cantidad_producida'),
                 'motivo_diferencia' => $motivoDiferencia ?: null,
                 'tiene_sobrante_materia_prima' => $tieneSobrante,
                 'observaciones' => $validated['observaciones'] ?? null,
-                'creado_por' => $idUsuario,
+                'creado_por' => $idUsuario ?? $registro->creado_por,
             ]);
+            $registro->estado = 'Realizado';
+            $registro->fecha_realizado = now();
+            $registro->save();
 
             foreach ($validated['productos'] as $productoFinal) {
                 $idProductoFinal = (int) $productoFinal['id_producto_final'];
@@ -191,13 +202,13 @@ class EntradaDevolucionFabricacionController extends Controller
                     'cantidad' => $cantidadProducida,
                     'motivo' => 'Entrada por fabricación',
                     'referencia' => $this->buildReferenciaEntrada($programacion->id),
-                    'id_referencia' => $entrada->id,
+                    'id_referencia' => $registro->id,
                     'id_usuario' => $idUsuario,
                     'observacion' => 'Ingreso de producto terminado por cierre de fabricación.',
                 ]);
 
                 DetalleEntradaDevolucionFabricacion::create([
-                    'id_entrada_devolucion_fabricacion' => $entrada->id,
+                    'id_entrada_devolucion_fabricacion' => $registro->id,
                     'tipo' => 'EntradaProducto',
                     'id_producto' => $idProductoFinal,
                     'cantidad' => $cantidadProducida,
@@ -220,13 +231,13 @@ class EntradaDevolucionFabricacionController extends Controller
                     'cantidad' => $cantidadDevuelta,
                     'motivo' => 'Devolución por sobrante de fabricación',
                     'referencia' => $this->buildReferenciaEntrada($programacion->id),
-                    'id_referencia' => $entrada->id,
+                    'id_referencia' => $registro->id,
                     'id_usuario' => $idUsuario,
                     'observacion' => 'Devolución de materia prima por cierre de fabricación.',
                 ]);
 
                 DetalleEntradaDevolucionFabricacion::create([
-                    'id_entrada_devolucion_fabricacion' => $entrada->id,
+                    'id_entrada_devolucion_fabricacion' => $registro->id,
                     'tipo' => 'DevolucionInsumo',
                     'id_producto' => $idProducto,
                     'cantidad' => $cantidadDevuelta,
@@ -251,7 +262,7 @@ class EntradaDevolucionFabricacionController extends Controller
                 'success' => true,
                 'message' => 'Entrada y devolucion registradas exitosamente.',
                 'data' => [
-                    'id' => $entrada->id,
+                    'id' => $registro->id,
                 ],
             ], 201);
         } catch (\Throwable $e) {
@@ -266,6 +277,13 @@ class EntradaDevolucionFabricacionController extends Controller
 
     private function buildResumenProgramacion(ProgramacionFabricacion $programacion): array
     {
+        if (!$programacion) {
+            return [
+                'productos_esperados' => [],
+                'insumos_sugeridos' => [],
+            ];
+        }
+
         $productosEsperados = [];
         $insumosSugeridos = [];
 

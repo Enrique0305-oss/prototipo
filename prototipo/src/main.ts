@@ -5,24 +5,24 @@ import { authService } from './modules/auth/auth.service'
 
 // Inicializar guard de autenticación
 initAuthGuard();
-import { renderDashboard, cargarAlertaStockBajo, cargarAlertaMantenimiento, cargarAlertaCotizacionesSinOrden } from './modules/dashboard/dashboard.view'
+import { renderDashboard, initDashboardEvents } from './modules/dashboard/dashboard.view'
 import { renderProgramacionServicio, initProgramacionServicioEvents } from './modules/programaciones/programacion-servicio/programacion-servicio.view'
 import { renderProgramacionCapacitacionAsesoria, initProgramacionCapacitacionAsesoriaEvents } from './modules/programaciones/programacion-capacitacion-asesoria/programacion-capacitacion-asesoria.view'
-import { renderRecursosHumanos, renderAsistenciaTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios } from './modules/recursos-humanos/recursos-humanos.view'
+import { renderRecursosHumanos, renderAsistenciaTab, renderAsistenciaPersonalTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, cargarAsistenciaPersonal, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios, getTabsRecursosHumanosPermitidos, tieneAccesoCompletoRecursosHumanos } from './modules/recursos-humanos/recursos-humanos.view'
 import { renderTecnicosTab, cargarTecnicos } from './modules/recursos-humanos/tecnicos.view'
 // Almacén
-import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
+import { initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
 import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderAjustesInventarioTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents, initKardexEvents, initAjustesInventarioEvents } from './modules/almacen/inventario/inventario.view'
 import { renderAlmacenProveedores, initProveedoresEvents } from './modules/almacen/proveedores/proveedores.view'
 import { renderAlmacenCompras, initComprasEvents } from './modules/almacen/compras/compras.view'
-import { renderAlmacenEntradasSalidas, renderMovimientosTab, renderPrestamoEPPTab, renderTransferenciasTab } from './modules/almacen/entradas-salidas/entradas-salidas.view'
+import { renderAlmacenDashboard, initAlmacenDashboardEvents } from './modules/almacen/dashboard-almacen.view'
 import { renderEntregaEpp, initEntregaEppEvents } from './modules/almacen/entrega-epp/entrega-epp.view'
 import { renderSalidasProgramacion, initSalidasProgramacion } from './modules/almacen/salidas-programacion/salidas-programacion.view'
 import { renderSalidasProductos, initSalidasProductos } from './modules/almacen/salidas-productos/salidas-productos.view'
 import { renderOrdenesFabricacion, initOrdenesFabricacion } from './modules/almacen/ordenes-fabricacion/ordenes-fabricacion.view'
 import { renderAlmacenVehiculos, initVehiculosEvents } from './modules/almacen/vehiculos/vehiculos.view'
 // Servicios - Clientes
-import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderRutasTab, initClientesLogisticaEvents, initServiciosTabEvents } from './modules/logistica/logistica.view'
+import { renderLogistica, renderClientesTab, renderServiciosDisponiblesTab, renderMuestreoClientesTab, initClientesLogisticaEvents, initServiciosTabEvents, initMuestreoClientesEvents } from './modules/logistica/logistica.view'
 // Comercial
 import { renderComercialProspectos, initProspectosEvents } from './modules/comercial/prospectos/prospectos.view'
 import { renderComercialCotizaciones, initCotizacionesEvents } from './modules/comercial/cotizaciones/cotizaciones.view'
@@ -30,10 +30,10 @@ import { renderComercialOrdenesServicio, initOrdenesServicioEvents } from './mod
 import { renderComercialOrdenesProducto, initOrdenesProductoEvents } from './modules/comercial/ordenes-producto/ordenes-producto.view'
 import { renderComercialOrdenesCapacitacion, initOrdenesCapacitacionEvents } from './modules/comercial/ordenes-capacitacion/ordenes-capacitacion.view'
 import { renderComercialOrdenesAsesoria, initOrdenesAsesoriaEvents } from './modules/comercial/ordenes-asesoria/ordenes-asesoria.view'
-import { renderComercialConversiones } from './modules/comercial/conversiones/conversiones.view'
 import { renderAprobacionCotizaciones, initAprobacionCotizacionesEvents } from './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.view'
 import './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.css'
 import { renderComercialExponentes, initExponentesEvents } from './modules/comercial/exponentes/exponentes.view'
+import { renderComercialDashboard, initComercialDashboardEvents } from './modules/comercial/dashboard-comercial.view'
 // Finanzas
 import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
 // Facturación
@@ -49,7 +49,6 @@ let activeMenu = 'Dashboard';
 let activeSubMenu = '';
 let expandedMenu = ''; // Controla qué menú con submenús está expandido (sin navegar)
 let activeInventoryTab = 'productos'; // Estado para el tab de inventario
-let activeEntradasTab = 'movimientos'; // Estado para el tab de entradas y salidas
 let activeLogisticaTab = 'clientes'; // Estado para el tab de Servicios - Clientes
 let activeFinanzasTab = 'dashboard'; // Estado para el tab de finanzas
 let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
@@ -81,8 +80,59 @@ const SUBMENU_PERMISOS: Record<string, string[]> = {
   'Programaciones::Programación Capacitación/Asesoría': ['programaciones-capacitacion-asesoria', 'programaciones'],
 };
 
+function esUsuarioGerencia(): boolean {
+  const user = authService.getUser();
+  const rol = (user?.rol || '').toLowerCase();
+  const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
+
+  return rol.includes('geren') || permisos.includes('*') || tieneAccesoModulo('*');
+}
+
+function getRutaInicialPorPerfil(): { menu: string; subMenu: string } {
+  if (esUsuarioGerencia()) {
+    return { menu: 'Dashboard', subMenu: '' };
+  }
+
+  const tieneAccesoComercial = [
+    'prospectos',
+    'cotizaciones',
+    'ods',
+    'odp',
+    'servicios',
+  ].some((permiso) => tieneAccesoModulo(permiso));
+
+  if (tieneAccesoComercial) {
+    return { menu: 'Comercial', subMenu: 'Dashboard' };
+  }
+
+  const tieneAccesoAlmacen = ['inventario', 'entradas-salidas'].some((permiso) => tieneAccesoModulo(permiso));
+  if (tieneAccesoAlmacen) {
+    return { menu: 'Almacén', subMenu: 'Dashboard' };
+  }
+
+  if (tieneAccesoModulo('logistica')) {
+    return { menu: 'Servicios - Clientes', subMenu: '' };
+  }
+
+  if (tieneAccesoModulo('programaciones')) {
+    return { menu: 'Programaciones', subMenu: 'Programación Servicio' };
+  }
+
+  if (tieneAccesoModulo('rrhh-asistencia') || tieneAccesoModulo('marcar-asistencia')) {
+    return { menu: 'Recursos Humanos', subMenu: '' };
+  }
+
+  const visible = filtrarMenuPorPermisos(menuItems);
+  const firstVisible = visible[0]?.name || 'Dashboard';
+  return { menu: firstVisible, subMenu: '' };
+}
+
 function filtrarMenuPorPermisos(items: typeof menuItems): typeof menuItems {
   return items.filter(item => {
+    if (item.name === 'Dashboard' && !esUsuarioGerencia()) {
+      return false;
+    }
+
     const permisosRequeridos = MENU_PERMISOS[item.name];
     if (!permisosRequeridos) return true; // Si no está en el mapa, mostrar
     return permisosRequeridos.some(p => tieneAccesoModulo(p));
@@ -100,10 +150,10 @@ function filtrarSubmenuPorPermisos(menuName: string, submenuItems: string[]): st
 
 const menuItems = [
   { name: 'Dashboard', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>', submenu: [] },
-  { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Mantenimiento', 'Inventario', 'Ajuste de Inventario', 'Proveedores', 'Órdenes de Compra', 'Entradas y Salidas', 'Entrega EPP', 'Gestión de Vehículos', 'Salidas Programación', 'Salidas de Productos', 'Órdenes de Fabricación'] },
+  { name: 'Almacén', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>', submenu: ['Dashboard', 'Mantenimiento', 'Inventario', 'Ajuste de Inventario', 'Proveedores', 'Órdenes de Compra', 'Entrega EPP', 'Gestión de Vehículos', 'Salidas Programación', 'Salidas de Productos', 'Órdenes de Fabricación'] },
   { name: 'Servicios - Clientes', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>', submenu: [] },
   { name: 'Programaciones', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>', submenu: ['Programación Servicio', 'Programación Capacitación/Asesoría'] },
-  { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Clientes Potenciales', 'Cotizaciones', 'Aprobación Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Órdenes de Asesoría', 'Exponentes', 'Conversiones'] },
+  { name: 'Comercial', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>', submenu: ['Dashboard', 'Clientes Potenciales', 'Cotizaciones', 'Aprobación Cotizaciones', 'Órdenes de Servicio', 'Órdenes de Producto', 'Órdenes de Capacitación', 'Órdenes de Asesoría', 'Exponentes'] },
   { name: 'Finanzas', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>', submenu: [] },
   { name: 'Facturación', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>', submenu: [] },
   { name: 'Recursos Humanos', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>', submenu: [] },
@@ -114,15 +164,25 @@ const menuItems = [
 
 function getMainContent() {
   if (activeMenu === 'Dashboard') {
-    // Cargar alerta de stock bajo después de que el DOM se renderice
-    setTimeout(() => { cargarAlertaStockBajo(); cargarAlertaMantenimiento(); cargarAlertaCotizacionesSinOrden(); }, 0);
+    if (!esUsuarioGerencia()) {
+      const ruta = getRutaInicialPorPerfil();
+      activeMenu = ruta.menu;
+      activeSubMenu = ruta.subMenu;
+      return getMainContent();
+    }
+
+    setTimeout(() => { initDashboardEvents(); }, 0);
     return renderDashboard();
   } else if (activeMenu === 'Almacén') {
     if (activeSubMenu === 'Inventario') return renderAlmacenInventario();
     if (activeSubMenu === 'Ajuste de Inventario') return renderAjustesInventarioTab();
     if (activeSubMenu === 'Proveedores') return renderAlmacenProveedores();
     if (activeSubMenu === 'Órdenes de Compra') return renderAlmacenCompras();
-    if (activeSubMenu === 'Entradas y Salidas') return renderAlmacenEntradasSalidas();
+    if (activeSubMenu === 'Dashboard') {
+      const html = renderAlmacenDashboard();
+      setTimeout(() => initAlmacenDashboardEvents(), 0);
+      return html;
+    }
     if (activeSubMenu === 'Entrega EPP') return renderEntregaEpp();
     if (activeSubMenu === 'Gestión de Vehículos') return renderAlmacenVehiculos();
     if (activeSubMenu === 'Salidas Programación') {
@@ -140,7 +200,9 @@ function getMainContent() {
       setTimeout(() => initOrdenesFabricacion(), 0);
       return html;
     }
-    return renderAlmacenMantenimiento(); // Mantenimiento por defecto (con tabs)
+    const html = renderAlmacenDashboard();
+    setTimeout(() => initAlmacenDashboardEvents(), 0);
+    return html;
   } else if (activeMenu === 'Servicios - Clientes') {
     const html = renderLogistica();
     setTimeout(() => initClientesLogisticaEvents(), 0);
@@ -151,6 +213,11 @@ function getMainContent() {
     }
     return renderProgramacionServicio();
   } else if (activeMenu === 'Comercial') {
+    if (activeSubMenu === 'Dashboard' || !activeSubMenu) {
+      const html = renderComercialDashboard();
+      setTimeout(() => initComercialDashboardEvents(), 0);
+      return html;
+    }
     if (activeSubMenu === 'Clientes Potenciales') {
       const html = renderComercialProspectos();
       setTimeout(() => initProspectosEvents(), 0);
@@ -191,9 +258,8 @@ function getMainContent() {
       setTimeout(() => initExponentesEvents(), 0);
       return html;
     }
-    if (activeSubMenu === 'Conversiones') return renderComercialConversiones();
-    const html = renderComercialProspectos(); // Prospectos por defecto
-    setTimeout(() => initProspectosEvents(), 0);
+    const html = renderComercialDashboard();
+    setTimeout(() => initComercialDashboardEvents(), 0);
     return html;
   } else if (activeMenu === 'Finanzas') {
     return renderFinanzas();
@@ -224,10 +290,30 @@ function renderApp() {
   const userName = currentUser?.nombre || 'Usuario';
   const userRole = currentUser?.rol || 'Sin rol';
   const userInitials = userName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+
+  if (activeMenu === 'Recursos Humanos') {
+    const tabsPermitidos = getTabsRecursosHumanosPermitidos();
+    if (!tabsPermitidos.includes(activeRecursosTab)) {
+      activeRecursosTab = tabsPermitidos.includes('asistencia') ? 'asistencia' : (tabsPermitidos[0] || 'asistencia');
+    }
+  }
+
+  if (activeMenu === 'Dashboard' && !esUsuarioGerencia()) {
+    const ruta = getRutaInicialPorPerfil();
+    activeMenu = ruta.menu;
+    activeSubMenu = ruta.subMenu;
+  }
+
   const visibleMenuItems = filtrarMenuPorPermisos(menuItems).map((item) => ({
     ...item,
     submenu: filtrarSubmenuPorPermisos(item.name, item.submenu),
   }));
+
+  if (!visibleMenuItems.some((item) => item.name === activeMenu)) {
+    const ruta = getRutaInicialPorPerfil();
+    activeMenu = ruta.menu;
+    activeSubMenu = ruta.subMenu;
+  }
 
   app.innerHTML = `
     <div class="app-container">
@@ -334,6 +420,12 @@ if (activeMenu === 'Facturación') {
     activeSubMenu = '';
     expandedMenu = '';
 
+    if (menuName === 'Dashboard' && !esUsuarioGerencia()) {
+      const ruta = getRutaInicialPorPerfil();
+      activeMenu = ruta.menu;
+      activeSubMenu = ruta.subMenu;
+    }
+
     // SOLO si es Facturación, traemos la data real
     if (menuName === 'Facturación') {
       try {
@@ -385,11 +477,6 @@ if (activeMenu === 'Facturación') {
         updateInventoryTabContent();
       }
 
-      if (tabName && activeMenu === 'Almacén' && activeSubMenu === 'Entradas y Salidas') {
-        activeEntradasTab = tabName;
-        updateEntradasTabContent();
-      }
-
       if (tabName && activeMenu === 'Servicios - Clientes') {
         activeLogisticaTab = tabName;
         updateLogisticaTabContent();
@@ -433,7 +520,11 @@ if (activeMenu === 'Facturación') {
 
   // Inicializar eventos del módulo de Asistencia Admin (RRHH)
   if (activeMenu === 'Recursos Humanos' && activeRecursosTab === 'asistencia') {
-    setTimeout(() => cargarAsistenciaAdmin(), 0);
+    if (tieneAccesoCompletoRecursosHumanos()) {
+      setTimeout(() => cargarAsistenciaAdmin(), 0);
+    } else {
+      setTimeout(() => cargarAsistenciaPersonal(), 0);
+    }
   }
 
   // Inicializar eventos del módulo de Programaciones
@@ -456,7 +547,7 @@ if (activeMenu === 'Facturación') {
   }
 
   // Inicializar eventos del módulo de Mantenimiento (tabs)
-  if (activeMenu === 'Almacén' && (!activeSubMenu || activeSubMenu === 'Mantenimiento')) {
+  if (activeMenu === 'Almacén' && activeSubMenu === 'Mantenimiento') {
     setTimeout(() => initMantenimientoEvents(), 0);
   }
 
@@ -515,35 +606,6 @@ function updateInventoryTabContent() {
 }
 
 
-function updateEntradasTabContent() {
-  const tabContent = document.querySelector('#entradas-tab-content');
-  const tabButtons = document.querySelectorAll('.tab-btn');
-
-  if (!tabContent) return;
-
-
-  tabButtons.forEach(btn => {
-    const target = btn as HTMLButtonElement;
-    if (target.dataset.tab === activeEntradasTab) {
-      target.classList.add('active');
-    } else {
-      target.classList.remove('active');
-    }
-  });
-
-  switch (activeEntradasTab) {
-    case 'prestamo':
-      tabContent.innerHTML = renderPrestamoEPPTab();
-      break;
-    case 'transferencias':
-      tabContent.innerHTML = renderTransferenciasTab();
-      break;
-    default:
-      tabContent.innerHTML = renderMovimientosTab();
-  }
-}
-
-
 function updateLogisticaTabContent() {
   const tabContent = document.querySelector('#logistica-tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
@@ -566,8 +628,9 @@ function updateLogisticaTabContent() {
       tabContent.innerHTML = renderServiciosDisponiblesTab();
       setTimeout(() => initServiciosTabEvents(), 0);
       break;
-    case 'rutas':
-      tabContent.innerHTML = renderRutasTab();
+    case 'muestreo':
+      tabContent.innerHTML = renderMuestreoClientesTab();
+      setTimeout(() => initMuestreoClientesEvents(), 0);
       break;
     default:
       tabContent.innerHTML = renderClientesTab();
@@ -640,8 +703,13 @@ function updateFacturacionTabContent() {
 function updateRecursosTabContent() {
   const tabContent = document.querySelector('#recursos-tab-content');
   const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabsPermitidos = getTabsRecursosHumanosPermitidos();
 
   if (!tabContent) return;
+
+  if (!tabsPermitidos.includes(activeRecursosTab)) {
+    activeRecursosTab = tabsPermitidos.includes('asistencia') ? 'asistencia' : (tabsPermitidos[0] || 'asistencia');
+  }
 
 
   tabButtons.forEach(btn => {
@@ -671,7 +739,7 @@ function updateRecursosTabContent() {
       tabContent.innerHTML = renderReportesTab();
       break;
     default:
-      tabContent.innerHTML = renderAsistenciaTab();
+      tabContent.innerHTML = tieneAccesoCompletoRecursosHumanos() ? renderAsistenciaTab() : renderAsistenciaPersonalTab();
   }
   
   // Inicializar event listeners para Marcar Asistencia
@@ -681,7 +749,11 @@ function updateRecursosTabContent() {
 
   // Cargar asistencia admin
   if (activeRecursosTab === 'asistencia') {
-    cargarAsistenciaAdmin();
+    if (tieneAccesoCompletoRecursosHumanos()) {
+      cargarAsistenciaAdmin();
+    } else {
+      cargarAsistenciaPersonal();
+    }
   }
 
   // Cargar datos de horarios
@@ -693,12 +765,6 @@ function updateRecursosTabContent() {
     cargarTecnicos();
   }
 }
-
-function initMarcarAsistenciaEvents() {
-  // Los eventos ahora se manejan dentro de cargarMarcarAsistencia()
-  // Esta función queda vacía por compatibilidad
-}
-
 
 function updateOperacionesTabContent() {
   const tabContent = document.querySelector('#operaciones-tab-content');

@@ -1,5 +1,6 @@
 ﻿// Recursos Humanos View
 import { rrhhService, type MiEstadoResponse, type EmpleadoHorarioResumen, type DiaHorario, type AsistenciaAdminRecord } from '../../services/rrhhService';
+import { authService } from '../auth/auth.service';
 
 // Timer global para el contador de horas trabajadas (persiste aunque cierren y abran)
 let contadorInterval: ReturnType<typeof setInterval> | null = null;
@@ -33,6 +34,211 @@ function calcularTiempoTranscurrido(horaEntradaRaw: string, servidorFecha: strin
 
 function formatContador(h: number, m: number, s: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function getIdPersonalActual(): number {
+  return authService.getUser()?.id ?? 1;
+}
+
+export function tieneAccesoCompletoRecursosHumanos(): boolean {
+  const user = authService.getUser();
+  const rol = (user?.rol || '').toLowerCase();
+  const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
+
+  if (rol.includes('geren') || rol.includes('recursos humanos') || rol.includes('rrhh')) {
+    return true;
+  }
+
+  if (permisos.includes('*')) {
+    return true;
+  }
+
+  return ['rrhh-empleados', 'rrhh-tecnicos', 'rrhh-reportes', 'rrhh-horarios'].some((p) => permisos.includes(p));
+}
+
+export function getTabsRecursosHumanosPermitidos(): string[] {
+  if (tieneAccesoCompletoRecursosHumanos()) {
+    return ['asistencia', 'marcar', 'horarios', 'empleados', 'tecnicos', 'reportes'];
+  }
+  return ['asistencia', 'marcar'];
+}
+
+function normalizarFechaISO(fechaRaw: string | null | undefined): string | null {
+  if (!fechaRaw) return null;
+
+  const fecha = fechaRaw.trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return fecha;
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
+    const [d, mo, y] = fecha.split('/');
+    return `${y}-${mo}-${d}`;
+  }
+
+  if (/^\d{2}-\d{2}-\d{4}$/.test(fecha)) {
+    const [d, mo, y] = fecha.split('-');
+    return `${y}-${mo}-${d}`;
+  }
+
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(fecha)) {
+    return fecha.replace(/\//g, '-');
+  }
+
+  const parsed = new Date(fecha);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+
+  return null;
+}
+
+function formatearFechaLegible(fechaRaw: string | null | undefined): string {
+  const iso = normalizarFechaISO(fechaRaw);
+  if (!iso) return fechaRaw || '--';
+
+  const [y, mo, d] = iso.split('-');
+  return `${d}/${mo}/${y}`;
+}
+
+function renderFilaMiAsistenciaSemana(dia: MiEstadoResponse['data']['semana'][number]): string {
+  const fecha = formatearFechaLegible(dia.fecha);
+
+  return `
+    <tr>
+      <td>${dia.dia}</td>
+      <td>${fecha}</td>
+      <td>${dia.entrada || '--:-- --'}</td>
+      <td>${dia.salida || '--:-- --'}</td>
+      <td>${dia.horas || '--'}</td>
+      <td><span class="status-indicator ${estadoAsistenciaClase(dia.estado || 'pendiente')}">${dia.estado || 'Pendiente'}</span></td>
+    </tr>
+  `;
+}
+
+export function renderAsistenciaPersonalTab() {
+  const hoy = new Date().toISOString().split('T')[0];
+
+  return `
+    <div id="asistencia-personal-container">
+      <div class="search-filter-bar" style="margin-bottom: 16px;">
+        <input type="date" class="op-filter-select" id="asistencia-personal-fecha" value="${hoy}">
+        <button class="btn-filter" id="asistencia-personal-btn-cargar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+          Cargar
+        </button>
+      </div>
+      <div id="asistencia-personal-body">
+        <div style="text-align: center; padding: 40px;">
+          <div class="spinner" style="margin: 0 auto 16px; width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2c4a7c; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+          <p style="color: #64748b;">Cargando tu asistencia...</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export async function cargarAsistenciaPersonal(fecha?: string) {
+  const body = document.getElementById('asistencia-personal-body');
+  if (!body) return;
+
+  const fechaInput = document.getElementById('asistencia-personal-fecha') as HTMLInputElement | null;
+  const fechaUsar = fecha ?? fechaInput?.value ?? new Date().toISOString().split('T')[0];
+
+  body.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div class="spinner" style="margin: 0 auto 16px; width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2c4a7c; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      <p style="color: #64748b;">Cargando tus registros...</p>
+    </div>
+  `;
+
+  document.getElementById('asistencia-personal-btn-cargar')?.addEventListener('click', () => cargarAsistenciaPersonal(), { once: true });
+
+  try {
+    const resp = await rrhhService.getMiEstado(getIdPersonalActual());
+    if (!resp.success) throw new Error('Error al cargar tu asistencia');
+
+    const { personal, asistencia_hoy, estadisticas, semana } = resp.data;
+    const registrosFiltrados = (semana || []).filter((d) => {
+      const fechaRegistro = normalizarFechaISO(d.fecha);
+      if (!fechaUsar) return true;
+      return fechaRegistro === fechaUsar;
+    });
+    const estadoHoy = asistencia_hoy?.estado || 'Sin registro';
+    const horasHoy = asistencia_hoy?.horas_trabajadas != null ? `${Number(asistencia_hoy.horas_trabajadas).toFixed(2)} hrs` : '--';
+
+    body.innerHTML = `
+      <div class="stats-row" style="margin-bottom: 24px;">
+        <div class="stat-box">
+          <div class="stat-box-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">Trabajador</div>
+            <div class="stat-box-value" style="font-size:16px;">${escapeHtml(personal.nombre)}</div>
+          </div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">Estado Hoy</div>
+            <div class="stat-box-value">${estadoHoy}</div>
+          </div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-icon orange">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">Horas Hoy</div>
+            <div class="stat-box-value">${horasHoy}</div>
+          </div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-icon red">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path></svg>
+          </div>
+          <div class="stat-box-content">
+            <div class="stat-box-label">Días Trabajados</div>
+            <div class="stat-box-value">${estadisticas?.dias_trabajados ?? 0}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="op-table">
+          <thead>
+            <tr>
+              <th>DÍA</th>
+              <th>FECHA</th>
+              <th>ENTRADA</th>
+              <th>SALIDA</th>
+              <th>HORAS</th>
+              <th>ESTADO</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${registrosFiltrados.length > 0
+              ? registrosFiltrados.map((d) => renderFilaMiAsistenciaSemana(d)).join('')
+              : `<tr><td colspan="6" style="text-align:center; padding:40px; color:#64748b;">No tienes registros para la fecha seleccionada.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch (err: any) {
+    body.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: #ef4444;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 16px; opacity: 0.5;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <p style="font-size: 16px; font-weight: 600;">${err.message ?? 'Error al cargar tus datos'}</p>
+        <button class="btn-primary" style="margin-top: 16px;" id="asistencia-personal-reintentar">Reintentar</button>
+      </div>
+    `;
+    document.getElementById('asistencia-personal-reintentar')?.addEventListener('click', () => cargarAsistenciaPersonal());
+  }
 }
 
 // Tab: Asistencia
@@ -912,7 +1118,7 @@ export async function cargarMarcarAsistencia() {
   if (!container) return;
 
   try {
-    const resp: MiEstadoResponse = await rrhhService.getMiEstado(1);
+    const resp: MiEstadoResponse = await rrhhService.getMiEstado(getIdPersonalActual());
     if (!resp.success) throw new Error('Error al cargar estado');
     
     const { personal, horario, asistencia_hoy, semana, estadisticas, servidor_hora, servidor_fecha } = resp.data;
@@ -1330,7 +1536,7 @@ async function handleMarcarEntrada() {
   btn.innerHTML = '<span>Registrando...</span>';
 
   try {
-    const resp = await rrhhService.marcarEntrada(1);
+    const resp = await rrhhService.marcarEntrada(getIdPersonalActual());
     if (resp.success) {
       // Mostrar notificaciÃ³n
       mostrarNotificacionAsistencia(resp.message, resp.data?.estado === 'Puntual' ? 'success' : 'warning');
@@ -1357,7 +1563,7 @@ async function handleMarcarSalida() {
   btn.innerHTML = '<span>Registrando...</span>';
 
   try {
-    const resp = await rrhhService.marcarSalida(1);
+    const resp = await rrhhService.marcarSalida(getIdPersonalActual());
     if (resp.success) {
       limpiarTimersAsistencia();
       mostrarNotificacionAsistencia(resp.message, 'success');
@@ -1382,13 +1588,21 @@ function iniciarContadorAlmuerzo(horaInicioAlmuerzoRaw: string, servidorFecha: s
   const actualizar = () => {
     const ahora = new Date();
     const inicio = new Date(`${servidorFecha}T${horaInicioAlmuerzoRaw}`);
-    const diffMs = ahora.getTime() - inicio.getTime();
-    const totalMin = Math.floor(diffMs / 60000);
-    const seg = Math.floor((diffMs % 60000) / 1000);
-    const display = `${String(totalMin).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
-    contadorEl.textContent = display;
-    // Cambiar color si excede 45 min
-    if (totalMin >= 45) {
+    const diffMs = Math.max(0, ahora.getTime() - inicio.getTime());
+    const transcurridoSeg = Math.floor(diffMs / 1000);
+    const limiteSeg = 45 * 60;
+    const restanteSeg = limiteSeg - transcurridoSeg;
+
+    if (restanteSeg >= 0) {
+      const min = Math.floor(restanteSeg / 60);
+      const seg = restanteSeg % 60;
+      contadorEl.textContent = `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
+      contadorEl.style.color = '#78350f';
+    } else {
+      const excesoSeg = Math.abs(restanteSeg);
+      const minExceso = Math.floor(excesoSeg / 60);
+      const segExceso = excesoSeg % 60;
+      contadorEl.textContent = `-${String(minExceso).padStart(2, '0')}:${String(segExceso).padStart(2, '0')}`;
       contadorEl.style.color = '#dc2626';
     }
   };
@@ -1428,7 +1642,7 @@ async function handleInicioAlmuerzo() {
   btn.innerHTML = '<span>Registrando...</span>';
 
   try {
-    const resp = await rrhhService.marcarInicioAlmuerzo(1);
+    const resp = await rrhhService.marcarInicioAlmuerzo(getIdPersonalActual());
     if (resp.success) {
       mostrarNotificacionAsistencia(resp.message, 'success');
       setTimeout(() => cargarMarcarAsistencia(), 500);
@@ -1453,7 +1667,7 @@ async function handleFinAlmuerzo() {
   btn.innerHTML = '<span>Registrando...</span>';
 
   try {
-    const resp = await rrhhService.marcarFinAlmuerzo(1);
+    const resp = await rrhhService.marcarFinAlmuerzo(getIdPersonalActual());
     if (resp.success) {
       if (almuerzoInterval) { clearInterval(almuerzoInterval); almuerzoInterval = null; }
       mostrarNotificacionAsistencia(resp.message, resp.data?.exceso_almuerzo_minutos > 0 ? 'warning' : 'success');
@@ -1935,6 +2149,19 @@ function abrirModalCopiarHorario(idPersonalDestino: number) {
 }
 
 export function renderRecursosHumanos() {
+  const tabsPermitidos = getTabsRecursosHumanosPermitidos();
+  const tabLabels: Record<string, string> = {
+    asistencia: 'Asistencia',
+    marcar: 'Marcar Asistencia',
+    horarios: 'Horarios',
+    empleados: 'Empleados',
+    tecnicos: 'Técnicos',
+    reportes: 'Reportes',
+  };
+
+  const tabInicial = tabsPermitidos.includes('asistencia') ? 'asistencia' : tabsPermitidos[0] || 'asistencia';
+  const contenidoInicial = tieneAccesoCompletoRecursosHumanos() ? renderAsistenciaTab() : renderAsistenciaPersonalTab();
+
   return `
     <div class="page-header-with-breadcrumb">
       <div class="breadcrumb">Gestión de Recursos Humanos</div>
@@ -1951,16 +2178,13 @@ export function renderRecursosHumanos() {
     </div>
 
     <div class="inventory-tabs">
-      <button class="tab-btn active" data-tab="asistencia">Asistencia</button>
-      <button class="tab-btn" data-tab="marcar">Marcar Asistencia</button>
-      <button class="tab-btn" data-tab="horarios">Horarios</button>
-      <button class="tab-btn" data-tab="empleados">Empleados</button>
-      <button class="tab-btn" data-tab="tecnicos">Técnicos</button>
-      <button class="tab-btn" data-tab="reportes">Reportes</button>
+      ${tabsPermitidos.map((tab) => `
+        <button class="tab-btn ${tab === tabInicial ? 'active' : ''}" data-tab="${tab}">${tabLabels[tab] ?? tab}</button>
+      `).join('')}
     </div>
 
     <div id="recursos-tab-content">
-      ${renderAsistenciaTab()}
+      ${contenidoInicial}
     </div>
   `;
 }

@@ -17,12 +17,15 @@ class EntradaDevolucionFabricacion extends Model
         'tiene_sobrante_materia_prima',
         'observaciones',
         'creado_por',
+        'estado',
+        'fecha_realizado',
     ];
 
     protected $casts = [
         'cantidad_esperada_total' => 'decimal:3',
         'cantidad_producida_total' => 'decimal:3',
         'tiene_sobrante_materia_prima' => 'boolean',
+        'fecha_realizado' => 'datetime',
     ];
 
     public function ordenFabricacion()

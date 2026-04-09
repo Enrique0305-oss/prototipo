@@ -1,5 +1,207 @@
 // Almacén - Entradas y Salidas View
 
+function buildPolylinePoints(values: number[], width: number, height: number, padding: number): string {
+  if (values.length === 0) return '';
+  const maxValue = Math.max(...values, 1);
+  const stepX = values.length === 1 ? 0 : (width - padding * 2) / (values.length - 1);
+
+  return values.map((value, index) => {
+    const x = padding + (stepX * index);
+    const normalized = value / maxValue;
+    const y = height - padding - (normalized * (height - padding * 2));
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(' ');
+}
+
+export function renderDashboardAlmacenTab() {
+  const barrasMovimiento = [
+    { label: 'Entradas', value: 45, color: '#16a34a' },
+    { label: 'Salidas', value: 38, color: '#2563eb' },
+    { label: 'Préstamos', value: 24, color: '#f59e0b' },
+    { label: 'Transferencias', value: 33, color: '#7c3aed' },
+  ];
+
+  const tendenciaSemanal = [18, 22, 19, 27, 24, 31, 28];
+  const tendenciaLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const puntos = buildPolylinePoints(tendenciaSemanal, 360, 170, 18);
+
+  const categoriasStock = [
+    { nombre: 'Insumos químicos', porcentaje: 82, color: '#2563eb' },
+    { nombre: 'EPP', porcentaje: 67, color: '#16a34a' },
+    { nombre: 'Equipos', porcentaje: 48, color: '#f59e0b' },
+    { nombre: 'Repuestos', porcentaje: 29, color: '#ef4444' },
+  ];
+
+  const topMovimientos = [
+    { item: 'Cipermetrina 25% EC', tipo: 'Entrada', cantidad: '20 L', frecuencia: '12 mov/mes' },
+    { item: 'Guantes Nitrilo', tipo: 'Préstamo', cantidad: '18 pares', frecuencia: '9 mov/mes' },
+    { item: 'Nebulizador X-200', tipo: 'Salida', cantidad: '4 unid', frecuencia: '6 mov/mes' },
+    { item: 'Mascarilla N95', tipo: 'Entrada', cantidad: '100 unid', frecuencia: '5 mov/mes' },
+  ];
+
+  const alertas = [
+    { titulo: 'Stock crítico', detalle: '4 productos requieren reposición en menos de 7 días' },
+    { titulo: 'Préstamos vencidos', detalle: '3 equipos deben retornar hoy' },
+    { titulo: 'Transferencias pendientes', detalle: '5 movimientos esperan confirmación' },
+  ];
+
+  return `
+    <div class="stats-row" style="margin-bottom: 24px;">
+      <div class="stat-box">
+        <div class="stat-box-icon blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Entradas del Mes</div>
+          <div class="stat-box-value">45</div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-icon blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"></path><path d="m5 12 7-7 7 7"></path></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Salidas del Mes</div>
+          <div class="stat-box-value">38</div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-icon orange">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Total Movimientos</div>
+          <div class="stat-box-value">83</div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-icon green">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m7 15 4-4 3 3 6-6"></path></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Rotación Promedio</div>
+          <div class="stat-box-value">92% <span class="stat-box-note">eficiencia</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:20px;align-items:start;">
+      <section style="grid-column:span 7;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Movimientos por tipo</h3>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Distribución mensual del flujo operativo del almacén.</p>
+          </div>
+          <span style="padding:6px 10px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:600;">83 movimientos</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          ${barrasMovimiento.map(barra => `
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;">
+                <strong style="color:#334155;">${barra.label}</strong>
+                <span style="color:#64748b;">${barra.value}</span>
+              </div>
+              <div style="height:12px;background:#e2e8f0;border-radius:999px;overflow:hidden;">
+                <div style="height:100%;width:${Math.round((barra.value / 45) * 100)}%;background:${barra.color};border-radius:999px;"></div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+
+      <section style="grid-column:span 5;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Tendencia semanal</h3>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Evolución de actividad de los últimos 7 días.</p>
+          </div>
+        </div>
+        <svg viewBox="0 0 360 170" width="100%" height="170" aria-label="Tendencia semanal">
+          <defs>
+            <linearGradient id="almacenTrendFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2563eb" stop-opacity="0.28"></stop>
+              <stop offset="100%" stop-color="#2563eb" stop-opacity="0.04"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M 18 150 L ${puntos.replaceAll(' ', ' L ')} L 342 150 Z" fill="url(#almacenTrendFill)"></path>
+          <polyline points="${puntos}" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          ${tendenciaSemanal.map((value, index) => {
+            const x = 18 + ((index === 0 ? 0 : (324 / (tendenciaSemanal.length - 1)) * index));
+            const y = 150 - ((value / Math.max(...tendenciaSemanal)) * 112);
+            return `<circle cx="${x}" cy="${y}" r="4.5" fill="#2563eb" stroke="#fff" stroke-width="2"></circle>`;
+          }).join('')}
+          ${tendenciaLabels.map((label, index) => {
+            const x = 18 + ((index === 0 ? 0 : (324 / (tendenciaSemanal.length - 1)) * index));
+            return `<text x="${x}" y="164" text-anchor="middle" font-size="11" fill="#64748b">${label}</text>`;
+          }).join('')}
+        </svg>
+      </section>
+
+      <section style="grid-column:span 6;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Salud del inventario</h3>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Estado porcentual por categoría crítica.</p>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          ${categoriasStock.map(cat => `
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;">
+                <strong style="color:#334155;">${cat.nombre}</strong>
+                <span style="color:#64748b;">${cat.porcentaje}%</span>
+              </div>
+              <div style="height:12px;background:#e2e8f0;border-radius:999px;overflow:hidden;">
+                <div style="height:100%;width:${cat.porcentaje}%;background:${cat.color};border-radius:999px;"></div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+
+      <section style="grid-column:span 6;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Productos con mayor rotación</h3>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Referencia rápida para compras y reposición.</p>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          ${topMovimientos.map(item => `
+            <div style="display:flex;justify-content:space-between;gap:12px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+              <div style="min-width:0;">
+                <div style="font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.item}</div>
+                <div style="font-size:12px;color:#64748b;">${item.cantidad} · ${item.frecuencia}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0;">
+                <div style="font-size:12px;color:#64748b;">${item.tipo}</div>
+                <div style="font-weight:700;color:#1d4ed8;">Alta</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+
+      <section style="grid-column:span 12;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Alertas operativas</h3>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Señales que deberían destacarse en el dashboard del área.</p>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
+          ${alertas.map(alerta => `
+            <div style="padding:14px 16px;background:linear-gradient(180deg,#fff, #f8fafc);border:1px solid #e2e8f0;border-radius:14px;">
+              <div style="font-weight:700;color:#0f172a;margin-bottom:4px;">${alerta.titulo}</div>
+              <div style="font-size:13px;color:#64748b;line-height:1.4;">${alerta.detalle}</div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
 // Tab: Todos los Movimientos
 export function renderMovimientosTab() {
   return `
@@ -555,7 +757,7 @@ export function renderTransferenciasTab() {
 export function renderAlmacenEntradasSalidas() {
   return `
     <div class="page-header-with-breadcrumb">
-      <div class="breadcrumb">Entradas y Salidas de Almacén</div>
+      <div class="breadcrumb">Dashboard del Área de Almacén</div>
       <div class="page-actions">
         <button class="btn-secondary">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -569,13 +771,14 @@ export function renderAlmacenEntradasSalidas() {
     </div>
 
     <div class="inventory-tabs">
-      <button class="tab-btn active" data-tab="movimientos">Todos los Movimientos</button>
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="movimientos">Todos los Movimientos</button>
       <button class="tab-btn" data-tab="prestamo">Préstamo de EPP</button>
       <button class="tab-btn" data-tab="transferencias">Transferencias</button>
     </div>
 
     <div id="entradas-tab-content">
-      ${renderMovimientosTab()}
+      ${renderDashboardAlmacenTab()}
     </div>
   `;
 }

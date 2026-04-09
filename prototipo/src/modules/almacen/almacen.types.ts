@@ -124,4 +124,15 @@ export interface EstadisticasMovimientos {
   entradas_mes: number;
   salidas_mes: number;
   total_movimientos: number;
+  movimientos_hoy?: number;
+  productos_con_movimiento_mes?: number;
+}
+
+export interface EstadoEquiposOperativo {
+  total_equipos: number;
+  al_dia: number;
+  proximo: number;
+  vencido: number;
+  pendientes: number;
+  realizados: number;
 }

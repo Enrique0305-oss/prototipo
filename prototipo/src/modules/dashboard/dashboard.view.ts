@@ -1,13 +1,321 @@
+import { Chart, registerables } from 'chart.js';
+import type { ChartConfiguration, ChartType } from 'chart.js';
 import type { DashboardData } from './dashboard.types';
 import { productoService } from '../../services/productoService';
 import { mantenimientoService } from '../../services/mantenimientoService';
+import { almacenService } from '../almacen/almacen.service';
+import { cotizacionService } from '../../services/cotizacionService';
+import { ordenServicioService } from '../../services/ordenServicioService';
+import { ordenProductoService } from '../../services/ordenProductoService';
+import { ordenCapacitacionService } from '../../services/ordenCapacitacionService';
+import { ordenAsesoriaService } from '../../services/ordenAsesoriaService';
 import { apiClient } from '../../core/api/api.client';
 
+Chart.register(...registerables);
+
+type DashboardMainData = {
+  almacen: {
+    stockTotal: number;
+    valorTotal: number;
+    bajoStock: number;
+    movimientosHoy: number;
+    equiposVencidos: number;
+    mantenimientosProximos: number;
+  };
+  comercial: {
+    cotizacionesTotales: number;
+    cotizacionesPendientes: number;
+    cotizacionesAceptadas: number;
+    valorCotizado: number;
+    ordenesTotales: number;
+    ordenesSinGenerar: number;
+  };
+  equipos: {
+    alDia: number;
+    proximo: number;
+    vencido: number;
+    total: number;
+  };
+  ordenesPorTipo: {
+    servicio: number;
+    producto: number;
+    capacitacion: number;
+    asesoria: number;
+  };
+};
+
+const dashboardState: DashboardMainData = {
+  almacen: {
+    stockTotal: 0,
+    valorTotal: 0,
+    bajoStock: 0,
+    movimientosHoy: 0,
+    equiposVencidos: 0,
+    mantenimientosProximos: 0,
+  },
+  comercial: {
+    cotizacionesTotales: 0,
+    cotizacionesPendientes: 0,
+    cotizacionesAceptadas: 0,
+    valorCotizado: 0,
+    ordenesTotales: 0,
+    ordenesSinGenerar: 0,
+  },
+  equipos: {
+    alDia: 0,
+    proximo: 0,
+    vencido: 0,
+    total: 0,
+  },
+  ordenesPorTipo: {
+    servicio: 0,
+    producto: 0,
+    capacitacion: 0,
+    asesoria: 0,
+  },
+};
+
+let dashboardLoading = false;
+const chartInstances: Chart[] = [];
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('es-PE').format(value);
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('es-PE', {
+    style: 'currency',
+    currency: 'PEN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function destroyCharts(): void {
+  while (chartInstances.length > 0) {
+    chartInstances.pop()?.destroy();
+  }
+}
+
+function createOrReplaceChart(canvasId: string, config: ChartConfiguration<ChartType, number[], string>): void {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const existing = chartInstances.find((chart) => chart.canvas === canvas);
+  if (existing) {
+    existing.destroy();
+    chartInstances.splice(chartInstances.indexOf(existing), 1);
+  }
+
+  const chart = new Chart(ctx, config);
+  chartInstances.push(chart);
+}
+
+function getNumberFromResponse(response: any, keys: string[]): number {
+  const source = (response as any)?.data?.data || (response as any)?.data || response;
+  for (const key of keys) {
+    const value = source?.[key];
+    if (typeof value === 'number' || typeof value === 'string') {
+      return toNumber(value);
+    }
+  }
+  return 0;
+}
+
+function getMainKpiValue(id: string, fallback: string): string {
+  const el = document.getElementById(id);
+  return el?.textContent?.trim() || fallback;
+}
+
+async function safeLoad<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise;
+  } catch (error) {
+    console.error('Error cargando dashboard principal:', error);
+    return fallback;
+  }
+}
+
+async function loadDashboardData(): Promise<DashboardMainData> {
+  const [estadInventario, alertasMantenimiento, estadoEquipos, estadCotizaciones, movimientos, ordServRes, ordProdRes, ordCapRes, ordAsesRes, alertasSinOrden] = await Promise.all([
+    safeLoad(almacenService.getEstadisticasInventario(), { stock_total: 0, valor_total: 0, productos_bajo_stock: 0, categorias: 0 } as any),
+    safeLoad(mantenimientoService.getAlertasMantenimiento(), { total_alertas: 0, proximos: 0, vencidos: 0 } as any),
+    safeLoad(almacenService.getEstadoEquiposOperativo(), { total_equipos: 0, al_dia: 0, proximo: 0, vencido: 0, pendientes: 0, realizados: 0 } as any),
+    safeLoad(cotizacionService.getEstadisticas(), { total: 0, pendientes: 0, aceptadas: 0, rechazadas: 0, valor_total: 0, valor_pendiente: 0 } as any),
+    safeLoad(almacenService.getMovimientos({}), [] as any[]),
+    safeLoad(ordenServicioService.getAll(), { data: [] } as any),
+    safeLoad(ordenProductoService.getAll(), { data: [] } as any),
+    safeLoad(ordenCapacitacionService.getAll(), { data: [] } as any),
+    safeLoad(ordenAsesoriaService.getAll(), { data: [] } as any),
+    safeLoad(apiClient.get<{ success: boolean; data: { total: number } }>('/cotizaciones/alerta-sin-orden'), { data: { total: 0 } } as any),
+  ]);
+
+  const rawProductos = (estadInventario as any)?.data || estadInventario || {};
+  const rawMantenimiento = (alertasMantenimiento as any)?.data || alertasMantenimiento || {};
+  const rawEquipos = (estadoEquipos as any)?.data || estadoEquipos || {};
+  const rawCotizaciones = (estadCotizaciones as any)?.data || estadCotizaciones || {};
+  const rawSinOrden = (alertasSinOrden as any)?.data?.data || (alertasSinOrden as any)?.data || alertasSinOrden || {};
+
+  const ordenesPorTipo = {
+    servicio: Array.isArray((ordServRes as any)?.data?.data || (ordServRes as any)?.data || ordServRes) ? ((ordServRes as any)?.data?.data || (ordServRes as any)?.data || ordServRes).length : 0,
+    producto: Array.isArray((ordProdRes as any)?.data?.data || (ordProdRes as any)?.data || ordProdRes) ? ((ordProdRes as any)?.data?.data || (ordProdRes as any)?.data || ordProdRes).length : 0,
+    capacitacion: Array.isArray((ordCapRes as any)?.data?.data || (ordCapRes as any)?.data || ordCapRes) ? ((ordCapRes as any)?.data?.data || (ordCapRes as any)?.data || ordCapRes).length : 0,
+    asesoria: Array.isArray((ordAsesRes as any)?.data?.data || (ordAsesRes as any)?.data || ordAsesRes) ? ((ordAsesRes as any)?.data?.data || (ordAsesRes as any)?.data || ordAsesRes).length : 0,
+  };
+
+  const ordenesTotales = [ordServRes, ordProdRes, ordCapRes, ordAsesRes].reduce((sum, response) => {
+    const data = (response as any)?.data?.data || (response as any)?.data || response;
+    return sum + (Array.isArray(data) ? data.length : 0);
+  }, 0);
+
+  const movimientosHoy = Array.isArray(movimientos)
+    ? movimientos.filter((movimiento) => String((movimiento as any)?.fecha || '').slice(0, 10) === new Date().toISOString().slice(0, 10)).length
+    : 0;
+
+  return {
+    almacen: {
+      stockTotal: toNumber(rawProductos.stock_total),
+      valorTotal: toNumber(rawProductos.valor_total),
+      bajoStock: toNumber(rawProductos.productos_bajo_stock),
+      movimientosHoy,
+      equiposVencidos: toNumber(rawMantenimiento.vencidos),
+      mantenimientosProximos: toNumber(rawMantenimiento.proximos),
+    },
+    comercial: {
+      cotizacionesTotales: toNumber(rawCotizaciones.total),
+      cotizacionesPendientes: toNumber(rawCotizaciones.pendientes),
+      cotizacionesAceptadas: toNumber(rawCotizaciones.aceptadas),
+      valorCotizado: toNumber(rawCotizaciones.valor_total),
+      ordenesTotales,
+      ordenesSinGenerar: toNumber(rawSinOrden.total),
+    },
+    equipos: {
+      alDia: toNumber(rawEquipos.al_dia),
+      proximo: toNumber(rawEquipos.proximo),
+      vencido: toNumber(rawEquipos.vencido),
+      total: toNumber(rawEquipos.total_equipos),
+    },
+    ordenesPorTipo,
+  };
+}
+
+function updateDashboardKPIs(): void {
+  const current = dashboardState;
+  const mappings: Array<[string, string]> = [
+    ['dashboard-almacen-stock-total', formatNumber(current.almacen.stockTotal)],
+    ['dashboard-almacen-valor-total', formatCurrency(current.almacen.valorTotal)],
+    ['dashboard-almacen-bajo-stock', formatNumber(current.almacen.bajoStock)],
+    ['dashboard-almacen-vencidos', formatNumber(current.almacen.equiposVencidos)],
+    ['dashboard-almacen-proximos', formatNumber(current.almacen.mantenimientosProximos)],
+    ['dashboard-almacen-movimientos-hoy', formatNumber(current.almacen.movimientosHoy)],
+    ['dashboard-comercial-cotizaciones', formatNumber(current.comercial.cotizacionesTotales)],
+    ['dashboard-comercial-pendientes', formatNumber(current.comercial.cotizacionesPendientes)],
+    ['dashboard-comercial-aceptadas', formatNumber(current.comercial.cotizacionesAceptadas)],
+    ['dashboard-comercial-valor-cotizado', formatCurrency(current.comercial.valorCotizado)],
+    ['dashboard-comercial-ordenes', formatNumber(current.comercial.ordenesTotales)],
+    ['dashboard-comercial-sin-orden', formatNumber(current.comercial.ordenesSinGenerar)],
+  ];
+
+  mappings.forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  });
+}
+
+function renderDashboardCharts(): void {
+  destroyCharts();
+
+  createOrReplaceChart('dashboard-chart-comercial', {
+    type: 'doughnut',
+    data: {
+      labels: ['Pendientes', 'Aceptadas', 'Sin orden'],
+      datasets: [{
+        data: [dashboardState.comercial.cotizacionesPendientes, dashboardState.comercial.cotizacionesAceptadas, dashboardState.comercial.ordenesSinGenerar],
+        backgroundColor: ['#f59e0b', '#16a34a', '#dc2626'],
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
+
+  createOrReplaceChart('dashboard-chart-ordenes', {
+    type: 'bar',
+    data: {
+      labels: ['Servicio', 'Producto', 'Capacitación', 'Asesoría'],
+      datasets: [{
+        label: 'Órdenes',
+        data: [dashboardState.ordenesPorTipo.servicio, dashboardState.ordenesPorTipo.producto, dashboardState.ordenesPorTipo.capacitacion, dashboardState.ordenesPorTipo.asesoria],
+        backgroundColor: ['#1d4ed8', '#16a34a', '#f59e0b', '#7c3aed'],
+        borderRadius: 10,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e2e8f0' } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+
+  createOrReplaceChart('dashboard-chart-equipos', {
+    type: 'doughnut',
+    data: {
+      labels: ['Al día', 'Próximo', 'Vencido'],
+      datasets: [{
+        data: [dashboardState.equipos.alDia, dashboardState.equipos.proximo, dashboardState.equipos.vencido],
+        backgroundColor: ['#16a34a', '#f59e0b', '#dc2626'],
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
+}
+
+async function refreshDashboard(): Promise<void> {
+  if (dashboardLoading) return;
+  dashboardLoading = true;
+  const root = document.getElementById('main-dashboard-root');
+  if (root) root.dataset.loading = 'true';
+
+  try {
+    const data = await loadDashboardData();
+    dashboardState.almacen = data.almacen;
+    dashboardState.comercial = data.comercial;
+    dashboardState.equipos = data.equipos;
+    dashboardState.ordenesPorTipo = data.ordenesPorTipo;
+    updateDashboardKPIs();
+    renderDashboardCharts();
+  } finally {
+    dashboardLoading = false;
+    if (root) root.dataset.loading = 'false';
+  }
+}
+
 export function renderDashboard(data?: DashboardData) {
-  // Si no hay datos, mostrar loading o usar mock
-  // En producción, data vendrá de dashboardService.getDashboardData()
-  
   return `
+    <div id="main-dashboard-root">
     <!-- Banner de alerta de stock bajo (se llena dinámicamente) -->
     <div id="stock-bajo-banner"></div>
 
@@ -22,148 +330,72 @@ export function renderDashboard(data?: DashboardData) {
       <p>Resumen general de operaciones y gestión de QSCI Group.</p>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg></span>
-          <span class="stat-change positive">+12%</span>
-        </div>
-        <div class="stat-label">Inventario Total</div>
-        <div class="stat-value">1,284 <span class="stat-unit">unidades</span></div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg></span>
-          <span class="stat-change urgent">1 Urgente</span>
-        </div>
-        <div class="stat-label">Servicios Pendientes</div>
-        <div class="stat-value">42 <span class="stat-unit">hoy</span></div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-header">
-          <span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></span>
-          <span class="stat-change positive">+8.4%</span>
-        </div>
-        <div class="stat-label">Ingresos Mensuales</div>
-        <div class="stat-value">$84,250 <span class="stat-unit">USD</span></div>
-      </div>
-    </div>
-
-    <!-- Activities and System Status -->
-    <div class="content-grid">
-      <div class="activities-section">
-        <div class="section-header">
-          <h2>Actividades Recientes</h2>
-          <button class="link-btn">Ver Todo</button>
-        </div>
-        
-        <table class="activities-table">
-          <thead>
-            <tr>
-              <th>CLIENTE / SERVICIO</th>
-              <th>ESTADO</th>
-              <th>FECHA</th>
-              <th>TÉCNICO</th>
-              <th>ACCIÓN</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>
-                <div class="service-info">
-                  <span class="service-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><path d="M16 8h5l3 3v5h-2m-4 0H2"></path><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg></span>
-                  <div>
-                    <div class="service-name">Logística Norte S.A.</div>
-                    <div class="service-desc">Fumigación de Almacén</div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="badge completed">COMPLETADO</span></td>
-              <td>Hace 2 hrs</td>
-              <td>Juan Pérez</td>
-              <td><button class="action-btn">⋮</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="service-info">
-                  <span class="service-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></span>
-                  <div>
-                    <div class="service-name">Residencial Las Lomas</div>
-                    <div class="service-desc">Control de Plagas Jardín</div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="badge in-progress">EN PROCESO</span></td>
-              <td>Hace 4 hrs</td>
-              <td>María García</td>
-              <td><button class="action-btn">⋮</button></td>
-            </tr>
-            <tr>
-              <td>
-                <div class="service-info">
-                  <span class="service-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg></span>
-                  <div>
-                    <div class="service-name">Súper Todo Express</div>
-                    <div class="service-desc">Inspección Sanitaria</div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="badge pending">PENDIENTE</span></td>
-              <td>Hoy, 09:00 AM</td>
-              <td>Carlos Ruiz</td>
-              <td><button class="action-btn">⋮</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="sidebar-right">
-        <div class="system-status">
-          <h3>Estado del Sistema</h3>
-          <div class="status-item">
-            <div class="status-label">Capacidad Almacén</div>
-            <div class="status-bar">
-              <div class="status-fill" style="width: 78%"></div>
-            </div>
-            <div class="status-value">78%</div>
+    <div class="dashboard-dual-grid" style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:18px;margin-top:20px;">
+      <section style="grid-column:span 12;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:18px 20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+          <div>
+            <h2 style="margin:0;font-size:20px;font-weight:800;color:#0f172a;">Almacén</h2>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Indicadores operativos del inventario y mantenimiento.</p>
           </div>
-          <div class="status-item">
-            <div class="status-label">Rendimiento Operativo</div>
-            <div class="status-bar">
-              <div class="status-fill green" style="width: 92%"></div>
-            </div>
-            <div class="status-value">92%</div>
+          <span class="stat-box-note">Solo áreas activas</span>
+        </div>
+        <div class="stats-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"></path><path d="M12 3v18"></path></svg></span><span class="stat-change positive">Actual</span></div><div class="stat-label">Stock total</div><div class="stat-value" id="dashboard-almacen-stock-total">0 <span class="stat-unit">unidades</span></div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></span><span class="stat-change positive">Actual</span></div><div class="stat-label">Valor inventario</div><div class="stat-value" id="dashboard-almacen-valor-total">S/ 0.00</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></span><span class="stat-change urgent">Atención</span></div><div class="stat-label">Bajo stock</div><div class="stat-value" id="dashboard-almacen-bajo-stock">0</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect></svg></span><span class="stat-change urgent">Mantenimiento</span></div><div class="stat-label">Vencidos</div><div class="stat-value" id="dashboard-almacen-vencidos">0</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg></span><span class="stat-change">Seguimiento</span></div><div class="stat-label">Próximos</div><div class="stat-value" id="dashboard-almacen-proximos">0</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"></path><path d="m5 12 7-7 7 7"></path></svg></span><span class="stat-change">Hoy</span></div><div class="stat-label">Movimientos</div><div class="stat-value" id="dashboard-almacen-movimientos-hoy">0</div></div>
+        </div>
+      </section>
+
+      <section style="grid-column:span 12;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:18px 20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+          <div>
+            <h2 style="margin:0;font-size:20px;font-weight:800;color:#0f172a;">Comercial</h2>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Seguimiento de cotizaciones y órdenes activas.</p>
+          </div>
+          <span class="stat-box-note">Facturación comercial</span>
+        </div>
+        <div class="stats-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></span><span class="stat-change urgent">Seguimiento</span></div><div class="stat-label">Cotizaciones totales</div><div class="stat-value" id="dashboard-comercial-cotizaciones">0</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg></span><span class="stat-change urgent">Pendiente</span></div><div class="stat-label">Cotizaciones pendientes</div><div class="stat-value" id="dashboard-comercial-pendientes">0</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></span><span class="stat-change positive">Valor</span></div><div class="stat-label">Valor cotizado</div><div class="stat-value" id="dashboard-comercial-valor-cotizado">S/ 0.00</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg></span><span class="stat-change">Órdenes</span></div><div class="stat-label">Órdenes generadas</div><div class="stat-value" id="dashboard-comercial-ordenes">0</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></span><span class="stat-change positive">Aceptadas</span></div><div class="stat-label">Cotizaciones aceptadas</div><div class="stat-value" id="dashboard-comercial-aceptadas">0</div></div>
+          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></span><span class="stat-change urgent">Sin orden</span></div><div class="stat-label">Aceptadas sin orden</div><div class="stat-value" id="dashboard-comercial-sin-orden">0</div></div>
+        </div>
+      </section>
+
+      <section style="grid-column:span 4;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:18px 20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Estado comercial</h3>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Pendientes, aceptadas y sin orden.</p>
           </div>
         </div>
+        <div style="height:260px;"><canvas id="dashboard-chart-comercial"></canvas></div>
+      </section>
 
-        <div class="upcoming-services">
-          <h3>Próximos Servicios</h3>
-          <div class="service-item">
-            <div class="service-date">
-              <div class="date-month">NOV</div>
-              <div class="date-day">24</div>
-            </div>
-            <div class="service-details">
-              <div class="service-title">Almacén Central FedEx</div>
-              <div class="service-subtitle">Mantenimiento Mensual</div>
-            </div>
+      <section style="grid-column:span 4;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:18px 20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Órdenes por tipo</h3>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Servicio, producto, capacitación y asesoría.</p>
           </div>
-          <div class="service-item">
-            <div class="service-date">
-              <div class="date-month">NOV</div>
-              <div class="date-day">25</div>
-            </div>
-            <div class="service-details">
-              <div class="service-title">Hotel Continental</div>
-              <div class="service-subtitle">Inspección de Cocinas</div>
-            </div>
-          </div>
-          <button class="calendar-btn">Ver Calendario Completo</button>
         </div>
-      </div>
+        <div style="height:260px;"><canvas id="dashboard-chart-ordenes"></canvas></div>
+      </section>
+
+      <section style="grid-column:span 4;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:18px 20px;box-shadow:0 8px 30px rgba(15,23,42,.05);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Estado de equipos</h3>
+            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Lectura operativa para gerencia de almacén.</p>
+          </div>
+        </div>
+        <div style="height:260px;"><canvas id="dashboard-chart-equipos"></canvas></div>
+      </section>
     </div>
   `;
 }
@@ -561,4 +793,11 @@ export async function cargarAlertaCotizacionesSinOrden() {
   } catch (e) {
     console.error('Error cargando alerta de cotizaciones sin orden:', e);
   }
+}
+
+export function initDashboardEvents() {
+  void refreshDashboard();
+  void cargarAlertaStockBajo();
+  void cargarAlertaMantenimiento();
+  void cargarAlertaCotizacionesSinOrden();
 }

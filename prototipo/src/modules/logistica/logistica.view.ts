@@ -1,8 +1,12 @@
-// Logística View
+﻿// Log├¡stica View
 import { clienteService } from '../../services/clienteService';
 import { servicioService } from '../../services/servicioService';
 import { productoService } from '../../services/productoService';
 import { equipoService } from '../../services/equipoService';
+import { ordenServicioService } from '../../services/ordenServicioService';
+import { ordenProductoService } from '../../services/ordenProductoService';
+import { ordenCapacitacionService } from '../../services/ordenCapacitacionService';
+import { ordenAsesoriaService } from '../../services/ordenAsesoriaService';
 import { catalogoCapAudService } from '../../services/catalogoCapAudService';
 import type { CatalogoCapAud } from '../../services/catalogoCapAudService';
 import { mostrarToast } from '../../shared/toast';
@@ -20,6 +24,32 @@ let filtroTipoCatalogo = '';
 let productosDisponiblesReceta: any[] = [];
 let equiposDisponiblesReceta: any[] = [];
 let recetaRows: { id_producto: number; cantidad_default: number; observacion: string; id_equipo: number }[] = [];
+
+type ResumenMuestreoCliente = {
+  key: string;
+  clienteId: number | null;
+  nombre: string;
+  rubro: string;
+  adquisiciones: {
+    servicio: number;
+    producto: number;
+    capacitacion: number;
+    asesoria: number;
+  };
+  inversionTotal: number;
+  ultimaAdquisicion: string | null;
+};
+
+let muestreoClientesData: ResumenMuestreoCliente[] = [];
+let filtroSearchMuestreo = '';
+let filtroTipoMuestreo = 'all';
+
+const moneyFormatter = new Intl.NumberFormat('es-PE', {
+  style: 'currency',
+  currency: 'PEN',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 function getInitials(name: string): string {
   return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
@@ -121,7 +151,7 @@ function renderizarGridClientes() {
           <div class="client-avatar" style="background: ${color};">${initials}</div>
           <div class="client-info">
             <h3>${cliente.nombre_empresa}</h3>
-            <p class="client-type">${cliente.rubro || '—'}</p>
+            <p class="client-type">${cliente.rubro || 'ÔÇö'}</p>
           </div>
           <span class="client-status active">Activo</span>
         </div>
@@ -144,15 +174,15 @@ function renderizarGridClientes() {
         </div>
         <div class="client-stats">
           <div class="client-stat">
-            <div class="stat-number">${cliente.ruc || '—'}</div>
+            <div class="stat-number">${cliente.ruc || 'ÔÇö'}</div>
             <div class="stat-label">RUC</div>
           </div>
           <div class="client-stat">
-            <div class="stat-number">${cliente.origen || '—'}</div>
+            <div class="stat-number">${cliente.origen || 'ÔÇö'}</div>
             <div class="stat-label">Origen</div>
           </div>
           <div class="client-stat">
-            <div class="stat-number">${cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : '—'}</div>
+            <div class="stat-number">${cliente.fecha_registro ? new Date(cliente.fecha_registro).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : 'ÔÇö'}</div>
             <div class="stat-label">Registro</div>
           </div>
         </div>
@@ -171,7 +201,7 @@ export function initClientesLogisticaEvents() {
   // Cargar datos
   cargarClientesLogistica();
 
-  // Búsqueda con debounce
+  // B├║squeda con debounce
   let debounce: ReturnType<typeof setTimeout>;
   const searchInput = document.getElementById('logistica-search-clientes') as HTMLInputElement;
   if (searchInput) {
@@ -238,15 +268,15 @@ export function renderServiciosDisponiblesTab() {
           <input type="hidden" id="servicio-id">
           <div class="form-group">
             <label class="form-label">Nombre <span style="color:#ef4444">*</span></label>
-            <input type="text" id="servicio-nombre" class="form-input" maxlength="100" placeholder="Ej: Fumigación Residencial">
+            <input type="text" id="servicio-nombre" class="form-input" maxlength="100" placeholder="Ej: Fumigaci├│n Residencial">
           </div>
           <div class="form-group">
-            <label class="form-label">Descripción <span style="color:#ef4444">*</span></label>
-            <input type="text" id="servicio-descripcion" class="form-input" maxlength="100" placeholder="Breve descripción del servicio">
+            <label class="form-label">Descripci├│n <span style="color:#ef4444">*</span></label>
+            <input type="text" id="servicio-descripcion" class="form-input" maxlength="100" placeholder="Breve descripci├│n del servicio">
           </div>
           <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div class="form-group">
-              <label class="form-label">Duración Estimada (min)</label>
+              <label class="form-label">Duraci├│n Estimada (min)</label>
               <input type="number" id="servicio-duracion" class="form-input" min="1" value="60" placeholder="60">
             </div>
             <div class="form-group">
@@ -304,16 +334,16 @@ export function renderServiciosDisponiblesTab() {
       </div>
     </div>
 
-    <!-- Modal Confirmar Eliminación -->
+    <!-- Modal Confirmar Eliminaci├│n -->
     <div class="modal-overlay" id="modal-servicio-eliminar" style="display:none;">
       <div class="modal-container" style="max-width:420px;">
         <div class="modal-header">
-          <h2>Confirmar Desactivación</h2>
+          <h2>Confirmar Desactivaci├│n</h2>
           <button class="modal-close" id="modal-servicio-eliminar-cerrar">&times;</button>
         </div>
         <div class="modal-body">
-          <p>¿Estás seguro de que deseas desactivar el servicio <strong id="servicio-eliminar-nombre"></strong>?</p>
-          <p style="color:#64748b;font-size:0.9em;">El servicio pasará a estado inactivo y no aparecerá en los listados.</p>
+          <p>┬┐Est├ís seguro de que deseas desactivar el servicio <strong id="servicio-eliminar-nombre"></strong>?</p>
+          <p style="color:#64748b;font-size:0.9em;">El servicio pasar├í a estado inactivo y no aparecer├í en los listados.</p>
         </div>
         <div class="modal-footer">
           <button class="btn-secondary" id="modal-servicio-eliminar-cancelar">Cancelar</button>
@@ -323,23 +353,23 @@ export function renderServiciosDisponiblesTab() {
     </div>
 
     <!-- ============================================ -->
-    <!-- CATÁLOGO DE CAPACITACIONES Y Asesorias -->
+    <!-- CAT├üLOGO DE CAPACITACIONES Y Asesorias -->
     <!-- ============================================ -->
     <div style="margin-top:40px;padding-top:32px;border-top:2px solid #e2e8f0;">
       <h2 style="font-size:20px;font-weight:700;color:#1a2332;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-        Catálogo de Capacitaciones y Asesorias
+        Cat├ílogo de Capacitaciones y Asesorias
       </h2>
 
       <div class="search-filter-bar">
         <div class="search-input-wrapper">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-          <input type="text" id="catalogo-search" placeholder="Buscar capacitación o auditoría..." class="search-input">
+          <input type="text" id="catalogo-search" placeholder="Buscar capacitaci├│n o auditor├¡a..." class="search-input">
         </div>
         <select class="filter-select" id="catalogo-filter-tipo">
           <option value="">Todos los tipos</option>
-          <option value="Capacitación">Capacitaciones</option>
-          <option value="Asesoría">Asesoría</option>
+          <option value="Capacitaci├│n">Capacitaciones</option>
+          <option value="Asesor├¡a">Asesor├¡a</option>
         </select>
         <select class="filter-select" id="catalogo-filter-estado">
           <option value="activo">Activos</option>
@@ -357,7 +387,7 @@ export function renderServiciosDisponiblesTab() {
       </div>
 
       <div class="services-grid" id="catalogo-grid">
-        <div style="text-align:center;padding:40px;color:#64748b;grid-column:1/-1;">Cargando catálogo...</div>
+        <div style="text-align:center;padding:40px;color:#64748b;grid-column:1/-1;">Cargando cat├ílogo...</div>
       </div>
 
       <div class="pagination" id="catalogo-pagination">
@@ -365,7 +395,7 @@ export function renderServiciosDisponiblesTab() {
       </div>
     </div>
 
-    <!-- Modal Crear/Editar Catálogo -->
+    <!-- Modal Crear/Editar Cat├ílogo -->
     <div class="modal-overlay" id="modal-catalogo" style="display:none;">
       <div class="modal-container" style="max-width:560px;">
         <div class="modal-header">
@@ -377,8 +407,8 @@ export function renderServiciosDisponiblesTab() {
           <div class="form-group">
             <label class="form-label">Tipo <span style="color:#ef4444">*</span></label>
             <select id="catalogo-tipo" class="form-input">
-              <option value="Capacitación">Capacitación</option>
-              <option value="Asesoría">Asesoría</option>
+              <option value="Capacitaci├│n">Capacitaci├│n</option>
+              <option value="Asesor├¡a">Asesor├¡a</option>
             </select>
           </div>
           <div class="form-group">
@@ -386,8 +416,8 @@ export function renderServiciosDisponiblesTab() {
             <input type="text" id="catalogo-nombre" class="form-input" maxlength="200" placeholder="Ej: Manejo Integrado de Plagas">
           </div>
           <div class="form-group">
-            <label class="form-label">Descripción</label>
-            <textarea id="catalogo-descripcion" class="form-input" rows="3" placeholder="Descripción detallada..."></textarea>
+            <label class="form-label">Descripci├│n</label>
+            <textarea id="catalogo-descripcion" class="form-input" rows="3" placeholder="Descripci├│n detallada..."></textarea>
           </div>
           <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
             <div class="form-group">
@@ -395,7 +425,7 @@ export function renderServiciosDisponiblesTab() {
               <input type="number" id="catalogo-precio" class="form-input" min="0" step="0.01" placeholder="0.00">
             </div>
             <div class="form-group">
-              <label class="form-label">Duración (hrs)</label>
+              <label class="form-label">Duraci├│n (hrs)</label>
               <input type="number" id="catalogo-duracion" class="form-input" min="1" placeholder="2">
             </div>
             <div class="form-group">
@@ -414,16 +444,16 @@ export function renderServiciosDisponiblesTab() {
       </div>
     </div>
 
-    <!-- Modal Confirmar Desactivación Catálogo -->
+    <!-- Modal Confirmar Desactivaci├│n Cat├ílogo -->
     <div class="modal-overlay" id="modal-catalogo-eliminar" style="display:none;">
       <div class="modal-container" style="max-width:420px;">
         <div class="modal-header">
-          <h2>Confirmar Desactivación</h2>
+          <h2>Confirmar Desactivaci├│n</h2>
           <button class="modal-close" id="modal-catalogo-eliminar-cerrar">&times;</button>
         </div>
         <div class="modal-body">
-          <p>¿Deseas desactivar <strong id="catalogo-eliminar-nombre"></strong>?</p>
-          <p style="color:#64748b;font-size:0.9em;">No aparecerá en los listados de selección.</p>
+          <p>┬┐Deseas desactivar <strong id="catalogo-eliminar-nombre"></strong>?</p>
+          <p style="color:#64748b;font-size:0.9em;">No aparecer├í en los listados de selecci├│n.</p>
         </div>
         <div class="modal-footer">
           <button class="btn-secondary" id="modal-catalogo-eliminar-cancelar">Cancelar</button>
@@ -436,25 +466,25 @@ export function renderServiciosDisponiblesTab() {
 
 function getServiceIcon(nombre: string): { svg: string; color: string } {
   const n = nombre.toLowerCase();
-  if (n.includes('fumigación') || n.includes('fumigacion')) {
+  if (n.includes('fumigaci├│n') || n.includes('fumigacion')) {
     return {
       svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>',
       color: n.includes('industrial') ? 'green' : n.includes('comercial') ? 'green' : 'blue'
     };
   }
-  if (n.includes('desratización') || n.includes('desratizacion')) {
+  if (n.includes('desratizaci├│n') || n.includes('desratizacion')) {
     return {
       svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
       color: 'orange'
     };
   }
-  if (n.includes('desinsectación') || n.includes('desinsectacion')) {
+  if (n.includes('desinsectaci├│n') || n.includes('desinsectacion')) {
     return {
       svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>',
       color: 'orange'
     };
   }
-  if (n.includes('capacitación') || n.includes('capacitacion')) {
+  if (n.includes('capacitaci├│n') || n.includes('capacitacion')) {
     return {
       svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
       color: 'blue'
@@ -490,7 +520,7 @@ function renderServicioCard(s: Servicio): string {
       <p class="service-description">${s.descripcion}</p>
       <div class="service-stats">
         <div class="service-stat">
-          <span class="stat-label">DURACIÓN</span>
+          <span class="stat-label">DURACI├ôN</span>
           <span class="stat-value">${formatDuracion(s.duracion_estimada)}</span>
         </div>
         <div class="service-stat">
@@ -583,7 +613,7 @@ function bindAccionesServicios() {
       const id = Number((btn as HTMLElement).dataset.id);
       try {
         await servicioService.reactivar(id);
-        mostrarToast('success', 'Servicio Reactivado', 'El servicio se reactivó correctamente');
+        mostrarToast('success', 'Servicio Reactivado', 'El servicio se reactiv├│ correctamente');
         await cargarServicios();
       } catch (error) {
         mostrarToast('error', 'Error', 'No se pudo reactivar el servicio');
@@ -658,7 +688,7 @@ function actualizarRecetaUI() {
             <thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
               <th style="text-align:left;padding:6px 8px;width:45%;">Producto</th>
               <th style="text-align:center;padding:6px 8px;width:18%;">Cantidad</th>
-              <th style="text-align:left;padding:6px 8px;width:27%;">Observación</th>
+              <th style="text-align:left;padding:6px 8px;width:27%;">Observaci├│n</th>
               <th style="text-align:center;padding:6px 8px;width:10%;"></th>
             </tr></thead>
             <tbody>${prods.map(r => {
@@ -685,7 +715,7 @@ function actualizarRecetaUI() {
             <thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
               <th style="text-align:left;padding:6px 8px;width:45%;">Producto</th>
               <th style="text-align:center;padding:6px 8px;width:18%;">Cantidad</th>
-              <th style="text-align:left;padding:6px 8px;width:27%;">Observación</th>
+              <th style="text-align:left;padding:6px 8px;width:27%;">Observaci├│n</th>
               <th style="text-align:center;padding:6px 8px;width:10%;"></th>
             </tr></thead>
             <tbody>${sinEquipo.map(r => {
@@ -740,7 +770,7 @@ function bindRecetaEvents() {
       actualizarRecetaUI();
     });
   });
-  // Agregar producto a un equipo específico
+  // Agregar producto a un equipo espec├¡fico
   document.querySelectorAll('.receta-add-prod-to-equipo').forEach(btn => {
     btn.addEventListener('click', () => {
       const eqId = Number((btn as HTMLElement).dataset.equipoId);
@@ -764,7 +794,7 @@ function agregarFilaReceta() {
 }
 
 function agregarEquipoReceta() {
-  // Mostrar selector de equipo en un mini-diálogo
+  // Mostrar selector de equipo en un mini-di├ílogo
   const equipoOpts = equiposDisponiblesReceta
     .filter((eq: any) => {
       // Excluir equipos ya agregados
@@ -774,7 +804,7 @@ function agregarEquipoReceta() {
     .map((eq: any) => `<option value="${eq.id}">${eq.descripcion} - ${eq.marca || ''} ${eq.modelo || ''}</option>`).join('');
 
   if (!equipoOpts) {
-    mostrarToast('warning', 'Sin equipos', 'No hay equipos disponibles para agregar o ya están todos asignados');
+    mostrarToast('warning', 'Sin equipos', 'No hay equipos disponibles para agregar o ya est├ín todos asignados');
     return;
   }
 
@@ -787,7 +817,7 @@ function agregarEquipoReceta() {
     <div id="${pickerId}" style="margin-bottom:12px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;display:flex;align-items:center;gap:10px;">
       <label style="font-size:13px;font-weight:600;color:#1e40af;white-space:nowrap;">Seleccione equipo:</label>
       <select class="form-input equipo-picker-select" style="flex:1;padding:6px 8px;font-size:13px;">
-        <option value="">—</option>
+        <option value="">ÔÇö</option>
         ${equipoOpts}
       </select>
       <button type="button" class="btn-primary equipo-picker-confirm" style="padding:5px 14px;font-size:12px;">Agregar</button>
@@ -835,7 +865,7 @@ async function cargarProductosParaReceta() {
 function abrirModalNuevoServicio() {
   limpiarFormServicio();
   (document.getElementById('modal-servicio-titulo') as HTMLElement).textContent = 'Nuevo Servicio';
-  // Mostrar sección receta también al crear
+  // Mostrar secci├│n receta tambi├®n al crear
   const recetaSection = document.getElementById('servicio-receta-section');
   if (recetaSection) recetaSection.style.display = 'block';
   recetaRows = [];
@@ -865,7 +895,7 @@ async function abrirModalEditarServicio(id: number) {
       (document.getElementById('servicio-plantilla') as HTMLInputElement).value = s.plantilla_certificado || '';
     }
 
-    // Mostrar sección receta y cargar datos
+    // Mostrar secci├│n receta y cargar datos
     const recetaSection = document.getElementById('servicio-receta-section');
     if (recetaSection) recetaSection.style.display = 'block';
 
@@ -913,7 +943,7 @@ async function guardarServicio() {
   const plantilla_certificado = (document.getElementById('servicio-plantilla') as HTMLInputElement).value.trim() || null;
 
   if (!nombre || !descripcion) {
-    mostrarToast('error', 'Campos requeridos', 'Nombre y descripción son obligatorios');
+    mostrarToast('error', 'Campos requeridos', 'Nombre y descripci├│n son obligatorios');
     return;
   }
 
@@ -945,7 +975,7 @@ async function guardarServicio() {
         mostrarToast('error', 'Advertencia', 'Servicio guardado pero hubo error al guardar los materiales');
       }
 
-      mostrarToast('success', 'Servicio Actualizado', 'El servicio se actualizó correctamente');
+      mostrarToast('success', 'Servicio Actualizado', 'El servicio se actualiz├│ correctamente');
     } else {
       const createRes = await servicioService.create(payload);
       const createdRaw = createRes.data || createRes;
@@ -966,7 +996,7 @@ async function guardarServicio() {
         }
       }
 
-      mostrarToast('success', 'Servicio Creado', 'El servicio se creó correctamente');
+      mostrarToast('success', 'Servicio Creado', 'El servicio se cre├│ correctamente');
     }
     (document.getElementById('modal-servicio') as HTMLElement).style.display = 'none';
     await cargarServicios();
@@ -991,7 +1021,7 @@ async function eliminarServicio() {
 
 export function initServiciosTabEvents() {
   // === SERVICIOS ===
-  // Búsqueda
+  // B├║squeda
   const searchInput = document.getElementById('servicios-search') as HTMLInputElement;
   if (searchInput) {
     let timeout: any;
@@ -1010,7 +1040,7 @@ export function initServiciosTabEvents() {
     filtroEstado.value = filtroEstadoServicios;
   }
 
-  // Botón filtrar
+  // Bot├│n filtrar
   const btnFiltrar = document.getElementById('servicios-btn-filtrar');
   if (btnFiltrar) {
     btnFiltrar.addEventListener('click', () => {
@@ -1020,11 +1050,11 @@ export function initServiciosTabEvents() {
     });
   }
 
-  // Botón nuevo
+  // Bot├│n nuevo
   const btnNuevo = document.getElementById('servicios-btn-nuevo');
   if (btnNuevo) btnNuevo.addEventListener('click', abrirModalNuevoServicio);
 
-  // Modal servicio — cerrar / cancelar
+  // Modal servicio ÔÇö cerrar / cancelar
   const modalCerrar = document.getElementById('modal-servicio-cerrar');
   const modalCancelar = document.getElementById('modal-servicio-cancelar');
   const modal = document.getElementById('modal-servicio') as HTMLElement;
@@ -1044,7 +1074,7 @@ export function initServiciosTabEvents() {
     });
   }
 
-  // Botón agregar material a receta (sin equipo)
+  // Bot├│n agregar material a receta (sin equipo)
   const btnAgregarReceta = document.getElementById('btn-agregar-receta');
   if (btnAgregarReceta) {
     btnAgregarReceta.addEventListener('click', async () => {
@@ -1053,7 +1083,7 @@ export function initServiciosTabEvents() {
     });
   }
 
-  // Botón agregar equipo a receta
+  // Bot├│n agregar equipo a receta
   const btnAgregarEquipo = document.getElementById('btn-agregar-equipo-receta');
   if (btnAgregarEquipo) {
     btnAgregarEquipo.addEventListener('click', async () => {
@@ -1062,7 +1092,7 @@ export function initServiciosTabEvents() {
     });
   }
 
-  // Modal eliminar — cerrar / cancelar / confirmar
+  // Modal eliminar ÔÇö cerrar / cancelar / confirmar
   const elimCerrar = document.getElementById('modal-servicio-eliminar-cerrar');
   const elimCancelar = document.getElementById('modal-servicio-eliminar-cancelar');
   const elimConfirmar = document.getElementById('modal-servicio-eliminar-confirmar');
@@ -1074,17 +1104,17 @@ export function initServiciosTabEvents() {
   // Cargar servicios
   cargarServicios();
 
-  // === CATÁLOGO CAPACITACIONES/AUDITORÍAS ===
+  // === CAT├üLOGO CAPACITACIONES/AUDITOR├ìAS ===
   initCatalogoCapAudEvents();
   cargarCatalogo();
 }
 
 // ========================================
-// CATÁLOGO CAPACITACIONES / AUDITORÍAS
+// CAT├üLOGO CAPACITACIONES / AUDITOR├ìAS
 // ========================================
 
 function getCatalogoIcon(tipo: string): { svg: string; color: string } {
-  if (tipo === 'Capacitación') {
+  if (tipo === 'Capacitaci├│n') {
     return {
       svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
       color: 'blue'
@@ -1107,15 +1137,15 @@ function renderCatalogoCard(item: CatalogoCapAud): string {
         ${icon.svg}
       </div>
       <h3>${item.nombre}</h3>
-      <p class="service-description">${item.descripcion || 'Sin descripción'}</p>
+      <p class="service-description">${item.descripcion || 'Sin descripci├│n'}</p>
       <div class="service-stats">
         <div class="service-stat">
           <span class="stat-label">PRECIO REF.</span>
-          <span class="stat-value">${item.precio_referencial ? 'S/ ' + Number(item.precio_referencial).toFixed(2) : '—'}</span>
+          <span class="stat-value">${item.precio_referencial ? 'S/ ' + Number(item.precio_referencial).toFixed(2) : 'ÔÇö'}</span>
         </div>
         <div class="service-stat">
-          <span class="stat-label">DURACIÓN</span>
-          <span class="stat-value">${item.duracion_horas ? item.duracion_horas + ' hrs' : '—'}</span>
+          <span class="stat-label">DURACI├ôN</span>
+          <span class="stat-value">${item.duracion_horas ? item.duracion_horas + ' hrs' : 'ÔÇö'}</span>
         </div>
       </div>
       <div class="service-tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
@@ -1162,7 +1192,7 @@ async function cargarCatalogo() {
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px;display:block;">
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
           </svg>
-          <p>No se encontraron capacitaciones ni auditorías</p>
+          <p>No se encontraron capacitaciones ni auditor├¡as</p>
         </div>`;
       return;
     }
@@ -1175,8 +1205,8 @@ async function cargarCatalogo() {
       pagination.innerHTML = `<span class="pagination-info">Mostrando ${catalogoCapAudData.length} registro(s)</span>`;
     }
   } catch (error) {
-    console.error('Error cargando catálogo:', error);
-    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;grid-column:1/-1;">Error al cargar catálogo</div>';
+    console.error('Error cargando cat├ílogo:', error);
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;grid-column:1/-1;">Error al cargar cat├ílogo</div>';
   }
 }
 
@@ -1212,7 +1242,7 @@ function bindAccionesCatalogo() {
 
 function limpiarFormCatalogo() {
   (document.getElementById('catalogo-id') as HTMLInputElement).value = '';
-  (document.getElementById('catalogo-tipo') as HTMLSelectElement).value = 'Capacitación';
+  (document.getElementById('catalogo-tipo') as HTMLSelectElement).value = 'Capacitaci├│n';
   (document.getElementById('catalogo-nombre') as HTMLInputElement).value = '';
   (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value = '';
   (document.getElementById('catalogo-precio') as HTMLInputElement).value = '';
@@ -1222,7 +1252,7 @@ function limpiarFormCatalogo() {
 
 function abrirModalNuevoCatalogo() {
   limpiarFormCatalogo();
-  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitación / Asesoría';
+  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitaci├│n / Asesor├¡a';
   (document.getElementById('modal-catalogo') as HTMLElement).style.display = 'flex';
 }
 
@@ -1258,7 +1288,7 @@ function abrirModalEliminarCatalogo(id: number, nombre: string) {
 
 async function guardarCatalogo() {
   const id = (document.getElementById('catalogo-id') as HTMLInputElement).value;
-  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitación' | 'Asesoría';
+  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitaci├│n' | 'Asesor├¡a';
   const nombre = (document.getElementById('catalogo-nombre') as HTMLInputElement).value.trim();
   const descripcion = (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value.trim() || undefined;
   const precio = (document.getElementById('catalogo-precio') as HTMLInputElement).value;
@@ -1290,7 +1320,7 @@ async function guardarCatalogo() {
     (document.getElementById('modal-catalogo') as HTMLElement).style.display = 'none';
     await cargarCatalogo();
   } catch (error) {
-    console.error('Error guardando catálogo:', error);
+    console.error('Error guardando cat├ílogo:', error);
     mostrarToast('error', 'Error', 'No se pudo guardar');
   }
 }
@@ -1309,7 +1339,7 @@ async function eliminarCatalogo() {
 }
 
 function initCatalogoCapAudEvents() {
-  // Búsqueda
+  // B├║squeda
   const searchCat = document.getElementById('catalogo-search') as HTMLInputElement;
   if (searchCat) {
     let timeout: any;
@@ -1322,7 +1352,7 @@ function initCatalogoCapAudEvents() {
     });
   }
 
-  // Botón filtrar
+  // Bot├│n filtrar
   const btnFiltrarCat = document.getElementById('catalogo-btn-filtrar');
   if (btnFiltrarCat) {
     btnFiltrarCat.addEventListener('click', () => {
@@ -1332,52 +1362,289 @@ function initCatalogoCapAudEvents() {
     });
   }
 
-  // Botón nuevo
+  // Bot├│n nuevo
   const btnNuevoCat = document.getElementById('catalogo-btn-nuevo');
   if (btnNuevoCat) btnNuevoCat.addEventListener('click', abrirModalNuevoCatalogo);
 
-  // Modal catálogo — cerrar / cancelar / guardar
+  // Modal cat├ílogo ÔÇö cerrar / cancelar / guardar
   const modalCat = document.getElementById('modal-catalogo') as HTMLElement;
   document.getElementById('modal-catalogo-cerrar')?.addEventListener('click', () => modalCat.style.display = 'none');
   document.getElementById('modal-catalogo-cancelar')?.addEventListener('click', () => modalCat.style.display = 'none');
   document.getElementById('modal-catalogo-guardar')?.addEventListener('click', guardarCatalogo);
 
-  // Modal eliminar catálogo
+  // Modal eliminar cat├ílogo
   const modalCatElim = document.getElementById('modal-catalogo-eliminar') as HTMLElement;
   document.getElementById('modal-catalogo-eliminar-cerrar')?.addEventListener('click', () => modalCatElim.style.display = 'none');
   document.getElementById('modal-catalogo-eliminar-cancelar')?.addEventListener('click', () => modalCatElim.style.display = 'none');
   document.getElementById('modal-catalogo-eliminar-confirmar')?.addEventListener('click', eliminarCatalogo);
 }
 
-// Tab: Rutas
-export function renderRutasTab() {
+function normalizarLista<T>(raw: any): T[] {
+  if (Array.isArray(raw)) return raw as T[];
+  if (raw && Array.isArray(raw.data)) return raw.data as T[];
+  if (raw && raw.data && Array.isArray(raw.data.data)) return raw.data.data as T[];
+  if (raw && Array.isArray(raw.items)) return raw.items as T[];
+  return [];
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function formatearFecha(valor: string | null): string {
+  if (!valor) return 'Sin registro';
+  const fecha = new Date(valor);
+  if (Number.isNaN(fecha.getTime())) return 'Sin registro';
+  return fecha.toLocaleDateString('es-PE', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function getFechaOrden(orden: any): string | null {
+  const fecha =
+    orden?.fecha_orden ||
+    orden?.fecha_ejecucion ||
+    orden?.fecha_envio ||
+    orden?.fecha_programada ||
+    orden?.created_at ||
+    null;
+  return typeof fecha === 'string' ? fecha : null;
+}
+
+function getNombreClienteDesdeOrden(orden: any): string {
+  const nombre =
+    orden?.cliente?.nombre_empresa ||
+    orden?.cotizacion?.cliente?.nombre_empresa ||
+    orden?.cotizacion?.cliente_nombre ||
+    orden?.cliente_nombre ||
+    '';
+  return typeof nombre === 'string' ? nombre.trim() : '';
+}
+
+function getClienteIdDesdeOrden(orden: any): number | null {
+  const id =
+    orden?.cliente?.id ||
+    orden?.cotizacion?.cliente?.id ||
+    orden?.id_cliente ||
+    orden?.cotizacion?.id_cliente ||
+    null;
+  const parsed = toNumber(id);
+  return parsed > 0 ? parsed : null;
+}
+
+function getMontoDesdeOrden(orden: any): number {
+  const totalDirecto = toNumber(orden?.total);
+  if (totalDirecto > 0) return totalDirecto;
+
+  const totalCotizacion = toNumber(orden?.cotizacion?.total);
+  if (totalCotizacion > 0) return totalCotizacion;
+
+  const subtotal = toNumber(orden?.cotizacion?.subtotal);
+  const igv = toNumber(orden?.cotizacion?.igv);
+  return subtotal + igv;
+}
+
+function incluyeTipo(adq: ResumenMuestreoCliente['adquisiciones'], filtro: string): boolean {
+  if (filtro === 'all') return true;
+  if (filtro === 'mixto') {
+    const tiposActivos = [adq.servicio, adq.producto, adq.capacitacion, adq.asesoria].filter(v => v > 0).length;
+    return tiposActivos > 1;
+  }
+  return adq[filtro as keyof ResumenMuestreoCliente['adquisiciones']] > 0;
+}
+
+function renderizarMuestreoClientesTabla() {
+  const tableBody = document.getElementById('muestreo-clientes-body');
+  const statsClientes = document.getElementById('muestreo-stat-clientes');
+  const statsAdquisiciones = document.getElementById('muestreo-stat-adquisiciones');
+  const statsInversion = document.getElementById('muestreo-stat-inversion');
+  const paginationInfo = document.querySelector('#muestreo-clientes-pagination .pagination-info');
+
+  if (!tableBody || !statsClientes || !statsAdquisiciones || !statsInversion) return;
+
+  const texto = filtroSearchMuestreo.toLowerCase();
+  const filtrados = muestreoClientesData
+    .filter(item => {
+      const coincideTexto = !texto || item.nombre.toLowerCase().includes(texto) || item.rubro.toLowerCase().includes(texto);
+      const coincideTipo = incluyeTipo(item.adquisiciones, filtroTipoMuestreo);
+      return coincideTexto && coincideTipo;
+    })
+    .sort((a, b) => b.inversionTotal - a.inversionTotal);
+
+  const totalAdquisiciones = filtrados.reduce((acc, item) => {
+    return acc + item.adquisiciones.servicio + item.adquisiciones.producto + item.adquisiciones.capacitacion + item.adquisiciones.asesoria;
+  }, 0);
+  const totalInversion = filtrados.reduce((acc, item) => acc + item.inversionTotal, 0);
+
+  statsClientes.textContent = String(filtrados.length);
+  statsAdquisiciones.textContent = String(totalAdquisiciones);
+  statsInversion.textContent = moneyFormatter.format(totalInversion);
+
+  if (filtrados.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:32px;">No se encontraron clientes con adquisiciones para este filtro.</td></tr>';
+    if (paginationInfo) paginationInfo.textContent = 'Mostrando 0 resultados';
+    return;
+  }
+
+  tableBody.innerHTML = filtrados.map(item => {
+    const totalTipos = [item.adquisiciones.servicio, item.adquisiciones.producto, item.adquisiciones.capacitacion, item.adquisiciones.asesoria]
+      .filter(v => v > 0).length;
+    const etiquetaPerfil = totalTipos > 1 ? 'Mixto' : 'Especializado';
+    const totalCompras = item.adquisiciones.servicio + item.adquisiciones.producto + item.adquisiciones.capacitacion + item.adquisiciones.asesoria;
+
+    return `
+      <tr>
+        <td>
+          <div class="equipment-info">
+            <div>
+              <div class="equipment-name">${item.nombre}</div>
+              <div class="equipment-id">${item.rubro || 'Sin rubro'}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge blue">S: ${item.adquisiciones.servicio}</span>
+            <span class="badge green">P: ${item.adquisiciones.producto}</span>
+            <span class="badge">C: ${item.adquisiciones.capacitacion}</span>
+            <span class="badge orange">A: ${item.adquisiciones.asesoria}</span>
+          </div>
+        </td>
+        <td>${totalCompras}</td>
+        <td><strong>${moneyFormatter.format(item.inversionTotal)}</strong></td>
+        <td>${formatearFecha(item.ultimaAdquisicion)}</td>
+        <td><span class="badge ${totalTipos > 1 ? 'blue' : 'green'}">${etiquetaPerfil}</span></td>
+      </tr>
+    `;
+  }).join('');
+
+  if (paginationInfo) {
+    paginationInfo.textContent = `Mostrando ${filtrados.length} de ${muestreoClientesData.length} clientes con adquisiciones`;
+  }
+}
+
+async function cargarMuestreoClientes() {
+  const tableBody = document.getElementById('muestreo-clientes-body');
+  if (tableBody) {
+    tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:32px;">Cargando muestreo de clientes...</td></tr>';
+  }
+
+  try {
+    const [resClientes, resServicio, resProducto, resCapacitacion, resAsesoria] = await Promise.all([
+      clienteService.getAll({ estado: 'Acepta', per_page: 500 }),
+      ordenServicioService.getAll({ per_page: 500 }),
+      ordenProductoService.getAll({ per_page: 500 }),
+      ordenCapacitacionService.getAll({ per_page: 500 }),
+      ordenAsesoriaService.getAll({ per_page: 500 }),
+    ]);
+
+    const clientes = normalizarLista<Cliente>(resClientes);
+    const ordenesServicio = normalizarLista<any>(resServicio);
+    const ordenesProducto = normalizarLista<any>(resProducto);
+    const ordenesCapacitacion = normalizarLista<any>(resCapacitacion);
+    const ordenesAsesoria = normalizarLista<any>(resAsesoria);
+
+    const clientesPorId = new Map<number, Cliente>();
+    clientes.forEach((cliente) => {
+      if (cliente.id) clientesPorId.set(cliente.id, cliente);
+    });
+
+    const resumen = new Map<string, ResumenMuestreoCliente>();
+    const upsertResumen = (tipo: keyof ResumenMuestreoCliente['adquisiciones'], orden: any) => {
+      const clienteId = getClienteIdDesdeOrden(orden);
+      const clienteBase = clienteId ? clientesPorId.get(clienteId) : undefined;
+      const nombre = getNombreClienteDesdeOrden(orden) || clienteBase?.nombre_empresa || `Cliente #${clienteId ?? 'N/D'}`;
+      const rubro = clienteBase?.rubro || orden?.cotizacion?.cliente?.rubro || 'Sin rubro';
+      const key = clienteId ? `id-${clienteId}` : `name-${nombre.toLowerCase()}`;
+
+      if (!resumen.has(key)) {
+        resumen.set(key, {
+          key,
+          clienteId,
+          nombre,
+          rubro,
+          adquisiciones: {
+            servicio: 0,
+            producto: 0,
+            capacitacion: 0,
+            asesoria: 0,
+          },
+          inversionTotal: 0,
+          ultimaAdquisicion: null,
+        });
+      }
+
+      const actual = resumen.get(key);
+      if (!actual) return;
+
+      actual.adquisiciones[tipo] += 1;
+      actual.inversionTotal += getMontoDesdeOrden(orden);
+
+      const fechaOrden = getFechaOrden(orden);
+      if (!fechaOrden) return;
+      if (!actual.ultimaAdquisicion) {
+        actual.ultimaAdquisicion = fechaOrden;
+        return;
+      }
+
+      const fechaActual = new Date(actual.ultimaAdquisicion).getTime();
+      const fechaNueva = new Date(fechaOrden).getTime();
+      if (!Number.isNaN(fechaNueva) && fechaNueva > fechaActual) {
+        actual.ultimaAdquisicion = fechaOrden;
+      }
+    };
+
+    ordenesServicio.forEach((orden) => upsertResumen('servicio', orden));
+    ordenesProducto.forEach((orden) => upsertResumen('producto', orden));
+    ordenesCapacitacion.forEach((orden) => upsertResumen('capacitacion', orden));
+    ordenesAsesoria.forEach((orden) => upsertResumen('asesoria', orden));
+
+    muestreoClientesData = Array.from(resumen.values());
+    renderizarMuestreoClientesTabla();
+  } catch (error) {
+    console.error('Error cargando muestreo de clientes:', error);
+    if (tableBody) {
+      tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:32px;">No se pudo cargar el muestreo de clientes.</td></tr>';
+    }
+  }
+}
+
+// Tab: Muestreo de Clientes
+export function renderMuestreoClientesTab() {
   return `
     <div class="stats-row" style="margin-bottom: 24px;">
       <div class="stat-box">
         <div class="stat-box-icon blue">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
         </div>
         <div class="stat-box-content">
-          <div class="stat-box-label">Rutas Activas Hoy</div>
-          <div class="stat-box-value">8</div>
+          <div class="stat-box-label">Clientes con adquisiciones</div>
+          <div class="stat-box-value" id="muestreo-stat-clientes">0</div>
         </div>
       </div>
       <div class="stat-box">
         <div class="stat-box-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"></path></svg>
         </div>
         <div class="stat-box-content">
-          <div class="stat-box-label">Servicios Programados</div>
-          <div class="stat-box-value">24</div>
+          <div class="stat-box-label">Adquisiciones registradas</div>
+          <div class="stat-box-value" id="muestreo-stat-adquisiciones">0</div>
         </div>
       </div>
       <div class="stat-box">
         <div class="stat-box-icon orange">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
         </div>
         <div class="stat-box-content">
-          <div class="stat-box-label">Tiempo Promedio</div>
-          <div class="stat-box-value">3.5 <span class="stat-box-note">hrs/ruta</span></div>
+          <div class="stat-box-label">Inversión total acumulada</div>
+          <div class="stat-box-value" id="muestreo-stat-inversion">S/ 0.00</div>
         </div>
       </div>
     </div>
@@ -1385,16 +1652,17 @@ export function renderRutasTab() {
     <div class="search-filter-bar">
       <div class="search-input-wrapper">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-        <input type="text" placeholder="Buscar ruta..." class="search-input">
+        <input type="text" id="muestreo-search-clientes" placeholder="Buscar cliente o rubro..." class="search-input">
       </div>
-      <select class="filter-select">
-        <option>Todos los vehículos</option>
-        <option>Unidad U-05</option>
-        <option>Unidad U-12</option>
-        <option>Unidad U-18</option>
+      <select class="filter-select" id="muestreo-filter-tipo">
+        <option value="all">Todos los tipos</option>
+        <option value="servicio">Servicio</option>
+        <option value="producto">Producto</option>
+        <option value="capacitacion">Capacitación</option>
+        <option value="asesoria">Asesoría</option>
+        <option value="mixto">Perfil mixto</option>
       </select>
-      <input type="date" class="filter-select" value="2026-01-31">
-      <button class="btn-filter">
+      <button class="btn-filter" id="muestreo-btn-filtrar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
         Filtrar
       </button>
@@ -1404,116 +1672,59 @@ export function renderRutasTab() {
       <table class="data-table">
         <thead>
           <tr>
-            <th>RUTA</th>
-            <th>VEHÍCULO</th>
-            <th>CONDUCTOR</th>
-            <th>SERVICIOS</th>
-            <th>HORARIO</th>
-            <th>ZONA</th>
-            <th>ESTADO</th>
-            <th>ACCIONES</th>
+            <th>CLIENTE</th>
+            <th>SERVICIOS ADQUIRIDOS</th>
+            <th>TOTAL ADQUISICIONES</th>
+            <th>INVERSIÓN TOTAL</th>
+            <th>ÚLTIMA ADQUISICIÓN</th>
+            <th>PERFIL</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="muestreo-clientes-body">
           <tr>
-            <td><strong>RUTA-A-031</strong></td>
-            <td>
-              <div class="equipment-info">
-                <div>
-                  <div class="equipment-name">Unidad U-05</div>
-                  <div class="equipment-id">ABC-123</div>
-                </div>
-              </div>
-            </td>
-            <td>Carlos Mendoza</td>
-            <td>4 servicios</td>
-            <td>08:00 - 14:30</td>
-            <td>Lima Norte</td>
-            <td><span class="badge blue">En Curso</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td><strong>RUTA-B-031</strong></td>
-            <td>
-              <div class="equipment-info">
-                <div>
-                  <div class="equipment-name">Unidad U-12</div>
-                  <div class="equipment-id">DEF-456</div>
-                </div>
-              </div>
-            </td>
-            <td>Juan Ramírez</td>
-            <td>3 servicios</td>
-            <td>09:00 - 13:00</td>
-            <td>Lima Sur</td>
-            <td><span class="badge blue">En Curso</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td><strong>RUTA-C-031</strong></td>
-            <td>
-              <div class="equipment-info">
-                <div>
-                  <div class="equipment-name">Unidad U-18</div>
-                  <div class="equipment-id">GHI-789</div>
-                </div>
-              </div>
-            </td>
-            <td>Pedro López</td>
-            <td>5 servicios</td>
-            <td>07:30 - 15:00</td>
-            <td>Callao</td>
-            <td><span class="badge green">Completada</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td><strong>RUTA-D-031</strong></td>
-            <td>
-              <div class="equipment-info">
-                <div>
-                  <div class="equipment-name">Unidad U-22</div>
-                  <div class="equipment-id">JKL-012</div>
-                </div>
-              </div>
-            </td>
-            <td>Luis Torres</td>
-            <td>2 servicios</td>
-            <td>10:00 - 12:30</td>
-            <td>Miraflores</td>
-            <td><span class="badge">Programada</span></td>
-            <td><button class="action-btn">⋮</button></td>
-          </tr>
-          <tr>
-            <td><strong>RUTA-E-031</strong></td>
-            <td>
-              <div class="equipment-info">
-                <div>
-                  <div class="equipment-name">Unidad U-08</div>
-                  <div class="equipment-id">MNO-345</div>
-                </div>
-              </div>
-            </td>
-            <td>María Soto</td>
-            <td>6 servicios</td>
-            <td>08:30 - 16:00</td>
-            <td>San Juan</td>
-            <td><span class="badge blue">En Curso</span></td>
-            <td><button class="action-btn">⋮</button></td>
+            <td colspan="6" style="text-align:center;color:#64748b;padding:32px;">Cargando muestreo de clientes...</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div class="pagination">
-      <span class="pagination-info">Mostrando 1-5 de 8 rutas activas</span>
-      <div class="pagination-controls">
-        <button class="pagination-btn" disabled>Anterior</button>
-        <button class="pagination-btn active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">Siguiente</button>
-      </div>
+    <div class="pagination" id="muestreo-clientes-pagination">
+      <span class="pagination-info"></span>
     </div>
   `;
+}
+
+export function initMuestreoClientesEvents() {
+  cargarMuestreoClientes();
+
+  const input = document.getElementById('muestreo-search-clientes') as HTMLInputElement;
+  if (input) {
+    let debounce: ReturnType<typeof setTimeout>;
+    input.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        filtroSearchMuestreo = input.value.trim();
+        renderizarMuestreoClientesTabla();
+      }, 300);
+    });
+  }
+
+  const filtroTipo = document.getElementById('muestreo-filter-tipo') as HTMLSelectElement;
+  if (filtroTipo) {
+    filtroTipo.addEventListener('change', () => {
+      filtroTipoMuestreo = filtroTipo.value;
+      renderizarMuestreoClientesTabla();
+    });
+  }
+
+  const btnFiltrar = document.getElementById('muestreo-btn-filtrar');
+  if (btnFiltrar) {
+    btnFiltrar.addEventListener('click', () => {
+      filtroSearchMuestreo = input?.value.trim() || '';
+      filtroTipoMuestreo = filtroTipo?.value || 'all';
+      renderizarMuestreoClientesTabla();
+    });
+  }
 }
 
 export function renderLogistica() {
@@ -1531,7 +1742,7 @@ export function renderLogistica() {
     <div class="inventory-tabs">
       <button class="tab-btn active" data-tab="clientes">Clientes</button>
       <button class="tab-btn" data-tab="servicios">Servicios Disponibles</button>
-      <button class="tab-btn" data-tab="rutas">Rutas</button>
+      <button class="tab-btn" data-tab="muestreo">Muestreo de Clientes</button>
     </div>
 
     <div id="logistica-tab-content">

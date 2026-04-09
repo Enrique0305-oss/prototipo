@@ -1,6 +1,6 @@
 .of-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -50,13 +50,22 @@
 
 .of-detalle-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px 40px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(140px, 180px) minmax(120px, 160px);
   gap: 8px;
   align-items: end;
   padding: 10px;
   border: 1px solid #dbe6f0;
   border-radius: 10px;
   background: #ffffff;
+}
+
+.of-detalle-row > div {
+  min-width: 0;
+}
+
+.of-detalle-row .prov-input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .of-actions-group {
@@ -116,9 +125,35 @@
   margin-bottom: 4px;
 }
 
+.of-cierre-motivo {
+  width: 100%;
+  min-height: 92px;
+  box-sizing: border-box;
+}
+
+.of-cierre-observaciones {
+  width: 100%;
+  min-height: 92px;
+  box-sizing: border-box;
+}
+
+.of-campo-ancho {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .of-btn-delete-row {
-  height: 38px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
   align-self: end;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 7px;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
 }
 
 .of-detail-tabs {
@@ -258,8 +293,17 @@
     grid-template-columns: 1fr;
   }
 
+  .of-cierre-motivo {
+    min-height: 110px;
+  }
+
+  .of-cierre-observaciones {
+    min-height: 110px;
+  }
+
   .of-btn-delete-row {
-    width: 44px;
+    width: 28px;
+    min-width: 28px;
     justify-self: end;
   }
 

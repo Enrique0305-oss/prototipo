@@ -63,6 +63,8 @@ export interface ProgramacionFabricacionSalida {
 
 export interface ProgramacionFabricacionEntradaDevolucion {
   id: number;
+  id_entrada_devolucion_fabricacion?: number;
+  id_programacion_fabricacion?: number;
   id_orden_fabricacion?: number;
   codigo_orden?: string;
   motivo_orden?: string | null;
@@ -70,6 +72,9 @@ export interface ProgramacionFabricacionEntradaDevolucion {
   hora_inicio: string;
   hora_fin?: string | null;
   estado_ejecucion: string;
+  estado: 'Pendiente' | 'Realizado';
+  fecha_realizado?: string | null;
+  observaciones?: string | null;
   tecnico?: {
     id: number;
     nombre?: string;
@@ -87,6 +92,20 @@ export interface ProgramacionFabricacionEntradaDevolucion {
     unidad?: string | null;
     cantidad_requerida: number;
   }>;
+  detalles?: Array<{
+    id: number;
+    tipo: 'EntradaProducto' | 'DevolucionInsumo';
+    id_producto: number;
+    cantidad: number;
+    observacion?: string | null;
+    producto?: {
+      id: number;
+      descripcion: string;
+      unidad?: string | null;
+    } | null;
+  }>;
+  cantidad_esperada_total?: number;
+  cantidad_producida_total?: number;
 }
 
 export const ordenesFabricacionService = {
@@ -130,7 +149,7 @@ export const ordenesFabricacionService = {
   },
 
   registrarEntradaDevolucion: async (payload: {
-    id_programacion_fabricacion: number;
+    id_entrada_devolucion_fabricacion: number;
     productos: Array<{
       id_producto_final: number;
       cantidad_producida: number;

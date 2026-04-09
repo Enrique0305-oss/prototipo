@@ -266,7 +266,7 @@ async function cargarCierresFabricacion() {
     cierreProgramacionData = res.data || [];
 
     if (!cierreProgramacionData.length) {
-      container.innerHTML = '<div class="sp-empty">No hay programaciones pendientes de entrada/devolucion.</div>';
+      container.innerHTML = '<div class="sp-empty">No hay registros de entrada/devolucion de fabricacion.</div>';
       return;
     }
 
@@ -277,6 +277,7 @@ async function cargarCierresFabricacion() {
             <tr>
               <th>ORDEN</th>
               <th>PROGRAMACION</th>
+              <th>ESTADO</th>
               <th>TECNICO</th>
               <th>PRODUCTOS</th>
               <th>INSUMOS</th>
@@ -286,17 +287,19 @@ async function cargarCierresFabricacion() {
           <tbody>
             ${cierreProgramacionData.map((prog) => {
               const tecnico = prog.tecnico ? `${prog.tecnico.nombre || ''} ${prog.tecnico.apellido || ''}`.trim() : '—';
+              const puedeAccion = prog.estado === 'Pendiente';
               return `
                 <tr>
                   <td><strong>${prog.codigo_orden || `OF-${prog.id_orden_fabricacion || ''}`}</strong><br><span class="muted">${prog.motivo_orden || '—'}</span></td>
                   <td>${fmtFecha(prog.fecha_programada)}<br><span class="muted">${fmtHora(prog.hora_inicio)}${prog.hora_fin ? ` - ${fmtHora(prog.hora_fin)}` : ''}</span></td>
+                  <td><span class="status-indicator ${prog.estado === 'Realizado' ? 'success' : 'warning'}">${prog.estado}</span>${prog.fecha_realizado ? `<br><span class="muted">${fmtFechaHora(String(prog.fecha_realizado))}</span>` : ''}</td>
                   <td>${tecnico}</td>
                   <td>${prog.productos_esperados.length}</td>
                   <td>${prog.insumos_sugeridos.length}</td>
                   <td>
                     <div class="of-actions-group">
-                      <button class="of-icon-btn of-icon-btn-blue" data-cierre-detalle="${prog.id}" title="Registrar cierre" aria-label="Registrar cierre">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"></path><path d="M5 12h14"></path><path d="M7 6l5-4 5 4"></path></svg>
+                      <button class="of-icon-btn ${puedeAccion ? 'of-icon-btn-blue' : 'of-icon-btn-green'}" data-cierre-detalle="${prog.id}" title="${puedeAccion ? 'Registrar cierre' : 'Ver detalle'}" aria-label="${puedeAccion ? 'Registrar cierre' : 'Ver detalle'}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${puedeAccion ? '<path d="M12 2v20"></path><path d="M5 12h14"></path><path d="M7 6l5-4 5 4"></path>' : '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle>'}</svg>
                       </button>
                     </div>
                   </td>
@@ -528,11 +531,11 @@ function renderFormHtml(of?: OrdenFabricacion): string {
           </div>
           <div class="of-grid-full">
             <label class="prov-label">Motivo</label>
-            <input type="text" id="ofMotivo" class="prov-input" maxlength="255" value="${of?.motivo || ''}" placeholder="Ej: reposicion de stock para pedidos de la semana">
+            <input type="text" id="ofMotivo" class="prov-input of-campo-ancho" maxlength="255" value="${of?.motivo || ''}" placeholder="Ej: reposicion de stock para pedidos de la semana">
           </div>
           <div class="of-grid-full">
             <label class="prov-label">Observaciones</label>
-            <textarea id="ofObservaciones" class="prov-input" rows="2" placeholder="Observaciones adicionales">${of?.observaciones || ''}</textarea>
+            <textarea id="ofObservaciones" class="prov-input of-campo-ancho" rows="3" placeholder="Observaciones adicionales">${of?.observaciones || ''}</textarea>
           </div>
         </div>
       </section>
@@ -838,14 +841,17 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
       return;
     }
 
-    titulo.textContent = `Cierre de ${prog.codigo_orden || `programación #${prog.id}`}`;
+    const esPendiente = prog.estado === 'Pendiente';
+    titulo.textContent = `${esPendiente ? 'Registrar cierre' : 'Detalle de cierre'} de ${prog.codigo_orden || `programación #${prog.id}`}`;
     body.innerHTML = `
       <div class="of-section of-section-tight">
         <div class="of-grid of-grid-header">
           <div><strong>Orden:</strong> ${prog.codigo_orden || '—'}</div>
           <div><strong>Fecha programada:</strong> ${fmtFecha(prog.fecha_programada)}</div>
           <div><strong>Técnico:</strong> ${prog.tecnico ? `${prog.tecnico.nombre || ''} ${prog.tecnico.apellido || ''}`.trim() : '—'}</div>
+          <div><strong>Estado:</strong> <span class="status-indicator ${esPendiente ? 'warning' : 'success'}">${prog.estado}</span></div>
           <div class="of-grid-full"><strong>Motivo:</strong> ${prog.motivo_orden || '—'}</div>
+          ${prog.fecha_realizado ? `<div class="of-grid-full"><strong>Realizado:</strong> ${fmtFechaHora(String(prog.fecha_realizado))}</div>` : ''}
         </div>
       </div>
 
@@ -861,7 +867,7 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
                 </div>
                 <div>
                   <label class="prov-label">Cantidad producida *</label>
-                  <input type="number" class="prov-input cierre-producto-cantidad" data-id-producto-final="${producto.id_producto_final}" min="0.001" step="0.001" value="${Number(producto.cantidad_esperada || 0)}">
+                  <input type="number" class="prov-input cierre-producto-cantidad" data-id-producto-final="${producto.id_producto_final}" min="0.001" step="0.001" value="${Number(prog.cantidad_producida_total || producto.cantidad_esperada || 0)}" ${esPendiente ? '' : 'disabled'}>
                 </div>
                 <div>
                   <label class="prov-label">Esperada</label>
@@ -872,24 +878,26 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
           </div>
         </section>
 
+        ${esPendiente ? `
         <section class="of-section of-section-tight">
           <div class="of-grid">
             <div class="of-grid-full">
               <label class="prov-label">Motivo si existe diferencia</label>
-              <textarea class="prov-input" id="cierreMotivoDiferencia" rows="2" placeholder="Requerido si la cantidad producida no coincide"></textarea>
+              <textarea class="prov-input of-cierre-motivo" id="cierreMotivoDiferencia" rows="3" placeholder="Requerido si la cantidad producida no coincide">${prog.estado === 'Realizado' ? (prog.detalles?.find((d) => d.tipo === 'EntradaProducto')?.observacion || '') : ''}</textarea>
             </div>
             <div class="of-grid-full">
-              <label class="prov-label"><input type="checkbox" id="cierreTieneSobranteMP"> Tiene sobrante de materia prima</label>
+              <label class="prov-label"><input type="checkbox" id="cierreTieneSobranteMP" ${prog.insumos_sugeridos.length > 0 ? '' : ''}> Tiene sobrante de materia prima</label>
             </div>
           </div>
         </section>
+        ` : ''}
 
-        <section class="of-section of-section-tight" id="cierreDevolucionesSection" style="display:none;">
+        <section class="of-section of-section-tight" id="cierreDevolucionesSection" style="${esPendiente ? 'display:none;' : 'display:block;'}">
           <div class="of-section-head">
             <h4 class="of-section-title">Devolución de materia prima</h4>
           </div>
           <div class="of-detalles-container">
-            ${prog.insumos_sugeridos.map((insumo) => `
+            ${(esPendiente ? prog.insumos_sugeridos : (prog.detalles || []).filter((d) => d.tipo === 'DevolucionInsumo').map((d) => ({ id_producto: d.id_producto, descripcion: d.producto?.descripcion || 'Insumo', cantidad_requerida: d.cantidad, unidad: d.producto?.unidad || null, cantidad_devuelta: d.cantidad }))).map((insumo: any) => `
               <div class="of-detalle-row">
                 <div>
                   <label class="prov-label">Insumo</label>
@@ -897,7 +905,7 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
                 </div>
                 <div>
                   <label class="prov-label">Cantidad devuelta</label>
-                  <input type="number" class="prov-input cierre-devolucion-cantidad" data-id-producto="${insumo.id_producto}" min="0" step="0.001" value="0">
+                  <input type="number" class="prov-input cierre-devolucion-cantidad" data-id-producto="${insumo.id_producto}" min="0" step="0.001" value="${Number(insumo.cantidad_devuelta ?? 0)}" ${esPendiente ? '' : 'disabled'}>
                 </div>
                 <div>
                   <label class="prov-label">Sugerida</label>
@@ -910,22 +918,24 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
 
         <section class="of-section of-section-tight">
           <label class="prov-label">Observaciones</label>
-          <textarea class="prov-input" id="cierreObservaciones" rows="2"></textarea>
+          <textarea class="prov-input of-cierre-observaciones" id="cierreObservaciones" rows="3" ${esPendiente ? '' : 'disabled'}>${prog.observaciones || ''}</textarea>
         </section>
 
         <div class="prov-modal-footer">
           <button type="button" class="prov-btn-secondary" id="btnCancelarCierreFab">Cancelar</button>
-          <button type="submit" class="prov-btn-primary" id="btnGuardarCierreFab" data-id-programacion="${prog.id}">Registrar cierre</button>
+          ${esPendiente ? `<button type="submit" class="prov-btn-primary" id="btnGuardarCierreFab" data-id-programacion="${prog.id}">Registrar cierre</button>` : ''}
         </div>
       </form>
     `;
 
     document.getElementById('btnCancelarCierreFab')?.addEventListener('click', cerrarModalCierre);
-    document.getElementById('cierreTieneSobranteMP')?.addEventListener('change', toggleDevolucionesSection);
-    document.getElementById('formCierreFabricacion')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      await registrarCierreFabricacion(idProgramacion);
-    });
+    if (esPendiente) {
+      document.getElementById('cierreTieneSobranteMP')?.addEventListener('change', toggleDevolucionesSection);
+      document.getElementById('formCierreFabricacion')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await registrarCierreFabricacion(idProgramacion);
+      });
+    }
   } catch (error: any) {
     console.error('Error abriendo cierre de fabricacion:', error);
     const msg = error?.data?.message || error?.response?.data?.message || 'No se pudo cargar la programación';
@@ -995,7 +1005,7 @@ async function registrarCierreFabricacion(idProgramacion: number) {
 
   try {
     await ordenesFabricacionService.registrarEntradaDevolucion({
-      id_programacion_fabricacion: idProgramacion,
+      id_entrada_devolucion_fabricacion: idProgramacion,
       productos,
       motivo_diferencia: motivoDiferencia || undefined,
       tiene_sobrante_materia_prima: tieneSobrante,
