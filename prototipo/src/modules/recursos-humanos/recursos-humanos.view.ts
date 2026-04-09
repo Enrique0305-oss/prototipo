@@ -1399,7 +1399,7 @@ export async function cargarMarcarAsistencia() {
           <table class="op-table">
             <thead>
               <tr>
-                <th>DÃA</th>
+                <th>DÍA</th>
                 <th>FECHA</th>
                 <th>ENTRADA</th>
                 <th>SALIDA</th>

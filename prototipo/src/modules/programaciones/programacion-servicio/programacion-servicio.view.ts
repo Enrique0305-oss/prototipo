@@ -48,7 +48,7 @@ function extractList<T = any>(response: any): T[] {
 }
 
 type ProgramacionExtendida = Programacion & {
-  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion';
+  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion' | 'otros';
   orden_capacitacion?: any;
   orden_asesoria?: any;
   cliente?: any;
@@ -56,6 +56,8 @@ type ProgramacionExtendida = Programacion & {
   id_orden_fabricacion?: number;
   orden_fabricacion?: any;
   motivo_fabricacion?: string;
+  motivo?: string;
+  ubicacion_manual?: string;
   productos_fabricacion?: number[];
   receta_fabricacion?: any[];
   exponentes?: any[];
@@ -828,6 +830,10 @@ export function renderProgramacionServicio(): string {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;display:inline;"><path d="M14.7 6.3l3 3-8.49 8.49-3.53.5.5-3.53L14.7 6.3z"></path><path d="M16 3l5 5"></path><path d="M3 21h18"></path></svg>
             Programación por Fabricación
           </button>
+          <button id="btnSelectorOtros" class="prog-btn-secondary" style="width:100%;padding:16px;font-size:15px;font-weight:500;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;display:inline;"><path d="M12 5v14"></path><path d="M5 12h14"></path><circle cx="12" cy="12" r="9"></circle></svg>
+            Programación de Otros
+          </button>
         </div>
       </div>
     </div>
@@ -889,6 +895,10 @@ export async function initProgramacionServicioEvents(): Promise<void> {
     cerrarModal('modalSelectorTipoProgramacion');
     abrirModalNuevaFabricacion();
   });
+  document.getElementById('btnSelectorOtros')?.addEventListener('click', () => {
+    cerrarModal('modalSelectorTipoProgramacion');
+    abrirModalNuevaOtros();
+  });
   document.getElementById('closeSelectorTipo')?.addEventListener('click', () => cerrarModal('modalSelectorTipoProgramacion'));
   document.getElementById('viewSelector')?.addEventListener('change', (e) => {
     vistaActual = (e.target as HTMLSelectElement).value as VistaProgramacion;
@@ -926,15 +936,17 @@ async function cargarDatosIniciales() {
       anio: fechaActual.getFullYear(),
     };
 
-    const [resServicio, resVisita, resFabricacion] = await Promise.all([
+    const [resServicio, resVisita, resFabricacion, resOtros] = await Promise.all([
       programacionService.getAll(filtrosBase),
       programacionService.getAllProgramacionVisita(filtrosBase),
       programacionService.getAllProgramacionFabricacion(filtrosBase),
+      programacionService.getAllProgramacionOtros(filtrosBase),
     ]);
 
     const programacionesServicio = resServicio.data || [];
     const programacionesVisita = resVisita.data || [];
     const programacionesFabricacion = resFabricacion.data || [];
+    const programacionesOtros = resOtros.data || [];
 
     const servicioMapeado = (programacionesServicio as any[]).map(p => ({
       ...p,
@@ -960,7 +972,15 @@ async function cargarDatosIniciales() {
       tipo_programacion: 'fabricacion',
     })) as ProgramacionExtendida[];
 
-    programacionesData = [...servicioMapeado, ...visitaMapeado, ...fabricacionMapeado] as Programacion[];
+    const otrosMapeado = (programacionesOtros as any[]).map(p => ({
+      ...p,
+      fecha_programada: normalizarFecha(p.fecha_programada),
+      hora_inicio: normalizarHora(p.hora_inicio),
+      hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
+      tipo_programacion: 'otros',
+    })) as ProgramacionExtendida[];
+
+    programacionesData = [...servicioMapeado, ...visitaMapeado, ...fabricacionMapeado, ...otrosMapeado] as Programacion[];
     const tecnicosRaw = extractList<Tecnico>(tecRes);
     const vehiculosRaw = extractList<Vehiculo>(vehRes);
 
@@ -996,15 +1016,17 @@ async function recargarProgramaciones() {
       anio: fechaActual.getFullYear(),
     };
 
-    const [resServicio, resVisita, resFabricacion] = await Promise.all([
+    const [resServicio, resVisita, resFabricacion, resOtros] = await Promise.all([
       programacionService.getAll(filtrosBase),
       programacionService.getAllProgramacionVisita(filtrosBase),
       programacionService.getAllProgramacionFabricacion(filtrosBase),
+      programacionService.getAllProgramacionOtros(filtrosBase),
     ]);
 
     const programacionesServicio = resServicio.data || [];
     const programacionesVisita = resVisita.data || [];
     const programacionesFabricacion = resFabricacion.data || [];
+    const programacionesOtros = resOtros.data || [];
 
     const servicioMapeado = (programacionesServicio as any[]).map(p => ({
       ...p,
@@ -1030,7 +1052,15 @@ async function recargarProgramaciones() {
       tipo_programacion: 'fabricacion',
     })) as ProgramacionExtendida[];
 
-    programacionesData = [...servicioMapeado, ...visitaMapeado, ...fabricacionMapeado] as Programacion[];
+    const otrosMapeado = (programacionesOtros as any[]).map(p => ({
+      ...p,
+      fecha_programada: normalizarFecha(p.fecha_programada),
+      hora_inicio: normalizarHora(p.hora_inicio),
+      hora_fin: p.hora_fin ? normalizarHora(p.hora_fin) : p.hora_fin,
+      tipo_programacion: 'otros',
+    })) as ProgramacionExtendida[];
+
+    programacionesData = [...servicioMapeado, ...visitaMapeado, ...fabricacionMapeado, ...otrosMapeado] as Programacion[];
 
     const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
     if (estRes.data) estadisticas = estRes.data;
@@ -1180,6 +1210,9 @@ function nombreActividad(p: Programacion): string {
   if (px.tipo_programacion === 'fabricacion') {
     return 'Fabricación';
   }
+  if (px.tipo_programacion === 'otros') {
+    return px.motivo || 'Otros';
+  }
   return p.servicio?.nombre || 'Servicio';
 }
 
@@ -1196,6 +1229,9 @@ function badgeTipoProgramacion(p: Programacion): string {
   }
   if (tipo === 'fabricacion') {
     return '<span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Fabricación</span>';
+  }
+  if (tipo === 'otros') {
+    return '<span style="background:#f3e8ff;color:#6b21a8;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Otros</span>';
   }
   return '';
 }
@@ -1478,7 +1514,7 @@ function enlazarEventosCalendario() {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = parseInt((el as HTMLElement).dataset.progId || '0');
-      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion';
+      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion' | 'otros';
       if (id) abrirModalDetalle(id, tipo);
     });
   });
@@ -1486,7 +1522,7 @@ function enlazarEventosCalendario() {
 
 // ═══════════ Modal Detalle ═══════════
 
-async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion' = 'servicio') {
+async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion' | 'otros' = 'servicio') {
   const modal = document.getElementById('modalDetalleProgramacion');
   const body = document.getElementById('modalDetalleBody');
   if (!modal || !body) return;
@@ -1502,6 +1538,8 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       ? await programacionService.getProgramacionAsesoriaById(id)
       : tipo === 'fabricacion'
       ? await programacionService.getProgramacionFabricacionById(id)
+      : tipo === 'otros'
+      ? await programacionService.getProgramacionOtrosById(id)
       : tipo === 'visita'
       ? await programacionService.getProgramacionVisitaById(id)
       : await programacionService.getById(id);
@@ -1699,32 +1737,37 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       return;
     }
 
-    if (tipo === 'visita' || tipo === 'fabricacion') {
+    if (tipo === 'visita' || tipo === 'fabricacion' || tipo === 'otros') {
       const esFabricacion = (p as any).tipo_programacion === 'fabricacion' || tipo === 'fabricacion';
+      const esOtros = (p as any).tipo_programacion === 'otros' || tipo === 'otros';
       const recetaFabricacion = Array.isArray((p as any).receta_fabricacion) ? (p as any).receta_fabricacion : [];
       body.innerHTML = `
         <div class="prog-detalle-grid">
           <div class="prog-detalle-section">
-            <h3 class="prog-detalle-section-title">${esFabricacion ? 'Programación por Fabricación' : 'Programación de Visita'}</h3>
-            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="${esFabricacion ? 'background:#e0e7ff;color:#3730a3;' : 'background:#ecfccb;color:#3f6212;'}padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">${esFabricacion ? 'Fabricación' : 'Visita'}</span></div></div>
+            <h3 class="prog-detalle-section-title">${esFabricacion ? 'Programación por Fabricación' : (esOtros ? 'Programación de Otros' : 'Programación de Visita')}</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="${esFabricacion ? 'background:#e0e7ff;color:#3730a3;' : (esOtros ? 'background:#f3e8ff;color:#6b21a8;' : 'background:#ecfccb;color:#3f6212;')}padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">${esFabricacion ? 'Fabricación' : (esOtros ? 'Otros' : 'Visita')}</span></div></div>
             ${esFabricacion ? `<div class="prog-detalle-row"><div class="prog-detalle-label">Orden:</div><div class="prog-detalle-value">${(p as any).orden_fabricacion?.codigo || ('#' + ((p as any).id_orden_fabricacion || '')) || '—'}</div></div>` : ''}
             ${esFabricacion
               ? `<div class="prog-detalle-row"><div class="prog-detalle-label">Motivo:</div><div class="prog-detalle-value">${(p as any).motivo_fabricacion || '—'}</div></div>`
-              : `<div class="prog-detalle-row"><div class="prog-detalle-label">Tipo de visita:</div><div class="prog-detalle-value">${(p as any).tipo_visita || '—'}</div></div>`}
+              : (esOtros
+                ? `<div class="prog-detalle-row"><div class="prog-detalle-label">Motivo:</div><div class="prog-detalle-value">${(p as any).motivo || '—'}</div></div>`
+                : `<div class="prog-detalle-row"><div class="prog-detalle-label">Tipo de visita:</div><div class="prog-detalle-value">${(p as any).tipo_visita || '—'}</div></div>`) }
             <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(p.fecha_programada)}</div></div>
             <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
           </div>
           <div class="prog-detalle-section">
-            <h3 class="prog-detalle-section-title">${esFabricacion ? 'Resumen de Fabricación' : 'Cliente y Ubicación'}</h3>
+            <h3 class="prog-detalle-section-title">${esFabricacion ? 'Resumen de Fabricación' : (esOtros ? 'Ubicación' : 'Cliente y Ubicación')}</h3>
             ${esFabricacion ? `
               <div class="prog-detalle-row"><div class="prog-detalle-label">Productos:</div><div class="prog-detalle-value">${recetaFabricacion.map((item: any) => item?.descripcion).filter(Boolean).join(', ') || '—'}</div></div>
+            ` : (esOtros ? `
+              <div class="prog-detalle-row"><div class="prog-detalle-label">Ubicación manual:</div><div class="prog-detalle-value">${(p as any).ubicacion_manual || '—'}</div></div>
             ` : `
               <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${(p as any).cliente?.nombre_empresa || (p as any).cliente?.persona_contacto || '—'}</div></div>
               <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
               <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${getAreasSeleccionadasLabel(p)}</div></div>
               <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.planta ? (p.planta.direccion || '—') : (p.direccion_completa || '—')}</div></div>
-            `}
+            `)}
           </div>
           <div class="prog-detalle-section">
             <h3 class="prog-detalle-section-title">Recursos Asignados</h3>
@@ -1759,7 +1802,13 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       body.querySelector('#btnCerrarDetalleVisita')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
       body.querySelector('#btnEliminarVisita')?.addEventListener('click', () => eliminarVisita(p.id));
       body.querySelector('#btnCancelarVisita')?.addEventListener('click', () => cancelarVisita(p.id));
-      body.querySelector('#btnEditarVisita')?.addEventListener('click', () => abrirEdicion({ ...(p as any), tipo_programacion: 'visita' } as Programacion));
+      body.querySelector('#btnEditarVisita')?.addEventListener('click', () => {
+        if (esOtros) {
+          abrirEdicionOtros({ ...(p as any), tipo_programacion: 'otros' } as Programacion);
+          return;
+        }
+        abrirEdicion({ ...(p as any), tipo_programacion: 'visita' } as Programacion);
+      });
       return;
     }
 
@@ -1840,6 +1889,8 @@ async function eliminarVisita(id: number) {
     const prog = programacionesData.find((x) => x.id === id) as ProgramacionExtendida | undefined;
     if (prog?.tipo_programacion === 'fabricacion') {
       await programacionService.deleteProgramacionFabricacion(id);
+    } else if (prog?.tipo_programacion === 'otros') {
+      await programacionService.deleteProgramacionOtros(id);
     } else {
       await programacionService.deleteProgramacionVisita(id);
     }
@@ -1867,6 +1918,8 @@ async function cancelarVisita(id: number) {
     const prog = programacionesData.find((x) => x.id === id) as ProgramacionExtendida | undefined;
     if (prog?.tipo_programacion === 'fabricacion') {
       await programacionService.updateProgramacionFabricacion(id, { estado_ejecucion: 'Cancelado' });
+    } else if (prog?.tipo_programacion === 'otros') {
+      await programacionService.updateProgramacionOtros(id, { estado_ejecucion: 'Cancelado' });
     } else {
       await programacionService.updateProgramacionVisita(id, { estado_ejecucion: 'Cancelado' });
     }
@@ -2260,6 +2313,158 @@ function abrirModalSelectorTipo() {
   if (!modal) return;
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+}
+
+async function abrirEdicionOtros(p: Programacion) {
+  const body = document.getElementById('modalDetalleBody');
+  if (!body) return;
+
+  const px = p as ProgramacionExtendida;
+  const tecnicosAsignados = Array.from(new Set<number>([
+    Number(p.id_tecnico_asignado || 0),
+    ...normalizeAreaIds((px as any).tecnicos_ids as any),
+  ].filter((id) => id > 0)));
+
+  body.innerHTML = `
+    <form id="formEditarOtros" class="prog-form">
+      <div class="prog-form-grid">
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Información</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Estado</label>
+            <select class="prog-form-control" name="estado_ejecucion">
+              ${(['Programado', 'Confirmado', 'En Camino', 'En Ejecución'] as string[]).map(e => `<option value="${e}" ${p.estado_ejecucion === e ? 'selected' : ''}>${e}</option>`).join('')}
+            </select>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Motivo <span class="prog-required">*</span></label>
+            <textarea class="prog-form-control" name="motivo" rows="2" required>${(px as any).motivo || ''}</textarea>
+          </div>
+          <div class="prog-form-row">
+            <div class="prog-form-group"><label class="prog-form-label">Fecha</label><input type="date" class="prog-form-control" name="fecha_programada" value="${normalizarFecha(p.fecha_programada || '')}"></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Inicio</label><input type="time" class="prog-form-control" name="hora_inicio" value="${fmtH(p.hora_inicio)}"></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin" value="${fmtH(p.hora_fin || '')}"></div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Ubicación Manual <span class="prog-required">*</span></label>
+            <input type="text" class="prog-form-control" name="ubicacion_manual" value="${(px as any).ubicacion_manual || ''}" required>
+          </div>
+        </div>
+
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Recursos</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Técnicos Asignados <span style="font-weight:400;font-size:12px;color:#888;">(primero = principal)</span></label>
+            <div class="prog-tecnicos-list" id="editTecnicosCheckboxes" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
+              ${tecnicosData.map(t => {
+                const isAssigned = tecnicosAsignados.includes(Number(t.id));
+                const isPrincipal = Number(t.id) === Number(p.id_tecnico_asignado || 0);
+                return `
+                <label class="prog-tecnico-check" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;">
+                  <input type="checkbox" name="tecnicos_ids" value="${t.id}" ${isAssigned ? 'checked' : ''} style="accent-color:#4f7cff;">
+                  <span style="font-weight:500;">${t.nombre} ${t.apellidos}</span>
+                  ${t.autorizado_conducir ? '<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;">Conductor</span>' : ''}
+                  <span class="prog-principal-badge" style="${isPrincipal ? '' : 'display:none;'}margin-left:auto;font-size:11px;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:600;">Principal</span>
+                </label>`;
+              }).join('')}
+            </div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Personal Administrativo <span style="font-weight:400;font-size:12px;color:#888;">(puedes seleccionar uno o varios)</span></label>
+            <select class="prog-form-control" id="personalAdministrativoSelectServicio" name="id_supervisor" multiple style="display:none;"></select>
+            <button type="button" id="personalAdministrativoToggleServicio" class="prog-form-control" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;">
+              <span>Seleccionar personal</span>
+              <span style="font-size:12px;">▼</span>
+            </button>
+            <div id="personalAdministrativoSummaryServicio" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin personal seleccionado</div>
+            <div id="personalAdministrativoPanelServicio" style="display:none;position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="personalAdministrativoSelectAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todos</button>
+                <button type="button" id="personalAdministrativoClearAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="personalAdministrativoOptionsServicio"></div>
+            </div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Vehículo</label>
+            <select class="prog-form-control" name="id_vehiculo">
+              <option value="">Sin vehículo</option>
+              ${vehiculosData.map(v => `<option value="${v.id}" ${v.id === p.id_vehiculo ? 'selected' : ''}>${v.placa} - ${v.marca} ${v.modelo}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div class="prog-form-section prog-form-section-full">
+          <h3 class="prog-form-section-title">Observaciones</h3>
+          <div class="prog-form-group"><textarea class="prog-form-control" name="observaciones" rows="2">${p.observaciones || ''}</textarea></div>
+        </div>
+      </div>
+      <div class="prog-modal-footer">
+        <button type="button" class="prog-btn-secondary" id="btnVolverDetalleOtros">Cancelar</button>
+        <button type="submit" class="prog-btn-primary">Guardar Cambios</button>
+      </div>
+    </form>`;
+
+  body.querySelector('#btnVolverDetalleOtros')?.addEventListener('click', () => abrirModalDetalle(p.id, 'otros'));
+
+  setupPrincipalBadge(body.querySelector('#editTecnicosCheckboxes') as HTMLElement);
+  const personalAdministrativoSelectEdit = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
+  if (personalAdministrativoSelectEdit) {
+    personalAdministrativoSelectEdit.innerHTML = personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('');
+    const personalAsignado = Array.isArray((p as any).personal_administrativo)
+      ? (p as any).personal_administrativo.map((item: any) => Number(item.id)).filter((id: number) => id > 0)
+      : normalizePersonalIds((p as any).id_supervisor);
+    Array.from(personalAdministrativoSelectEdit.options).forEach((opt) => {
+      opt.selected = personalAsignado.includes(Number(opt.value));
+    });
+  }
+  renderPersonalPickerOptionsServicio(body);
+  actualizarResumenPersonalServicio(body);
+  bindPersonalMultiInteractionsServicio(body);
+
+  body.querySelector('#formEditarOtros')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    const checkedTecs = Array.from(body.querySelectorAll('#editTecnicosCheckboxes input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
+    const tecnicosIds = checkedTecs.map(c => parseInt(c.value, 10)).filter((id) => id > 0);
+
+    const personalAdministrativoEdit = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
+    const data: Record<string, any> = {
+      estado_ejecucion: fd.get('estado_ejecucion') || null,
+      motivo: String(fd.get('motivo') || '').trim(),
+      fecha_programada: fd.get('fecha_programada') || null,
+      hora_inicio: fd.get('hora_inicio') || null,
+      hora_fin: fd.get('hora_fin') || null,
+      ubicacion_manual: String(fd.get('ubicacion_manual') || '').trim(),
+      id_vehiculo: fd.get('id_vehiculo') || null,
+      observaciones: fd.get('observaciones') || null,
+      id_tecnico_asignado: tecnicosIds.length > 0 ? tecnicosIds[0] : null,
+      tecnicos_ids: tecnicosIds.length > 0 ? tecnicosIds : null,
+      id_supervisor: personalAdministrativoEdit && personalAdministrativoEdit.selectedOptions.length > 0
+        ? Array.from(personalAdministrativoEdit.selectedOptions).map(o => parseInt(o.value)).filter((id) => id > 0)
+        : null,
+    };
+
+    if (!data.motivo) {
+      mostrarToast('warning', 'Campo requerido', 'Debe ingresar el motivo');
+      return;
+    }
+
+    if (!data.ubicacion_manual) {
+      mostrarToast('warning', 'Campo requerido', 'Debe ingresar la ubicación manual');
+      return;
+    }
+
+    try {
+      await programacionService.updateProgramacionOtros(p.id, data);
+      cerrarModal('modalDetalleProgramacion');
+      await recargarProgramaciones();
+      mostrarToast('success', 'Actualizada', 'La programación de otros fue actualizada correctamente');
+    } catch (err) {
+      mostrarToast('error', 'Error', 'No se pudieron guardar los cambios');
+      console.error(err);
+    }
+  });
 }
 
 // ═══════════ Modal Nueva Programación ═══════════
@@ -2791,6 +2996,110 @@ async function abrirModalNuevaFabricacion() {
   renderFormFabricacion(body);
 }
 
+async function abrirModalNuevaOtros() {
+  const modal = document.getElementById('modalNuevaProgramacionVisita');
+  const body = document.getElementById('modalNuevaVisitaBody');
+  const titulo = document.getElementById('tituloModalNuevaVisita');
+  if (!modal || !body) return;
+
+  if (titulo) titulo.textContent = 'Nueva Programación de Otros';
+
+  body.innerHTML = '<p style="padding:24px;color:#999;">Preparando formulario...</p>';
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  renderFormOtros(body);
+}
+
+function renderFormOtros(body: HTMLElement) {
+  body.innerHTML = `
+    <form id="formNuevaOtros" class="prog-form">
+      <div class="prog-form-grid">
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Datos Generales</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Motivo <span class="prog-required">*</span></label>
+            <textarea class="prog-form-control" name="motivo" rows="2" required placeholder="Describe el motivo de esta programación"></textarea>
+          </div>
+          <div class="prog-form-row">
+            <div class="prog-form-group"><label class="prog-form-label">Fecha <span class="prog-required">*</span></label><input type="date" class="prog-form-control" name="fecha_programada" required></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Inicio <span class="prog-required">*</span></label><input type="time" class="prog-form-control" name="hora_inicio" value="08:00" required></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin" value="12:00"></div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Ubicación Manual <span class="prog-required">*</span></label>
+            <input type="text" class="prog-form-control" name="ubicacion_manual" required placeholder="Ej. Almacén central, Oficina principal, etc.">
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Observaciones</label>
+            <textarea class="prog-form-control" name="observaciones" rows="2"></textarea>
+          </div>
+        </div>
+
+        <div class="prog-form-section">
+          <h3 class="prog-form-section-title">Asignación de Recursos</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Técnicos <span style="font-weight:400;font-size:12px;color:#888;">(opcional, el primero marcado será el principal)</span></label>
+            <div class="prog-tecnicos-list" id="tecnicosCheckboxesVisita" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
+              ${tecnicosData.map(t => `
+                <label class="prog-tecnico-check" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;transition:background .15s;">
+                  <input type="checkbox" name="tecnicos_ids" value="${t.id}" style="accent-color:#4f7cff;">
+                  <span style="font-weight:500;">${t.nombre} ${t.apellidos}</span>
+                  ${t.autorizado_conducir ? '<span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;">Conductor</span>' : ''}
+                  <span class="prog-principal-badge" style="display:none;margin-left:auto;font-size:11px;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:4px;font-weight:600;">Principal</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Personal Administrativo <span style="font-weight:400;font-size:12px;color:#888;">(puedes seleccionar uno o varios)</span></label>
+            <select class="prog-form-control" id="personalAdministrativoSelectVisita" name="id_supervisor" multiple style="display:none;"></select>
+            <button type="button" id="personalAdministrativoToggle" class="prog-form-control" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;">
+              <span>Seleccionar personal</span>
+              <span style="font-size:12px;">▼</span>
+            </button>
+            <div id="personalAdministrativoSummary" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin personal seleccionado</div>
+            <div id="personalAdministrativoPanel" style="display:none;position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="personalAdministrativoSelectAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todos</button>
+                <button type="button" id="personalAdministrativoClearAll" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="personalAdministrativoOptions"></div>
+            </div>
+          </div>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Vehículo</label>
+            <select class="prog-form-control" name="id_vehiculo">
+              <option value="">Sin vehículo</option>
+              ${vehiculosData.map(v => `<option value="${v.id}">${v.placa} - ${v.marca} ${v.modelo}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="prog-modal-footer">
+        <button type="button" class="prog-btn-secondary" id="btnCancelarOtros">Cancelar</button>
+        <button type="submit" class="prog-btn-primary" id="btnSubmitOtros">Crear Programación</button>
+      </div>
+    </form>`;
+
+  setupPrincipalBadge(body.querySelector('#tecnicosCheckboxesVisita') as HTMLElement);
+
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement;
+  if (personalAdministrativoSelect) {
+    personalAdministrativoSelect.innerHTML = personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('');
+  }
+  renderPersonalPickerOptionsVisita(body);
+  actualizarResumenPersonalVisita(body);
+  bindPersonalMultiInteractionsVisita(body);
+
+  body.querySelector('#btnCancelarOtros')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacionVisita'));
+  body.querySelector('#formNuevaOtros')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await submitOtrosIndividual(body);
+  });
+}
+
 function renderFormFabricacion(body: HTMLElement) {
   body.innerHTML = `
     <form id="formNuevaFabricacion" class="prog-form">
@@ -3257,6 +3566,70 @@ async function submitFabricacionIndividual(body: HTMLElement) {
   }
 }
 
+async function submitOtrosIndividual(body: HTMLElement) {
+  const form = body.querySelector('#formNuevaOtros') as HTMLFormElement | null;
+  if (!form) return;
+
+  const fd = new FormData(form);
+  const motivo = String(fd.get('motivo') || '').trim();
+  const ubicacionManual = String(fd.get('ubicacion_manual') || '').trim();
+
+  if (!motivo) {
+    mostrarToast('warning', 'Campo requerido', 'Debe ingresar el motivo');
+    return;
+  }
+
+  if (!ubicacionManual) {
+    mostrarToast('warning', 'Campo requerido', 'Debe ingresar la ubicación manual');
+    return;
+  }
+
+  const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
+  const tecnicosIds = checkedTecs.map(c => parseInt(c.value, 10)).filter((id) => id > 0);
+
+  const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement;
+
+  const data: Record<string, any> = {
+    tipo_programacion: 'otros',
+    motivo,
+    id_tecnico_asignado: tecnicosIds.length > 0 ? tecnicosIds[0] : null,
+    tecnicos_ids: tecnicosIds.length > 0 ? tecnicosIds : null,
+    id_supervisor: personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0
+      ? Array.from(personalAdministrativoSelect.selectedOptions).map((o) => parseInt(o.value, 10)).filter((id) => id > 0)
+      : null,
+    id_vehiculo: fd.get('id_vehiculo') || null,
+    fecha_programada: fd.get('fecha_programada'),
+    hora_inicio: fd.get('hora_inicio') || '08:00',
+    hora_fin: fd.get('hora_fin') || '12:00',
+    ubicacion_manual: ubicacionManual,
+    observaciones: fd.get('observaciones') || '',
+  };
+
+  const validacion = verificarConflictosHorarios(tecnicosIds, String(data.fecha_programada || ''), String(data.hora_inicio || ''), String(data.hora_fin || ''));
+  if (validacion.hayConflicto) {
+    mostrarToast('warning', 'Conflicto de Horarios', validacion.conflictoDetalle);
+    return;
+  }
+
+  try {
+    await programacionService.createOtros(data);
+    cerrarModal('modalNuevaProgramacionVisita');
+    await recargarProgramaciones();
+    mostrarToast('success', 'Programación Creada', 'La programación de otros fue registrada exitosamente');
+  } catch (err: any) {
+    let message = err?.data?.message || err?.response?.data?.message || err?.message || 'No se pudo crear la programación de otros';
+    const errors = err?.data?.errors || err?.response?.data?.errors;
+    if (errors && typeof errors === 'object') {
+      const detalles = Object.entries(errors)
+        .map(([campo, msgs]: [string, any]) => `${campo}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+        .join(' | ');
+      if (detalles) message = `${message}. ${detalles}`;
+    }
+    mostrarErrorProgramacion(message);
+    console.error('Error creando programación de otros:', err?.data || err);
+  }
+}
+
 async function submitAnual(body: HTMLElement) {
   const selectODS = body.querySelector('#selectODS') as HTMLSelectElement;
   const selectServicio = body.querySelector('#selectServicio') as HTMLSelectElement;
@@ -3404,6 +3777,9 @@ function clienteNombre(p: Programacion): string {
   const px = p as ProgramacionExtendida;
   if (px.tipo_programacion === 'fabricacion') {
     return 'PRODUCTOS';
+  }
+  if (px.tipo_programacion === 'otros') {
+    return 'OTROS';
   }
   const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente || px.cliente;
   return c ? (c.nombre_empresa || c.persona_contacto || '—') : '—';
