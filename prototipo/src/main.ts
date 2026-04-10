@@ -12,7 +12,7 @@ import { renderProgramacionCapacitacionAsesoria, initProgramacionCapacitacionAse
 import { renderRecursosHumanos, renderAsistenciaTab, renderAsistenciaPersonalTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, cargarAsistenciaPersonal, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios, getTabsRecursosHumanosPermitidos, tieneAccesoCompletoRecursosHumanos } from './modules/recursos-humanos/recursos-humanos.view'
 import { renderTecnicosTab, cargarTecnicos } from './modules/recursos-humanos/tecnicos.view'
 // Almacén
-import { initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
+import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
 import { renderAlmacenInventario, renderProductosTab, renderKardexTab, renderAjustesInventarioTab, renderCategoriasTab, initProductosEvents, initCategoriasEvents, initKardexEvents, initAjustesInventarioEvents } from './modules/almacen/inventario/inventario.view'
 import { renderAlmacenProveedores, initProveedoresEvents } from './modules/almacen/proveedores/proveedores.view'
 import { renderAlmacenCompras, initComprasEvents } from './modules/almacen/compras/compras.view'
@@ -176,6 +176,9 @@ function getMainContent() {
     setTimeout(() => { initDashboardEvents(); }, 0);
     return renderDashboard();
   } else if (activeMenu === 'Almacén') {
+    if (activeSubMenu === 'Mantenimiento') {
+      return renderAlmacenMantenimiento();
+    }
     if (activeSubMenu === 'Inventario') return renderAlmacenInventario();
     if (activeSubMenu === 'Ajuste de Inventario') return renderAjustesInventarioTab();
     if (activeSubMenu === 'Proveedores') return renderAlmacenProveedores();
