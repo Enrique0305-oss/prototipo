@@ -2,6 +2,7 @@ import './style.css'
 import './additional-styles.css'
 import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
+const LOGO_URL = "http://localhost:8000/images/menu.png";
 
 // Inicializar guard de autenticación
 initAuthGuard();
@@ -323,15 +324,20 @@ function renderApp() {
     activeMenu = ruta.menu;
     activeSubMenu = ruta.subMenu;
   }
-
   app.innerHTML = `
     <div class="app-container">
       <!-- Sidebar -->
       <aside class="sidebar${expandedMenu ? ' sidebar-expanded' : ''}">
-        <div class="sidebar-header">
-          <div class="logo">QSCI Group</div>
-          <div class="logo-subtitle">ADMIN PANEL</div>
-        </div>
+       <div class="sidebar-header" style="padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 100px;">
+        
+        <img src="${LOGO_URL}" 
+             width="100" 
+             alt="Logo QSCI"
+             style="display: block; max-width: 120%; height: auto; object-fit: contain;"
+             onload="this.style.display='block';"
+             onerror="console.error('No se pudo cargar el logo en:', this.src); this.alt='Error al cargar logo';">
+
+      </div>
         
         <nav class="sidebar-nav">
           ${visibleMenuItems.map(item => `

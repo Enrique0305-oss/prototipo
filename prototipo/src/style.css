@@ -91,7 +91,6 @@ body {
 }
 
 .sidebar-header::before {
-  content: 'Q';
   font-size: 28px;
   font-weight: 900;
   color: white;
