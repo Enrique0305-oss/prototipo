@@ -339,25 +339,30 @@ export function renderDashboardProgramacionServicio(): string {
 }
 
 export function initDashboardProgramacionServicioEvents(): void {
-  document.getElementById('prog-serv-dash-prev')?.addEventListener('click', () => {
+  const prevBtn = document.getElementById('prog-serv-dash-prev') as HTMLButtonElement | null;
+  const nextBtn = document.getElementById('prog-serv-dash-next') as HTMLButtonElement | null;
+  const todayBtn = document.getElementById('prog-serv-dash-today') as HTMLButtonElement | null;
+  const refreshBtn = document.getElementById('prog-serv-dash-refresh') as HTMLButtonElement | null;
+
+  if (prevBtn) prevBtn.onclick = () => {
     shiftDashboardMonth(-1);
     void refreshDashboard();
-  });
+  };
 
-  document.getElementById('prog-serv-dash-next')?.addEventListener('click', () => {
+  if (nextBtn) nextBtn.onclick = () => {
     shiftDashboardMonth(1);
     void refreshDashboard();
-  });
+  };
 
-  document.getElementById('prog-serv-dash-today')?.addEventListener('click', () => {
+  if (todayBtn) todayBtn.onclick = () => {
     const now = new Date();
     dashboardMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     void refreshDashboard();
-  });
+  };
 
-  document.getElementById('prog-serv-dash-refresh')?.addEventListener('click', () => {
+  if (refreshBtn) refreshBtn.onclick = () => {
     void refreshDashboard();
-  });
+  };
 
   void refreshDashboard();
 }
