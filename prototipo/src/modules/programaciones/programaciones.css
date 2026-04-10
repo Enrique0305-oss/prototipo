@@ -421,6 +421,7 @@
 .prog-event.cyan { background: linear-gradient(135deg, #06B6D4, #0891B2); }
 .prog-event.yellow { background: linear-gradient(135deg, #EAB308, #CA8A04); }
 .prog-event.gray { background: linear-gradient(135deg, #6B7280, #4B5563); }
+.prog-event.red { background: linear-gradient(135deg, #ef4444, #dc2626); }
 
 .prog-event-title {
   font-size: 12px;
@@ -546,6 +547,7 @@
 .prog-week-card-cyan   { border-left-color: #06B6D4; background: #ECFEFF; }
 .prog-week-card-yellow { border-left-color: #EAB308; background: #FEFCE8; }
 .prog-week-card-gray   { border-left-color: #6B7280; background: #F9FAFB; }
+.prog-week-card-red    { border-left-color: #ef4444; background: #fef2f2; }
 
 .prog-week-card-title {
   font-weight: 700;
@@ -589,6 +591,7 @@
 .prog-week-card-cyan .prog-week-card-badge   { background: #CFFAFE; color: #155E75; }
 .prog-week-card-yellow .prog-week-card-badge { background: #FEF9C3; color: #854D0E; }
 .prog-week-card-gray .prog-week-card-badge   { background: #F3F4F6; color: #374151; }
+.prog-week-card-red .prog-week-card-badge    { background: #fee2e2; color: #991b1b; }
 
 .prog-week-empty {
   padding: 20px 8px;
@@ -705,8 +708,8 @@
 }
 
 .prog-status-badge.Realizado {
-  background: #EDE9FE;
-  color: #5B21B6;
+  background: #D1FAE5;
+  color: #065F46;
 }
 
 .prog-status-badge.Reprogramado {
@@ -715,8 +718,8 @@
 }
 
 .prog-status-badge.Cancelado {
-  background: #F3F4F6;
-  color: #374151;
+  background: #FEE2E2;
+  color: #991B1B;
 }
 
 .prog-day-service-details {

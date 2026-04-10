@@ -448,13 +448,20 @@ class ProgramacionServicioController extends Controller
         $tecnicosIds = $validated['tecnicos_ids'] ?? null;
         unset($validated['tecnicos_ids']);
 
+        $requiereValidacionConflicto =
+            array_key_exists('id_tecnico_asignado', $validated)
+            || $tecnicosIds !== null
+            || array_key_exists('fecha_programada', $validated)
+            || array_key_exists('hora_inicio', $validated)
+            || array_key_exists('hora_fin', $validated);
+
         $principal = $validated['id_tecnico_asignado'] ?? $prog->id_tecnico_asignado;
         $listaTecnicos = $tecnicosIds !== null
             ? $tecnicosIds
             : $prog->tecnicos()->pluck('tecnicos.id')->map(fn ($id) => (int) $id)->all();
 
         $tecnicosFinales = $this->normalizeTecnicosIds($principal, $listaTecnicos);
-        if (!empty($tecnicosFinales)) {
+        if ($requiereValidacionConflicto && !empty($tecnicosFinales)) {
             $conflicto = ScheduleConflictService::validarTecnicos(
                 $tecnicosFinales,
                 (string) ($validated['fecha_programada'] ?? $prog->fecha_programada),

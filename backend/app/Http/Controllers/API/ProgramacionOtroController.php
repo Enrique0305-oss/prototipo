@@ -199,7 +199,15 @@ class ProgramacionOtroController extends Controller
             array_key_exists('tecnicos_ids', $validated) ? ($validated['tecnicos_ids'] ?? []) : ((array) ($programacion->tecnicos_ids ?? []))
         ));
 
-        if (!empty($tecnicosFinales)) {
+        $requiereValidacionConflicto =
+            array_key_exists('id_tecnico_asignado', $validated)
+            || array_key_exists('tecnicos_ids', $validated)
+            || array_key_exists('fecha_programada', $validated)
+            || array_key_exists('hora_inicio', $validated)
+            || array_key_exists('hora_fin', $validated)
+            || array_key_exists('id_supervisor', $validated);
+
+        if ($requiereValidacionConflicto && !empty($tecnicosFinales)) {
             $conflicto = ScheduleConflictService::validarTecnicos(
                 $tecnicosFinales,
                 (string) ($validated['fecha_programada'] ?? $programacion->fecha_programada),
@@ -221,7 +229,7 @@ class ProgramacionOtroController extends Controller
             array_key_exists('id_supervisor', $validated) ? ($validated['id_supervisor'] ?? []) : ((array) ($programacion->id_supervisor ?? []))
         );
 
-        if (!empty($personalFinal)) {
+        if ($requiereValidacionConflicto && !empty($personalFinal)) {
             $conflicto = ScheduleConflictService::validarPersonal(
                 $personalFinal,
                 (string) ($validated['fecha_programada'] ?? $programacion->fecha_programada),

@@ -216,7 +216,14 @@ class ProgramacionVisitaController extends Controller
             array_key_exists('tecnicos_ids', $validated) ? ($validated['tecnicos_ids'] ?? []) : ((array) ($programacion->tecnicos_ids ?? []))
         ));
 
-        if (!empty($tecnicosFinales)) {
+        $requiereValidacionConflicto =
+            array_key_exists('id_tecnico_asignado', $validated)
+            || array_key_exists('tecnicos_ids', $validated)
+            || array_key_exists('fecha_programada', $validated)
+            || array_key_exists('hora_inicio', $validated)
+            || array_key_exists('hora_fin', $validated);
+
+        if ($requiereValidacionConflicto && !empty($tecnicosFinales)) {
             $conflicto = ScheduleConflictService::validarTecnicos(
                 $tecnicosFinales,
                 (string) ($validated['fecha_programada'] ?? $programacion->fecha_programada),

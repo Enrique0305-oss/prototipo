@@ -3731,8 +3731,13 @@ function mostrarErrorProgramacion(message: string) {
 
 function getColorByState(estado: string): string {
   const c: Record<string, string> = {
-    'Programado': 'blue', 'Confirmado': 'green', 'En Camino': 'cyan',
-    'En Ejecución': 'orange', 'Realizado': 'purple', 'Reprogramado': 'yellow', 'Cancelado': 'gray',
+    'Programado': 'blue',
+    'Confirmado': 'green',
+    'Realizado': 'green',
+    'Cancelado': 'red',
+    'En Camino': 'cyan',
+    'En Ejecución': 'orange',
+    'Reprogramado': 'yellow',
   };
   return c[estado] || 'blue';
 }
