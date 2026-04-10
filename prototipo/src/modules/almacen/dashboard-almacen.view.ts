@@ -473,7 +473,7 @@ function renderCharts(data: DashboardData): void {
       labels: ['Entradas', 'Salidas'],
       datasets: [{
         data: [movementCounts.Entrada, movementCounts.Salida],
-        backgroundColor: ['#16a34a', '#2563eb'],
+        backgroundColor: ['#7BF1A8', '#FFA2A2'],
         borderWidth: 0,
       }],
     },

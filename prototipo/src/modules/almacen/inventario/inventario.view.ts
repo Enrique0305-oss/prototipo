@@ -501,7 +501,7 @@ function renderKardexRows(movimientos: KardexMovimiento[]) {
     const fecha = new Date(mov.fecha_movimiento).toLocaleDateString('es-PE', {
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
-    const tipoClass = mov.tipo_movimiento === 'Entrada' ? 'green' : 'orange';
+    const tipoClass = mov.tipo_movimiento === 'Entrada' ? 'green' : 'red';
     const cantSign = mov.tipo_movimiento === 'Entrada' ? '+' : '-';
     const cantClass = mov.tipo_movimiento === 'Entrada' ? 'entrada' : 'salida';
 
