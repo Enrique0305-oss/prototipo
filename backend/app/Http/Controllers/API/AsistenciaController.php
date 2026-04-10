@@ -414,6 +414,353 @@ class AsistenciaController extends Controller
     }
 
     /**
+     * GET /asistencia/reporte-dashboard?mes=YYYY-MM&area=NombreArea
+     * Dashboard RRHH con datos reales para KPIs, tablas y graficos.
+     */
+    public function reporteDashboard(Request $request)
+    {
+        $mes = (string) $request->query('mes', Carbon::now()->format('Y-m'));
+        $areaFiltro = trim((string) $request->query('area', ''));
+
+        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El parámetro mes debe tener formato YYYY-MM'
+            ], 422);
+        }
+
+        [$anio, $mesNumero] = array_map('intval', explode('-', $mes));
+        $inicioMes = Carbon::createFromDate($anio, $mesNumero, 1)->startOfMonth();
+        $finMes = $inicioMes->copy()->endOfMonth();
+
+        $query = RrhhAsistencia::with(['personal.area'])
+            ->where('tipo_registro', 'Oficina')
+            ->whereBetween('fecha', [$inicioMes->toDateString(), $finMes->toDateString()]);
+
+        if ($areaFiltro !== '' && mb_strtolower($areaFiltro) !== 'todos') {
+            $query->whereHas('personal.area', function ($q) use ($areaFiltro) {
+                $q->where('nombre', $areaFiltro);
+            });
+        }
+
+        $asistencias = $query->get();
+
+        $totalRegistros = $asistencias->count();
+        $registrosConEntrada = $asistencias->filter(fn($a) => !empty($a->hora_entrada));
+        $totalConEntrada = $registrosConEntrada->count();
+
+        $totalHoras = round((float) $registrosConEntrada->sum(fn($a) => (float) ($a->horas_trabajadas ?? 0)), 2);
+        $totalTardanzaMin = (int) $asistencias->sum(fn($a) => (int) ($a->tardanza_minutos ?? 0));
+        $totalTardanzas = $asistencias->filter(fn($a) => ((int) ($a->tardanza_minutos ?? 0)) > 0)->count();
+        $totalAusencias = $asistencias->filter(fn($a) => ($a->estado ?? '') === 'Falta')->count();
+        $totalExtraMin = (int) $asistencias->sum(fn($a) => (int) ($a->tiempo_extra_minutos ?? 0));
+
+        $totalAlmuerzoMin = 0;
+        $totalExcesoAlmuerzoMin = 0;
+        $totalTardanzaInicioAlmuerzoMin = 0;
+        $registrosConAlmuerzo = 0;
+
+        foreach ($asistencias as $a) {
+            $totalExcesoAlmuerzoMin += (int) ($a->exceso_almuerzo_minutos ?? 0);
+
+            if (!empty($a->hora_inicio_almuerzo) && !empty($a->hora_fin_almuerzo)) {
+                $inicioAlmuerzo = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_inicio_almuerzo);
+                $finAlmuerzo = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_fin_almuerzo);
+                if ($finAlmuerzo->gt($inicioAlmuerzo)) {
+                    $totalAlmuerzoMin += (int) $inicioAlmuerzo->diffInMinutes($finAlmuerzo);
+                }
+                $registrosConAlmuerzo++;
+            }
+
+            if (!empty($a->hora_inicio_almuerzo) && !empty($a->hora_esperada_entrada) && !empty($a->hora_esperada_salida)) {
+                $fecha = $a->fecha->toDateString();
+                $esperadaEntrada = Carbon::parse($fecha . ' ' . $a->hora_esperada_entrada);
+                $esperadaSalida = Carbon::parse($fecha . ' ' . $a->hora_esperada_salida);
+                $inicioEsperadoAlmuerzo = $esperadaEntrada->copy()->addMinutes((int) floor($esperadaEntrada->diffInMinutes($esperadaSalida) / 2));
+                $inicioRealAlmuerzo = Carbon::parse($fecha . ' ' . $a->hora_inicio_almuerzo);
+                if ($inicioRealAlmuerzo->gt($inicioEsperadoAlmuerzo)) {
+                    $totalTardanzaInicioAlmuerzoMin += (int) $inicioEsperadoAlmuerzo->diffInMinutes($inicioRealAlmuerzo);
+                }
+            }
+        }
+
+        $asistenciaPromedio = $totalRegistros > 0
+            ? round(($totalConEntrada / $totalRegistros) * 100, 1)
+            : 0.0;
+
+        $jornadaPromedio = $totalConEntrada > 0
+            ? round($totalHoras / $totalConEntrada, 2)
+            : 0.0;
+
+        $horasEfectivas = max(0, round($totalHoras - ($totalTardanzaMin / 60), 2));
+        $promedioAlmuerzoMin = $registrosConAlmuerzo > 0
+            ? round($totalAlmuerzoMin / $registrosConAlmuerzo, 1)
+            : 0.0;
+
+        $porArea = $asistencias
+            ->groupBy(function ($a) {
+                return $a->personal && $a->personal->area
+                    ? $a->personal->area->nombre
+                    : 'Sin área';
+            })
+            ->map(function ($items, $area) {
+                $registros = $items->count();
+                $conEntrada = $items->filter(fn($a) => !empty($a->hora_entrada));
+                $horas = round((float) $conEntrada->sum(fn($a) => (float) ($a->horas_trabajadas ?? 0)), 2);
+                $tardanzaMin = (int) $items->sum(fn($a) => (int) ($a->tardanza_minutos ?? 0));
+                $tardanzas = $items->filter(fn($a) => ((int) ($a->tardanza_minutos ?? 0)) > 0)->count();
+                $asistencia = $registros > 0 ? round(($conEntrada->count() / $registros) * 100, 1) : 0.0;
+
+                return [
+                    'area' => $area,
+                    'horas' => $horas,
+                    'asistencia' => $asistencia,
+                    'tardanza_minutos' => $tardanzaMin,
+                    'tardanzas' => $tardanzas,
+                ];
+            })
+            ->sortByDesc('horas')
+            ->values();
+
+        $topEmpleados = $asistencias
+            ->groupBy('id_personal')
+            ->map(function ($items) {
+                $primero = $items->first();
+                $nombre = $primero && $primero->personal
+                    ? trim(($primero->personal->nombre ?? '') . ' ' . ($primero->personal->apellidos ?? ''))
+                    : 'Desconocido';
+                $area = $primero && $primero->personal && $primero->personal->area
+                    ? $primero->personal->area->nombre
+                    : 'Sin área';
+
+                $registros = $items->count();
+                $conEntrada = $items->filter(fn($a) => !empty($a->hora_entrada));
+                $presentes = $conEntrada->count();
+                $tardanzas = $items->filter(fn($a) => ((int) ($a->tardanza_minutos ?? 0)) > 0)->count();
+
+                $asistencia = $registros > 0 ? round(($presentes / $registros) * 100, 1) : 0.0;
+                $puntualidad = $presentes > 0 ? round((($presentes - $tardanzas) / $presentes) * 100, 1) : 0.0;
+
+                return [
+                    'id_personal' => (int) $primero->id_personal,
+                    'empleado' => $nombre,
+                    'area' => $area,
+                    'asistencia' => $asistencia,
+                    'puntualidad' => $puntualidad,
+                ];
+            })
+            ->sortByDesc(function ($e) {
+                return ($e['asistencia'] * 1000) + $e['puntualidad'];
+            })
+            ->take(6)
+            ->values();
+
+        $semanasMes = [];
+        $totalSemanas = (int) ceil($finMes->day / 7);
+        for ($i = 1; $i <= $totalSemanas; $i++) {
+            $semanasMes[$i] = [
+                'etiqueta' => 'S' . $i,
+                'horas' => 0.0,
+                'tardanza_minutos' => 0,
+            ];
+        }
+
+        foreach ($asistencias as $a) {
+            $dia = Carbon::parse($a->fecha)->day;
+            $indiceSemana = (int) floor(($dia - 1) / 7) + 1;
+            if (!isset($semanasMes[$indiceSemana])) {
+                continue;
+            }
+
+            $semanasMes[$indiceSemana]['horas'] += (float) ($a->horas_trabajadas ?? 0);
+            $semanasMes[$indiceSemana]['tardanza_minutos'] += (int) ($a->tardanza_minutos ?? 0);
+        }
+
+        $historicoSemanas = array_values(array_map(function ($s) {
+            return [
+                'etiqueta' => $s['etiqueta'],
+                'horas' => round((float) $s['horas'], 2),
+                'tardanza_minutos' => (int) $s['tardanza_minutos'],
+            ];
+        }, $semanasMes));
+
+        $almuerzoSemanas = [];
+        for ($i = 1; $i <= $totalSemanas; $i++) {
+            $almuerzoSemanas[$i] = [
+                'etiqueta' => 'S' . $i,
+                'almuerzo_minutos' => 0,
+                'exceso_almuerzo_minutos' => 0,
+                'tardanza_inicio_almuerzo_minutos' => 0,
+            ];
+        }
+
+        foreach ($asistencias as $a) {
+            $dia = Carbon::parse($a->fecha)->day;
+            $indiceSemana = (int) floor(($dia - 1) / 7) + 1;
+            if (!isset($almuerzoSemanas[$indiceSemana])) {
+                continue;
+            }
+
+            if (!empty($a->hora_inicio_almuerzo) && !empty($a->hora_fin_almuerzo)) {
+                $inicioAlmuerzo = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_inicio_almuerzo);
+                $finAlmuerzo = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_fin_almuerzo);
+                if ($finAlmuerzo->gt($inicioAlmuerzo)) {
+                    $almuerzoSemanas[$indiceSemana]['almuerzo_minutos'] += (int) $inicioAlmuerzo->diffInMinutes($finAlmuerzo);
+                }
+            }
+
+            $almuerzoSemanas[$indiceSemana]['exceso_almuerzo_minutos'] += (int) ($a->exceso_almuerzo_minutos ?? 0);
+
+            if (!empty($a->hora_inicio_almuerzo) && !empty($a->hora_esperada_entrada) && !empty($a->hora_esperada_salida)) {
+                $fecha = $a->fecha->toDateString();
+                $esperadaEntrada = Carbon::parse($fecha . ' ' . $a->hora_esperada_entrada);
+                $esperadaSalida = Carbon::parse($fecha . ' ' . $a->hora_esperada_salida);
+                $inicioEsperadoAlmuerzo = $esperadaEntrada->copy()->addMinutes((int) floor($esperadaEntrada->diffInMinutes($esperadaSalida) / 2));
+                $inicioRealAlmuerzo = Carbon::parse($fecha . ' ' . $a->hora_inicio_almuerzo);
+                if ($inicioRealAlmuerzo->gt($inicioEsperadoAlmuerzo)) {
+                    $almuerzoSemanas[$indiceSemana]['tardanza_inicio_almuerzo_minutos'] += (int) $inicioEsperadoAlmuerzo->diffInMinutes($inicioRealAlmuerzo);
+                }
+            }
+        }
+
+        $historicoAlmuerzoSemanas = array_values($almuerzoSemanas);
+
+        $historicoDias = [];
+        $historicoAlmuerzoDias = [];
+        for ($d = 1; $d <= $finMes->day; $d++) {
+            $key = str_pad((string) $d, 2, '0', STR_PAD_LEFT);
+            $historicoDias[$key] = [
+                'etiqueta' => $key,
+                'horas' => 0.0,
+                'tardanza_minutos' => 0,
+            ];
+            $historicoAlmuerzoDias[$key] = [
+                'etiqueta' => $key,
+                'almuerzo_minutos' => 0,
+                'exceso_almuerzo_minutos' => 0,
+                'tardanza_inicio_almuerzo_minutos' => 0,
+            ];
+        }
+
+        foreach ($asistencias as $a) {
+            $diaNum = Carbon::parse($a->fecha)->day;
+            $key = str_pad((string) $diaNum, 2, '0', STR_PAD_LEFT);
+            if (!isset($historicoDias[$key])) {
+                continue;
+            }
+
+            $historicoDias[$key]['horas'] += (float) ($a->horas_trabajadas ?? 0);
+            $historicoDias[$key]['tardanza_minutos'] += (int) ($a->tardanza_minutos ?? 0);
+
+            if (!empty($a->hora_inicio_almuerzo) && !empty($a->hora_fin_almuerzo)) {
+                $inicioAlmuerzo = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_inicio_almuerzo);
+                $finAlmuerzo = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_fin_almuerzo);
+                if ($finAlmuerzo->gt($inicioAlmuerzo)) {
+                    $historicoAlmuerzoDias[$key]['almuerzo_minutos'] += (int) $inicioAlmuerzo->diffInMinutes($finAlmuerzo);
+                }
+            }
+
+            $historicoAlmuerzoDias[$key]['exceso_almuerzo_minutos'] += (int) ($a->exceso_almuerzo_minutos ?? 0);
+
+            if (!empty($a->hora_inicio_almuerzo) && !empty($a->hora_esperada_entrada) && !empty($a->hora_esperada_salida)) {
+                $fecha = $a->fecha->toDateString();
+                $esperadaEntrada = Carbon::parse($fecha . ' ' . $a->hora_esperada_entrada);
+                $esperadaSalida = Carbon::parse($fecha . ' ' . $a->hora_esperada_salida);
+                $inicioEsperadoAlmuerzo = $esperadaEntrada->copy()->addMinutes((int) floor($esperadaEntrada->diffInMinutes($esperadaSalida) / 2));
+                $inicioRealAlmuerzo = Carbon::parse($fecha . ' ' . $a->hora_inicio_almuerzo);
+                if ($inicioRealAlmuerzo->gt($inicioEsperadoAlmuerzo)) {
+                    $historicoAlmuerzoDias[$key]['tardanza_inicio_almuerzo_minutos'] += (int) $inicioEsperadoAlmuerzo->diffInMinutes($inicioRealAlmuerzo);
+                }
+            }
+        }
+
+        $historicoDias = array_values(array_map(function ($d) {
+            return [
+                'etiqueta' => $d['etiqueta'],
+                'horas' => round((float) $d['horas'], 2),
+                'tardanza_minutos' => (int) $d['tardanza_minutos'],
+            ];
+        }, $historicoDias));
+
+        $historicoAlmuerzoDias = array_values($historicoAlmuerzoDias);
+
+        $estadosDistribucion = $asistencias
+            ->groupBy(function ($a) {
+                return (string) ($a->estado ?? 'Sin estado');
+            })
+            ->map(function ($items, $estado) {
+                return [
+                    'estado' => $estado,
+                    'total' => $items->count(),
+                ];
+            })
+            ->values();
+
+        $alertas = [];
+        if ($totalTardanzas > 0) {
+            $alertas[] = [
+                'tipo' => 'warning',
+                'titulo' => 'Seguimiento de tardanzas',
+                'detalle' => "Se registraron {$totalTardanzas} tardanzas en {$mes}."
+            ];
+        }
+        if ($totalAusencias > 0) {
+            $alertas[] = [
+                'tipo' => 'danger',
+                'titulo' => 'Ausencias detectadas',
+                'detalle' => "Se reportaron {$totalAusencias} ausencias en el periodo."
+            ];
+        }
+        if ($asistenciaPromedio >= 95) {
+            $alertas[] = [
+                'tipo' => 'success',
+                'titulo' => 'Buen nivel de asistencia',
+                'detalle' => "La asistencia promedio mensual es {$asistenciaPromedio}%."
+            ];
+        }
+        if (empty($alertas)) {
+            $alertas[] = [
+                'tipo' => 'info',
+                'titulo' => 'Sin alertas críticas',
+                'detalle' => 'No se identificaron desviaciones relevantes para este periodo.'
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'filtros' => [
+                    'mes' => $mes,
+                    'area' => $areaFiltro === '' ? 'Todos' : $areaFiltro,
+                ],
+                'kpis' => [
+                    'horas_trabajadas_totales' => $totalHoras,
+                    'horas_efectivas' => $horasEfectivas,
+                    'tiempo_total_tardanza_minutos' => $totalTardanzaMin,
+                    'tiempo_total_almuerzo_minutos' => (int) $totalAlmuerzoMin,
+                    'promedio_almuerzo_minutos' => $promedioAlmuerzoMin,
+                    'tiempo_exceso_almuerzo_minutos' => (int) $totalExcesoAlmuerzoMin,
+                    'tardanza_inicio_almuerzo_minutos' => (int) $totalTardanzaInicioAlmuerzoMin,
+                    'asistencia_promedio' => $asistenciaPromedio,
+                    'tardanzas_mes' => $totalTardanzas,
+                    'ausencias_mes' => $totalAusencias,
+                    'tiempo_extra_total_minutos' => $totalExtraMin,
+                    'jornada_promedio_horas' => $jornadaPromedio,
+                ],
+                'por_area' => $porArea,
+                'top_empleados' => $topEmpleados,
+                'historico_semanas' => $historicoSemanas,
+                'historico_almuerzo_semanas' => $historicoAlmuerzoSemanas,
+                'historico_dias' => $historicoDias,
+                'historico_almuerzo_dias' => $historicoAlmuerzoDias,
+                'distribucion_estados' => $estadosDistribucion,
+                'alertas' => $alertas,
+                'areas_disponibles' => $porArea->pluck('area')->values(),
+            ],
+        ]);
+    }
+
+    /**
      * PUT /asistencia/{id}/horas-extra
      * Para RRHH: asignar horas extra a un empleado que está en curso (ANTES de marcar salida).
      * Si asignar=true, activa las horas extra con hora_inicio_extra.

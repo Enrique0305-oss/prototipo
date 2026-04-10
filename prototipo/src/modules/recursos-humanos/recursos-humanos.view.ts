@@ -1,6 +1,9 @@
 ﻿// Recursos Humanos View
-import { rrhhService, type MiEstadoResponse, type EmpleadoHorarioResumen, type DiaHorario, type AsistenciaAdminRecord } from '../../services/rrhhService';
+import { Chart, registerables } from 'chart.js';
+import { rrhhService, type MiEstadoResponse, type EmpleadoHorarioResumen, type DiaHorario, type AsistenciaAdminRecord, type RrhhReporteDashboardResponse } from '../../services/rrhhService';
 import { authService } from '../auth/auth.service';
+
+Chart.register(...registerables);
 
 // Timer global para el contador de horas trabajadas (persiste aunque cierren y abran)
 let contadorInterval: ReturnType<typeof setInterval> | null = null;
@@ -892,7 +895,40 @@ export function renderEmpleadosTab() {
 }
 
 // Tab: Reportes
+const rrhhReportChartInstances: Chart[] = [];
+
+function destruirGraficosRrhh(): void {
+  while (rrhhReportChartInstances.length > 0) {
+    rrhhReportChartInstances.pop()?.destroy();
+  }
+}
+
+function crearOGestionarGraficoRrhh(canvasId: string, config: any): void {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const existente = rrhhReportChartInstances.find((chart) => chart.canvas === canvas);
+  if (existente) {
+    existente.destroy();
+    rrhhReportChartInstances.splice(rrhhReportChartInstances.indexOf(existente), 1);
+  }
+
+  rrhhReportChartInstances.push(new Chart(ctx, config));
+}
+
 export function renderReportesTab() {
+  const hoy = new Date();
+  const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+  const opcionesMes: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+    opcionesMes.push(`<option value="${value}" ${value === mesActual ? 'selected' : ''}>${label.charAt(0).toUpperCase() + label.slice(1)}</option>`);
+  }
+
   return `
     <style>
       .rrhh-reportes-grid-2 {
@@ -914,279 +950,632 @@ export function renderReportesTab() {
           grid-template-columns: 1fr;
         }
       }
+
+      .rrhh-chart-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 20px;
+        margin-bottom: 24px;
+      }
+
+      .rrhh-chart-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: 0 8px 30px rgba(15, 23, 42, .05);
+      }
+
+      .rrhh-span-6 { grid-column: span 6; }
+      .rrhh-span-5 { grid-column: span 5; }
+      .rrhh-span-7 { grid-column: span 7; }
+
+      @media (max-width: 1200px) {
+        .rrhh-span-6,
+        .rrhh-span-5,
+        .rrhh-span-7 { grid-column: span 12; }
+      }
+
+      .rrhh-chart-wrap {
+        height: 300px;
+      }
+
+      .rrhh-chart-wrap.short {
+        height: 260px;
+      }
     </style>
 
-    <div class="search-filter-bar">
-      <select class="op-filter-select">
-        <option>Enero 2025</option>
-        <option>Diciembre 2024</option>
-        <option>Noviembre 2024</option>
+    <div class="search-filter-bar" id="rrhh-reportes-filtros">
+      <select class="op-filter-select" id="rrhh-reportes-mes">
+        ${opcionesMes.join('')}
       </select>
-      <select class="op-filter-select">
-        <option>Todos los Departamentos</option>
-        <option>Administrativo</option>
-        <option>Campo</option>
-        <option>LogÃ­stica</option>
-        <option>Ventas</option>
+      <select class="op-filter-select" id="rrhh-reportes-vista">
+        <option value="semanal" selected>Vista semanal</option>
+        <option value="diaria">Vista diaria</option>
       </select>
-      <button class="btn-secondary">
+      <select class="op-filter-select" id="rrhh-reportes-area">
+        <option value="Todos">Todas las áreas</option>
+      </select>
+      <button class="btn-filter" id="rrhh-reportes-btn-aplicar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+        Aplicar
+      </button>
+      <button class="btn-secondary" id="rrhh-reportes-btn-exportar" type="button">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         Exportar Excel
       </button>
     </div>
 
-    <div class="card" style="margin-bottom: 20px; padding: 18px 20px; border-left: 4px solid #2c4a7c;">
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;">
-        <div>
-          <h3 style="margin: 0; font-size: 18px; color: #1a2332;">KPIs Prioritarios de RRHH</h3>
-          <p style="margin: 6px 0 0; color: #64748b; font-size: 13px;">Primero horas trabajadas y tiempo acumulado de tardanza para decisiones de asistencia y productividad.</p>
-        </div>
-        <span style="font-size: 12px; color: #475569; background: #e2e8f0; padding: 6px 10px; border-radius: 999px;">Corte: Enero 2025</span>
-      </div>
-    </div>
-
-    <div class="stat-boxes" style="margin-bottom: 16px;">
-      <div class="stat-box">
-        <div class="stat-box-icon blue">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Horas Trabajadas Totales</div>
-          <div class="stat-box-value">4,256 <span class="stat-box-note">hrs</span></div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon blue">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 4-6"></path></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Horas Efectivas</div>
-          <div class="stat-box-value">3,972 <span class="stat-box-note">hrs netas</span></div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon orange">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 7v6l3 3"></path></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Tiempo Total de Tardanza</div>
-          <div class="stat-box-value">18h 42m</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Asistencia Promedio</div>
-          <div class="stat-box-value">96.8%</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="stat-boxes" style="margin-bottom: 24px;">
-      <div class="stat-box">
-        <div class="stat-box-icon orange">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Tardanzas del Mes</div>
-          <div class="stat-box-value">38</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon red">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Ausencias del Mes</div>
-          <div class="stat-box-value">12</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"></path><path d="M9 9h6v6H9z"></path></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Tiempo Extra Total</div>
-          <div class="stat-box-value">126h 30m</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon blue">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M3 10h18"></path></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Jornada Promedio</div>
-          <div class="stat-box-value">8.1h</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="rrhh-reportes-grid-2">
-      <div class="card">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Horas y Tardanza por Departamento</h3>
-        <div class="table-container">
-          <table class="op-table">
-            <thead>
-              <tr>
-                <th>DEPARTAMENTO</th>
-                <th>HORAS</th>
-                <th>ASISTENCIA</th>
-                <th>T. TARDANZA</th>
-                <th>TARDANZAS</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><span class="badge">Campo</span></td>
-                <td><strong>1,458h</strong></td>
-                <td><strong>95.2%</strong></td>
-                <td>7h 20m</td>
-                <td>18</td>
-              </tr>
-              <tr>
-                <td><span class="badge green">Administrativo</span></td>
-                <td><strong>1,022h</strong></td>
-                <td><strong>98.5%</strong></td>
-                <td>2h 05m</td>
-                <td>5</td>
-              </tr>
-              <tr>
-                <td><span class="badge blue">Logistica</span></td>
-                <td><strong>894h</strong></td>
-                <td><strong>97.1%</strong></td>
-                <td>4h 37m</td>
-                <td>8</td>
-              </tr>
-              <tr>
-                <td><span class="badge orange">Ventas</span></td>
-                <td><strong>882h</strong></td>
-                <td><strong>96.8%</strong></td>
-                <td>4h 40m</td>
-                <td>7</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Top Empleados del Mes</h3>
-        <div class="table-container">
-          <table class="op-table">
-            <thead>
-              <tr>
-                <th>EMPLEADO</th>
-                <th>DEPT.</th>
-                <th>ASISTENCIA</th>
-                <th>PUNTUALIDAD</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">Maria Soto</div>
-                  </div>
-                </td>
-                <td><span class="badge green">Admin</span></td>
-                <td><strong>100%</strong></td>
-                <td><span class="status-indicator success">Excelente</span></td>
-              </tr>
-              <tr>
-                <td>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">Pedro Lopez</div>
-                  </div>
-                </td>
-                <td><span class="badge">Campo</span></td>
-                <td><strong>100%</strong></td>
-                <td><span class="status-indicator success">Excelente</span></td>
-              </tr>
-              <tr>
-                <td>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">Carmen Rios</div>
-                  </div>
-                </td>
-                <td><span class="badge orange">Ventas</span></td>
-                <td><strong>98.5%</strong></td>
-                <td><span class="status-indicator success">Muy Bueno</span></td>
-              </tr>
-              <tr>
-                <td>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">Carlos Mendoza</div>
-                  </div>
-                </td>
-                <td><span class="badge">Campo</span></td>
-                <td><strong>97.8%</strong></td>
-                <td><span class="status-indicator success">Muy Bueno</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div class="rrhh-reportes-grid-bottom">
-      <div class="card">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Historico de Horas y Tardanza (Enero 2025)</h3>
-        <div style="height: 220px; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); border-radius: 8px; display: flex; align-items: flex-end; justify-content: space-around; padding: 20px; gap: 12px;">
-          <div style="text-align: center;">
-            <div style="display: flex; align-items: flex-end; gap: 6px; margin-bottom: 8px;">
-              <div style="width: 18px; height: 152px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px;"></div>
-              <div style="width: 18px; height: 38px; background: linear-gradient(to top, #d97706, #f59e0b); border-radius: 4px;"></div>
-            </div>
-            <div style="font-size: 12px; color: #666;">S1</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="display: flex; align-items: flex-end; gap: 6px; margin-bottom: 8px;">
-              <div style="width: 18px; height: 140px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px;"></div>
-              <div style="width: 18px; height: 44px; background: linear-gradient(to top, #d97706, #f59e0b); border-radius: 4px;"></div>
-            </div>
-            <div style="font-size: 12px; color: #666;">S2</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="display: flex; align-items: flex-end; gap: 6px; margin-bottom: 8px;">
-              <div style="width: 18px; height: 166px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px;"></div>
-              <div style="width: 18px; height: 33px; background: linear-gradient(to top, #d97706, #f59e0b); border-radius: 4px;"></div>
-            </div>
-            <div style="font-size: 12px; color: #666;">S3</div>
-          </div>
-          <div style="text-align: center;">
-            <div style="display: flex; align-items: flex-end; gap: 6px; margin-bottom: 8px;">
-              <div style="width: 18px; height: 148px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px;"></div>
-              <div style="width: 18px; height: 49px; background: linear-gradient(to top, #d97706, #f59e0b); border-radius: 4px;"></div>
-            </div>
-            <div style="font-size: 12px; color: #666;">S4</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Alertas de RRHH</h3>
-        <div style="display: grid; gap: 10px;">
-          <div style="padding: 12px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px;">
-            <div style="font-size: 12px; color: #b91c1c; font-weight: 700; margin-bottom: 4px;">Riesgo alto</div>
-            <div style="font-size: 14px; color: #1f2937;">4 colaboradores superan 90 min de tardanza acumulada.</div>
-          </div>
-          <div style="padding: 12px; border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px;">
-            <div style="font-size: 12px; color: #b45309; font-weight: 700; margin-bottom: 4px;">Seguimiento</div>
-            <div style="font-size: 14px; color: #1f2937;">Ventas concentra 24.9% del total de tardanzas del mes.</div>
-          </div>
-          <div style="padding: 12px; border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 10px;">
-            <div style="font-size: 12px; color: #166534; font-weight: 700; margin-bottom: 4px;">Mejora positiva</div>
-            <div style="font-size: 14px; color: #1f2937;">Asistencia promedio subio 1.7% frente al mes anterior.</div>
-          </div>
-          <div style="padding: 10px 12px; border-radius: 8px; background: #eff6ff; color: #1e3a8a; font-size: 13px;">
-            Recomendacion: priorizar revisiones semanales de tardanza y ajustes de horarios por area.
-          </div>
-        </div>
+    <div id="rrhh-reportes-body">
+      <div style="text-align:center; padding: 48px 12px; color:#64748b;">
+        <div class="spinner" style="margin: 0 auto 16px; width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2c4a7c; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        Cargando dashboard de reportes...
       </div>
     </div>
   `;
+}
+
+function minutosATexto(min: number): string {
+  if (min <= 0) return '0 min';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function minutosATextoLargo(min: number): string {
+  const total = Math.max(0, Math.round(min));
+  if (total === 0) return '0 min';
+
+  const horas = Math.floor(total / 60);
+  const minutos = total % 60;
+
+  if (horas === 0) return `${minutos} min`;
+  if (minutos === 0) return `${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+  return `${horas} ${horas === 1 ? 'hora' : 'horas'} y ${minutos} min`;
+}
+
+function horasDecimalesATextoLargo(horasDecimales: number): string {
+  const minutos = Math.round(Math.max(0, horasDecimales) * 60);
+  return minutosATextoLargo(minutos);
+}
+
+function horasDecimalesATextoCorto(horasDecimales: number): string {
+  const minutos = Math.round(Math.max(0, horasDecimales) * 60);
+  return minutosATexto(minutos);
+}
+
+function nivelPuntualidad(p: number): { clase: string; texto: string } {
+  if (p >= 98) return { clase: 'success', texto: 'Excelente' };
+  if (p >= 94) return { clase: 'success', texto: 'Muy bueno' };
+  if (p >= 88) return { clase: 'warning', texto: 'Regular' };
+  return { clase: 'danger', texto: 'Critico' };
+}
+
+function formatearMes(mes: string): string {
+  const [y, m] = mes.split('-').map((n) => Number(n));
+  if (!y || !m) return mes;
+  const d = new Date(y, m - 1, 1);
+  const label = d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function colorBadgeArea(i: number): string {
+  const colors = ['', 'green', 'blue', 'orange'];
+  return colors[i % colors.length];
+}
+
+export async function cargarReportesRRHH() {
+  const body = document.getElementById('rrhh-reportes-body');
+  const mesEl = document.getElementById('rrhh-reportes-mes') as HTMLSelectElement | null;
+  const vistaEl = document.getElementById('rrhh-reportes-vista') as HTMLSelectElement | null;
+  const areaEl = document.getElementById('rrhh-reportes-area') as HTMLSelectElement | null;
+  const aplicarBtn = document.getElementById('rrhh-reportes-btn-aplicar') as HTMLButtonElement | null;
+  const exportarBtn = document.getElementById('rrhh-reportes-btn-exportar') as HTMLButtonElement | null;
+
+  if (!body || !mesEl || !vistaEl || !areaEl) return;
+
+  destruirGraficosRrhh();
+
+  if (aplicarBtn && !aplicarBtn.dataset.bound) {
+    aplicarBtn.dataset.bound = '1';
+    aplicarBtn.addEventListener('click', () => cargarReportesRRHH());
+  }
+
+  if (!vistaEl.dataset.bound) {
+    vistaEl.dataset.bound = '1';
+    vistaEl.addEventListener('change', () => cargarReportesRRHH());
+  }
+
+  if (exportarBtn && !exportarBtn.dataset.bound) {
+    exportarBtn.dataset.bound = '1';
+    exportarBtn.addEventListener('click', () => {
+      mostrarNotificacionAsistencia('Exportacion disponible en la siguiente iteracion del modulo.', 'warning');
+    });
+  }
+
+  body.innerHTML = `
+    <div style="text-align:center; padding: 48px 12px; color:#64748b;">
+      <div class="spinner" style="margin: 0 auto 16px; width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2c4a7c; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      Consultando datos reales de asistencia...
+    </div>
+  `;
+
+  try {
+    const resp: RrhhReporteDashboardResponse = await rrhhService.getReporteDashboard(mesEl.value, areaEl.value);
+    if (!resp.success) throw new Error('No se pudo cargar el dashboard de reportes');
+
+    const data = resp.data;
+    const { kpis, por_area, top_empleados, alertas } = data;
+
+    const horasTrabajadasTexto = horasDecimalesATextoLargo(Number(kpis.horas_trabajadas_totales) || 0);
+    const horasEfectivasTexto = horasDecimalesATextoLargo(Number(kpis.horas_efectivas) || 0);
+    const jornadaPromedioTexto = horasDecimalesATextoLargo(Number(kpis.jornada_promedio_horas) || 0);
+    const promedioAlmuerzoTexto = minutosATextoLargo(Number(kpis.promedio_almuerzo_minutos) || 0);
+
+    const areaSeleccionada = areaEl.value;
+    const nuevasAreas = ['Todos', ...(data.areas_disponibles || [])];
+    const actuales = Array.from(areaEl.options).map((o) => o.value);
+    if (JSON.stringify(actuales) !== JSON.stringify(nuevasAreas)) {
+      areaEl.innerHTML = nuevasAreas
+        .map((a) => `<option value="${escapeHtml(a)}" ${a === areaSeleccionada ? 'selected' : ''}>${escapeHtml(a === 'Todos' ? 'Todas las áreas' : a)}</option>`)
+        .join('');
+    }
+
+    const filasDept = por_area.length > 0
+      ? por_area.map((d, i) => `
+        <tr>
+          <td><span class="badge ${colorBadgeArea(i)}">${escapeHtml(d.area)}</span></td>
+          <td><strong>${horasDecimalesATextoCorto(Number(d.horas) || 0)}</strong></td>
+          <td><strong>${Number(d.asistencia).toFixed(1)}%</strong></td>
+          <td>${minutosATexto(Number(d.tardanza_minutos) || 0)}</td>
+          <td>${Number(d.tardanzas) || 0}</td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#64748b;">Sin datos para el filtro seleccionado.</td></tr>';
+
+    const filasTop = top_empleados.length > 0
+      ? top_empleados.map((e, i) => {
+        const nivel = nivelPuntualidad(Number(e.puntualidad) || 0);
+        return `
+          <tr>
+            <td><div class="equipment-name">${escapeHtml(e.empleado)}</div></td>
+            <td><span class="badge ${colorBadgeArea(i)}">${escapeHtml(e.area)}</span></td>
+            <td><strong>${Number(e.asistencia).toFixed(1)}%</strong></td>
+            <td><span class="status-indicator ${nivel.clase}">${nivel.texto}</span></td>
+          </tr>
+        `;
+      }).join('')
+      : '<tr><td colspan="4" style="text-align:center; padding: 20px; color:#64748b;">Sin datos para ranking.</td></tr>';
+
+    const alertasHtml = alertas.length > 0
+      ? alertas.map((a) => {
+        const styles = a.tipo === 'danger'
+          ? { border: '#fecaca', bg: '#fef2f2', title: '#b91c1c' }
+          : a.tipo === 'warning'
+            ? { border: '#fde68a', bg: '#fffbeb', title: '#b45309' }
+            : a.tipo === 'success'
+              ? { border: '#bbf7d0', bg: '#f0fdf4', title: '#166534' }
+              : { border: '#bfdbfe', bg: '#eff6ff', title: '#1d4ed8' };
+        return `
+          <div style="padding: 12px; border: 1px solid ${styles.border}; background: ${styles.bg}; border-radius: 10px;">
+            <div style="font-size: 12px; color: ${styles.title}; font-weight: 700; margin-bottom: 4px;">${escapeHtml(a.titulo)}</div>
+            <div style="font-size: 14px; color: #1f2937;">${escapeHtml(a.detalle)}</div>
+          </div>
+        `;
+      }).join('')
+      : '<div style="padding: 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 10px; color:#64748b;">Sin alertas para este periodo.</div>';
+
+    body.innerHTML = `
+      <div class="card" style="margin-bottom: 20px; padding: 18px 20px; border-left: 4px solid #2c4a7c;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;">
+          <div>
+            <h3 style="margin: 0; font-size: 18px; color: #1a2332;">KPIs Prioritarios de RRHH</h3>
+            <p style="margin: 6px 0 0; color: #64748b; font-size: 13px;">Dashboard alimentado con datos reales de asistencia.</p>
+          </div>
+          <span style="font-size: 12px; color: #475569; background: #e2e8f0; padding: 6px 10px; border-radius: 999px;">Corte: ${escapeHtml(formatearMes(data.filtros.mes))}</span>
+        </div>
+      </div>
+
+      <div class="stat-boxes" style="margin-bottom: 16px;">
+        <div class="stat-box"><div class="stat-box-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div><div class="stat-box-content"><div class="stat-box-label">Horas Trabajadas Totales</div><div class="stat-box-value">${horasTrabajadasTexto}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 4-6"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Horas Efectivas</div><div class="stat-box-value">${horasEfectivasTexto}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 7v6l3 3"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Tiempo Total de Tardanza</div><div class="stat-box-value">${minutosATexto(Number(kpis.tiempo_total_tardanza_minutos) || 0)}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div class="stat-box-content"><div class="stat-box-label">Asistencia Promedio</div><div class="stat-box-value">${Number(kpis.asistencia_promedio).toFixed(1)}%</div></div></div>
+      </div>
+
+      <div class="stat-boxes" style="margin-bottom: 24px;">
+        <div class="stat-box"><div class="stat-box-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></div><div class="stat-box-content"><div class="stat-box-label">Tardanzas del Mes</div><div class="stat-box-value">${Number(kpis.tardanzas_mes) || 0}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg></div><div class="stat-box-content"><div class="stat-box-label">Ausencias del Mes</div><div class="stat-box-value">${Number(kpis.ausencias_mes) || 0}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"></path><path d="M9 9h6v6H9z"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Tiempo Extra Total</div><div class="stat-box-value">${minutosATexto(Number(kpis.tiempo_extra_total_minutos) || 0)}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M3 10h18"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Jornada Promedio</div><div class="stat-box-value">${jornadaPromedioTexto}</div></div></div>
+      </div>
+
+      <div class="stat-boxes" style="margin-bottom: 24px;">
+        <div class="stat-box"><div class="stat-box-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 7v5"></path><path d="M12 12l3 2"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Tiempo Almuerzo Total</div><div class="stat-box-value">${minutosATexto(Number(kpis.tiempo_total_almuerzo_minutos) || 0)}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"></path><path d="M12 3v18"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Promedio Almuerzo</div><div class="stat-box-value">${promedioAlmuerzoTexto}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Exceso Almuerzo</div><div class="stat-box-value">${minutosATexto(Number(kpis.tiempo_exceso_almuerzo_minutos) || 0)}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></div><div class="stat-box-content"><div class="stat-box-label">Tardanza Inicio Almuerzo</div><div class="stat-box-value">${minutosATexto(Number(kpis.tardanza_inicio_almuerzo_minutos) || 0)}</div></div></div>
+      </div>
+
+      <div class="rrhh-reportes-grid-2">
+        <div class="card">
+          <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Horas y Tardanza por Área</h3>
+          <div class="table-container"><table class="op-table"><thead><tr><th>ÁREA</th><th>HORAS</th><th>ASISTENCIA</th><th>T. TARDANZA</th><th>TARDANZAS</th></tr></thead><tbody>${filasDept}</tbody></table></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Top Empleados del Mes</h3>
+          <div class="table-container"><table class="op-table"><thead><tr><th>EMPLEADO</th><th>ÁREA</th><th>ASISTENCIA</th><th>PUNTUALIDAD</th></tr></thead><tbody>${filasTop}</tbody></table></div>
+        </div>
+      </div>
+
+      <div class="rrhh-chart-grid">
+        <section class="rrhh-chart-card rrhh-span-7">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Horas trabajadas vs tardanza (${escapeHtml(vistaEl.value === 'diaria' ? 'diaria' : 'semanal')})</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Azul: tiempo trabajado (${vistaEl.value === 'diaria' ? 'minutos' : 'horas'}) (eje izquierdo). Naranja: tardanza (${vistaEl.value === 'diaria' ? 'minutos' : 'horas'}) (eje derecho).</p></div></div>
+          <div class="rrhh-chart-wrap"><canvas id="rrhh-chart-horas-tardanza"></canvas></div>
+        </section>
+
+        <section class="rrhh-chart-card rrhh-span-5">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Distribución de estados</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Puntualidad, tardanza, faltas e incompletos del periodo.</p></div></div>
+          <div class="rrhh-chart-wrap short"><canvas id="rrhh-chart-estados"></canvas></div>
+        </section>
+
+        <section class="rrhh-chart-card rrhh-span-6">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Comportamiento de almuerzo (${escapeHtml(vistaEl.value === 'diaria' ? 'diario' : 'semanal')})</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Celeste: almuerzo total. Naranja y rojo: exceso y tardanza de inicio.</p></div></div>
+          <div class="rrhh-chart-wrap"><canvas id="rrhh-chart-almuerzo"></canvas></div>
+        </section>
+
+        <section class="rrhh-chart-card rrhh-span-6">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Comparativo por área</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Barras azules: horas trabajadas. Línea naranja: tardanza (${vistaEl.value === 'diaria' ? 'minutos' : 'horas'}).</p></div></div>
+          <div class="rrhh-chart-wrap"><canvas id="rrhh-chart-area"></canvas></div>
+        </section>
+      </div>
+
+      <div class="rrhh-reportes-grid-bottom">
+        <div class="card">
+          <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Alertas de RRHH</h3>
+          <div style="display: grid; gap: 10px;">${alertasHtml}</div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Resumen de corte</h3>
+          <div style="padding: 12px; border: 1px solid #dbeafe; background: #eff6ff; border-radius: 10px; color:#1e3a8a; font-size: 13px;">
+            Periodo analizado: <strong>${escapeHtml(formatearMes(data.filtros.mes))}</strong><br>
+            Área aplicada: <strong>${escapeHtml(data.filtros.area || 'Todos')}</strong><br>
+            Datos usados: registros reales de asistencia y almuerzo almacenados en RRHH.
+          </div>
+        </div>
+      </div>
+    `;
+
+    renderGraficosReportesRRHH(data, vistaEl.value === 'diaria' ? 'diaria' : 'semanal');
+  } catch (err: any) {
+    destruirGraficosRrhh();
+    body.innerHTML = `
+      <div style="text-align:center; padding: 48px 12px; color:#dc2626;">
+        <p style="margin: 0 0 12px; font-size: 15px; font-weight: 600;">No se pudo cargar el dashboard de reportes.</p>
+        <p style="margin: 0 0 16px; color:#64748b;">${escapeHtml(err?.message || 'Error de conexión con el servidor')}</p>
+        <button class="btn-primary" id="rrhh-reportes-reintentar">Reintentar</button>
+      </div>
+    `;
+    document.getElementById('rrhh-reportes-reintentar')?.addEventListener('click', () => cargarReportesRRHH());
+  }
+}
+
+function renderGraficosReportesRRHH(data: RrhhReporteDashboardResponse['data'], vista: 'semanal' | 'diaria') {
+  const historialTrabajo = vista === 'diaria' ? data.historico_dias : data.historico_semanas;
+  const labelsSemanas = historialTrabajo.map((s) => s.etiqueta);
+  const trabajoSerie = historialTrabajo.map((s) => {
+    const horas = Math.max(0, Number(s.horas || 0));
+    return vista === 'diaria' ? Math.round(horas * 60) : horas;
+  });
+  const tardanzaSerie = historialTrabajo.map((s) => {
+    const min = Math.max(0, Number(s.tardanza_minutos || 0));
+    return vista === 'diaria' ? min : Number((min / 60).toFixed(2));
+  });
+  const trabajoLabel = vista === 'diaria' ? 'Tiempo trabajado (min)' : 'Horas trabajadas';
+  const trabajoAxisTitle = vista === 'diaria' ? 'Tiempo trabajado (minutos)' : 'Horas trabajadas';
+  const tardanzaLabel = vista === 'diaria' ? 'Tardanza (min)' : 'Tardanza (h)';
+  const tardanzaAxisTitle = vista === 'diaria' ? 'Tardanza (minutos)' : 'Tardanza (horas)';
+  const formatoTrabajo = (v: number) => vista === 'diaria'
+    ? minutosATextoLargo(v)
+    : horasDecimalesATextoLargo(v);
+  const formatoTardanza = (v: number) => vista === 'diaria'
+    ? minutosATextoLargo(v)
+    : `${Number(v).toFixed(2)} h`;
+
+  crearOGestionarGraficoRrhh('rrhh-chart-horas-tardanza', {
+    type: 'bar',
+    data: {
+      labels: labelsSemanas,
+      datasets: [
+        {
+          type: 'bar',
+          label: trabajoLabel,
+          data: trabajoSerie,
+          backgroundColor: '#2c4a7c',
+          borderColor: '#1e3a8a',
+          borderWidth: 2,
+          borderRadius: 10,
+        },
+        {
+          type: 'line',
+          label: tardanzaLabel,
+          data: tardanzaSerie,
+          borderColor: '#d97706',
+          backgroundColor: 'rgba(217, 119, 6, .18)',
+          tension: 0.35,
+          fill: false,
+          pointRadius: 3,
+          pointBackgroundColor: '#d97706',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          yAxisID: 'y1',
+        },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx: any) => {
+              const value = Number(ctx.parsed.y ?? 0);
+              if (ctx.dataset.label?.includes('Tardanza')) {
+                return `${ctx.dataset.label}: ${formatoTardanza(value)}`;
+              }
+              return `${ctx.dataset.label}: ${formatoTrabajo(value)}`;
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: trabajoAxisTitle },
+          ticks: {
+            callback: (value: any) => vista === 'diaria' ? `${Math.round(Number(value))}` : Number(value).toFixed(2),
+            precision: vista === 'diaria' ? 0 : 2,
+            stepSize: vista === 'diaria' ? 1 : undefined,
+          },
+        },
+        y1: {
+          beginAtZero: true,
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: tardanzaAxisTitle },
+          ticks: {
+            callback: (value: any) => vista === 'diaria' ? `${Math.round(Number(value))}` : Number(value).toFixed(2),
+            precision: vista === 'diaria' ? 0 : 2,
+            stepSize: vista === 'diaria' ? 1 : undefined,
+          },
+        },
+      },
+    },
+  });
+
+  const almuerzoSeries = vista === 'diaria'
+    ? (data.historico_almuerzo_dias || [])
+    : (data.historico_almuerzo_semanas || []);
+  const almuerzoTotal = almuerzoSeries.map((s) => Math.max(0, Number(s.almuerzo_minutos || 0)));
+  const almuerzoExceso = almuerzoSeries.map((s) => Math.max(0, Number(s.exceso_almuerzo_minutos || 0)));
+  const almuerzoTardanza = almuerzoSeries.map((s) => Math.max(0, Number(s.tardanza_inicio_almuerzo_minutos || 0)));
+
+  crearOGestionarGraficoRrhh('rrhh-chart-almuerzo', {
+    type: 'line',
+    data: {
+      labels: almuerzoSeries.map((s) => s.etiqueta),
+      datasets: [
+        {
+          label: 'Almuerzo total (min)',
+          data: almuerzoTotal,
+          borderColor: '#0ea5e9',
+          backgroundColor: 'rgba(14, 165, 233, .14)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 4,
+          pointBackgroundColor: '#0ea5e9',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Exceso almuerzo (min)',
+          data: almuerzoExceso,
+          borderColor: '#ea580c',
+          backgroundColor: 'rgba(234, 88, 12, .14)',
+          fill: false,
+          tension: 0.35,
+          pointRadius: 4,
+          pointBackgroundColor: '#ea580c',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          yAxisID: 'y1',
+        },
+        {
+          label: 'Tardanza inicio almuerzo (min)',
+          data: almuerzoTardanza,
+          borderColor: '#dc2626',
+          backgroundColor: 'rgba(220, 38, 38, .1)',
+          fill: false,
+          tension: 0.35,
+          pointRadius: 4,
+          pointBackgroundColor: '#dc2626',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          yAxisID: 'y1',
+        },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx: any) => {
+              const value = Number(ctx.parsed.y ?? 0);
+              return `${ctx.dataset.label}: ${minutosATextoLargo(value)}`;
+            },
+          },
+        },
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Almuerzo total (min)' } },
+        y1: {
+          beginAtZero: true,
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: 'Exceso / tardanza (min)' },
+        },
+      },
+    },
+  });
+
+  const estados = data.distribucion_estados || [];
+  const coloresEstados = estados.map((e) => {
+    const estado = String(e.estado || '').toLowerCase();
+
+    if (estado.includes('puntual') || estado.includes('a tiempo') || estado.includes('presente')) {
+      return '#16a34a'; // Verde: a tiempo
+    }
+
+    if (estado.includes('tardanza') || estado.includes('tarde')) {
+      return '#f59e0b'; // Amarillo: tardanza
+    }
+
+    if (estado.includes('falta') || estado.includes('ausente') || estado.includes('no marco') || estado.includes('no marc')) {
+      return '#dc2626'; // Rojo: falta/no marcó
+    }
+
+    if (estado.includes('incompleto')) {
+      return '#f97316';
+    }
+
+    return '#64748b';
+  });
+
+  crearOGestionarGraficoRrhh('rrhh-chart-estados', {
+    type: 'doughnut',
+    data: {
+      labels: estados.map((e) => e.estado),
+      datasets: [
+        {
+          data: estados.map((e) => Number(e.total || 0)),
+          backgroundColor: coloresEstados,
+          borderColor: coloresEstados,
+          borderWidth: 5,
+          borderAlign: 'center',
+          spacing: 2,
+          offset: estados.map(() => 4),
+          hoverOffset: 7,
+        },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
+      },
+    },
+  });
+
+  crearOGestionarGraficoRrhh('rrhh-chart-area', {
+    type: 'bar',
+    data: {
+      labels: data.por_area.map((a) => a.area),
+      datasets: [
+        {
+          label: 'Horas trabajadas',
+          data: data.por_area.map((a) => Math.max(0, Number(a.horas || 0))),
+          backgroundColor: '#1d4ed8',
+          borderColor: '#1e40af',
+          borderWidth: 2,
+          borderRadius: 10,
+          yAxisID: 'y',
+        },
+        {
+          type: 'line',
+          label: tardanzaLabel,
+          data: data.por_area.map((a) => {
+            const min = Math.max(0, Number(a.tardanza_minutos || 0));
+            return vista === 'diaria' ? min : Number((min / 60).toFixed(2));
+          }),
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, .15)',
+          tension: 0.35,
+          fill: false,
+          pointRadius: 3,
+          pointBackgroundColor: '#f59e0b',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          yAxisID: 'y1',
+        },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx: any) => {
+              const value = Number(ctx.parsed.y ?? 0);
+              if (ctx.dataset.label?.includes('Tardanza')) {
+                return `${ctx.dataset.label}: ${formatoTardanza(value)}`;
+              }
+              return `${ctx.dataset.label}: ${formatoTrabajo(value)}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { stacked: false },
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: 'Horas trabajadas' },
+        },
+        y1: {
+          beginAtZero: true,
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: tardanzaAxisTitle },
+          ticks: {
+            callback: (value: any) => vista === 'diaria' ? `${Math.round(Number(value))}` : Number(value).toFixed(2),
+            precision: vista === 'diaria' ? 0 : 2,
+            stepSize: vista === 'diaria' ? 1 : undefined,
+          },
+        },
+      },
+    },
+  });
 }
 
 // Tab: Marcar Asistencia (Personal Administrativo) - Conectado al backend

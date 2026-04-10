@@ -86,6 +86,76 @@ export interface ListaAdminResponse {
   data: AsistenciaAdminRecord[];
 }
 
+export interface RrhhReporteDashboardResponse {
+  success: boolean;
+  data: {
+    filtros: {
+      mes: string;
+      area: string;
+    };
+    kpis: {
+      horas_trabajadas_totales: number;
+      horas_efectivas: number;
+      tiempo_total_tardanza_minutos: number;
+      tiempo_total_almuerzo_minutos: number;
+      promedio_almuerzo_minutos: number;
+      tiempo_exceso_almuerzo_minutos: number;
+      tardanza_inicio_almuerzo_minutos: number;
+      asistencia_promedio: number;
+      tardanzas_mes: number;
+      ausencias_mes: number;
+      tiempo_extra_total_minutos: number;
+      jornada_promedio_horas: number;
+    };
+    por_area: Array<{
+      area: string;
+      horas: number;
+      asistencia: number;
+      tardanza_minutos: number;
+      tardanzas: number;
+    }>;
+    top_empleados: Array<{
+      id_personal: number;
+      empleado: string;
+      area: string;
+      asistencia: number;
+      puntualidad: number;
+    }>;
+    historico_semanas: Array<{
+      etiqueta: string;
+      horas: number;
+      tardanza_minutos: number;
+    }>;
+    historico_dias: Array<{
+      etiqueta: string;
+      horas: number;
+      tardanza_minutos: number;
+    }>;
+    historico_almuerzo_semanas: Array<{
+      etiqueta: string;
+      almuerzo_minutos: number;
+      exceso_almuerzo_minutos: number;
+      tardanza_inicio_almuerzo_minutos: number;
+    }>;
+    historico_almuerzo_dias: Array<{
+      etiqueta: string;
+      almuerzo_minutos: number;
+      exceso_almuerzo_minutos: number;
+      tardanza_inicio_almuerzo_minutos: number;
+    }>;
+    distribucion_estados: Array<{
+      estado: string;
+      total: number;
+    }>;
+    alertas: Array<{
+      tipo: 'success' | 'warning' | 'danger' | 'info';
+      titulo: string;
+      detalle: string;
+    }>;
+    areas_disponibles: string[];
+  };
+}
+
 // === Horarios ===
 
 export interface EmpleadoHorarioResumen {
@@ -163,6 +233,14 @@ export const rrhhService = {
   // === Asistencia Admin ===
   getListaAdmin: async (fecha: string): Promise<ListaAdminResponse> => {
     return apiClient.get<ListaAdminResponse>('/asistencia/lista', { fecha });
+  },
+
+  getReporteDashboard: async (mes: string, area?: string): Promise<RrhhReporteDashboardResponse> => {
+    const params: Record<string, string> = { mes };
+    if (area && area.trim() !== '' && area !== 'Todos') {
+      params.area = area;
+    }
+    return apiClient.get<RrhhReporteDashboardResponse>('/asistencia/reporte-dashboard', params);
   },
 
   asignarHorasExtra: async (idAsistencia: number, asignar: boolean, horaInicioExtra?: string, observaciones?: string): Promise<MarcarResponse> => {

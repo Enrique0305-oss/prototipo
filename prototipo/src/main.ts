@@ -10,7 +10,7 @@ import { renderDashboard, initDashboardEvents } from './modules/dashboard/dashbo
 import { renderDashboardProgramacionServicio, initDashboardProgramacionServicioEvents } from './modules/programaciones/programacion-servicio/dashboard-programacion-servicio.view'
 import { renderProgramacionServicio, initProgramacionServicioEvents } from './modules/programaciones/programacion-servicio/programacion-servicio.view'
 import { renderProgramacionCapacitacionAsesoria, initProgramacionCapacitacionAsesoriaEvents } from './modules/programaciones/programacion-capacitacion-asesoria/programacion-capacitacion-asesoria.view'
-import { renderRecursosHumanos, renderAsistenciaTab, renderAsistenciaPersonalTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, cargarAsistenciaPersonal, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios, getTabsRecursosHumanosPermitidos, tieneAccesoCompletoRecursosHumanos } from './modules/recursos-humanos/recursos-humanos.view'
+import { renderRecursosHumanos, renderAsistenciaTab, renderAsistenciaPersonalTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, cargarAsistenciaPersonal, renderEmpleadosTab, renderReportesTab, renderHorariosTab, cargarHorarios, getTabsRecursosHumanosPermitidos, tieneAccesoCompletoRecursosHumanos, cargarReportesRRHH } from './modules/recursos-humanos/recursos-humanos.view'
 import { renderTecnicosTab, cargarTecnicos } from './modules/recursos-humanos/tecnicos.view'
 // Almacén
 import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
@@ -57,6 +57,13 @@ let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
 let activeRecursosTab = 'asistencia'; // Estado para el tab de recursos humanos
 let activeOperacionesTab = 'servicios'; // Estado para el tab de operaciones
 let misProyecciones: any[] = []; // Lista de proyecciones para facturación
+let sidebarForceCollapsed = false;
+
+declare global {
+  interface Window {
+    navigateToModule?: (menuName: string, submenuName?: string, options?: { collapseSidebar?: boolean }) => void;
+  }
+}
 
 /**
  * Mapa: nombre de menú → permiso(s) requeridos.
@@ -95,6 +102,25 @@ function getRutaInicialPorPerfil(): { menu: string; subMenu: string } {
   if (esUsuarioGerencia()) {
     return { menu: 'Dashboard', subMenu: '' };
   }
+
+  function navigateToModule(menuName: string, submenuName = '', options?: { collapseSidebar?: boolean }): void {
+    activeMenu = menuName;
+    activeSubMenu = submenuName;
+    sidebarForceCollapsed = Boolean(options?.collapseSidebar);
+    expandedMenu = sidebarForceCollapsed ? '' : (submenuName ? menuName : '');
+
+    if (menuName === 'Dashboard' && !esUsuarioGerencia()) {
+      const ruta = getRutaInicialPorPerfil();
+      activeMenu = ruta.menu;
+      activeSubMenu = ruta.subMenu;
+      sidebarForceCollapsed = false;
+      expandedMenu = '';
+    }
+
+    renderApp();
+  }
+
+  window.navigateToModule = navigateToModule;
 
   const tieneAccesoComercial = [
     'prospectos',
@@ -327,7 +353,7 @@ function renderApp() {
   app.innerHTML = `
     <div class="app-container">
       <!-- Sidebar -->
-      <aside class="sidebar${expandedMenu ? ' sidebar-expanded' : ''}">
+      <aside class="sidebar${expandedMenu ? ' sidebar-expanded' : ''}${sidebarForceCollapsed ? ' sidebar-force-collapsed' : ''}">
        <div class="sidebar-header" style="padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 100px;">
         
         <img src="${LOGO_URL}" 
@@ -378,7 +404,7 @@ function renderApp() {
       </aside>
 
       <!-- Main Content -->
-      <main class="main-content">
+      <main class="main-content${expandedMenu ? ' sidebar-expanded' : ''}${sidebarForceCollapsed ? ' sidebar-force-collapsed' : ''}">
         <header class="top-bar">
           <div class="user-section">
             <div class="user-profile" style="cursor: pointer;" onclick="logout()">
@@ -403,6 +429,12 @@ if (activeMenu === 'Facturación') {
   const sidebarEl = document.querySelector('.sidebar');
   if (sidebarEl) {
     sidebarEl.addEventListener('mouseleave', () => {
+      if (sidebarForceCollapsed) {
+        sidebarForceCollapsed = false;
+        renderApp();
+        return;
+      }
+
       if (expandedMenu) {
         expandedMenu = '';
         renderApp();
@@ -419,6 +451,7 @@ if (activeMenu === 'Facturación') {
 
     // Si tiene submenú, solo expandir/colapsar sin navegar
     if (hasSubmenu) {
+      sidebarForceCollapsed = false;
       if (expandedMenu === menuName) {
         // Ya está expandido → colapsar
         expandedMenu = '';
@@ -434,6 +467,7 @@ if (activeMenu === 'Facturación') {
     activeMenu = menuName;
     activeSubMenu = '';
     expandedMenu = '';
+    sidebarForceCollapsed = false;
 
     if (menuName === 'Dashboard' && !esUsuarioGerencia()) {
       const ruta = getRutaInicialPorPerfil();
@@ -477,6 +511,7 @@ if (activeMenu === 'Facturación') {
       activeMenu = expandedMenu;
       activeSubMenu = submenuName;
       activeInventoryTab = 'productos';
+      sidebarForceCollapsed = false;
       renderApp();
     });
   });
@@ -776,6 +811,10 @@ function updateRecursosTabContent() {
   // Cargar datos de horarios
   if (activeRecursosTab === 'horarios') {
     cargarHorarios();
+  }
+
+  if (activeRecursosTab === 'reportes') {
+    cargarReportesRRHH();
   }
 
   if (activeRecursosTab === 'tecnicos') {

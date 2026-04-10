@@ -290,6 +290,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Asistencia RRHH
     Route::get('/asistencia/mi-estado', [AsistenciaController::class, 'miEstado']);
     Route::get('/asistencia/lista', [AsistenciaController::class, 'listaAdmin']);
+    Route::get('/asistencia/reporte-dashboard', [AsistenciaController::class, 'reporteDashboard']);
     Route::post('/asistencia/marcar-entrada', [AsistenciaController::class, 'marcarEntrada']);
     Route::post('/asistencia/marcar-salida', [AsistenciaController::class, 'marcarSalida']);
     Route::post('/asistencia/marcar-inicio-almuerzo', [AsistenciaController::class, 'marcarInicioAlmuerzo']);

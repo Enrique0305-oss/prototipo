@@ -138,6 +138,32 @@ function getMainKpiValue(id: string, fallback: string): string {
   return el?.textContent?.trim() || fallback;
 }
 
+function navigateUsingSidebar(menuName: string, submenuName: string, afterNavigate?: () => void): void {
+  const navigator = window.navigateToModule;
+  if (navigator) {
+    navigator(menuName, submenuName, { collapseSidebar: true });
+    if (afterNavigate) {
+      setTimeout(afterNavigate, 150);
+    }
+    return;
+  }
+
+  const menuButton = document.querySelector(`[data-menu="${menuName}"]`) as HTMLButtonElement | null;
+  if (!menuButton) return;
+
+  menuButton.click();
+  setTimeout(() => {
+    const submenuButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(`.submenu-item[data-submenu="${submenuName}"]`),
+    ).find((btn) => btn.offsetParent !== null);
+
+    submenuButton?.click();
+    if (afterNavigate) {
+      setTimeout(afterNavigate, 150);
+    }
+  }, 120);
+}
+
 async function safeLoad<T>(promise: Promise<T>, fallback: T): Promise<T> {
   try {
     return await promise;
@@ -520,13 +546,7 @@ export async function cargarAlertaStockBajo() {
 
       // Botón ir a inventario - dispara click en menú Almacén > Inventario
       document.getElementById('btn-ir-inventario')?.addEventListener('click', () => {
-        // Buscar el botón de Almacén en el sidebar y simular navegación
-        const almacenBtn = document.querySelector('[data-menu="Almacén"]') as HTMLButtonElement;
-        if (almacenBtn) almacenBtn.click();
-        setTimeout(() => {
-          const inventarioBtn = document.querySelector('[data-submenu="Inventario"]') as HTMLButtonElement;
-          if (inventarioBtn) inventarioBtn.click();
-        }, 100);
+        navigateUsingSidebar('Almacén', 'Inventario');
       });
     }
   } catch (e) {
@@ -687,17 +707,10 @@ export async function cargarAlertaMantenimiento() {
 
     // Botón ir a mantenimiento
     document.getElementById('btn-ir-mantenimiento')?.addEventListener('click', () => {
-      const almacenBtn = document.querySelector('[data-menu="Almacén"]') as HTMLButtonElement;
-      if (almacenBtn) almacenBtn.click();
-      setTimeout(() => {
-        const mantBtn = document.querySelector('[data-submenu="Mantenimiento"]') as HTMLButtonElement;
-        if (mantBtn) mantBtn.click();
-        // Auto-click en tab programación anual
-        setTimeout(() => {
-          const progTab = document.querySelector('[data-tab="programacion-anual"]') as HTMLButtonElement;
-          if (progTab) progTab.click();
-        }, 200);
-      }, 100);
+      navigateUsingSidebar('Almacén', 'Mantenimiento', () => {
+        const progTab = document.querySelector('[data-tab="programacion-anual"]') as HTMLButtonElement | null;
+        progTab?.click();
+      });
     });
   } catch (e) {
     console.error('Error cargando alerta de mantenimientos:', e);
@@ -811,12 +824,7 @@ export async function cargarAlertaCotizacionesSinOrden() {
 
     // Botón ir a cotizaciones
     document.getElementById('btn-ir-cotizaciones')?.addEventListener('click', () => {
-      const comercialBtn = document.querySelector('[data-menu="Comercial"]') as HTMLButtonElement;
-      if (comercialBtn) comercialBtn.click();
-      setTimeout(() => {
-        const cotBtn = document.querySelector('[data-submenu="Cotizaciones"]') as HTMLButtonElement;
-        if (cotBtn) cotBtn.click();
-      }, 100);
+      navigateUsingSidebar('Comercial', 'Cotizaciones');
     });
   } catch (e) {
     console.error('Error cargando alerta de cotizaciones sin orden:', e);
