@@ -34,6 +34,7 @@ const UNIDAD_OPTIONS = [
   'Unidad',
   'Par',
   'Cajas',
+  'Metros',
   'Galones',
   'Gramos',
   'Rodajas',

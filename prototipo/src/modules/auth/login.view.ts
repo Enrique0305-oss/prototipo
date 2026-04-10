@@ -5,26 +5,56 @@ const LOGO_URL = "http://localhost:8000/images/menu.png";
 
 export function renderLogin() {
   return `
-    <div class="login-container">
-      <div class="login-header">
-        <div class="logo-container">
-          <div class="logo-text">
+    <div class="auth-shell">
+      <section class="brand-panel">
+        <div class="brand-glow"></div>
+        <div class="brand-content">
+          <div class="brand-logo-wrap">
             <img src="${LOGO_URL}" 
-            width="100" 
-             alt="Logo QSCI"
-             style="display: block; max-width: 90%; height: auto; object-fit: contain;"
-             onload="this.style.display='block';"
-             onerror="console.error('No se pudo cargar el logo en:', this.src); this.alt='Error al cargar logo';">
+              width="92"
+              alt="Logo QSCI"
+              class="brand-logo"
+              onload="this.style.display='block';"
+              onerror="console.error('No se pudo cargar el logo en:', this.src); this.alt='Error al cargar logo';">
           </div>
-        </div> 
-        <h1>QSCI Group</h1>
-        <p>Panel de Administración</p>
-      </div>
+          <h1>QSCI</h1>
+          <p class="brand-subtitle">Gestión empresarial conectada para operaciones, inventario y comercial.</p>
 
-      <div class="login-body">
+          <ul class="brand-points">
+            <li>
+              <span class="point-icon">+</span>
+              Gestión completa de inventario y compras
+            </li>
+            <li>
+              <span class="point-icon">+</span>
+              Reportes y analítica en tiempo real
+            </li>
+            <li>
+              <span class="point-icon">+</span>
+              Seguridad y trazabilidad por usuario
+            </li>
+          </ul>
+
+          <div class="brand-meta">Versión corporativa 2026</div>
+        </div> 
+      </section>
+
+      <section class="form-panel">
+        <div class="form-card">
+          <div class="form-logo-wrap">
+            <img src="${LOGO_URL}" 
+              width="74"
+              alt="Logo QSCI"
+              class="form-logo"
+              onload="this.style.display='block';"
+              onerror="console.error('No se pudo cargar el logo en:', this.src); this.alt='Error al cargar logo';">
+          </div>
+          <h2>Iniciar Sesión</h2>
+          <p class="form-subtitle">Accede a tu cuenta empresarial</p>
+
         <form id="loginForm">
           <div class="form-group">
-            <label class="form-label" for="email">Usuario o Correo Electrónico</label>
+            <label class="form-label" for="email">Usuario</label>
             <div class="input-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -34,7 +64,7 @@ export function renderLogin() {
                 type="text" 
                 id="email" 
                 class="form-input" 
-                placeholder="admin@qscigroup.com"
+                placeholder="Ingrese su usuario"
                 autocomplete="username"
               >
             </div>
@@ -55,6 +85,12 @@ export function renderLogin() {
                 placeholder="••••••••"
                 autocomplete="current-password"
               >
+              <button type="button" id="togglePassword" class="password-toggle" aria-label="Mostrar u ocultar contraseña">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
             </div>
             <div class="error-message" id="passwordError"></div>
           </div>
@@ -67,14 +103,20 @@ export function renderLogin() {
             <a href="#" class="forgot-password">¿Olvidaste tu contraseña?</a>
           </div>
 
-          <button type="submit" class="btn-login" id="loginBtn">Iniciar Sesión</button>
+          <button type="submit" class="btn-login" id="loginBtn">INICIAR SESIÓN</button>
           <div class="error-message" id="generalError" style="margin-top: 12px; text-align: center;"></div>
         </form>
-      </div>
 
-      <div class="login-footer">
-        ¿No tienes una cuenta? <a href="#">Solicitar acceso</a>
-      </div>
+          <div class="security-note">
+            <span class="security-dot"></span>
+            Conexión segura y sesión auditada
+          </div>
+
+          <div class="login-footer">
+            © 2026 QSCI Group. Todos los derechos reservados.
+          </div>
+        </div>
+      </section>
     </div>
   `;
 }
@@ -85,10 +127,19 @@ export function initLoginEvents() {
   const passwordInput = document.getElementById('password') as HTMLInputElement;
   const rememberMeCheckbox = document.getElementById('rememberMe') as HTMLInputElement;
   const loginBtn = document.getElementById('loginBtn') as HTMLButtonElement;
+  const togglePasswordBtn = document.getElementById('togglePassword') as HTMLButtonElement;
 
   // Limpiar errores al escribir
   emailInput.addEventListener('input', () => clearError('email'));
   passwordInput.addEventListener('input', () => clearError('password'));
+
+  if (togglePasswordBtn) {
+    togglePasswordBtn.addEventListener('click', () => {
+      const isPassword = passwordInput.type === 'password';
+      passwordInput.type = isPassword ? 'text' : 'password';
+      togglePasswordBtn.classList.toggle('active', isPassword);
+    });
+  }
 
   // Manejar submit del formulario
   form.addEventListener('submit', async (e) => {
