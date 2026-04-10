@@ -243,13 +243,26 @@ function renderDashboardCharts(): void {
       datasets: [{
         data: [dashboardState.comercial.cotizacionesPendientes, dashboardState.comercial.cotizacionesAceptadas, dashboardState.comercial.ordenesSinGenerar],
         backgroundColor: ['#f59e0b', '#16a34a', '#dc2626'],
-        borderWidth: 0,
+        borderColor: ['#d97706', '#15803d', '#b91c1c'],
+        borderWidth: 3,
+        borderAlign: 'center',
+        spacing: 2,
+        offset: [4, 4, 4],
+        hoverOffset: 7,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
+      },
     },
   });
 
@@ -261,6 +274,8 @@ function renderDashboardCharts(): void {
         label: 'Órdenes',
         data: [dashboardState.ordenesPorTipo.servicio, dashboardState.ordenesPorTipo.producto, dashboardState.ordenesPorTipo.capacitacion, dashboardState.ordenesPorTipo.asesoria],
         backgroundColor: ['#1d4ed8', '#16a34a', '#f59e0b', '#7c3aed'],
+        borderColor: ['#1e40af', '#15803d', '#b45309', '#6d28d9'],
+        borderWidth: 2,
         borderRadius: 10,
       }],
     },
@@ -282,13 +297,26 @@ function renderDashboardCharts(): void {
       datasets: [{
         data: [dashboardState.equipos.alDia, dashboardState.equipos.proximo, dashboardState.equipos.vencido],
         backgroundColor: ['#16a34a', '#f59e0b', '#dc2626'],
-        borderWidth: 0,
+        borderColor: ['#15803d', '#d97706', '#b91c1c'],
+        borderWidth: 3,
+        borderAlign: 'center',
+        spacing: 2,
+        offset: [4, 4, 4],
+        hoverOffset: 7,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
+      },
     },
   });
 }
