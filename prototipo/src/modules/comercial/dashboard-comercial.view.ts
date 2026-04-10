@@ -542,11 +542,28 @@ function renderCharts(data: ComercialDashboardData): void {
       labels: ['Pendientes', 'Aceptadas', 'Rechazadas'],
       datasets: [{
         data: [data.estadisticasCotizaciones.pendientes, data.estadisticasCotizaciones.aceptadas, data.estadisticasCotizaciones.rechazadas],
-        backgroundColor: ['#FEE685', '#7BF1A8', '#FFA2A2'], 
-        borderWidth: 0,
+        backgroundColor: ['#FEE685', '#7BF1A8', '#FFA2A2'],
+        borderColor: ['#f59e0b', '#16a34a', '#dc2626'],
+        borderWidth: 3,
+        borderAlign: 'center',
+        spacing: 2,
+        offset: [4, 4, 4],
+        hoverOffset: 7,
       }],
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
+      },
+    },
   });
 
   createOrReplaceChart('comercial-chart-tendencia', {
@@ -593,7 +610,8 @@ function renderCharts(data: ComercialDashboardData): void {
         label: 'Cotizaciones',
         data: porTipo.map((item) => item.total),
         backgroundColor: ['#A684FF', '#53EAFD', '#F4A8FF', '#8EC5FF'],
-        // backgroundColor: ['#f3e8ff', '#cffafe', '#fbcfe8', '#e0e7ff'],
+        borderColor: ['#7c3aed', '#0891b2', '#db2777', '#2563eb'],
+        borderWidth: 2,
         borderRadius: 10,
       }],
     },
@@ -613,6 +631,8 @@ function renderCharts(data: ComercialDashboardData): void {
         label: 'Valor cotizado',
         data: porCliente.map((item) => item.totalValor),
         backgroundColor: '#0f766e',
+        borderColor: '#0f5f58',
+        borderWidth: 2,
         borderRadius: 10,
       }],
     },
@@ -632,10 +652,27 @@ function renderCharts(data: ComercialDashboardData): void {
       datasets: [{
         data: ordenesPorTipo.map((item) => item.total),
         backgroundColor: ['#8EC5FF', '#A684FF', '#53EAFD', '#F4A8FF'],
-        borderWidth: 0,
+        borderColor: ['#2563eb', '#7c3aed', '#0891b2', '#db2777'],
+        borderWidth: 3,
+        borderAlign: 'center',
+        spacing: 2,
+        offset: [4, 4, 4, 4],
+        hoverOffset: 7,
       }],
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
+      },
+    },
   });
 
   createOrReplaceChart('comercial-chart-prospectos', {
@@ -647,6 +684,8 @@ function renderCharts(data: ComercialDashboardData): void {
           label: 'Contactado',
           data: prospectosPorMes.contactado,
           backgroundColor: '#8EC5FF',
+          borderColor: '#2563eb',
+          borderWidth: 2,
           borderRadius: 8,
           stack: 'prospectos',
         },
@@ -654,6 +693,8 @@ function renderCharts(data: ComercialDashboardData): void {
           label: 'Acepta',
           data: prospectosPorMes.acepta,
           backgroundColor: '#7BF1A8',
+          borderColor: '#16a34a',
+          borderWidth: 2,
           borderRadius: 8,
           stack: 'prospectos',
         },
@@ -661,6 +702,8 @@ function renderCharts(data: ComercialDashboardData): void {
           label: 'No acepta',
           data: prospectosPorMes.noAcepta,
           backgroundColor: '#FEE685',
+          borderColor: '#f59e0b',
+          borderWidth: 2,
           borderRadius: 8,
           stack: 'prospectos',
         },
