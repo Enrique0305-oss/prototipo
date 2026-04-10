@@ -710,7 +710,7 @@ async function cargarOrdenesServicio() {
         '<td>' + fechaAcep + '</td>' +
         '<td>' + fechaTent + '</td>' +
         '<td><strong>S/ ' + total + '</strong></td>' +
-        '<td><span style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;' + (o.estado === 'Aprobado' ? 'background:#dcfce7;color:#166534;' : o.estado === 'Rechazado' ? 'background:#fee2e2;color:#991b1b;' : 'background:#fef3c7;color:#92400e;') + '">' + (o.estado || 'Aprobado') + '</span></td>' +
+        '<td><span style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;' + (o.estado === 'Aprobado' ? 'background:#dcfce7;color:#166534;' : o.estado === 'Rechazado' ? 'background:#fee2e2;color:#991b1b;' : o.estado === 'Programado' ? 'background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;' : 'background:#fef3c7;color:#92400e;') + '">' + (o.estado || 'Aprobado') + '</span></td>' +
         '<td>' +
           '<div style="display:flex; gap:6px;">' +
             // BOTÓN VER (Solo lectura)

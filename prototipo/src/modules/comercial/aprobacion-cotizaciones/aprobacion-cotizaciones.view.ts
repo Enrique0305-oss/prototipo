@@ -237,6 +237,7 @@ function getBadgeTipo(tipo: string): string {
     case 'Servicio': return '<span class="aprob-badge aprob-badge-info">Servicio</span>';
     case 'Producto': return '<span class="aprob-badge aprob-badge-purple">Producto</span>';
     case 'Capacitacion': return '<span class="aprob-badge aprob-badge-cyan">Capacitación</span>';
+    case 'Asesoria': return '<span class="aprob-badge aprob-badge-blue">Asesoría</span>';
     default: return '<span class="aprob-badge aprob-badge-info">' + tipo + '</span>';
   }
 }

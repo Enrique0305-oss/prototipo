@@ -273,6 +273,11 @@
   color: #155e75;
 }
 
+.aprob-badge-blue {
+  background: #fbcfe8;
+  color: #be123c;
+}
+
 /* Action buttons */
 .aprob-actions {
   display: flex;

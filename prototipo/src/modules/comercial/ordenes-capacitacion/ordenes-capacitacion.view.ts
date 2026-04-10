@@ -459,10 +459,11 @@ async function cargarOrdenesCapacitacion() {
 
     const getBadgeClass = (estado: string): string => {
       switch (estado) {
-        case 'Aprobado': return 'oc-badge-success';
-        case 'Pendiente': return 'oc-badge-warning';
-        case 'Rechazado': return 'oc-badge-danger';
-        default: return 'oc-badge-info';
+        case 'Aprobado': return 'background:#dcfce7;color:#166534;';
+        case 'Pendiente': return 'background:#fef3c7;color:#92400e;';
+        case 'Programado': return 'background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;';
+        case 'Rechazado': return 'background:#fee2e2;color:#991b1b;';
+        default: return 'background:#f1f5f9;color:#64748b;';
       }
     };
 
@@ -497,7 +498,7 @@ async function cargarOrdenesCapacitacion() {
         '<td><span class="oc-badge ' + getModalidadBadge(o.modalidad) + '">' + (o.modalidad || '-') + '</span></td>' +
         '<td style="text-align:center;">' + (o.num_participantes || 0) + '</td>' +
         '<td title="' + costoTooltip + '"><strong>S/ ' + costoTotal + '</strong>' + (tieneIgv ? '<br><small style="color:#64748b;">inc. IGV</small>' : '<br><small style="color:#94a3b8;">sin IGV</small>') + '</td>' +
-        '<td><span class="oc-badge ' + getBadgeClass(o.estado) + '">' + (o.estado || 'Aprobado') + '</span></td>' +
+        '<td><span style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;' + getBadgeClass(o.estado) + '">' + (o.estado || 'Aprobado') + '</span></td>' +
         '<td>' +
           '<div class="oc-action-buttons">' +
             '<button class="oc-btn-icon btn-ver-oc" data-id="' + o.id + '" title="Ver/Editar">' +
