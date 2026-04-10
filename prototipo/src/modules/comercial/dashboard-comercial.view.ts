@@ -542,7 +542,7 @@ function renderCharts(data: ComercialDashboardData): void {
       labels: ['Pendientes', 'Aceptadas', 'Rechazadas'],
       datasets: [{
         data: [data.estadisticasCotizaciones.pendientes, data.estadisticasCotizaciones.aceptadas, data.estadisticasCotizaciones.rechazadas],
-        backgroundColor: ['#f59e0b', '#16a34a', '#ef4444'],
+        backgroundColor: ['#FEE685', '#7BF1A8', '#FFA2A2'], 
         borderWidth: 0,
       }],
     },
@@ -592,7 +592,8 @@ function renderCharts(data: ComercialDashboardData): void {
       datasets: [{
         label: 'Cotizaciones',
         data: porTipo.map((item) => item.total),
-        backgroundColor: ['#2563eb', '#16a34a', '#f59e0b', '#7c3aed'],
+        backgroundColor: ['#A684FF', '#53EAFD', '#F4A8FF', '#8EC5FF'],
+        // backgroundColor: ['#f3e8ff', '#cffafe', '#fbcfe8', '#e0e7ff'],
         borderRadius: 10,
       }],
     },
@@ -630,7 +631,7 @@ function renderCharts(data: ComercialDashboardData): void {
       labels: ordenesPorTipo.map((item) => item.tipo),
       datasets: [{
         data: ordenesPorTipo.map((item) => item.total),
-        backgroundColor: ['#1d4ed8', '#16a34a', '#f59e0b', '#db2777'],
+        backgroundColor: ['#8EC5FF', '#A684FF', '#53EAFD', '#F4A8FF'],
         borderWidth: 0,
       }],
     },
@@ -645,21 +646,21 @@ function renderCharts(data: ComercialDashboardData): void {
         {
           label: 'Contactado',
           data: prospectosPorMes.contactado,
-          backgroundColor: '#f59e0b',
+          backgroundColor: '#8EC5FF',
           borderRadius: 8,
           stack: 'prospectos',
         },
         {
           label: 'Acepta',
           data: prospectosPorMes.acepta,
-          backgroundColor: '#16a34a',
+          backgroundColor: '#7BF1A8',
           borderRadius: 8,
           stack: 'prospectos',
         },
         {
           label: 'No acepta',
           data: prospectosPorMes.noAcepta,
-          backgroundColor: '#ef4444',
+          backgroundColor: '#FEE685',
           borderRadius: 8,
           stack: 'prospectos',
         },
@@ -851,7 +852,6 @@ export function renderComercialDashboard() {
         <section style="grid-column:span 6;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Cotizaciones por tipo</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Servicio, producto, capacitación y asesoría.</p></div></div><div style="height:280px;"><canvas id="comercial-chart-tipos"></canvas></div></section>
         <section style="grid-column:span 6;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Top clientes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Clientes con mayor valor cotizado.</p></div></div><div style="height:280px;"><canvas id="comercial-chart-clientes"></canvas></div></section>
         <section style="grid-column:span 5;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Órdenes por tipo</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Servicio, producto, capacitación y asesoría.</p></div></div><div style="height:280px;"><canvas id="comercial-chart-ordenes"></canvas></div></section>
-        <section style="grid-column:span 7;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Clientes potenciales por mes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Distribución mensual por estados programado, acepta y no acepta.</p></div></div><div style="height:320px;"><canvas id="comercial-chart-prospectos"></canvas></div></section>
         <section style="grid-column:span 7;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Clientes potenciales por mes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Distribución mensual por estados contactado, acepta y no acepta.</p></div></div><div style="height:320px;"><canvas id="comercial-chart-prospectos"></canvas></div></section>
         <section style="grid-column:span 7;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Cotizaciones recientes</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Últimos registros comerciales emitidos.</p></div></div><div class="table-container"><table class="data-table"><thead><tr><th>NÚMERO</th><th>CLIENTE</th><th>FECHA</th><th>TIPO</th><th>TOTAL</th><th>ESTADO</th></tr></thead><tbody id="comercial-cotizaciones-body"><tr><td colspan="6" style="text-align:center;padding:24px;color:#64748b;">Cargando cotizaciones...</td></tr></tbody></table></div></section>
         <section style="grid-column:span 5;background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(15,23,42,.05);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;"><div><h3 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">Alertas comerciales</h3><p style="margin:4px 0 0;color:#64748b;font-size:13px;">Puntos que requieren seguimiento.</p></div></div><ul id="comercial-alertas-body" style="margin:0;padding-left:18px;color:#334155;display:flex;flex-direction:column;gap:10px;line-height:1.45;"><li>Cargando alertas...</li></ul></section>
