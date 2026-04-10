@@ -783,8 +783,7 @@ export function renderComercialDashboard() {
     <div id="comercial-dashboard-root" class="comercial-dashboard-shell">
       <div class="page-header-with-breadcrumb">
         <div>
-          <div class="breadcrumb">Dashboard Comercial</div>
-          <h1 style="margin:6px 0 0; font-size:28px; color:#0f172a;">Gestión Comercial</h1>
+          <h1 style="margin:6px 0 0; font-size:28px; color:#0f172a;">Dashboard del Área Comercial</h1>
           <p style="margin:6px 0 0; color:#64748b;">Los KPI, gráficas y tablas se recalculan según el rango de fechas activo.</p>
         </div>
         <div class="page-actions">
