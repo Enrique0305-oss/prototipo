@@ -894,6 +894,28 @@ export function renderEmpleadosTab() {
 // Tab: Reportes
 export function renderReportesTab() {
   return `
+    <style>
+      .rrhh-reportes-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+
+      .rrhh-reportes-grid-bottom {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 24px;
+      }
+
+      @media (max-width: 1100px) {
+        .rrhh-reportes-grid-2,
+        .rrhh-reportes-grid-bottom {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+
     <div class="search-filter-bar">
       <select class="op-filter-select">
         <option>Enero 2025</option>
@@ -913,14 +935,42 @@ export function renderReportesTab() {
       </button>
     </div>
 
-    <div class="stats-row" style="margin-bottom: 24px;">
+    <div class="card" style="margin-bottom: 20px; padding: 18px 20px; border-left: 4px solid #2c4a7c;">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;">
+        <div>
+          <h3 style="margin: 0; font-size: 18px; color: #1a2332;">KPIs Prioritarios de RRHH</h3>
+          <p style="margin: 6px 0 0; color: #64748b; font-size: 13px;">Primero horas trabajadas y tiempo acumulado de tardanza para decisiones de asistencia y productividad.</p>
+        </div>
+        <span style="font-size: 12px; color: #475569; background: #e2e8f0; padding: 6px 10px; border-radius: 999px;">Corte: Enero 2025</span>
+      </div>
+    </div>
+
+    <div class="stat-boxes" style="margin-bottom: 16px;">
       <div class="stat-box">
         <div class="stat-box-icon blue">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         </div>
         <div class="stat-box-content">
-          <div class="stat-box-label">Horas Trabajadas</div>
+          <div class="stat-box-label">Horas Trabajadas Totales</div>
           <div class="stat-box-value">4,256 <span class="stat-box-note">hrs</span></div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-icon blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M7 15l4-4 3 3 4-6"></path></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Horas Efectivas</div>
+          <div class="stat-box-value">3,972 <span class="stat-box-note">hrs netas</span></div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-icon orange">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 7v6l3 3"></path></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Tiempo Total de Tardanza</div>
+          <div class="stat-box-value">18h 42m</div>
         </div>
       </div>
       <div class="stat-box">
@@ -932,6 +982,9 @@ export function renderReportesTab() {
           <div class="stat-box-value">96.8%</div>
         </div>
       </div>
+    </div>
+
+    <div class="stat-boxes" style="margin-bottom: 24px;">
       <div class="stat-box">
         <div class="stat-box-icon orange">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -950,50 +1003,68 @@ export function renderReportesTab() {
           <div class="stat-box-value">12</div>
         </div>
       </div>
+      <div class="stat-box">
+        <div class="stat-box-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"></path><path d="M9 9h6v6H9z"></path></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Tiempo Extra Total</div>
+          <div class="stat-box-value">126h 30m</div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-icon blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M3 10h18"></path></svg>
+        </div>
+        <div class="stat-box-content">
+          <div class="stat-box-label">Jornada Promedio</div>
+          <div class="stat-box-value">8.1h</div>
+        </div>
+      </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+    <div class="rrhh-reportes-grid-2">
       <div class="card">
-        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Asistencia por Departamento</h3>
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Horas y Tardanza por Departamento</h3>
         <div class="table-container">
           <table class="op-table">
             <thead>
               <tr>
                 <th>DEPARTAMENTO</th>
-                <th>EMPLEADOS</th>
+                <th>HORAS</th>
                 <th>ASISTENCIA</th>
+                <th>T. TARDANZA</th>
                 <th>TARDANZAS</th>
-                <th>AUSENCIAS</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td><span class="badge">Campo</span></td>
-                <td>12</td>
+                <td><strong>1,458h</strong></td>
                 <td><strong>95.2%</strong></td>
+                <td>7h 20m</td>
                 <td>18</td>
-                <td>7</td>
               </tr>
               <tr>
                 <td><span class="badge green">Administrativo</span></td>
-                <td>6</td>
+                <td><strong>1,022h</strong></td>
                 <td><strong>98.5%</strong></td>
+                <td>2h 05m</td>
                 <td>5</td>
-                <td>2</td>
               </tr>
               <tr>
-                <td><span class="badge blue">LogÃ­stica</span></td>
-                <td>3</td>
+                <td><span class="badge blue">Logistica</span></td>
+                <td><strong>894h</strong></td>
                 <td><strong>97.1%</strong></td>
+                <td>4h 37m</td>
                 <td>8</td>
-                <td>1</td>
               </tr>
               <tr>
                 <td><span class="badge orange">Ventas</span></td>
-                <td>3</td>
+                <td><strong>882h</strong></td>
                 <td><strong>96.8%</strong></td>
+                <td>4h 40m</td>
                 <td>7</td>
-                <td>2</td>
               </tr>
             </tbody>
           </table>
@@ -1016,7 +1087,7 @@ export function renderReportesTab() {
               <tr>
                 <td>
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">MarÃ­a Soto</div>
+                    <div class="equipment-name">Maria Soto</div>
                   </div>
                 </td>
                 <td><span class="badge green">Admin</span></td>
@@ -1026,7 +1097,7 @@ export function renderReportesTab() {
               <tr>
                 <td>
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">Pedro LÃ³pez</div>
+                    <div class="equipment-name">Pedro Lopez</div>
                   </div>
                 </td>
                 <td><span class="badge">Campo</span></td>
@@ -1036,7 +1107,7 @@ export function renderReportesTab() {
               <tr>
                 <td>
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="equipment-name">Carmen RÃ­os</div>
+                    <div class="equipment-name">Carmen Rios</div>
                   </div>
                 </td>
                 <td><span class="badge orange">Ventas</span></td>
@@ -1059,24 +1130,59 @@ export function renderReportesTab() {
       </div>
     </div>
 
-    <div class="card">
-      <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">HistÃ³rico de Horas Trabajadas (Enero 2025)</h3>
-      <div style="height: 200px; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); border-radius: 8px; display: flex; align-items: flex-end; justify-content: space-around; padding: 20px; gap: 8px;">
-        <div style="text-align: center;">
-          <div style="width: 40px; height: 160px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px; margin-bottom: 8px;"></div>
-          <div style="font-size: 12px; color: #666;">S1</div>
+    <div class="rrhh-reportes-grid-bottom">
+      <div class="card">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Historico de Horas y Tardanza (Enero 2025)</h3>
+        <div style="height: 220px; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); border-radius: 8px; display: flex; align-items: flex-end; justify-content: space-around; padding: 20px; gap: 12px;">
+          <div style="text-align: center;">
+            <div style="display: flex; align-items: flex-end; gap: 6px; margin-bottom: 8px;">
+              <div style="width: 18px; height: 152px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px;"></div>
+              <div style="width: 18px; height: 38px; background: linear-gradient(to top, #d97706, #f59e0b); border-radius: 4px;"></div>
+            </div>
+            <div style="font-size: 12px; color: #666;">S1</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="display: flex; align-items: flex-end; gap: 6px; margin-bottom: 8px;">
+              <div style="width: 18px; height: 140px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px;"></div>
+              <div style="width: 18px; height: 44px; background: linear-gradient(to top, #d97706, #f59e0b); border-radius: 4px;"></div>
+            </div>
+            <div style="font-size: 12px; color: #666;">S2</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="display: flex; align-items: flex-end; gap: 6px; margin-bottom: 8px;">
+              <div style="width: 18px; height: 166px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px;"></div>
+              <div style="width: 18px; height: 33px; background: linear-gradient(to top, #d97706, #f59e0b); border-radius: 4px;"></div>
+            </div>
+            <div style="font-size: 12px; color: #666;">S3</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="display: flex; align-items: flex-end; gap: 6px; margin-bottom: 8px;">
+              <div style="width: 18px; height: 148px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px;"></div>
+              <div style="width: 18px; height: 49px; background: linear-gradient(to top, #d97706, #f59e0b); border-radius: 4px;"></div>
+            </div>
+            <div style="font-size: 12px; color: #666;">S4</div>
+          </div>
         </div>
-        <div style="text-align: center;">
-          <div style="width: 40px; height: 145px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px; margin-bottom: 8px;"></div>
-          <div style="font-size: 12px; color: #666;">S2</div>
-        </div>
-        <div style="text-align: center;">
-          <div style="width: 40px; height: 170px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px; margin-bottom: 8px;"></div>
-          <div style="font-size: 12px; color: #666;">S3</div>
-        </div>
-        <div style="text-align: center;">
-          <div style="width: 40px; height: 155px; background: linear-gradient(to top, #2c4a7c, #4a6fa5); border-radius: 4px; margin-bottom: 8px;"></div>
-          <div style="font-size: 12px; color: #666;">S4</div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #1a1a1a;">Alertas de RRHH</h3>
+        <div style="display: grid; gap: 10px;">
+          <div style="padding: 12px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px;">
+            <div style="font-size: 12px; color: #b91c1c; font-weight: 700; margin-bottom: 4px;">Riesgo alto</div>
+            <div style="font-size: 14px; color: #1f2937;">4 colaboradores superan 90 min de tardanza acumulada.</div>
+          </div>
+          <div style="padding: 12px; border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px;">
+            <div style="font-size: 12px; color: #b45309; font-weight: 700; margin-bottom: 4px;">Seguimiento</div>
+            <div style="font-size: 14px; color: #1f2937;">Ventas concentra 24.9% del total de tardanzas del mes.</div>
+          </div>
+          <div style="padding: 12px; border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 10px;">
+            <div style="font-size: 12px; color: #166534; font-weight: 700; margin-bottom: 4px;">Mejora positiva</div>
+            <div style="font-size: 14px; color: #1f2937;">Asistencia promedio subio 1.7% frente al mes anterior.</div>
+          </div>
+          <div style="padding: 10px 12px; border-radius: 8px; background: #eff6ff; color: #1e3a8a; font-size: 13px;">
+            Recomendacion: priorizar revisiones semanales de tardanza y ajustes de horarios por area.
+          </div>
         </div>
       </div>
     </div>
