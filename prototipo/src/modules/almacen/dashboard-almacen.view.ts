@@ -1,6 +1,7 @@
 import { Chart, registerables } from 'chart.js';
 import type { ChartConfiguration, ChartType } from 'chart.js';
 import { almacenService } from './almacen.service';
+import { ordenCompraService, type OrdenCompra } from './compras/compras.service';
 import { mantenimientoService } from '../../services/mantenimientoService';
 import type { EstadoEquiposOperativo, EstadisticasInventario, EstadisticasMovimientos, Movimiento, Producto, Proveedor } from './almacen.types';
 
@@ -21,6 +22,7 @@ type DashboardData = {
   kardex: Movimiento[];
   estadoEquipos: EstadoEquiposOperativo;
   proveedores: Proveedor[];
+  ordenesCompra: OrdenCompra[];
 };
 
 const chartInstances: Chart[] = [];
@@ -260,7 +262,48 @@ function getEquipmentSummary(estadoEquipos: EstadoEquiposOperativo) {
   ];
 }
 
-function getSupplierSummary(proveedores: Proveedor[]) {
+function unwrapArrayResponse<T>(response: unknown): T[] {
+  if (Array.isArray(response)) return response as T[];
+
+  const r = response as any;
+  if (Array.isArray(r?.data)) return r.data as T[];
+  if (Array.isArray(r?.data?.data)) return r.data.data as T[];
+  if (Array.isArray(r?.items)) return r.items as T[];
+
+  return [];
+}
+
+function getSupplierSummary(proveedores: Proveedor[], ordenesCompra: OrdenCompra[]) {
+  const comprasValidas = ordenesCompra.filter((orden) => orden.estado !== 'Anulado');
+
+  if (comprasValidas.length > 0) {
+    const proveedoresMap = new Map<number, Proveedor>(proveedores.map((p) => [p.id, p]));
+    const resumen = new Map<number, { label: string; value: number; last?: string }>();
+
+    comprasValidas.forEach((orden) => {
+      const proveedorId = toNumber(orden.id_proveedor);
+      if (proveedorId <= 0) return;
+
+      const proveedor = proveedoresMap.get(proveedorId);
+      const label = orden.proveedor?.razon_social || proveedor?.razon_social || `Proveedor #${proveedorId}`;
+      const actual = resumen.get(proveedorId) || { label, value: 0, last: undefined };
+
+      // Ranking por cantidad de OC por proveedor.
+      actual.value += 1;
+
+      const fechaOrden = orden.fecha_compra;
+      if (!actual.last || (fechaOrden && fechaOrden > actual.last)) {
+        actual.last = fechaOrden;
+      }
+
+      resumen.set(proveedorId, actual);
+    });
+
+    return Array.from(resumen.values())
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }
+
   return proveedores
     .map((proveedor) => ({
       label: proveedor.razon_social,
@@ -426,7 +469,7 @@ async function loadDashboardData(range: DashboardRange): Promise<DashboardData> 
     fecha_fin: range.fechaHasta,
   };
 
-  const [inventario, productos, kardex, estadoEquipos, proveedores] = await Promise.all([
+  const [inventario, productos, kardex, estadoEquipos, proveedores, ordenesCompraRaw] = await Promise.all([
     safeLoad(almacenService.getEstadisticasInventario(), {
       stock_total: 0,
       valor_total: 0,
@@ -444,7 +487,10 @@ async function loadDashboardData(range: DashboardRange): Promise<DashboardData> 
       realizados: 0,
     } as EstadoEquiposOperativo),
     safeLoad(almacenService.getProveedores({}), [] as Proveedor[]),
+    safeLoad(ordenCompraService.getAll({}), [] as unknown),
   ]);
+
+  const ordenesCompra = unwrapArrayResponse<OrdenCompra>(ordenesCompraRaw);
 
   const movimientos = buildMovementSummary(kardex);
 
@@ -455,6 +501,7 @@ async function loadDashboardData(range: DashboardRange): Promise<DashboardData> 
     kardex,
     estadoEquipos,
     proveedores,
+    ordenesCompra,
   };
 }
 
@@ -465,7 +512,7 @@ function renderCharts(data: DashboardData): void {
   const weeklyTrend = getTrendByRange(data.kardex, dashboardRange.fechaDesde, dashboardRange.fechaHasta);
   const categorySummary = getCategorySummary(data.productos);
   const equipmentSummary = getEquipmentSummary(data.estadoEquipos);
-  const supplierSummary = getSupplierSummary(data.proveedores);
+  const supplierSummary = getSupplierSummary(data.proveedores, data.ordenesCompra);
 
   createOrReplaceChart('almacen-chart-movimientos', {
     type: 'doughnut',
@@ -474,14 +521,26 @@ function renderCharts(data: DashboardData): void {
       datasets: [{
         data: [movementCounts.Entrada, movementCounts.Salida],
         backgroundColor: ['#7BF1A8', '#FFA2A2'],
-        borderWidth: 0,
+        borderColor: ['#16a34a', '#dc2626'],
+        borderWidth: 3,
+        borderAlign: 'center',
+        borderRadius: 10,
+        spacing: 2,
+        offset: [4, 4],
+        hoverOffset: 7,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'bottom' },
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
       },
     },
   });
@@ -531,12 +590,16 @@ function renderCharts(data: DashboardData): void {
           label: 'Stock',
           data: categorySummary.map((item) => item.stock),
           backgroundColor: '#16a34a',
+          borderColor: '#15803d',
+          borderWidth: 2,
           borderRadius: 10,
         },
         {
           label: 'Valor total',
           data: categorySummary.map((item) => item.valor),
           backgroundColor: '#f59e0b',
+          borderColor: '#b45309',
+          borderWidth: 2,
           borderRadius: 10,
         },
       ],
@@ -565,15 +628,27 @@ function renderCharts(data: DashboardData): void {
       labels: equipmentSummary.map((item) => item.label),
       datasets: [{
         data: equipmentSummary.map((item) => item.value),
-        backgroundColor: ['#2563eb', '#16a34a', '#f59e0b', '#ef4444'],
-        borderWidth: 0,
+        backgroundColor: ['#93c5fd', '#86efac', '#fcd34d'],
+        borderColor: ['#2563eb', '#16a34a', '#f59e0b'],
+        borderWidth: 3,
+        borderAlign: 'center',
+        borderRadius: 10,
+        spacing: 2,
+        offset: [4, 4, 4],
+        hoverOffset: 7,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'bottom' },
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'rectRounded',
+          },
+        },
       },
     },
   });
@@ -583,9 +658,11 @@ function renderCharts(data: DashboardData): void {
     data: {
       labels: supplierSummary.map((item) => item.label),
       datasets: [{
-        label: 'Compras',
+        label: 'Órdenes de compra',
         data: supplierSummary.map((item) => item.value),
         backgroundColor: '#7c3aed',
+        borderColor: '#6d28d9',
+        borderWidth: 2,
         borderRadius: 10,
       }],
     },
@@ -659,13 +736,13 @@ function renderLists(data: DashboardData): void {
   }
 
   if (proveedoresBody) {
-    const topProveedores = getSupplierSummary(data.proveedores);
+    const topProveedores = getSupplierSummary(data.proveedores, data.ordenesCompra);
 
     proveedoresBody.innerHTML = topProveedores.length > 0
       ? topProveedores.map((proveedor) => `
         <tr>
           <td>${proveedor.label}</td>
-          <td>${proveedor.value}</td>
+          <td>${new Intl.NumberFormat('es-PE').format(toNumber(proveedor.value))}</td>
           <td>${formatDate(proveedor.last)}</td>
         </tr>
       `).join('')
@@ -991,7 +1068,7 @@ export function renderAlmacenDashboard() {
               <thead>
                 <tr>
                   <th>PROVEEDOR</th>
-                  <th>TOTAL COMPRAS</th>
+                  <th>N° ÓRDENES</th>
                   <th>ÚLTIMA COMPRA</th>
                 </tr>
               </thead>
