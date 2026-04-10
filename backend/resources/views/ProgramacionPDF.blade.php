@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Programación de Servicios — {{ $titulo }}</title>
+    <title>Programacion Operativa — {{ $titulo }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Arial', sans-serif; color: #333; line-height: 1.4; padding: 15px; font-size: 11px; }
@@ -184,7 +184,7 @@
             </div>
         @endif
 
-        <div class="main-title">{{ $vista === 'diaria' ? 'HOJA OPERATIVA DEL DÍA' : 'PROGRAMACIÓN DE SERVICIOS' }}</div>
+        <div class="main-title">{{ $vista === 'diaria' ? 'HOJA OPERATIVA DEL DIA' : 'PROGRAMACION OPERATIVA' }}</div>
         <div class="sub-title">{{ $titulo }}</div>
 
         {{-- RESUMEN ESTADÍSTICO --}}
@@ -342,7 +342,7 @@
 
                 <div class="week-day-header {{ $isToday ? 'today-header' : '' }}">
                     {{ $diasLabel[$i] }} {{ $dia->format('d/m/Y') }}
-                    ({{ $servicios->count() }} servicio{{ $servicios->count() !== 1 ? 's' : '' }})
+                    ({{ $servicios->count() }} programacion{{ $servicios->count() !== 1 ? 'es' : '' }})
                 </div>
 
                 @if($servicios->count() > 0)
@@ -409,7 +409,7 @@
                 <div class="ops-summary">
                     <div class="ops-summary-item">
                         <div class="ops-summary-value">{{ $programaciones->count() }}</div>
-                        <div class="ops-summary-label">Servicios del día</div>
+                        <div class="ops-summary-label">Programaciones del dia</div>
                     </div>
                     <div class="ops-summary-item">
                         <div class="ops-summary-value">{{ $tecnicosUnicos }}</div>
@@ -486,7 +486,7 @@
                 @endforeach
             @else
                 <div style="padding:30px; text-align:center; color:#999; font-size:14px;">
-                    No hay servicios programados para este día.
+                    No hay programaciones para este dia.
                 </div>
             @endif
         @endif

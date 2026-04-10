@@ -15,6 +15,8 @@ use App\Models\Vehiculo;
 use App\Models\Servicio;
 use App\Models\OrdenCapacitacionAuditoria;
 use App\Models\ProgramacionVisita;
+use App\Models\ProgramacionFabricacion;
+use App\Models\ProgramacionOtro;
 use App\Services\ScheduleConflictService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1083,6 +1085,16 @@ class ProgramacionServicioController extends Controller
             'vehiculo',
         ]);
 
+        $queryFabricaciones = ProgramacionFabricacion::with([
+            'tecnico',
+            'ordenFabricacion',
+        ]);
+
+        $queryOtros = ProgramacionOtro::with([
+            'tecnico',
+            'vehiculo',
+        ]);
+
         $orientation = 'landscape';
         $titulo = '';
         $fechaInicio = null;
@@ -1099,6 +1111,10 @@ class ProgramacionServicioController extends Controller
                 ->whereYear('fecha_programada', $anio);
             $queryVisitas->whereMonth('fecha_programada', $mes)
                 ->whereYear('fecha_programada', $anio);
+            $queryFabricaciones->whereMonth('fecha_programada', $mes)
+                ->whereYear('fecha_programada', $anio);
+            $queryOtros->whereMonth('fecha_programada', $mes)
+                ->whereYear('fecha_programada', $anio);
             $titulo = $monthNames[$mes - 1] . ' ' . $anio;
         } elseif ($vista === 'semanal') {
             // Se pasa fecha_inicio (lunes de la semana)
@@ -1106,11 +1122,15 @@ class ProgramacionServicioController extends Controller
             $fechaFin = Carbon::parse($fechaInicio)->addDays(6)->format('Y-m-d');
             $queryServicios->whereBetween('fecha_programada', [$fechaInicio, $fechaFin]);
             $queryVisitas->whereBetween('fecha_programada', [$fechaInicio, $fechaFin]);
+            $queryFabricaciones->whereBetween('fecha_programada', [$fechaInicio, $fechaFin]);
+            $queryOtros->whereBetween('fecha_programada', [$fechaInicio, $fechaFin]);
             $titulo = 'Semana del ' . Carbon::parse($fechaInicio)->format('d/m/Y') . ' al ' . Carbon::parse($fechaFin)->format('d/m/Y');
         } elseif ($vista === 'diaria') {
             $fecha = $request->input('fecha', now()->format('Y-m-d'));
             $queryServicios->whereDate('fecha_programada', $fecha);
             $queryVisitas->whereDate('fecha_programada', $fecha);
+            $queryFabricaciones->whereDate('fecha_programada', $fecha);
+            $queryOtros->whereDate('fecha_programada', $fecha);
             $titulo = Carbon::parse($fecha)->locale('es')->isoFormat('dddd D [de] MMMM [de] YYYY');
             $orientation = 'landscape';
         }
@@ -1127,6 +1147,16 @@ class ProgramacionServicioController extends Controller
                 $q->where('id_tecnico_asignado', $idTec)
                     ->orWhereJsonContains('tecnicos_ids', (int) $idTec);
             });
+
+            $queryFabricaciones->where(function ($q) use ($idTec) {
+                $q->where('id_tecnico_asignado', $idTec)
+                    ->orWhereJsonContains('tecnicos_ids', (int) $idTec);
+            });
+
+            $queryOtros->where(function ($q) use ($idTec) {
+                $q->where('id_tecnico_asignado', $idTec)
+                    ->orWhereJsonContains('tecnicos_ids', (int) $idTec);
+            });
         }
 
         // Filtro opcional: estado
@@ -1134,6 +1164,8 @@ class ProgramacionServicioController extends Controller
             $estados = explode(',', $request->estado);
             $queryServicios->whereIn('estado_ejecucion', $estados);
             $queryVisitas->whereIn('estado_ejecucion', $estados);
+            $queryFabricaciones->whereIn('estado_ejecucion', $estados);
+            $queryOtros->whereIn('estado_ejecucion', $estados);
         }
 
         $programacionesServicios = $queryServicios->orderBy('fecha_programada', 'asc')
@@ -1141,6 +1173,14 @@ class ProgramacionServicioController extends Controller
             ->get();
 
         $programacionesVisitas = $queryVisitas->orderBy('fecha_programada', 'asc')
+            ->orderBy('hora_inicio', 'asc')
+            ->get();
+
+        $programacionesFabricacion = $queryFabricaciones->orderBy('fecha_programada', 'asc')
+            ->orderBy('hora_inicio', 'asc')
+            ->get();
+
+        $programacionesOtros = $queryOtros->orderBy('fecha_programada', 'asc')
             ->orderBy('hora_inicio', 'asc')
             ->get();
 
@@ -1153,6 +1193,24 @@ class ProgramacionServicioController extends Controller
                 }
                 return $ids;
             })
+            ->concat(
+                $programacionesFabricacion->flatMap(function ($fabricacion) {
+                    $ids = collect($fabricacion->tecnicos_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0);
+                    if (!empty($fabricacion->id_tecnico_asignado)) {
+                        $ids->push((int) $fabricacion->id_tecnico_asignado);
+                    }
+                    return $ids;
+                })
+            )
+            ->concat(
+                $programacionesOtros->flatMap(function ($otro) {
+                    $ids = collect($otro->tecnicos_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0);
+                    if (!empty($otro->id_tecnico_asignado)) {
+                        $ids->push((int) $otro->id_tecnico_asignado);
+                    }
+                    return $ids;
+                })
+            )
             ->unique()
             ->values();
 
@@ -1187,8 +1245,68 @@ class ProgramacionServicioController extends Controller
             return $visita;
         });
 
+        $fabricacionesCompatibles = $programacionesFabricacion->map(function ($fabricacion) use ($tecnicosMap) {
+            $ids = collect($fabricacion->tecnicos_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0);
+            if (!empty($fabricacion->id_tecnico_asignado)) {
+                $ids->push((int) $fabricacion->id_tecnico_asignado);
+            }
+            $ids = $ids->unique()->values();
+
+            $tecnicos = $ids
+                ->map(fn($id) => $tecnicosMap->get($id))
+                ->filter()
+                ->values();
+
+            $fabricacion->setRelation('tecnicos', $tecnicos);
+            $fabricacion->setRelation('insumos', collect());
+            $fabricacion->setRelation('ordenServicio', (object) [
+                'cliente' => (object) [
+                    'nombre_empresa' => 'PRODUCTOS',
+                    'persona_contacto' => null,
+                ],
+            ]);
+            $fabricacion->setRelation('servicio', (object) [
+                'nombre' => 'Fabricacion',
+            ]);
+            $fabricacion->local_sede = $fabricacion->local_sede ?? null;
+            $fabricacion->direccion_completa = $fabricacion->direccion_completa ?? null;
+
+            return $fabricacion;
+        });
+
+        $otrosCompatibles = $programacionesOtros->map(function ($otro) use ($tecnicosMap) {
+            $ids = collect($otro->tecnicos_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0);
+            if (!empty($otro->id_tecnico_asignado)) {
+                $ids->push((int) $otro->id_tecnico_asignado);
+            }
+            $ids = $ids->unique()->values();
+
+            $tecnicos = $ids
+                ->map(fn($id) => $tecnicosMap->get($id))
+                ->filter()
+                ->values();
+
+            $otro->setRelation('tecnicos', $tecnicos);
+            $otro->setRelation('insumos', collect());
+            $otro->setRelation('ordenServicio', (object) [
+                'cliente' => (object) [
+                    'nombre_empresa' => 'OTROS',
+                    'persona_contacto' => null,
+                ],
+            ]);
+            $otro->setRelation('servicio', (object) [
+                'nombre' => 'Otros',
+            ]);
+            $otro->local_sede = $otro->ubicacion_manual ?? null;
+            $otro->direccion_completa = $otro->ubicacion_manual ?? null;
+
+            return $otro;
+        });
+
         $programaciones = $programacionesServicios
             ->concat($visitasCompatibles)
+            ->concat($fabricacionesCompatibles)
+            ->concat($otrosCompatibles)
             ->sort(function ($a, $b) {
                 $fechaA = Carbon::parse($a->fecha_programada)->format('Y-m-d');
                 $fechaB = Carbon::parse($b->fecha_programada)->format('Y-m-d');
