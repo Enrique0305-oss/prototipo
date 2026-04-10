@@ -14,6 +14,8 @@
         .title-row { background: #d9e2f3; font-weight: bold; }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
+        .bg-blue { background-color: #d9e2f3; font-weight: bold; }
+        .n-orden { color: #ff0000; font-size: 13px; font-weight: bold; }
         .observation-box { background-color: #fde9d9; border: 1px solid #000; padding: 8px; margin-top: 12px; font-size: 9px; }
     </style>
 </head>
@@ -26,6 +28,16 @@
             : ($orden->exponente ? trim(($orden->exponente->nombre ?? '') . ' ' . ($orden->exponente->apellidos ?? '')) : '---');
     @endphp
 
+    @php
+    // Accedemos a la cotización a través de la relación de la orden
+    $cotizacionRelacionada = $orden->cotizacion;
+    
+    // Obtenemos el primer detalle de esa cotización
+    $detallePlan = $cotizacionRelacionada ? $cotizacionRelacionada->detalles->first() : null;
+    
+    // Extraemos los meses
+    $tiempoImplementacion = $detallePlan?->meses_implementacion;
+@endphp
     <table class="no-border">
         <tr>
             <td style="width: 25%; text-align: left">
@@ -47,10 +59,20 @@
         </tr>
     </table>
 
+    {{-- NÚMERO DE ORDEN --}}
     <table>
-        <tr class="title-row">
-            <td colspan="2">ORDEN DE ASESORIA</td>
+        <tr class="bg-blue">
+            <td style="width: 75%;" class="text-blue">ORDEN DE SERVICIO DE ASESORIA</td>
+            <td style="width: 25%; text-align: center;">
+                <span class="n-orden">N&deg; {{ $orden->numero_orden }}</span>
+            </td>
         </tr>
+    </table>
+
+    {{-- ESPACIADOR DE SEGURIDAD --}}
+    <div style="height: 10px; width: 100%;"></div>
+    
+    <table>
         <tr>
             <td class="label">Cliente</td>
             <td>{{ $orden->cliente->nombre_empresa ?? '---' }}</td>
@@ -72,8 +94,10 @@
             <td>{{ $fechaServicio ? $fechaServicio->format('d/m/Y') : '---' }}</td>
         </tr>
         <tr>
-            <td class="label">Hora</td>
-            <td>{{ $orden->hora_servicio ? \Carbon\Carbon::parse($orden->hora_servicio)->format('H:i') : '---' }}</td>
+            <td class="label">Meses de implementación</td>
+            <td>
+                {{ $tiempoImplementacion ? $tiempoImplementacion . ($tiempoImplementacion == 1 ? ' mes' : ' meses') : '---' }}
+            </td>
         </tr>
         <tr>
             <td class="label">Total</td>
