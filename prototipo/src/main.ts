@@ -214,9 +214,7 @@ function getMainContent() {
     return html;
   } else if (activeMenu === 'Programaciones') {
     if (activeSubMenu === 'Dashboard Servicio' || !activeSubMenu) {
-      const html = renderDashboardProgramacionServicio();
-      setTimeout(() => initDashboardProgramacionServicioEvents(), 0);
-      return html;
+      return renderDashboardProgramacionServicio();
     }
 
     if (activeSubMenu === 'Programación Capacitación/Asesoría') {
