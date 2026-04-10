@@ -1,14 +1,22 @@
 import './login.css';
 import { authService } from './auth.service';
 import type { Credenciales, LoginError } from './auth.types';
+const LOGO_URL = "http://localhost:8000/images/menu.png";
 
 export function renderLogin() {
   return `
     <div class="login-container">
       <div class="login-header">
         <div class="logo-container">
-          <div class="logo-text">QG</div>
-        </div>
+          <div class="logo-text">
+            <img src="${LOGO_URL}" 
+            width="100" 
+             alt="Logo QSCI"
+             style="display: block; max-width: 90%; height: auto; object-fit: contain;"
+             onload="this.style.display='block';"
+             onerror="console.error('No se pudo cargar el logo en:', this.src); this.alt='Error al cargar logo';">
+          </div>
+        </div> 
         <h1>QSCI Group</h1>
         <p>Panel de Administración</p>
       </div>
