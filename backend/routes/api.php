@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\ClienteController;
 use App\Http\Controllers\API\CotizacionController;
@@ -48,6 +49,26 @@ use App\Http\Controllers\API\InventarioAjusteController;
 
 // Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
+    Route::get('/health', function () {
+        $dbOk = true;
+        $dbMessage = 'ok';
+
+        try {
+            DB::connection()->getPdo();
+        } catch (\Throwable $e) {
+            $dbOk = false;
+            $dbMessage = $e->getMessage();
+        }
+
+        return response()->json([
+            'success' => true,
+            'app' => 'ok',
+            'db' => $dbOk,
+            'db_message' => $dbMessage,
+            'timestamp' => now()->toIso8601String(),
+        ], $dbOk ? 200 : 503);
+    });
+
     Route::post('/auth/login', [AuthController::class, 'login']);
 });
 
