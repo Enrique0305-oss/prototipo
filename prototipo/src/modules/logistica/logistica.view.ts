@@ -353,12 +353,12 @@ export function renderServiciosDisponiblesTab() {
     </div>
 
     <!-- ============================================ -->
-    <!-- CAT├üLOGO DE CAPACITACIONES Y Asesorias -->
+    <!-- CATALOGO DE CAPACITACIONES Y Asesorias -->
     <!-- ============================================ -->
     <div style="margin-top:40px;padding-top:32px;border-top:2px solid #e2e8f0;">
       <h2 style="font-size:20px;font-weight:700;color:#1a2332;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-        Cat├ílogo de Capacitaciones y Asesorias
+        Catalogo de Capacitaciones y Asesorias
       </h2>
 
       <div class="search-filter-bar">
@@ -369,7 +369,7 @@ export function renderServiciosDisponiblesTab() {
         <select class="filter-select" id="catalogo-filter-tipo">
           <option value="">Todos los tipos</option>
           <option value="Capacitaci├│n">Capacitaciones</option>
-          <option value="Asesor├¡a">Asesor├¡a</option>
+          <option value="Asesor├¡a">Asesoría</option>
         </select>
         <select class="filter-select" id="catalogo-filter-estado">
           <option value="activo">Activos</option>
@@ -387,7 +387,7 @@ export function renderServiciosDisponiblesTab() {
       </div>
 
       <div class="services-grid" id="catalogo-grid">
-        <div style="text-align:center;padding:40px;color:#64748b;grid-column:1/-1;">Cargando cat├ílogo...</div>
+        <div style="text-align:center;padding:40px;color:#64748b;grid-column:1/-1;">Cargando catalogo...</div>
       </div>
 
       <div class="pagination" id="catalogo-pagination">
@@ -1192,7 +1192,7 @@ async function cargarCatalogo() {
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px;display:block;">
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
           </svg>
-          <p>No se encontraron capacitaciones ni auditor├¡as</p>
+          <p>No se encontraron capacitaciones ni auditorías</p>
         </div>`;
       return;
     }
