@@ -72,6 +72,13 @@ const chartInstances: Chart[] = [];
 let isLoading = false;
 let dashboardSource: ComercialDashboardSourceData | null = null;
 let dashboardRange: ComercialDateRange = getDefaultDashboardRange();
+const COMERCIAL_DASHBOARD_CACHE_KEY = 'qsci_dashboard_comercial_cache';
+const COMERCIAL_DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+
+type ComercialDashboardCacheEntry = {
+  timestamp: number;
+  source: ComercialDashboardSourceData;
+};
 
 function toNumber(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -340,6 +347,35 @@ function getClienteFechaNormalizada(cliente: Cliente): string {
   return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function readComercialDashboardCache(): ComercialDashboardSourceData | null {
+  try {
+    const raw = sessionStorage.getItem(COMERCIAL_DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as ComercialDashboardCacheEntry;
+    if (!parsed?.timestamp || Date.now() - parsed.timestamp > COMERCIAL_DASHBOARD_CACHE_TTL_MS) {
+      sessionStorage.removeItem(COMERCIAL_DASHBOARD_CACHE_KEY);
+      return null;
+    }
+
+    return parsed.source;
+  } catch {
+    return null;
+  }
+}
+
+function saveComercialDashboardCache(source: ComercialDashboardSourceData): void {
+  try {
+    const entry: ComercialDashboardCacheEntry = {
+      timestamp: Date.now(),
+      source,
+    };
+    sessionStorage.setItem(COMERCIAL_DASHBOARD_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // ignore cache failures
+  }
+}
+
 function getClientesPotencialesPorMes(clientes: Cliente[], range: ComercialDateRange) {
   const normalizado = normalizeRange(range);
   const filtrados = filterByRange(clientes, getClienteFecha, normalizado);
@@ -485,6 +521,12 @@ function safeLoad<T>(promise: Promise<T>, fallback: T): Promise<T> {
 }
 
 async function loadDashboardData(): Promise<ComercialDashboardData> {
+  const cached = readComercialDashboardCache();
+  if (cached) {
+    dashboardSource = cached;
+    return buildDashboardData(cached, dashboardRange);
+  }
+
   const [cotizacionesRes, clientesRes, ordServRes, ordProdRes, ordCapRes, ordAsesRes] = await Promise.all([
     safeLoad(cotizacionService.getAll(), { success: true, data: [] } as any),
     safeLoad(clienteService.getAll({ per_page: 500 } as any), { success: true, data: [] } as any),
@@ -504,6 +546,7 @@ async function loadDashboardData(): Promise<ComercialDashboardData> {
   };
 
   dashboardSource = source;
+  saveComercialDashboardCache(source);
   return buildDashboardData(source, dashboardRange);
 }
 

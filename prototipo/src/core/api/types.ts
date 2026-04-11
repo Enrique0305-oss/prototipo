@@ -331,7 +331,7 @@ export interface MantenimientoVehiculo {
   updated_at?: string;
 }
 
-export interface MantenimientoVehiculoFilters extends FilterParams {
+export interface MantenimientoVehiculoFilters extends Omit<FilterParams, 'orden'> {
   id_vehiculo?: number;
   estado?: 'Programado' | 'Realizado' | 'Vencido' | 'Cancelado' | 'todos';
   fecha_desde?: string;

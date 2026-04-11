@@ -593,16 +593,39 @@ class CotizacionController extends Controller
             default => 'CotizacionPDF',
         };
 
-        $pdf = Pdf::loadView($pdfView, compact('cotizacion', 'exponentes', 'gerenteComercial'))
-                  ->setPaper('a4', 'portrait');
+        try {
+            if (!view()->exists($pdfView)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Vista PDF no encontrada: {$pdfView}"
+                ], 500);
+            }
 
-        // Si se pasa parámetro descargar=true, descarga automáticamente
-        // Si no, muestra en navegador
-        if ($request->get('descargar') === 'true') {
-            return $pdf->download('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
+            $pdf = Pdf::loadView($pdfView, compact('cotizacion', 'exponentes', 'gerenteComercial'))
+                    ->setPaper('a4', 'portrait');
+
+            // Si se pasa parámetro descargar=true, descarga automáticamente
+            // Si no, muestra en navegador
+            if ($request->get('descargar') === 'true') {
+                return $pdf->download('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
+            }
+
+            return $pdf->stream('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
+        } catch (\Throwable $e) {
+            \Log::error('Error generando PDF de cotizacion', [
+                'cotizacion_id' => $id,
+                'tipo_cotizacion' => $cotizacion->tipo_cotizacion ?? null,
+                'pdf_view' => $pdfView,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo generar el PDF de la cotización',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        return $pdf->stream('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
     }
 
     /**

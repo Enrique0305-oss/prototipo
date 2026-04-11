@@ -270,7 +270,7 @@ class EquipoController extends Controller
             'message' => 'Imagen subida exitosamente',
             'data' => [
                 'imagen' => $ruta,
-                'imagen_url' => asset('storage/' . $ruta),
+                'imagen_url' => url('media/' . ltrim($ruta, '/')),
             ]
         ]);
     }

@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use App\Models\Cotizacion;
 use App\Http\Controllers\API\CotizacionController;
 use App\Models\OrdenServicio;
@@ -10,6 +11,22 @@ use App\Http\Controllers\API\OrdenCapacitacionAuditoriaController;
 Route::get('/', function () {
     return view('welcome');
 });
+
+// Servir imágenes públicas desde storage/app/public sin depender de symlink.
+Route::get('/media/{path}', function (string $path) {
+    $path = ltrim($path, '/');
+
+    if (!Storage::disk('public')->exists($path)) {
+        abort(404);
+    }
+
+    $mimeType = Storage::disk('public')->mimeType($path) ?: 'application/octet-stream';
+
+    return response(Storage::disk('public')->get($path), 200, [
+        'Content-Type' => $mimeType,
+        'Cache-Control' => 'public, max-age=604800',
+    ]);
+})->where('path', '.*');
 
 // Ruta para generar PDF de cotización
 Route::get('/cotizacion/pdf/{id}', [CotizacionController::class, 'generarPDF']);

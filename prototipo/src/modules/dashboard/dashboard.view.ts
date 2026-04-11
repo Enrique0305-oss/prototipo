@@ -77,6 +77,13 @@ const dashboardState: DashboardMainData = {
 
 let dashboardLoading = false;
 const chartInstances: Chart[] = [];
+const DASHBOARD_CACHE_KEY = 'qsci_dashboard_main_cache';
+const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+
+type DashboardCacheEntry = {
+  timestamp: number;
+  data: DashboardMainData;
+};
 
 function toNumber(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -138,6 +145,35 @@ function getMainKpiValue(id: string, fallback: string): string {
   return el?.textContent?.trim() || fallback;
 }
 
+function readDashboardCache(): DashboardMainData | null {
+  try {
+    const raw = sessionStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as DashboardCacheEntry;
+    if (!parsed?.timestamp || Date.now() - parsed.timestamp > DASHBOARD_CACHE_TTL_MS) {
+      sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+      return null;
+    }
+
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function saveDashboardCache(data: DashboardMainData): void {
+  try {
+    const entry: DashboardCacheEntry = {
+      timestamp: Date.now(),
+      data,
+    };
+    sessionStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // ignore cache failures
+  }
+}
+
 function navigateUsingSidebar(menuName: string, submenuName: string, afterNavigate?: () => void): void {
   const navigator = window.navigateToModule;
   if (navigator) {
@@ -174,6 +210,11 @@ async function safeLoad<T>(promise: Promise<T>, fallback: T): Promise<T> {
 }
 
 async function loadDashboardData(): Promise<DashboardMainData> {
+  const cached = readDashboardCache();
+  if (cached) {
+    return cached;
+  }
+
   const [estadInventario, alertasMantenimiento, estadoEquipos, estadCotizaciones, movimientos, ordServRes, ordProdRes, ordCapRes, ordAsesRes, alertasSinOrden] = await Promise.all([
     safeLoad(almacenService.getEstadisticasInventario(), { stock_total: 0, valor_total: 0, productos_bajo_stock: 0, categorias: 0 } as any),
     safeLoad(mantenimientoService.getAlertasMantenimiento(), { total_alertas: 0, proximos: 0, vencidos: 0 } as any),
@@ -355,6 +396,7 @@ async function refreshDashboard(): Promise<void> {
 
   try {
     const data = await loadDashboardData();
+    saveDashboardCache(data);
     dashboardState.almacen = data.almacen;
     dashboardState.comercial = data.comercial;
     dashboardState.equipos = data.equipos;

@@ -3392,6 +3392,9 @@ async function guardarCotizacion(tipoFijo?: string) {
             await cotizacionService.downloadPDF(nuevaId);
           } catch (e) {
             console.error('Error generando PDF:', e);
+            const pdfError = e as any;
+            const detalle = pdfError?.data?.error || pdfError?.data?.message || 'Revisa logs del backend para más detalle';
+            mostrarToast('warning', 'PDF no generado', `La cotización se guardó, pero falló el PDF: ${detalle}`);
           }
 
           // Guardar receta de servicio si tipo es Servicio y hay receta

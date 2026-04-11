@@ -1,7 +1,7 @@
 import type { Asistencia, Empleado, Horario, ReporteAsistencia } from './recursos-humanos.types';
 
 export class RecursosHumanosService {
-  private baseURL = 'http://localhost:3000/api';
+  private baseURL = 'http://backend.qsci-system.com/api';
 
   async getAsistencias(filtros?: {
     fecha?: Date;

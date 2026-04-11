@@ -26,6 +26,50 @@ type RecetaDraftItem = {
 let recetaDraftNuevo: RecetaDraftItem[] = [];
 let recetaDraftEditar: RecetaDraftItem[] = [];
 
+function getBackendOrigin(): string {
+  const fallback = 'https://backend.qsci-system.com';
+  const apiBase = (import.meta.env.VITE_API_URL || `${fallback}/api/v1`).trim();
+
+  try {
+    return new URL(apiBase).origin;
+  } catch {
+    return fallback;
+  }
+}
+
+function resolverImagenProductoUrl(producto: Producto): string | null {
+  const backendOrigin = getBackendOrigin();
+  const imagenUrl = (producto.imagen_url || '').trim();
+
+  if (imagenUrl) {
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(imagenUrl)) {
+      try {
+        const parsed = new URL(imagenUrl);
+        return `${backendOrigin}${parsed.pathname}`;
+      } catch {
+        return imagenUrl;
+      }
+    }
+
+    if (/^https?:\/\//i.test(imagenUrl)) {
+      return imagenUrl;
+    }
+
+    if (imagenUrl.startsWith('/')) {
+      return `${backendOrigin}${imagenUrl}`;
+    }
+
+    return `${backendOrigin}/storage/${imagenUrl.replace(/^storage\//, '')}`;
+  }
+
+  if (producto.imagen) {
+    const cleanPath = producto.imagen.replace(/^\/+/, '').replace(/^storage\//, '');
+    return `${backendOrigin}/storage/${cleanPath}`;
+  }
+
+  return null;
+}
+
 const UNIDAD_OPTIONS = [
   'Mililitros',
   'Miligramos',
@@ -849,22 +893,23 @@ export function renderCategoriasTab() {
   `;
 }
 
-// Colores de íconos por índice
+// Colores visuales por índice
 const categoryColors = ['#16a34a', '#3b82f6', '#a855f7', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
 const categoryBgColors = ['#f0fdf4', '#eff6ff', '#faf5ff', '#fffbeb', '#fef2f2', '#ecfeff', '#fdf2f8', '#f7fee7'];
 
-function getCategoryIcon(index: number): string {
-  const icons = [
-    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"></path><path d="M8.5 2h7"></path><path d="M7 16h10"></path></svg>',
-    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 0 1 9 9v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 9-9z"></path><path d="M8 12h.01M16 12h.01M15 16H9"></path></svg>',
-    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>',
-    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>',
-    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>',
-    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
-    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
-    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>',
-  ];
-  return icons[index % icons.length];
+function getCategoryInitials(nombre: string): string {
+  const cleanName = (nombre || '').trim();
+  if (!cleanName) return 'SC';
+
+  const words = cleanName
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
 async function cargarCategoriasGrid() {
@@ -906,7 +951,7 @@ function renderizarCategoriasGrid() {
     const catId = cat.id_categoria || cat.id;
     const color = categoryColors[index % categoryColors.length];
     const bgColor = categoryBgColors[index % categoryBgColors.length];
-    const icon = getCategoryIcon(index);
+    const initials = getCategoryInitials(cat.nombre);
     const totalProductos = cat.total_productos || cat.productos_count || 0;
     const estadoBadge = cat.estado === 'Activo'
       ? '<span style="font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #f0fdf4; color: #16a34a; font-weight: 500;">Activo</span>'
@@ -916,7 +961,7 @@ function renderizarCategoriasGrid() {
       <div class="category-card" data-categoria-id="${catId}">
         <div class="category-header">
           <div class="category-icon" style="background: ${bgColor}; color: ${color};">
-            ${icon}
+            <span class="category-icon-text">${initials}</span>
           </div>
           <div class="category-info">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -2223,6 +2268,7 @@ async function handleSubmitNuevoProducto(e: Event) {
 
 function renderModalEditarProducto(producto: Producto): string {
   const categoriaSeleccionada = Number(producto.id_categoria ?? (producto.categoria as any)?.id ?? 0);
+  const imagenProductoUrl = resolverImagenProductoUrl(producto);
   const categoriasOptions = categoriasData.map(cat => {
     const catId = cat.id_categoria || (cat as any).id;
     const selected = Number(catId) === categoriaSeleccionada ? 'selected' : '';
@@ -2347,9 +2393,9 @@ function renderModalEditarProducto(producto: Producto): string {
           <div style="margin-top: 16px; padding: 16px; border: 2px dashed #cbd5e1; border-radius: 8px; text-align: center; cursor: pointer; transition: border-color 0.2s;" id="zona-imagen-editar">
             <input type="file" id="edit-imagen" name="imagen" accept="image/jpeg,image/png,image/webp" style="display: none;">
             <div id="preview-imagen-editar">
-              ${producto.imagen_url ? `
+              ${imagenProductoUrl ? `
                 <div style="position: relative; display: inline-block;">
-                  <img src="${producto.imagen_url}" alt="${producto.descripcion}" style="max-width: 200px; max-height: 150px; border-radius: 6px; object-fit: cover;">
+                  <img src="${imagenProductoUrl}" alt="${producto.descripcion}" style="max-width: 200px; max-height: 150px; border-radius: 6px; object-fit: cover;">
                   <button type="button" id="btn-eliminar-imagen" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Eliminar imagen">&times;</button>
                 </div>
                 <div style="font-size: 11px; color: #94a3b8; margin-top: 8px;">Haz clic para cambiar la imagen</div>

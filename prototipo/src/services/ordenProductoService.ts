@@ -58,7 +58,7 @@ export const ordenProductoService = {
   },
 
   getPDFUrl: (id: number, descargar: boolean = false) => {
-    const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    const base = import.meta.env.VITE_API_URL || 'http://backend.qsci-system.com/api/v1';
     return `${base}/ordenes-producto/${id}/pdf${descargar ? '?descargar=true' : ''}`;
   },
 

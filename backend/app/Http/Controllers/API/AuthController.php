@@ -15,7 +15,7 @@ class AuthController extends Controller
      */
     private const PERMISOS_POR_AREA = [
         // id_area => módulos permitidos
-        1 => ['dashboard', 'prospectos', 'cotizaciones', 'servicios', 'marcar-asistencia'],                           // Comercial
+        1 => ['dashboard', 'prospectos', 'cotizaciones', 'servicios', 'logistica', 'marcar-asistencia'],              // Comercial
         2 => ['dashboard', 'ods', 'odp', 'servicios', 'programaciones', 'marcar-asistencia'],                         // Operaciones
         3 => ['dashboard', 'productos', 'categorias', 'logistica', 'cotizaciones', 'marcar-asistencia'],               // Administración
         4 => ['dashboard', 'rrhh-asistencia', 'rrhh-empleados', 'rrhh-reportes', 'marcar-asistencia'],                // RRHH
@@ -23,6 +23,22 @@ class AuthController extends Controller
         6 => ['*'],                                                                                                     // Gerencia = TODO
         7 => ['dashboard', 'inventario', 'entradas-salidas', 'marcar-asistencia'],                                     // Almacén
     ];
+
+    /**
+     * Permisos especiales por cargo (tienen prioridad sobre área).
+     */
+    private function resolverPermisos(Personal $personal): array
+    {
+        $cargoNombre = mb_strtolower(trim((string) optional($personal->cargo)->nombre));
+
+        // Área Programación - Cargo: Programación Servicio
+        // Acceso únicamente al módulo de Programaciones (servicio + dashboard) y marcado de asistencia.
+        if (in_array($cargoNombre, ['programacion servicio', 'programación servicio'], true)) {
+            return ['programaciones', 'programaciones-servicio', 'marcar-asistencia'];
+        }
+
+        return self::PERMISOS_POR_AREA[$personal->id_area] ?? ['dashboard', 'marcar-asistencia'];
+    }
 
     /**
      * POST /auth/login
@@ -59,8 +75,10 @@ class AuthController extends Controller
         // Crear token Sanctum
         $token = $personal->createToken('auth-token')->plainTextToken;
 
-        // Obtener permisos según área
-        $permisos = self::PERMISOS_POR_AREA[$personal->id_area] ?? ['dashboard', 'marcar-asistencia'];
+        $personal->loadMissing(['area', 'cargo']);
+
+        // Obtener permisos según área/cargo
+        $permisos = $this->resolverPermisos($personal);
         $areaNombre = $personal->area ? $personal->area->nombre : 'Sin área';
 
         return response()->json([
@@ -113,8 +131,8 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $personal->load('area');
-        $permisos = self::PERMISOS_POR_AREA[$personal->id_area] ?? ['dashboard', 'marcar-asistencia'];
+        $personal->loadMissing(['area', 'cargo']);
+        $permisos = $this->resolverPermisos($personal);
         $areaNombre = $personal->area ? $personal->area->nombre : 'Sin área';
 
         return response()->json([

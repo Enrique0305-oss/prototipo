@@ -47,22 +47,22 @@
             <div class="client-info-list">
                 <div class="info-item">
                     <span class="label">Ing.:</span>
-                    <span class="value">{{ $cotizacion->cliente->persona_contacto }}</span>
+                    <span class="value">{{ $cotizacion->cliente?->persona_contacto ?? 'No registrado' }}</span>
                 </div>
 
                 <div class="info-item">
                     <span class="label">Atención:</span>
-                    <span class="value">{{ $cotizacion->cliente->nombre_empresa }}</span>
+                    <span class="value">{{ $cotizacion->cliente?->nombre_empresa ?? 'No registrado' }}</span>
                 </div>
 
                 <div class="info-item">
                     <span class="label">RUC:</span>
-                    <span class="value">{{ $cotizacion->cliente->ruc }}</span>
+                    <span class="value">{{ $cotizacion->cliente?->ruc ?? 'No registrado' }}</span>
                 </div>
 
                 <div class="info-item">
                     <span class="label">Dirección:</span>
-                    <span class="value">{{ $cotizacion->cliente->direccion ?? 'No registrada' }}</span>
+                    <span class="value">{{ $cotizacion->cliente?->direccion ?? 'No registrada' }}</span>
                 </div>
             </div>
 
@@ -105,10 +105,10 @@
 
             <div class="issued-container">
                 <div class="issued-name">
-                    {{ $cotizacion->creador->nombre ?? 'N/A' }} {{ $cotizacion->creador->apellido ?? '' }}
+                    {{ $cotizacion->creador?->nombre ?? 'N/A' }} {{ $cotizacion->creador?->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $cotizacion->creador->cargo?->nombre ?? 'Gerente Comercial' }}
+                    {{ $cotizacion->creador?->cargo?->nombre ?? 'Gerente Comercial' }}
                 </div>
                 <div class="signature-logos">
                     <table>
@@ -124,10 +124,10 @@
                 </div>
                 <div class="proposal-text">
                     <p>
-                        E-mail: {{ $cotizacion->creador->correo  }}
+                        E-mail: {{ $cotizacion->creador?->correo ?? 'No registrado' }}
                     </p>
                     <p>
-                        Número: {{ $cotizacion->creador->celular  }}
+                        Número: {{ $cotizacion->creador?->celular ?? 'No registrado' }}
                     </p>
                 </div>
             </div>
@@ -170,7 +170,7 @@
                 Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.
                 <ul>
                     <li>INFORMACIÓN: La organización cumple con lso parámetros establecidos conforme DS 022 - 2001 SA del MInisterio de Salud que regula las actividades de Saneamiento Ambiental</li>
-                    <li>Las actividades se realizarán en las siguiente dirección: {{ $cotizacion->cliente->direccion ?? 'No registrada' }}</li>
+                    <li>Las actividades se realizarán en las siguiente dirección: {{ $cotizacion->cliente?->direccion ?? 'No registrada' }}</li>
                 </ul>
             </div>
 
@@ -390,7 +390,7 @@
                         @foreach($cotizacion->detalles as $detalle)
                             @php
                                 $servicio = $detalle->servicio;
-                                $planta = $cotizacion->cliente->plantas()->find($detalle->id_cliente_planta);
+                                $planta = $cotizacion->cliente ? $cotizacion->cliente->plantas()->find($detalle->id_cliente_planta) : null;
                                 
                                 // Obtener múltiples áreas desde el array JSON
                                 $areaIds = $detalle->id_cliente_planta_area ?? [];
@@ -992,10 +992,10 @@
                 </div>
                 <div class="proposal-text">
                     <p>
-                        E-mail: {{ $gerenteComercial->correo }}
+                        E-mail: {{ $gerenteComercial->correo ?? 'No registrado' }}
                     </p>
                     <p>
-                        Número: {{ $gerenteComercial->celular }}
+                        Número: {{ $gerenteComercial->celular ?? 'No registrado' }}
                     </p>
                 </div>
             </div>

@@ -75,7 +75,7 @@ class ProductoController extends Controller
                 'precio_unitario' => $producto->precio_unitario,
                 'estado' => $producto->estado,
                 'imagen' => $producto->imagen,
-                'imagen_url' => $producto->imagen ? asset('storage/' . $producto->imagen) : null,
+                'imagen_url' => $producto->imagen ? url('media/' . ltrim($producto->imagen, '/')) : null,
                 'ingre_activo' => $producto->ingre_activo,
                 'plag_objetivo' => $producto->plag_objetivo,
                 'presentacion' => $producto->presentacion,
@@ -308,7 +308,7 @@ class ProductoController extends Controller
             'precio_unitario' => $producto->precio_unitario,
             'estado' => $producto->estado,
             'imagen' => $producto->imagen,
-            'imagen_url' => $producto->imagen ? asset('storage/' . $producto->imagen) : null,
+            'imagen_url' => $producto->imagen ? url('media/' . ltrim($producto->imagen, '/')) : null,
             'ingre_activo' => $producto->ingre_activo,
             'plag_objetivo' => $producto->plag_objetivo,
             'presentacion' => $producto->presentacion,
@@ -776,7 +776,7 @@ class ProductoController extends Controller
             'message' => 'Imagen subida exitosamente',
             'data' => [
                 'imagen' => $ruta,
-                'imagen_url' => asset('storage/' . $ruta),
+                'imagen_url' => url('media/' . ltrim($ruta, '/')),
             ]
         ]);
     }

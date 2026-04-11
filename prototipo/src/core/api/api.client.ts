@@ -1,13 +1,20 @@
 import { API_CONFIG } from './api.config';
 
 export class ApiError extends Error {
+  public status: number;
+  public statusText: string;
+  public data?: any;
+
   constructor(
-    public status: number,
-    public statusText: string,
-    public data?: any
+    status: number,
+    statusText: string,
+    data?: any
   ) {
     super(`API Error ${status}: ${statusText}`);
     this.name = 'ApiError';
+    this.status = status;
+    this.statusText = statusText;
+    this.data = data;
   }
 }
 
@@ -154,7 +161,21 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      throw new ApiError(response.status, response.statusText);
+      let errorData: any = { message: response.statusText };
+      try {
+        const raw = await response.text();
+        if (raw) {
+          try {
+            errorData = JSON.parse(raw);
+          } catch {
+            errorData = { message: raw };
+          }
+        }
+      } catch {
+        // Mantener mensaje por defecto si no se puede leer el body.
+      }
+
+      throw new ApiError(response.status, response.statusText, errorData);
     }
 
     const blob = await response.blob();

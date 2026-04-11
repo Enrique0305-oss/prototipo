@@ -46,6 +46,7 @@ use App\Http\Controllers\API\SalidaProgramacionFabricacionController;
 use App\Http\Controllers\API\OrdenCompraController;
 use App\Http\Controllers\API\PersonalController;
 use App\Http\Controllers\API\InventarioAjusteController;
+use App\Http\Middleware\CacheJsonGetResponses;
 
 // Rutas PÚBLICAS (sin autenticación)
 Route::prefix('v1')->group(function () {
@@ -73,7 +74,7 @@ Route::prefix('v1')->group(function () {
 });
 
 // Rutas PROTEGIDAS (requieren token Sanctum)
-Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
+Route::prefix('v1')->middleware(['auth:sanctum', CacheJsonGetResponses::class])->group(function () {
 
     // Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
