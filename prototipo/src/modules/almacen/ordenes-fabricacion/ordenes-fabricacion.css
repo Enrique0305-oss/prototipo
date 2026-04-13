@@ -265,6 +265,16 @@
   margin: 0;
 }
 
+.of-alert-diferencia {
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .of-link-btn {
   border: 1px solid #bfdbfe;
   color: #1d4ed8;

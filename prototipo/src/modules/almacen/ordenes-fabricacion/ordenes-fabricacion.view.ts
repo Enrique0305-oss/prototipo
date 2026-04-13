@@ -881,12 +881,18 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
         ${esPendiente ? `
         <section class="of-section of-section-tight">
           <div class="of-grid">
-            <div class="of-grid-full">
-              <label class="prov-label">Motivo si existe diferencia</label>
-              <textarea class="prov-input of-cierre-motivo" id="cierreMotivoDiferencia" rows="3" placeholder="Requerido si la cantidad producida no coincide">${prog.estado === 'Realizado' ? (prog.detalles?.find((d) => d.tipo === 'EntradaProducto')?.observacion || '') : ''}</textarea>
+            <div class="of-grid-full" id="cierreAlertaDiferenciaSection" style="display:none;">
+              <div class="of-alert-diferencia" id="cierreAlertaDiferenciaMensaje"></div>
             </div>
             <div class="of-grid-full">
-              <label class="prov-label"><input type="checkbox" id="cierreTieneSobranteMP" ${prog.insumos_sugeridos.length > 0 ? '' : ''}> Tiene sobrante de materia prima</label>
+              <label class="prov-label">Motivo si existe diferencia</label>
+              <textarea class="prov-input of-cierre-motivo" id="cierreMotivoDiferencia" rows="3" placeholder="Requerido si la cantidad producida no coincide">${prog.motivo_diferencia || ''}</textarea>
+            </div>
+            <div class="of-grid-full">
+              <label class="prov-label"><input type="checkbox" id="cierreTieneSobranteMP"> Tiene sobrante de materia prima</label>
+            </div>
+            <div class="of-grid-full" id="cierreDiferenciaMateriaContainer" style="display:none;">
+              <label class="prov-label"><input type="checkbox" id="cierreTieneDiferenciaMP"> Agregar diferencia de materia prima</label>
             </div>
           </div>
         </section>
@@ -916,6 +922,35 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
           </div>
         </section>
 
+        <section class="of-section of-section-tight" id="cierreDiferenciasSection" style="${esPendiente ? 'display:none;' : (prog.detalles || []).some((d) => d.tipo === 'ConsumoDiferenciaInsumo') ? 'display:block;' : 'display:none;'}">
+          <div class="of-section-head">
+            <h4 class="of-section-title">Diferencia de materia prima (consumo adicional)</h4>
+          </div>
+          <div class="of-detalles-container">
+            ${(esPendiente
+              ? prog.insumos_sugeridos
+              : (prog.detalles || [])
+                  .filter((d) => d.tipo === 'ConsumoDiferenciaInsumo')
+                  .map((d) => ({
+                    id_producto: d.id_producto,
+                    descripcion: d.producto?.descripcion || 'Insumo',
+                    cantidad_adicional: d.cantidad,
+                  }))
+            ).map((insumo: any) => `
+              <div class="of-detalle-row">
+                <div>
+                  <label class="prov-label">Insumo</label>
+                  <input class="prov-input" value="${insumo.descripcion}" disabled>
+                </div>
+                <div>
+                  <label class="prov-label">Cantidad adicional usada</label>
+                  <input type="number" class="prov-input cierre-diferencia-cantidad" data-id-producto="${insumo.id_producto}" min="0" step="0.001" value="${Number(insumo.cantidad_adicional ?? 0)}" ${esPendiente ? '' : 'disabled'}>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+
         <section class="of-section of-section-tight">
           <label class="prov-label">Observaciones</label>
           <textarea class="prov-input of-cierre-observaciones" id="cierreObservaciones" rows="3" ${esPendiente ? '' : 'disabled'}>${prog.observaciones || ''}</textarea>
@@ -931,6 +966,12 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
     document.getElementById('btnCancelarCierreFab')?.addEventListener('click', cerrarModalCierre);
     if (esPendiente) {
       document.getElementById('cierreTieneSobranteMP')?.addEventListener('change', toggleDevolucionesSection);
+      document.getElementById('cierreTieneDiferenciaMP')?.addEventListener('change', toggleDiferenciasSection);
+      document.querySelectorAll('.cierre-producto-cantidad').forEach((input) => {
+        input.addEventListener('input', () => actualizarCondicionesCierre(prog));
+      });
+      toggleDevolucionesSection();
+      actualizarCondicionesCierre(prog);
       document.getElementById('formCierreFabricacion')?.addEventListener('submit', async (event) => {
         event.preventDefault();
         await registrarCierreFabricacion(idProgramacion);
@@ -950,6 +991,54 @@ function toggleDevolucionesSection() {
   section.style.display = checkbox.checked ? '' : 'none';
 }
 
+function toggleDiferenciasSection() {
+  const section = document.getElementById('cierreDiferenciasSection');
+  const checkbox = document.getElementById('cierreTieneDiferenciaMP') as HTMLInputElement | null;
+  if (!section || !checkbox) return;
+  section.style.display = checkbox.checked ? '' : 'none';
+}
+
+function actualizarCondicionesCierre(programacion: ProgramacionFabricacionEntradaDevolucion) {
+  const expectedMap = new Map(programacion.productos_esperados.map((item) => [item.id_producto_final, Number(item.cantidad_esperada || 0)]));
+  const productos = Array.from(document.querySelectorAll('.cierre-producto-cantidad')).map((input) => {
+    const element = input as HTMLInputElement;
+    return {
+      id_producto_final: Number(element.dataset.idProductoFinal || 0),
+      cantidad_producida: Number(element.value || 0),
+    };
+  });
+
+  const cantidadEsperadaTotal = Array.from(expectedMap.values()).reduce((acc, value) => acc + Number(value || 0), 0);
+  const cantidadProducidaTotal = productos.reduce((acc, item) => acc + Number(item.cantidad_producida || 0), 0);
+  const produccionMayorEsperada = Number(cantidadProducidaTotal.toFixed(3)) > Number(cantidadEsperadaTotal.toFixed(3));
+
+  const alertaSection = document.getElementById('cierreAlertaDiferenciaSection');
+  const alertaMensaje = document.getElementById('cierreAlertaDiferenciaMensaje');
+  const diferenciaContainer = document.getElementById('cierreDiferenciaMateriaContainer');
+  const diferenciaCheck = document.getElementById('cierreTieneDiferenciaMP') as HTMLInputElement | null;
+
+  if (alertaSection && alertaMensaje) {
+    if (produccionMayorEsperada) {
+      const exceso = Number((cantidadProducidaTotal - cantidadEsperadaTotal).toFixed(3));
+      alertaSection.style.display = '';
+      alertaMensaje.textContent = `La producción supera lo esperado en ${exceso}. Debe registrar motivo y marcar "Agregar diferencia de materia prima".`;
+    } else {
+      alertaSection.style.display = 'none';
+      alertaMensaje.textContent = '';
+    }
+  }
+
+  if (diferenciaContainer) {
+    diferenciaContainer.style.display = produccionMayorEsperada ? '' : 'none';
+  }
+
+  if (!produccionMayorEsperada && diferenciaCheck) {
+    diferenciaCheck.checked = false;
+  }
+
+  toggleDiferenciasSection();
+}
+
 async function registrarCierreFabricacion(idProgramacion: number) {
   const productos = Array.from(document.querySelectorAll('.cierre-producto-cantidad'))
     .map((input) => {
@@ -967,6 +1056,7 @@ async function registrarCierreFabricacion(idProgramacion: number) {
   }
 
   const tieneSobrante = (document.getElementById('cierreTieneSobranteMP') as HTMLInputElement | null)?.checked || false;
+  const tieneDiferenciaMateriaPrima = (document.getElementById('cierreTieneDiferenciaMP') as HTMLInputElement | null)?.checked || false;
   const devoluciones = tieneSobrante
     ? Array.from(document.querySelectorAll('.cierre-devolucion-cantidad'))
         .map((input) => {
@@ -979,11 +1069,26 @@ async function registrarCierreFabricacion(idProgramacion: number) {
         .filter((item) => item.id_producto > 0 && item.cantidad_devuelta > 0)
     : [];
 
+  const diferenciasMateriaPrima = tieneDiferenciaMateriaPrima
+    ? Array.from(document.querySelectorAll('.cierre-diferencia-cantidad'))
+        .map((input) => {
+          const element = input as HTMLInputElement;
+          return {
+            id_producto: Number(element.dataset.idProducto || 0),
+            cantidad_adicional: Number(element.value || 0),
+          };
+        })
+        .filter((item) => item.id_producto > 0 && item.cantidad_adicional > 0)
+    : [];
+
   const motivoDiferencia = ((document.getElementById('cierreMotivoDiferencia') as HTMLTextAreaElement | null)?.value || '').trim();
   const observaciones = ((document.getElementById('cierreObservaciones') as HTMLTextAreaElement | null)?.value || '').trim();
   const programacion = cierreProgramacionData.find((p) => p.id === idProgramacion);
   const expectedMap = new Map(programacion?.productos_esperados?.map((item) => [item.id_producto_final, Number(item.cantidad_esperada || 0)]) || []);
   const mismatch = productos.some((item) => Number(item.cantidad_producida || 0).toFixed(3) !== Number(expectedMap.get(item.id_producto_final) || 0).toFixed(3));
+  const cantidadEsperadaTotal = Array.from(expectedMap.values()).reduce((acc, value) => acc + Number(value || 0), 0);
+  const cantidadProducidaTotal = productos.reduce((acc, item) => acc + Number(item.cantidad_producida || 0), 0);
+  const produccionMayorEsperada = Number(cantidadProducidaTotal.toFixed(3)) > Number(cantidadEsperadaTotal.toFixed(3));
 
   if (mismatch && !motivoDiferencia) {
     mostrarToast('warning', 'Validacion', 'Debe indicar un motivo si la cantidad producida no coincide');
@@ -995,6 +1100,16 @@ async function registrarCierreFabricacion(idProgramacion: number) {
     return;
   }
 
+  if (produccionMayorEsperada && !tieneDiferenciaMateriaPrima) {
+    mostrarToast('warning', 'Validacion', 'Si la producción supera la esperada, debe marcar "Agregar diferencia de materia prima"');
+    return;
+  }
+
+  if (produccionMayorEsperada && !diferenciasMateriaPrima.length) {
+    mostrarToast('warning', 'Validacion', 'Debe registrar al menos un insumo con cantidad adicional usada');
+    return;
+  }
+
   const ok = await confirmarAccion({
     titulo: 'Registrar cierre',
     mensaje: 'Se registrara la entrada del producto terminado y las devoluciones necesarias en Kardex.',
@@ -1003,22 +1118,46 @@ async function registrarCierreFabricacion(idProgramacion: number) {
   });
   if (!ok) return;
 
+  const requestPayload = {
+    id_entrada_devolucion_fabricacion: idProgramacion,
+    productos,
+    motivo_diferencia: motivoDiferencia || undefined,
+    tiene_sobrante_materia_prima: tieneSobrante,
+    tiene_diferencia_materia_prima: produccionMayorEsperada ? tieneDiferenciaMateriaPrima : false,
+    observaciones: observaciones || undefined,
+    devoluciones,
+    diferencias_materia_prima: produccionMayorEsperada ? diferenciasMateriaPrima : [],
+  };
+
+  console.groupCollapsed(`[Fabricacion][Cierre] Enviando cierre #${idProgramacion}`);
+  console.log('Payload:', requestPayload);
+  console.log('Resumen validacion:', {
+    mismatch,
+    cantidadEsperadaTotal,
+    cantidadProducidaTotal,
+    produccionMayorEsperada,
+  });
+  console.groupEnd();
+
   try {
-    await ordenesFabricacionService.registrarEntradaDevolucion({
-      id_entrada_devolucion_fabricacion: idProgramacion,
-      productos,
-      motivo_diferencia: motivoDiferencia || undefined,
-      tiene_sobrante_materia_prima: tieneSobrante,
-      observaciones: observaciones || undefined,
-      devoluciones,
-    });
+    const response = await ordenesFabricacionService.registrarEntradaDevolucion(requestPayload);
+
+    console.groupCollapsed(`[Fabricacion][Cierre] Respuesta cierre #${idProgramacion}`);
+    console.log('Response completa:', response);
+    console.log('Data:', response?.data);
+    console.groupEnd();
 
     mostrarToast('success', 'Cierre registrado', 'La entrada y la devolucion fueron registradas correctamente.');
     cerrarModalCierre();
     await cargarCierresFabricacion();
     await cargarOrdenes();
   } catch (error: any) {
-    console.error('Error registrando cierre de fabricacion:', error);
+    console.group(`[Fabricacion][Cierre] Error cierre #${idProgramacion}`);
+    console.error('Error completo:', error);
+    console.error('Payload enviado:', requestPayload);
+    console.error('Error data:', error?.data || error?.response?.data || null);
+    console.error('Error status:', error?.status || error?.response?.status || null);
+    console.groupEnd();
     const msg = error?.data?.message || error?.response?.data?.message || 'No se pudo registrar el cierre';
     mostrarToast('error', 'Error', msg);
   }

@@ -364,12 +364,12 @@ export function renderServiciosDisponiblesTab() {
       <div class="search-filter-bar">
         <div class="search-input-wrapper">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-          <input type="text" id="catalogo-search" placeholder="Buscar capacitaci├│n o auditor├¡a..." class="search-input">
+          <input type="text" id="catalogo-search" placeholder="Buscar Capacitación o auditor├¡a..." class="search-input">
         </div>
         <select class="filter-select" id="catalogo-filter-tipo">
           <option value="">Todos los tipos</option>
-          <option value="Capacitaci├│n">Capacitaciones</option>
-          <option value="Asesor├¡a">Asesoría</option>
+          <option value="Capacitación">Capacitaciones</option>
+          <option value="Asesoría">Asesoría</option>
         </select>
         <select class="filter-select" id="catalogo-filter-estado">
           <option value="activo">Activos</option>
@@ -407,8 +407,8 @@ export function renderServiciosDisponiblesTab() {
           <div class="form-group">
             <label class="form-label">Tipo <span style="color:#ef4444">*</span></label>
             <select id="catalogo-tipo" class="form-input">
-              <option value="Capacitaci├│n">Capacitaci├│n</option>
-              <option value="Asesor├¡a">Asesor├¡a</option>
+              <option value="Capacitación">Capacitación</option>
+              <option value="Asesoría">Asesoría</option>
             </select>
           </div>
           <div class="form-group">
@@ -484,7 +484,7 @@ function getServiceIcon(nombre: string): { svg: string; color: string } {
       color: 'orange'
     };
   }
-  if (n.includes('capacitaci├│n') || n.includes('capacitacion')) {
+  if (n.includes('Capacitación') || n.includes('capacitacion')) {
     return {
       svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
       color: 'blue'
@@ -1114,7 +1114,7 @@ export function initServiciosTabEvents() {
 // ========================================
 
 function getCatalogoIcon(tipo: string): { svg: string; color: string } {
-  if (tipo === 'Capacitaci├│n') {
+  if (tipo === 'Capacitación') {
     return {
       svg: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
       color: 'blue'
@@ -1242,7 +1242,7 @@ function bindAccionesCatalogo() {
 
 function limpiarFormCatalogo() {
   (document.getElementById('catalogo-id') as HTMLInputElement).value = '';
-  (document.getElementById('catalogo-tipo') as HTMLSelectElement).value = 'Capacitaci├│n';
+  (document.getElementById('catalogo-tipo') as HTMLSelectElement).value = 'Capacitación';
   (document.getElementById('catalogo-nombre') as HTMLInputElement).value = '';
   (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value = '';
   (document.getElementById('catalogo-precio') as HTMLInputElement).value = '';
@@ -1252,7 +1252,7 @@ function limpiarFormCatalogo() {
 
 function abrirModalNuevoCatalogo() {
   limpiarFormCatalogo();
-  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitaci├│n / Asesor├¡a';
+  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitación / Asesoría';
   (document.getElementById('modal-catalogo') as HTMLElement).style.display = 'flex';
 }
 
@@ -1288,7 +1288,7 @@ function abrirModalEliminarCatalogo(id: number, nombre: string) {
 
 async function guardarCatalogo() {
   const id = (document.getElementById('catalogo-id') as HTMLInputElement).value;
-  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitaci├│n' | 'Asesor├¡a';
+  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitación' | 'Asesoría';
   const nombre = (document.getElementById('catalogo-nombre') as HTMLInputElement).value.trim();
   const descripcion = (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value.trim() || undefined;
   const precio = (document.getElementById('catalogo-precio') as HTMLInputElement).value;

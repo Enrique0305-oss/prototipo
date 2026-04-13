@@ -10,6 +10,7 @@ use App\Models\Kardex;
 use App\Models\ProgramacionFabricacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class EntradaDevolucionFabricacionController extends Controller
 {
@@ -57,6 +58,8 @@ class EntradaDevolucionFabricacionController extends Controller
                 'estado' => $registro->estado,
                 'fecha_realizado' => $registro->fecha_realizado,
                 'observaciones' => $registro->observaciones,
+                'motivo_diferencia' => $registro->motivo_diferencia,
+                'tiene_diferencia_materia_prima' => (bool) $registro->tiene_diferencia_materia_prima,
                 'tecnico' => $programacion->tecnico ? [
                     'id' => $programacion->tecnico->id,
                     'nombre' => $programacion->tecnico->nombre,
@@ -99,10 +102,14 @@ class EntradaDevolucionFabricacionController extends Controller
             'productos.*.cantidad_producida' => 'required|numeric|min:0.001',
             'motivo_diferencia' => 'nullable|string|max:1000',
             'tiene_sobrante_materia_prima' => 'nullable|boolean',
+            'tiene_diferencia_materia_prima' => 'nullable|boolean',
             'observaciones' => 'nullable|string|max:1000',
             'devoluciones' => 'nullable|array',
             'devoluciones.*.id_producto' => 'required_with:devoluciones|integer|exists:productos,id',
             'devoluciones.*.cantidad_devuelta' => 'required_with:devoluciones|numeric|min:0.001',
+            'diferencias_materia_prima' => 'nullable|array',
+            'diferencias_materia_prima.*.id_producto' => 'required_with:diferencias_materia_prima|integer|exists:productos,id',
+            'diferencias_materia_prima.*.cantidad_adicional' => 'required_with:diferencias_materia_prima|numeric|min:0.001',
         ]);
 
         $registro = EntradaDevolucionFabricacion::with(['ordenFabricacion.detalles.producto', 'programacionFabricacion.tecnico', 'detalles.producto'])
@@ -156,6 +163,10 @@ class EntradaDevolucionFabricacionController extends Controller
             }
         }
 
+        $cantidadEsperadaTotal = (float) collect($resumen['productos_esperados'])->sum('cantidad_esperada');
+        $cantidadProducidaTotal = (float) collect($validated['productos'])->sum('cantidad_producida');
+        $produccionMayorEsperada = round($cantidadProducidaTotal, 3) > round($cantidadEsperadaTotal, 3);
+
         $motivoDiferencia = trim((string) ($validated['motivo_diferencia'] ?? ''));
         if ($diferenciaDetectada && $motivoDiferencia === '') {
             return response()->json([
@@ -166,6 +177,8 @@ class EntradaDevolucionFabricacionController extends Controller
 
         $tieneSobrante = (bool) ($validated['tiene_sobrante_materia_prima'] ?? false);
         $devoluciones = collect($validated['devoluciones'] ?? []);
+        $tieneDiferenciaMateriaPrima = (bool) ($validated['tiene_diferencia_materia_prima'] ?? false);
+        $diferenciasMateriaPrima = collect($validated['diferencias_materia_prima'] ?? []);
 
         if ($tieneSobrante && $devoluciones->isEmpty()) {
             return response()->json([
@@ -174,15 +187,65 @@ class EntradaDevolucionFabricacionController extends Controller
             ], 422);
         }
 
+        if ($produccionMayorEsperada && !$tieneDiferenciaMateriaPrima) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Si la cantidad producida supera la esperada, debe marcar la diferencia de materia prima.',
+            ], 422);
+        }
+
+        if ($tieneDiferenciaMateriaPrima && $diferenciasMateriaPrima->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debe registrar al menos un insumo con cantidad adicional usada.',
+            ], 422);
+        }
+
+        if (!$produccionMayorEsperada) {
+            $tieneDiferenciaMateriaPrima = false;
+            $diferenciasMateriaPrima = collect();
+        }
+
+        $insumosSugeridos = collect($resumen['insumos_sugeridos'])->keyBy('id_producto');
+        foreach ($diferenciasMateriaPrima as $diferencia) {
+            $idProducto = (int) ($diferencia['id_producto'] ?? 0);
+            $cantidadAdicional = (float) ($diferencia['cantidad_adicional'] ?? 0);
+
+            if (!$insumosSugeridos->has($idProducto)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La diferencia de materia prima contiene un insumo no asociado a la receta de fabricación.',
+                ], 422);
+            }
+
+            if ($cantidadAdicional <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Las cantidades adicionales de materia prima deben ser mayores a 0.',
+                ], 422);
+            }
+
+            $inventario = Inventario::query()->where('id_productos', $idProducto)->first();
+            $stockDisponible = (float) ($inventario?->cantidad_disponible ?? 0);
+            if ($stockDisponible < $cantidadAdicional) {
+                $descripcion = (string) ($insumosSugeridos->get($idProducto)['descripcion'] ?? 'Insumo');
+                return response()->json([
+                    'success' => false,
+                    'message' => "Stock insuficiente para registrar diferencia de materia prima en {$descripcion}.",
+                ], 422);
+            }
+        }
+
         $idUsuario = $request->user()?->id;
 
         DB::beginTransaction();
         try {
             $registro->fill([
-                'cantidad_esperada_total' => collect($resumen['productos_esperados'])->sum('cantidad_esperada'),
-                'cantidad_producida_total' => collect($validated['productos'])->sum('cantidad_producida'),
+                'cantidad_esperada_total' => $cantidadEsperadaTotal,
+                'cantidad_producida_total' => $cantidadProducidaTotal,
                 'motivo_diferencia' => $motivoDiferencia ?: null,
                 'tiene_sobrante_materia_prima' => $tieneSobrante,
+                'tiene_diferencia_materia_prima' => $tieneDiferenciaMateriaPrima,
                 'observaciones' => $validated['observaciones'] ?? null,
                 'creado_por' => $idUsuario ?? $registro->creado_por,
             ]);
@@ -209,7 +272,7 @@ class EntradaDevolucionFabricacionController extends Controller
 
                 DetalleEntradaDevolucionFabricacion::create([
                     'id_entrada_devolucion_fabricacion' => $registro->id,
-                    'tipo' => 'EntradaProducto',
+                    'tipo' => DetalleEntradaDevolucionFabricacion::TIPO_ENTRADA_PRODUCTO,
                     'id_producto' => $idProductoFinal,
                     'cantidad' => $cantidadProducida,
                     'observacion' => 'Entrada de producto fabricado',
@@ -238,10 +301,39 @@ class EntradaDevolucionFabricacionController extends Controller
 
                 DetalleEntradaDevolucionFabricacion::create([
                     'id_entrada_devolucion_fabricacion' => $registro->id,
-                    'tipo' => 'DevolucionInsumo',
+                    'tipo' => DetalleEntradaDevolucionFabricacion::TIPO_DEVOLUCION_INSUMO,
                     'id_producto' => $idProducto,
                     'cantidad' => $cantidadDevuelta,
                     'observacion' => 'Devolución de sobrante',
+                ]);
+            }
+
+            foreach ($diferenciasMateriaPrima as $diferencia) {
+                $idProducto = (int) $diferencia['id_producto'];
+                $cantidadAdicional = (float) $diferencia['cantidad_adicional'];
+                if ($cantidadAdicional <= 0) {
+                    continue;
+                }
+
+                $this->ensureInventarioExists($idProducto);
+
+                Kardex::registrarMovimiento([
+                    'id_producto' => $idProducto,
+                    'tipo_movimiento' => 'Salida',
+                    'cantidad' => $cantidadAdicional,
+                    'motivo' => 'Salida por diferencia de fabricación',
+                    'referencia' => $this->buildReferenciaEntrada($programacion->id),
+                    'id_referencia' => $registro->id,
+                    'id_usuario' => $idUsuario,
+                    'observacion' => 'Consumo adicional de materia prima por fabricación mayor a la esperada.',
+                ]);
+
+                DetalleEntradaDevolucionFabricacion::create([
+                    'id_entrada_devolucion_fabricacion' => $registro->id,
+                    'tipo' => DetalleEntradaDevolucionFabricacion::TIPO_CONSUMO_DIFERENCIA_INSUMO,
+                    'id_producto' => $idProducto,
+                    'cantidad' => $cantidadAdicional,
+                    'observacion' => 'Consumo adicional por diferencia de producción',
                 ]);
             }
 
@@ -267,6 +359,10 @@ class EntradaDevolucionFabricacionController extends Controller
             ], 201);
         } catch (\Throwable $e) {
             DB::rollBack();
+
+            if ($e instanceof ValidationException) {
+                throw $e;
+            }
 
             return response()->json([
                 'success' => false,

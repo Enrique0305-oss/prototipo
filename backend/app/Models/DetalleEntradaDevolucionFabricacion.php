@@ -20,6 +20,10 @@ class DetalleEntradaDevolucionFabricacion extends Model
         'cantidad' => 'decimal:3',
     ];
 
+    public const TIPO_ENTRADA_PRODUCTO = 'EntradaProducto';
+    public const TIPO_DEVOLUCION_INSUMO = 'DevolucionInsumo';
+    public const TIPO_CONSUMO_DIFERENCIA_INSUMO = 'ConsumoDiferenciaInsumo';
+
     public function entradaDevolucionFabricacion()
     {
         return $this->belongsTo(EntradaDevolucionFabricacion::class, 'id_entrada_devolucion_fabricacion');

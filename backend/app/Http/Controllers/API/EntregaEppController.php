@@ -100,11 +100,13 @@ class EntregaEppController extends Controller
     }
 
     /**
-     * Obtener productos EPP disponibles (categoría EPP, id_categoria = 4)
+     * Obtener productos EPP disponibles por nombre de categoría
      */
     public function productosEpp(): JsonResponse
     {
-        $productos = Producto::where('id_categoria', 4)
+        $productos = Producto::whereHas('categoria', function ($q) {
+                $q->whereIn(DB::raw('UPPER(nombre)'), ['EPP', 'EPPS']);
+            })
             ->where('estado', 'Activo')
             ->with('inventario')
             ->get()
@@ -140,13 +142,15 @@ class EntregaEppController extends Controller
             'detalles.*.observacion' => 'nullable|string',
         ]);
 
-        // Validar que todos los productos sean EPP (categoría 4)
+        // Validar que todos los productos pertenezcan a la categoría EPP/EPPS
         foreach ($validated['detalles'] as $detalle) {
-            $producto = Producto::find($detalle['id_producto']);
-            if ($producto->id_categoria != 4) {
+            $producto = Producto::with('categoria')->find($detalle['id_producto']);
+            $nombreCategoria = strtoupper($producto?->categoria?->nombre ?? '');
+
+            if (!in_array($nombreCategoria, ['EPP', 'EPPS'], true)) {
                 return response()->json([
                     'success' => false,
-                    'message' => "El producto '{$producto->descripcion}' no es EPP",
+                    'message' => "El producto '{$producto->descripcion}' no pertenece a la categoría EPP",
                 ], 422);
             }
         }

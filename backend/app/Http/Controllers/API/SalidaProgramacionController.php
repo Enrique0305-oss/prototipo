@@ -5,6 +5,8 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\ProgramacionServicio;
 use App\Models\ProgramacionInsumo;
+use App\Models\OrdenServicioProducto;
+use App\Models\ServicioProducto;
 use App\Models\Kardex;
 use App\Models\Inventario;
 use Illuminate\Http\Request;
@@ -19,6 +21,8 @@ class SalidaProgramacionController extends Controller
      */
     public function getPendientes(Request $request)
     {
+        $this->asegurarInsumosAsignadosParaPendientes($request);
+
         $query = ProgramacionServicio::with([
             'ordenServicio.cliente',
             'servicio',
@@ -51,6 +55,73 @@ class SalidaProgramacionController extends Controller
             'success' => true,
             'data' => $programaciones,
         ]);
+    }
+
+    /**
+     * Para programaciones antiguas sin insumos, reconstruye insumos "Asignado"
+     * desde orden_servicio_producto y, si no existe, desde servicio_producto.
+     */
+    private function asegurarInsumosAsignadosParaPendientes(Request $request): void
+    {
+        $base = ProgramacionServicio::query()
+            ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->doesntHave('insumos');
+
+        if ($request->filled('fecha_desde')) {
+            $base->whereDate('fecha_programada', '>=', $request->fecha_desde);
+        }
+        if ($request->filled('fecha_hasta')) {
+            $base->whereDate('fecha_programada', '<=', $request->fecha_hasta);
+        }
+        if (!$request->filled('fecha_desde') && !$request->filled('fecha_hasta')) {
+            $base->whereDate('fecha_programada', '>=', now());
+        }
+
+        $programaciones = $base->get(['id', 'id_orden_servicio', 'id_servicio']);
+
+        foreach ($programaciones as $prog) {
+            $insumos = collect();
+
+            if (!empty($prog->id_orden_servicio)) {
+                $insumos = OrdenServicioProducto::query()
+                    ->where('id_orden_servicio', $prog->id_orden_servicio)
+                    ->where('id_servicio', $prog->id_servicio)
+                    ->get()
+                    ->groupBy('id_producto')
+                    ->map(fn ($rows, $idProducto) => [
+                        'id_producto' => (int) $idProducto,
+                        'cantidad' => (int) round((float) $rows->sum('cantidad')),
+                    ])
+                    ->values()
+                    ->filter(fn ($item) => $item['cantidad'] > 0)
+                    ->values();
+            }
+
+            if ($insumos->isEmpty()) {
+                $insumos = ServicioProducto::query()
+                    ->where('id_servicio', $prog->id_servicio)
+                    ->get()
+                    ->map(fn ($item) => [
+                        'id_producto' => (int) $item->id_producto,
+                        'cantidad' => (int) round((float) $item->cantidad_default),
+                    ])
+                    ->filter(fn ($item) => $item['cantidad'] > 0)
+                    ->values();
+            }
+
+            if ($insumos->isEmpty()) {
+                continue;
+            }
+
+            foreach ($insumos as $item) {
+                ProgramacionInsumo::create([
+                    'id_programacion' => $prog->id,
+                    'id_producto' => $item['id_producto'],
+                    'cantidad_asignada' => $item['cantidad'],
+                    'estado' => 'Asignado',
+                ]);
+            }
+        }
     }
 
     /**

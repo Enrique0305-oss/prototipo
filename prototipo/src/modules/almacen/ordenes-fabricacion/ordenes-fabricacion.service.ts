@@ -75,6 +75,8 @@ export interface ProgramacionFabricacionEntradaDevolucion {
   estado: 'Pendiente' | 'Realizado';
   fecha_realizado?: string | null;
   observaciones?: string | null;
+  motivo_diferencia?: string | null;
+  tiene_diferencia_materia_prima?: boolean;
   tecnico?: {
     id: number;
     nombre?: string;
@@ -94,7 +96,7 @@ export interface ProgramacionFabricacionEntradaDevolucion {
   }>;
   detalles?: Array<{
     id: number;
-    tipo: 'EntradaProducto' | 'DevolucionInsumo';
+    tipo: 'EntradaProducto' | 'DevolucionInsumo' | 'ConsumoDiferenciaInsumo';
     id_producto: number;
     cantidad: number;
     observacion?: string | null;
@@ -156,10 +158,15 @@ export const ordenesFabricacionService = {
     }>;
     motivo_diferencia?: string;
     tiene_sobrante_materia_prima?: boolean;
+    tiene_diferencia_materia_prima?: boolean;
     observaciones?: string;
     devoluciones?: Array<{
       id_producto: number;
       cantidad_devuelta: number;
+    }>;
+    diferencias_materia_prima?: Array<{
+      id_producto: number;
+      cantidad_adicional: number;
     }>;
   }) => {
     return apiClient.post<{ success: boolean; message: string; data: { id: number } }>('/almacen/ordenes-fabricacion/entrada-devolucion', payload);

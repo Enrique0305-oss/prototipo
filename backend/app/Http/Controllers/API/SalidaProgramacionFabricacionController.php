@@ -210,6 +210,7 @@ class SalidaProgramacionFabricacionController extends Controller
                     'cantidad_producida_total' => 0,
                     'motivo_diferencia' => null,
                     'tiene_sobrante_materia_prima' => false,
+                    'tiene_diferencia_materia_prima' => false,
                     'observaciones' => null,
                     'creado_por' => $idUsuario,
                     'estado' => 'Pendiente',

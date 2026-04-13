@@ -67,7 +67,7 @@ export const salidasProgramacionService = {
     fecha_hasta?: string;
     estado?: string;
   }) => {
-    return apiClient.get<{ success: boolean; data: ProgramacionPendiente[] }>('/almacen/salidas-programacion/pendientes', { params });
+    return apiClient.get<{ success: boolean; data: ProgramacionPendiente[] }>('/almacen/salidas-programacion/pendientes', params);
   },
 
   // Ver detalle de una programación con sus insumos
@@ -85,7 +85,7 @@ export const salidasProgramacionService = {
     fecha_desde?: string;
     fecha_hasta?: string;
   }) => {
-    return apiClient.get<{ success: boolean; data: ProgramacionPendiente[] }>('/almacen/salidas-programacion/historial', { params });
+    return apiClient.get<{ success: boolean; data: ProgramacionPendiente[] }>('/almacen/salidas-programacion/historial', params);
   },
 
   // Ver detalle para devolución de materiales entregados

@@ -1,5 +1,6 @@
 import { salidasProgramacionService, type ProgramacionPendiente, type InsumoProgamacion } from './salidas-programacion.service';
 import { mostrarToast, confirmarAccion } from '../../../shared/toast';
+import { ApiError } from '../../../core/api/api.client';
 import './salidas-programacion.css';
 
 let programacionesPendientes: ProgramacionPendiente[] = [];
@@ -169,7 +170,9 @@ async function cargarPendientes() {
     enlazarEventosPendientes();
   } catch (error) {
     console.error('Error cargando pendientes:', error);
-    contenedor.innerHTML = '<div class="sp-error">Error al cargar datos</div>';
+    const mensaje = obtenerMensajeError(error, 'Error al cargar datos');
+    contenedor.innerHTML = `<div class="sp-error">${mensaje}</div>`;
+    mostrarToast('error', 'Error', mensaje);
     ocultarPaginacion();
   }
 }
@@ -206,7 +209,9 @@ async function cargarHistorial() {
     enlazarEventosHistorial();
   } catch (error) {
     console.error('Error cargando historial:', error);
-    contenedor.innerHTML = '<div class="sp-error">Error al cargar historial</div>';
+    const mensaje = obtenerMensajeError(error, 'Error al cargar historial');
+    contenedor.innerHTML = `<div class="sp-error">${mensaje}</div>`;
+    mostrarToast('error', 'Error', mensaje);
     ocultarPaginacion();
   }
 }
@@ -713,7 +718,7 @@ async function confirmarEntrega(e: Event) {
     await cargarPendientes();
   } catch (error: any) {
     console.error('Error confirmando salida:', error);
-    mostrarToast('error', 'Error', error.response?.data?.message || 'No se pudo confirmar la salida');
+    mostrarToast('error', 'Error', obtenerMensajeError(error, 'No se pudo confirmar la salida'));
     btn.disabled = false;
     btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Confirmar Entrega';
   }
@@ -761,7 +766,7 @@ async function registrarDevolucion(e: Event) {
     await cargarHistorial();
   } catch (error: any) {
     console.error('Error registrando devolución:', error);
-    mostrarToast('error', 'Error', error.response?.data?.message || 'No se pudo registrar la devolución');
+    mostrarToast('error', 'Error', obtenerMensajeError(error, 'No se pudo registrar la devolución'));
     btn.disabled = false;
     btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg> Registrar Devolución';
   }
@@ -786,4 +791,21 @@ function formatFecha(fecha: string): string {
     return `${parseInt(d, 10)} ${meses[mesIdx] || m} ${y}`;
   }
   return fecha;
+}
+
+function obtenerMensajeError(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    const errorsMap = error.data?.errors as Record<string, string[]> | undefined;
+    const primerError = errorsMap ? Object.values(errorsMap)[0]?.[0] : undefined;
+
+    return (
+      error.data?.message ||
+      (Array.isArray(error.data?.errors)
+        ? error.data.errors.join(', ')
+        : primerError) ||
+      fallback
+    );
+  }
+
+  return fallback;
 }

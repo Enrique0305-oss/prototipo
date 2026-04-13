@@ -445,13 +445,6 @@ function initMantenimientoTabEvents() {
     cargarMantenimientos();
   });
 
-  // Abrir modal desde botón del header
-  document.getElementById('btnAgendarMantenimiento')?.addEventListener('click', () => {
-    limpiarFormMant();
-    document.getElementById('modal-mant-titulo')!.textContent = 'Agendar Mantenimiento';
-    if (modal) modal.style.display = 'flex';
-  });
-
   // Cerrar modales
   document.getElementById('btn-cerrar-modal-mant')?.addEventListener('click', () => {
     if (modal) modal.style.display = 'none';
@@ -937,7 +930,7 @@ function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
         <div style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
             <strong style="font-size:15px; color:#1e293b;">${prog.equipo?.descripcion || 'Equipo'}</strong>
-            <span style="font-size:12px; color:#94a3b8;">${prog.equipo?.marca || ''} ${prog.equipo?.modelo || ''}</span>
+            <span style="font-size:12px; color:#94a3b8;">${prog.equipo?.marca || ''} ${prog.equipo?.modelo || ''}${(prog.equipo as any)?.serie !== undefined && (prog.equipo as any)?.serie !== null ? ` - Serie ${(prog.equipo as any).serie}` : ''}</span>
             ${categoriaBadge(tipo)}
           </div>
           <div style="font-size:13px; color:#0f172a; margin-bottom:8px;"><strong>Motivo:</strong> ${motivo}</div>
@@ -1120,7 +1113,7 @@ async function cargarDropdownsProg() {
     const progEq = document.getElementById('prog-equipo') as HTMLSelectElement;
     if (progEq) {
       progEq.innerHTML = '<option value="">Seleccione equipo...</option>' +
-        equiposLista.map(e => `<option value="${e.id}">${e.descripcion} - ${e.marca} ${e.modelo}</option>`).join('');
+        equiposLista.map(e => `<option value="${e.id}">${e.descripcion} - ${e.marca} ${e.modelo} - Serie ${e.serie}</option>`).join('');
     }
 
     actualizarOpcionesMotivoProgramacion();
@@ -1128,7 +1121,7 @@ async function cargarDropdownsProg() {
     const filterEq = document.getElementById('prog-filter-equipo') as HTMLSelectElement;
     if (filterEq) {
       filterEq.innerHTML = '<option value="">Todos los equipos</option>' +
-        equiposLista.map(e => `<option value="${e.id}">${e.descripcion} - ${e.marca} ${e.modelo}</option>`).join('');
+        equiposLista.map(e => `<option value="${e.id}">${e.descripcion} - ${e.marca} ${e.modelo} - Serie ${e.serie}</option>`).join('');
     }
   } catch (error) {
     console.error('Error cargando dropdowns programación:', error);
@@ -1522,12 +1515,6 @@ export function renderAlmacenMantenimiento() {
             </svg>
             Mantenimiento de Equipos
           </h1>
-          <button class="btn-primary" id="btnAgendarMantenimiento">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Agendar Mantenimiento
-          </button>
         </div>
       </div>
 
@@ -1909,7 +1896,8 @@ function initGestionEquiposEvents() {
       if (modal) modal.style.display = 'none';
       cargarEquipos();
     } catch (error: any) {
-      const msg = error?.errors ? Object.values(error.errors).flat().join(', ') : 'Error al guardar equipo';
+      const errores = error?.data?.errors || error?.errors;
+      const msg = errores ? Object.values(errores).flat().join(', ') : (error?.data?.message || 'Error al guardar equipo');
       mostrarToast('error', 'Error', String(msg));
     }
   });

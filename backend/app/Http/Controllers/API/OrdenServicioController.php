@@ -165,6 +165,89 @@ class OrdenServicioController extends Controller
             ];
         });
 
+        $recetaServicio = collect($cotizacion->receta_servicio ?? []);
+        if ($recetaServicio->isEmpty()) {
+            $recetaServicio = $cotizacion->detalles->flatMap(function ($detalle) {
+                $recetas = $detalle->servicio?->productosReceta ?? collect();
+
+                return $recetas->map(function ($receta) use ($detalle) {
+                    return [
+                        'id_servicio' => $detalle->id_servicio,
+                        'id_equipo' => $receta->id_equipo,
+                        'equipo_descripcion' => $receta->equipo?->descripcion ?? '',
+                        'id_producto' => $receta->id_producto,
+                        'cantidad' => $receta->cantidad_default,
+                        'observacion' => $receta->observacion,
+                        'id_cliente_planta' => $detalle->id_cliente_planta,
+                        'id_cliente_planta_area' => $detalle->id_cliente_planta_area,
+                    ];
+                });
+            });
+        }
+
+        $productos = [];
+        $equipos = [];
+        $productosIndex = [];
+        $equiposIndex = [];
+
+        foreach ($recetaServicio as $row) {
+            $idServicio = (int) ($row['id_servicio'] ?? 0);
+            $idPlanta = $row['id_cliente_planta'] ?? null;
+            $idArea = $row['id_cliente_planta_area'] ?? null;
+            $idEquipo = $row['id_equipo'] ?? null;
+            $idProducto = (int) ($row['id_producto'] ?? 0);
+
+            if (!$idServicio || !$idProducto) {
+                continue;
+            }
+
+            $areaKey = is_array($idArea) ? json_encode($idArea) : ($idArea ?? 0);
+            $productoKey = implode('|', [
+                $idServicio,
+                $idPlanta ?? 0,
+                $areaKey,
+                $idEquipo ?? 0,
+                $idProducto,
+            ]);
+
+            if (!isset($productosIndex[$productoKey])) {
+                $productosIndex[$productoKey] = true;
+                $productos[] = [
+                    'id_producto' => $idProducto,
+                    'cantidad' => (float) ($row['cantidad'] ?? 1),
+                    'observacion' => (string) ($row['observacion'] ?? ''),
+                    'id_servicio' => $idServicio,
+                    'id_cliente_planta' => $idPlanta,
+                    'id_cliente_planta_area' => is_array($idArea) ? ($idArea[0] ?? null) : $idArea,
+                    'id_equipo' => $idEquipo ?: null,
+                    'equipo_descripcion' => (string) ($row['equipo_descripcion'] ?? ''),
+                ];
+            }
+
+            if (!$idEquipo) {
+                continue;
+            }
+
+            $equipoKey = implode('|', [
+                $idServicio,
+                $idPlanta ?? 0,
+                $areaKey,
+                $idEquipo,
+            ]);
+
+            if (!isset($equiposIndex[$equipoKey])) {
+                $equiposIndex[$equipoKey] = true;
+                $equipos[] = [
+                    'id_equipo' => $idEquipo,
+                    'observacion' => (string) ($row['observacion'] ?? ''),
+                    'equipo_descripcion' => (string) ($row['equipo_descripcion'] ?? ''),
+                    'id_servicio' => $idServicio,
+                    'id_cliente_planta' => $idPlanta,
+                    'id_cliente_planta_area' => is_array($idArea) ? ($idArea[0] ?? null) : $idArea,
+                ];
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -187,6 +270,8 @@ class OrdenServicioController extends Controller
                 'igv' => $cotizacion->igv,
                 'incluye_igv' => (bool) $cotizacion->incluye_igv,
                 'detalles' => $detalles,
+                'productos' => $productos,
+                'equipos' => $equipos,
             ]
         ]);
     }

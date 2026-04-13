@@ -60,7 +60,7 @@ class KardexController extends Controller
                 'id_referencia' => $mov->id_referencia,
                 'usuario' => $mov->usuario ? ($mov->usuario->nombre . ' ' . $mov->usuario->apellidos) : 'Sistema',
                 'observacion' => $mov->observacion,
-                'fecha_movimiento' => $mov->fecha_movimiento,
+                'fecha_movimiento' => $mov->fecha_movimiento?->toIso8601String(),
             ];
         });
 
@@ -92,7 +92,7 @@ class KardexController extends Controller
                 'referencia' => $mov->referencia,
                 'usuario' => $mov->usuario ? ($mov->usuario->nombre . ' ' . $mov->usuario->apellidos) : 'Sistema',
                 'observacion' => $mov->observacion,
-                'fecha_movimiento' => $mov->fecha_movimiento,
+                'fecha_movimiento' => $mov->fecha_movimiento?->toIso8601String(),
             ];
         });
 

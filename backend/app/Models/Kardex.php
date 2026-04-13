@@ -84,6 +84,7 @@ class Kardex extends Model
             'id_referencia' => $data['id_referencia'] ?? null,
             'id_usuario' => $data['id_usuario'] ?? null,
             'observacion' => $data['observacion'] ?? null,
+            'fecha_movimiento' => now('America/Lima'),
         ]);
 
         // Actualizar inventario

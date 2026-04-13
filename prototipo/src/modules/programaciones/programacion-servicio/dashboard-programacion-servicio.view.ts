@@ -80,6 +80,85 @@ function getDataServiciosOnly(programaciones: ProgramacionDashboard[]): Programa
   });
 }
 
+function navigateToProgramacionServicio(): void {
+  const navigator = (window as any).navigateToModule as
+    | ((menuName: string, submenuName?: string, options?: { collapseSidebar?: boolean }) => void)
+    | undefined;
+
+  if (navigator) {
+    navigator('Programaciones', 'Programación Servicio', { collapseSidebar: true });
+    return;
+  }
+
+  const menuBtn = document.querySelector('[data-menu="Programaciones"]') as HTMLButtonElement | null;
+  menuBtn?.click();
+  setTimeout(() => {
+    const subBtn = document.querySelector('[data-submenu="Programación Servicio"]') as HTMLButtonElement | null;
+    subBtn?.click();
+  }, 120);
+}
+
+function renderServiciosPendientesBanner(odsDisponibles: any[]): void {
+  const banner = document.getElementById('prog-serv-alerta-servicios-banner');
+  if (!banner) return;
+
+  const totalOrdenes = odsDisponibles.length;
+  const totalServicios = odsDisponibles.reduce((acc, orden) => {
+    const detalles = Array.isArray(orden?.detalles) ? orden.detalles.length : 0;
+    return acc + detalles;
+  }, 0);
+
+  if (totalServicios <= 0) {
+    banner.innerHTML = '';
+    return;
+  }
+
+  banner.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;margin-bottom:8px;background:linear-gradient(135deg,#eff6ff 0%,#bae6fd 100%);border:1px solid #0284c7;border-left:5px solid #0369a1;border-radius:10px;box-shadow:0 2px 8px rgba(3,105,161,.15);animation:bannerSlideIn .4s ease-out;">
+      <div style="flex-shrink:0;width:44px;height:44px;background:#0369a1;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M8 6h13"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path></svg>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:15px;color:#0c4a6e;margin-bottom:2px;">Servicios pendientes por programar</div>
+        <div style="font-size:13px;color:#075985;">Tienes <strong>${totalServicios}</strong> servicio${totalServicios > 1 ? 's' : ''} pendientes en <strong>${totalOrdenes}</strong> orden${totalOrdenes > 1 ? 'es' : ''}.</div>
+      </div>
+      <button id="prog-btn-ir-programacion-servicio" style="flex-shrink:0;padding:8px 18px;background:#0369a1;color:white;border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;transition:background .2s;white-space:nowrap;">Ir a Programación →</button>
+    </div>
+  `;
+
+  document.getElementById('prog-btn-ir-programacion-servicio')?.addEventListener('click', () => {
+    navigateToProgramacionServicio();
+  });
+}
+
+function renderFabricacionPendienteBanner(ordenesDisponibles: any[]): void {
+  const banner = document.getElementById('prog-serv-alerta-fabricacion-banner');
+  if (!banner) return;
+
+  const totalPendientes = ordenesDisponibles.length;
+  if (totalPendientes <= 0) {
+    banner.innerHTML = '';
+    return;
+  }
+
+  banner.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;padding:14px 20px;margin-bottom:8px;background:linear-gradient(135deg,#f5f3ff 0%,#ddd6fe 100%);border:1px solid #7c3aed;border-left:5px solid #5b21b6;border-radius:10px;box-shadow:0 2px 8px rgba(91,33,182,.18);animation:bannerSlideIn .4s ease-out;">
+      <div style="flex-shrink:0;width:44px;height:44px;background:#5b21b6;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 9h6"></path><path d="M9 15h6"></path></svg>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:15px;color:#4c1d95;margin-bottom:2px;">Fabricación pendiente por programar</div>
+        <div style="font-size:13px;color:#5b21b6;">Tienes <strong>${totalPendientes}</strong> orden${totalPendientes > 1 ? 'es' : ''} de fabricación pendientes de programación.</div>
+      </div>
+      <button id="prog-btn-ir-programacion-fabricacion" style="flex-shrink:0;padding:8px 18px;background:#5b21b6;color:white;border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;transition:background .2s;white-space:nowrap;">Ir a Programación →</button>
+    </div>
+  `;
+
+  document.getElementById('prog-btn-ir-programacion-fabricacion')?.addEventListener('click', () => {
+    navigateToProgramacionServicio();
+  });
+}
+
 function normalizarFechaISO(valor: string | undefined | null): string | null {
   if (!valor) return null;
   const raw = String(valor).trim();
@@ -280,16 +359,22 @@ async function refreshDashboard(): Promise<void> {
   if (root) root.setAttribute('data-loading', 'true');
 
   try {
-    const [programacionesRes, tecnicosRes] = await Promise.all([
+    const [programacionesRes, tecnicosRes, odsRes, fabricacionRes] = await Promise.all([
       programacionService.getAll(monthParams() as any),
       programacionService.getTecnicos(),
+      programacionService.getODSDisponibles(),
+      programacionService.getOrdenesFabricacionDisponibles(),
     ]);
 
     programacionesServicioData = getDataServiciosOnly(extractList<ProgramacionDashboard>(programacionesRes));
     tecnicosData = extractList<Tecnico>(tecnicosRes);
+    const odsDisponibles = extractList<any>(odsRes);
+    const fabricacionDisponibles = extractList<any>(fabricacionRes);
 
     renderMetrics(programacionesServicioData);
     renderCharts(programacionesServicioData);
+    renderServiciosPendientesBanner(odsDisponibles);
+    renderFabricacionPendienteBanner(fabricacionDisponibles);
 
     const periodLabel = document.getElementById('prog-serv-dash-period-label');
     if (periodLabel) periodLabel.textContent = formatMonthLabel(dashboardMonth);
@@ -317,6 +402,9 @@ export function renderDashboardProgramacionServicio(): string {
           <button class="prog-btn-secondary" id="prog-serv-dash-refresh">Actualizar</button>
         </div>
       </div>
+
+      <div id="prog-serv-alerta-servicios-banner"></div>
+      <div id="prog-serv-alerta-fabricacion-banner"></div>
 
       <section style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:16px 18px;box-shadow:0 8px 24px rgba(15,23,42,.05);">
         <div class="stats-row" style="margin:0 0 18px;">

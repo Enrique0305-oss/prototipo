@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class EquipoController extends Controller
 {
@@ -92,11 +93,30 @@ class EquipoController extends Controller
                 'descripcion' => 'required|string|max:100',
                 'marca' => 'required|string|max:100',
                 'modelo' => 'required|string|max:100',
-                'serie' => 'required|integer|unique:equipo,serie',
+                'serie' => [
+                    'required',
+                    'integer',
+                    Rule::unique('equipo', 'serie')->where(function ($query) use ($request) {
+                        return $query->where('descripcion', $request->descripcion)
+                                     ->where('marca', $request->marca)
+                                     ->where('modelo', $request->modelo);
+                    }),
+                ],
                 'encargado' => 'required|string|max:100',
                 'responsable' => 'required|string|max:100',
                 'contacto' => 'required|integer',
                 'estado' => 'nullable|in:Activo,Inactivo'
+            ], [
+                'descripcion.required' => 'La descripción es obligatoria.',
+                'marca.required' => 'La marca es obligatoria.',
+                'modelo.required' => 'El modelo es obligatorio.',
+                'serie.required' => 'El número de serie es obligatorio.',
+                'serie.integer' => 'El número de serie debe ser numérico.',
+                'serie.unique' => 'Ya existe un equipo con ese número de serie.',
+                'encargado.required' => 'El encargado es obligatorio.',
+                'responsable.required' => 'El responsable es obligatorio.',
+                'contacto.required' => 'El contacto es obligatorio.',
+                'contacto.integer' => 'El contacto debe ser numérico.',
             ]);
 
             // Asignar estado por defecto si no se envía
@@ -139,15 +159,32 @@ class EquipoController extends Controller
                 ], 404);
             }
 
+            $descripcionBase = $request->input('descripcion', $equipo->descripcion);
+            $marcaBase = $request->input('marca', $equipo->marca);
+            $modeloBase = $request->input('modelo', $equipo->modelo);
+
             $validated = $request->validate([
                 'descripcion' => 'string|max:100',
                 'marca' => 'string|max:100',
                 'modelo' => 'string|max:100',
-                'serie' => 'integer|unique:equipo,serie,' . $id,
+                'serie' => [
+                    'integer',
+                    Rule::unique('equipo', 'serie')
+                        ->ignore($id)
+                        ->where(function ($query) use ($descripcionBase, $marcaBase, $modeloBase) {
+                            return $query->where('descripcion', $descripcionBase)
+                                         ->where('marca', $marcaBase)
+                                         ->where('modelo', $modeloBase);
+                        }),
+                ],
                 'encargado' => 'string|max:100',
                 'responsable' => 'string|max:100',
                 'contacto' => 'integer',
                 'estado' => 'in:Activo,Inactivo'
+            ], [
+                'serie.integer' => 'El número de serie debe ser numérico.',
+                'serie.unique' => 'Ya existe otro equipo con ese número de serie.',
+                'contacto.integer' => 'El contacto debe ser numérico.',
             ]);
 
             $equipo->update($validated);

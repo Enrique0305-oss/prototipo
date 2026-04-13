@@ -7,6 +7,7 @@ use App\Models\ProgramacionServicio;
 use App\Models\ProgramacionInsumo;
 use App\Models\ProgramacionTecnico;
 use App\Models\OrdenServicio;
+use App\Models\OrdenServicioProducto;
 use App\Models\DetalleOrdenServicio;
 use App\Models\ServicioProducto;
 use App\Models\Kardex;
@@ -911,13 +912,41 @@ class ProgramacionServicioController extends Controller
      */
     private function asignarInsumosDesdeReceta(ProgramacionServicio $prog, ?int $idUsuario): void
     {
-        $receta = ServicioProducto::where('id_servicio', $prog->id_servicio)->get();
+        $insumos = collect();
 
-        foreach ($receta as $item) {
+        // Priorizar la receta específica de la ODS (si existe), porque puede diferir de la receta maestra del servicio.
+        if (!empty($prog->id_orden_servicio)) {
+            $insumosOrden = OrdenServicioProducto::query()
+                ->where('id_orden_servicio', $prog->id_orden_servicio)
+                ->where('id_servicio', $prog->id_servicio)
+                ->get()
+                ->groupBy('id_producto')
+                ->map(fn ($rows, $idProducto) => [
+                    'id_producto' => (int) $idProducto,
+                    'cantidad' => (int) round((float) $rows->sum('cantidad')),
+                ])
+                ->values();
+
+            $insumos = $insumosOrden->filter(fn ($item) => $item['cantidad'] > 0)->values();
+        }
+
+        // Fallback: receta base del servicio.
+        if ($insumos->isEmpty()) {
+            $insumos = ServicioProducto::where('id_servicio', $prog->id_servicio)
+                ->get()
+                ->map(fn ($item) => [
+                    'id_producto' => (int) $item->id_producto,
+                    'cantidad' => (int) round((float) $item->cantidad_default),
+                ])
+                ->filter(fn ($item) => $item['cantidad'] > 0)
+                ->values();
+        }
+
+        foreach ($insumos as $item) {
             ProgramacionInsumo::create([
                 'id_programacion' => $prog->id,
-                'id_producto' => $item->id_producto,
-                'cantidad_asignada' => $item->cantidad_default,
+                'id_producto' => $item['id_producto'],
+                'cantidad_asignada' => $item['cantidad'],
                 'estado' => 'Asignado', // Asignado teóricamente, pendiente de entrega por almacén
             ]);
 

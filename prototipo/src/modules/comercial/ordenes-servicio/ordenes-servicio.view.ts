@@ -860,6 +860,35 @@ async function cargarDatosCotizacion(cotizacionId: number) {
       );
     });
 
+    // Auto-llenar productos y equipos derivados de la cotización
+    odsProductoRows = Array.isArray(data.productos)
+      ? data.productos.map((p: any) => ({
+          id_producto: Number(p.id_producto || 0),
+          cantidad: Number(p.cantidad || 0),
+          observacion: p.observacion || '',
+          id_servicio: p.id_servicio || 0,
+          id_cliente_planta: p.id_cliente_planta || null,
+          id_cliente_planta_area: p.id_cliente_planta_area || null,
+          id_equipo: p.id_equipo || null,
+          equipo_descripcion: p.equipo_descripcion || '',
+          stock: p.stock,
+        }))
+      : [];
+
+    odsEquipoRows = Array.isArray(data.equipos)
+      ? data.equipos.map((e: any) => ({
+          id_equipo: Number(e.id_equipo || 0),
+          observacion: e.observacion || '',
+          equipo_descripcion: e.equipo_descripcion || '',
+          id_servicio: e.id_servicio || 0,
+          id_cliente_planta: e.id_cliente_planta || null,
+          id_cliente_planta_area: e.id_cliente_planta_area || null,
+        }))
+      : [];
+
+    renderProductosODS();
+    renderEquiposODS();
+
     calcularTotalCosto();
 
   } catch (e) {
@@ -2106,6 +2135,10 @@ export function initOrdenesServicioEvents() {
       (document.getElementById('ods-fecha-aceptacion') as HTMLInputElement).disabled = true;
       (document.getElementById('ods-cotizacion-info') as HTMLElement).style.display = 'none';
       (document.getElementById('ods-detalle-body') as HTMLElement).innerHTML = '';
+      odsProductoRows = [];
+      odsEquipoRows = [];
+      renderProductosODS();
+      renderEquiposODS();
       calcularTotalCosto();
     }
   });

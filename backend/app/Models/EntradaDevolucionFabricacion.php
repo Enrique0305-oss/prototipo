@@ -15,6 +15,7 @@ class EntradaDevolucionFabricacion extends Model
         'cantidad_producida_total',
         'motivo_diferencia',
         'tiene_sobrante_materia_prima',
+        'tiene_diferencia_materia_prima',
         'observaciones',
         'creado_por',
         'estado',
@@ -25,6 +26,7 @@ class EntradaDevolucionFabricacion extends Model
         'cantidad_esperada_total' => 'decimal:3',
         'cantidad_producida_total' => 'decimal:3',
         'tiene_sobrante_materia_prima' => 'boolean',
+        'tiene_diferencia_materia_prima' => 'boolean',
         'fecha_realizado' => 'datetime',
     ];
 
