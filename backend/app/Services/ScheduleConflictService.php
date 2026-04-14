@@ -114,9 +114,13 @@ class ScheduleConflictService
             ->all();
 
         $servicios = DB::table('programacion_servicio')
-            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_tecnico_asignado')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_tecnico_asignado', 'id_supervisor', 'id_vehiculo', 'requiere_asignacion_recursos')
             ->whereDate('fecha_programada', $fecha)
             ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->where(function ($q) {
+                $q->whereNull('requiere_asignacion_recursos')
+                    ->orWhere('requiere_asignacion_recursos', false);
+            })
             ->when(isset($ignore['programacion_servicio']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_servicio']))
             ->get();
 
@@ -130,6 +134,10 @@ class ScheduleConflictService
                 $asignados = [(int) ($row->id_tecnico_asignado ?? 0)];
                 foreach (($pivot[(int) $row->id] ?? collect()) as $p) {
                     $asignados[] = (int) $p->id_tecnico;
+                }
+
+                if (!self::servicioBloqueaAgenda($row, $asignados, null)) {
+                    continue;
                 }
 
                 $asignados = self::normalizeIds($asignados);
@@ -262,13 +270,21 @@ class ScheduleConflictService
             ->all();
 
         $servicios = DB::table('programacion_servicio')
-            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor', 'id_vehiculo', 'requiere_asignacion_recursos')
             ->whereDate('fecha_programada', $fecha)
             ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->where(function ($q) {
+                $q->whereNull('requiere_asignacion_recursos')
+                    ->orWhere('requiere_asignacion_recursos', false);
+            })
             ->when(isset($ignore['programacion_servicio']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_servicio']))
             ->get();
 
         foreach ($servicios as $row) {
+            if (!self::servicioBloqueaAgenda($row, null, null)) {
+                continue;
+            }
+
             $asignados = self::extractIdsFromJsonColumn($row->id_supervisor ?? null);
             $idConflicto = self::firstIntersectingId($personalIds, $asignados);
             if (!$idConflicto) {
@@ -519,9 +535,13 @@ class ScheduleConflictService
         }
 
         $servicios = DB::table('programacion_servicio')
-            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin')
+            ->select('id', 'fecha_programada', 'hora_inicio', 'hora_fin', 'id_supervisor', 'id_vehiculo', 'requiere_asignacion_recursos')
             ->whereDate('fecha_programada', $fecha)
             ->where('estado_ejecucion', '!=', 'Cancelado')
+            ->where(function ($q) {
+                $q->whereNull('requiere_asignacion_recursos')
+                    ->orWhere('requiere_asignacion_recursos', false);
+            })
             ->when(isset($ignore['programacion_servicio']), fn ($q) => $q->where('id', '!=', (int) $ignore['programacion_servicio']))
             ->get();
 
@@ -533,6 +553,10 @@ class ScheduleConflictService
 
             foreach ($servicios as $row) {
                 $asignados = collect($pivot[(int) $row->id] ?? [])->pluck('id_exponente')->map(fn ($id) => (int) $id)->all();
+                if (!self::servicioBloqueaAgenda($row, null, $asignados)) {
+                    continue;
+                }
+
                 $idConflicto = self::firstIntersectingId($exponenteIds, self::normalizeIds($asignados));
                 if (!$idConflicto) {
                     continue;
@@ -635,6 +659,34 @@ class ScheduleConflictService
             }
         }
         return null;
+    }
+
+    private static function servicioBloqueaAgenda(object $row, ?array $tecnicosAsignados, ?array $exponentesAsignados): bool
+    {
+        if (!empty($row->requiere_asignacion_recursos)) {
+            return false;
+        }
+
+        $tieneHoraInicio = self::normalizeTime($row->hora_inicio ?? null) !== null;
+        $tieneHoraFin = self::normalizeTime($row->hora_fin ?? null) !== null;
+        if (!$tieneHoraInicio || !$tieneHoraFin) {
+            return false;
+        }
+
+        if (is_array($tecnicosAsignados)) {
+            return !empty(self::normalizeIds($tecnicosAsignados));
+        }
+
+        if (is_array($exponentesAsignados)) {
+            return !empty(self::normalizeIds($exponentesAsignados));
+        }
+
+        $supervisores = self::extractIdsFromJsonColumn($row->id_supervisor ?? null);
+        if (empty($supervisores)) {
+            return false;
+        }
+
+        return true;
     }
 
     private static function normalizeTime(?string $time): ?string

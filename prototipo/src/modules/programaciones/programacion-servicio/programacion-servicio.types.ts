@@ -7,4 +7,5 @@ export type {
   EstadoEjecucion,
   VistaProgramacion,
   SugerenciaSiguiente,
+  ResumenPendientesRecursos,
 } from '../programaciones.types';
