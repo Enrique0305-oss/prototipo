@@ -26,6 +26,20 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
   final List<XFile> _photos = <XFile>[];
   bool _saving = false;
 
+  _StatusPalette _paletteForStatus(String status) {
+    final normalized = status.toLowerCase();
+    if (normalized.contains('cancel')) {
+      return const _StatusPalette(colors: [Color(0xFFF35454), Color(0xFFE11E1E)]);
+    }
+    if (normalized.contains('realizado') || normalized.contains('complet')) {
+      return const _StatusPalette(colors: [Color(0xFF18B89A), Color(0xFF12A56E)]);
+    }
+    if (normalized.contains('program')) {
+      return const _StatusPalette(colors: [Color(0xFF3F7EF0), Color(0xFF2B5FDE)]);
+    }
+    return const _StatusPalette(colors: [Color(0xFF4E6283), Color(0xFF394E6D)]);
+  }
+
   @override
   void dispose() {
     _observationController.dispose();
@@ -71,24 +85,65 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = _paletteForStatus(widget.service.status);
+    final hasSchedule =
+        (widget.service.startTime != null && widget.service.startTime!.trim().isNotEmpty) ||
+        (widget.service.endTime != null && widget.service.endTime!.trim().isNotEmpty);
+    final schedule = hasSchedule
+        ? '${(widget.service.startTime ?? '').trim()} - ${(widget.service.endTime ?? '').trim()}'
+        : null;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Servicio en curso')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.service.title, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 6),
-                  Text(widget.service.client),
-                  const SizedBox(height: 6),
-                  Text(widget.service.address ?? 'Sin direccion'),
-                ],
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: palette.colors,
               ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.service.client,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 24,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.service.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 20,
+                  ),
+                ),
+                if (schedule != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    schedule,
+                    style: const TextStyle(
+                      color: Color(0xE6FFFFFF),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 4),
+                Text(
+                  widget.service.address ?? 'Sin direccion',
+                  style: const TextStyle(color: Color(0xE6FFFFFF)),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 10),
@@ -164,4 +219,10 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
       ),
     );
   }
+}
+
+class _StatusPalette {
+  const _StatusPalette({required this.colors});
+
+  final List<Color> colors;
 }

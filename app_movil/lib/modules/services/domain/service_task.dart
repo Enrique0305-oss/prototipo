@@ -50,7 +50,8 @@ class ServiceTask {
     final service = json['servicio'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final order = json['orden_servicio'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final clientMap = order['cliente'] as Map<String, dynamic>? ?? <String, dynamic>{};
-    final coords = _parseCoordinates((json['coordenadas'] ?? '').toString());
+    final planta = json['planta'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    final coords = _resolveCoordinates(json, planta);
 
     return ServiceTask(
       id: (json['id'] ?? 0) as int,
@@ -67,18 +68,61 @@ class ServiceTask {
     );
   }
 
+  static (double?, double?) _resolveCoordinates(
+    Map<String, dynamic> programacion,
+    Map<String, dynamic> planta,
+  ) {
+    // Prioridad: coordenadas de programacion; fallback: coordenadas de planta.
+    final rawProgramacion = (programacion['coordenadas'] ?? '').toString().trim();
+    if (rawProgramacion.isNotEmpty) {
+      final parsed = _parseCoordinates(rawProgramacion);
+      if (parsed.$1 != null && parsed.$2 != null) {
+        return parsed;
+      }
+    }
+
+    final rawPlanta = (planta['coordenadas'] ?? '').toString().trim();
+    if (rawPlanta.isNotEmpty) {
+      final parsed = _parseCoordinates(rawPlanta);
+      if (parsed.$1 != null && parsed.$2 != null) {
+        return parsed;
+      }
+    }
+
+    return (null, null);
+  }
+
   static (double?, double?) _parseCoordinates(String raw) {
     if (raw.trim().isEmpty) {
       return (null, null);
     }
 
-    final parts = raw.split(',');
-    if (parts.length != 2) {
+    final cleaned = raw
+        .replaceAll('(', ' ')
+        .replaceAll(')', ' ')
+        .replaceAll(';', ',')
+        .trim();
+
+    final parts = cleaned
+        .split(RegExp(r'\s*,\s*|\s+'))
+        .where((value) => value.trim().isNotEmpty)
+        .toList(growable: false);
+
+    if (parts.length < 2) {
       return (null, null);
     }
 
     final lat = double.tryParse(parts[0].trim());
     final lng = double.tryParse(parts[1].trim());
+    if (lat == null || lng == null) {
+      return (null, null);
+    }
+
+    // Si detectamos orden lng,lat de forma no ambigua, lo normalizamos a lat,lng.
+    if (lat.abs() > 90 && lng.abs() <= 90) {
+      return (lng, lat);
+    }
+
     return (lat, lng);
   }
 }

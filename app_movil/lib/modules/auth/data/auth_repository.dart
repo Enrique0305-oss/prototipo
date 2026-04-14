@@ -73,6 +73,17 @@ class AuthRepository {
   Future<UserSession?> restoreSession() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_tokenKey);
+
+    // Si se paso de modo demo a modo real, descartamos token simulado.
+    if (!AppConfig.useMockData && token == 'mock-token') {
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_nameKey);
+      await prefs.remove(_roleKey);
+      await prefs.remove(_emailKey);
+      await prefs.remove(_idKey);
+      return null;
+    }
+
     if (token == null || token.isEmpty) {
       if (AppConfig.useMockData) {
         final session = UserSession(

@@ -1,11 +1,11 @@
 -- phpMyAdmin SQL Dump
--- version 5.2.2
+-- version 5.2.3
 -- https://www.phpmyadmin.net/
 --
--- Servidor: 127.0.0.1:3306
--- Tiempo de generación: 13-04-2026 a las 23:40:55
--- Versión del servidor: 11.8.6-MariaDB-log
--- Versión de PHP: 7.2.34
+-- Servidor: localhost:3306
+-- Tiempo de generación: 14-04-2026 a las 04:00:07
+-- Versión del servidor: 8.0.44
+-- Versión de PHP: 8.4.15
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -18,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Base de datos: `u647909462_qscifumigacion`
+-- Base de datos: `sfumigacion`
 --
 
 -- --------------------------------------------------------
@@ -28,7 +28,7 @@ SET time_zone = "+00:00";
 --
 
 CREATE TABLE `actividades_mantenieminto` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `categoria` enum('Programado','Entregado','Garantia') DEFAULT NULL,
   `motivo` varchar(255) DEFAULT NULL,
   `tipo_mantenimiento` enum('Preventivo','Correctivo') DEFAULT NULL,
@@ -52,7 +52,7 @@ INSERT INTO `actividades_mantenieminto` (`id`, `categoria`, `motivo`, `tipo_mant
 --
 
 CREATE TABLE `area` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `estado` enum('Activo','Inactivo') DEFAULT 'Activo'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -69,7 +69,8 @@ INSERT INTO `area` (`id`, `nombre`, `estado`) VALUES
 (5, 'Finanzas', 'Activo'),
 (6, 'Gerencia', 'Activo'),
 (7, 'Almacén', 'Activo'),
-(8, 'Programacion', 'Activo');
+(8, 'Programacion', 'Activo'),
+(9, 'Tecnico', 'Activo');
 
 -- --------------------------------------------------------
 
@@ -78,9 +79,9 @@ INSERT INTO `area` (`id`, `nombre`, `estado`) VALUES
 --
 
 CREATE TABLE `cache` (
-  `key` varchar(255) NOT NULL,
-  `value` mediumtext NOT NULL,
-  `expiration` int(11) NOT NULL
+  `key` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `value` mediumtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expiration` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -90,9 +91,9 @@ CREATE TABLE `cache` (
 --
 
 CREATE TABLE `cache_locks` (
-  `key` varchar(255) NOT NULL,
-  `owner` varchar(255) NOT NULL,
-  `expiration` int(11) NOT NULL
+  `key` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `owner` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expiration` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -102,7 +103,7 @@ CREATE TABLE `cache_locks` (
 --
 
 CREATE TABLE `caja_chica` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `fecha` date DEFAULT NULL,
   `solicitante` varchar(100) NOT NULL,
   `area` varchar(100) NOT NULL,
@@ -123,11 +124,11 @@ CREATE TABLE `caja_chica` (
 --
 
 CREATE TABLE `cargo` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_area` bigint(20) UNSIGNED DEFAULT NULL,
-  `nombre` varchar(255) NOT NULL,
-  `descripcion` text DEFAULT NULL,
-  `estado` enum('activo','inactivo') NOT NULL DEFAULT 'activo',
+  `id` bigint UNSIGNED NOT NULL,
+  `id_area` bigint UNSIGNED DEFAULT NULL,
+  `nombre` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `descripcion` text COLLATE utf8mb4_unicode_ci,
+  `estado` enum('activo','inactivo') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'activo',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -150,13 +151,13 @@ INSERT INTO `cargo` (`id`, `id_area`, `nombre`, `descripcion`, `estado`, `create
 --
 
 CREATE TABLE `catalogo_capacitacion_auditoria` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `tipo` enum('Capacitación','Asesoría') NOT NULL,
-  `nombre` varchar(200) NOT NULL,
-  `descripcion` text DEFAULT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `tipo` enum('Capacitación','Asesoría') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `nombre` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `descripcion` text COLLATE utf8mb4_unicode_ci,
   `precio_referencial` decimal(10,2) DEFAULT NULL,
-  `duracion_horas` int(11) DEFAULT NULL,
-  `estado` enum('activo','inactivo') NOT NULL DEFAULT 'activo'
+  `duracion_horas` int DEFAULT NULL,
+  `estado` enum('activo','inactivo') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'activo'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -166,7 +167,7 @@ CREATE TABLE `catalogo_capacitacion_auditoria` (
 --
 
 CREATE TABLE `categoria` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `descripcion` varchar(100) DEFAULT NULL,
   `estado` enum('Activo','Inactivo') DEFAULT 'Activo'
@@ -190,7 +191,7 @@ INSERT INTO `categoria` (`id`, `nombre`, `descripcion`, `estado`) VALUES
 --
 
 CREATE TABLE `cliente` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `nombre_empresa` varchar(100) NOT NULL,
   `ruc` char(11) NOT NULL,
   `rubro` varchar(150) NOT NULL,
@@ -225,18 +226,18 @@ INSERT INTO `cliente` (`id`, `nombre_empresa`, `ruc`, `rubro`, `direccion`, `per
 --
 
 CREATE TABLE `cliente_planta` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_cliente` int(11) NOT NULL,
-  `nombre` varchar(150) NOT NULL,
-  `direccion` varchar(255) DEFAULT NULL,
-  `distrito` varchar(100) DEFAULT NULL,
-  `provincia` varchar(100) DEFAULT NULL,
-  `departamento` varchar(100) DEFAULT NULL,
-  `referencia` varchar(255) DEFAULT NULL,
-  `coordenadas` varchar(80) DEFAULT NULL,
-  `contacto_nombre` varchar(100) DEFAULT NULL,
-  `contacto_telefono` varchar(20) DEFAULT NULL,
-  `estado` enum('Activo','Inactivo') NOT NULL DEFAULT 'Activo'
+  `id` bigint UNSIGNED NOT NULL,
+  `id_cliente` int NOT NULL,
+  `nombre` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `direccion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `distrito` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provincia` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `departamento` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `referencia` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `coordenadas` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `contacto_nombre` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `contacto_telefono` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado` enum('Activo','Inactivo') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Activo'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -256,11 +257,11 @@ INSERT INTO `cliente_planta` (`id`, `id_cliente`, `nombre`, `direccion`, `distri
 --
 
 CREATE TABLE `cliente_planta_area` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED NOT NULL,
-  `nombre` varchar(150) NOT NULL,
-  `descripcion` text DEFAULT NULL,
-  `estado` enum('Activo','Inactivo') NOT NULL DEFAULT 'Activo'
+  `id` bigint UNSIGNED NOT NULL,
+  `id_cliente_planta` bigint UNSIGNED NOT NULL,
+  `nombre` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `descripcion` text COLLATE utf8mb4_unicode_ci,
+  `estado` enum('Activo','Inactivo') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Activo'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -284,25 +285,25 @@ INSERT INTO `cliente_planta_area` (`id`, `id_cliente_planta`, `nombre`, `descrip
 --
 
 CREATE TABLE `cotizacion` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `numero_cotizacion` varchar(20) NOT NULL,
-  `id_cliente` int(11) NOT NULL,
+  `id_cliente` int NOT NULL,
   `fecha_emision` date NOT NULL,
-  `id_personal_creador` int(11) NOT NULL,
-  `id_multicim` int(11) DEFAULT NULL,
+  `id_personal_creador` int NOT NULL,
+  `id_multicim` int DEFAULT NULL,
   `estado` enum('Pendiente','Aceptada','Rechazada') DEFAULT 'Pendiente',
   `tipo_cotizacion` enum('Servicio','Producto','Capacitacion','Asesoria') NOT NULL,
-  `propuesta_tecnica` longtext DEFAULT NULL,
-  `incluye_igv` tinyint(1) NOT NULL DEFAULT 1,
+  `propuesta_tecnica` longtext,
+  `incluye_igv` tinyint(1) NOT NULL DEFAULT '1',
   `subtotal` decimal(10,2) DEFAULT NULL,
   `igv` decimal(10,2) DEFAULT NULL,
   `total` decimal(10,2) DEFAULT NULL,
-  `observaciones` text DEFAULT NULL,
-  `receta_servicio` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'JSON con receta de servicio (equipos y productos)' CHECK (json_valid(`receta_servicio`)),
-  `exponentes_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`exponentes_ids`)),
+  `observaciones` text,
+  `receta_servicio` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT 'JSON con receta de servicio (equipos y productos)',
+  `exponentes_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `objetivos_asesoria` varchar(1000) DEFAULT NULL,
   `fecha_estado_cotizacion` datetime DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ;
 
 --
 -- Volcado de datos para la tabla `cotizacion`
@@ -321,15 +322,15 @@ INSERT INTO `cotizacion` (`id`, `numero_cotizacion`, `id_cliente`, `fecha_emisio
 --
 
 CREATE TABLE `cotizacion_beneficio` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_cotizacion` int(11) NOT NULL,
-  `id_catalogo_cap_aud` bigint(20) UNSIGNED DEFAULT NULL,
-  `nombre_beneficio` varchar(255) NOT NULL,
-  `modalidad_sugerida` varchar(80) DEFAULT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `id_cotizacion` int NOT NULL,
+  `id_catalogo_cap_aud` bigint UNSIGNED DEFAULT NULL,
+  `nombre_beneficio` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `modalidad_sugerida` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `horas_capacitacion` decimal(8,2) DEFAULT NULL,
-  `precio_referencial` decimal(10,2) NOT NULL DEFAULT 0.00,
-  `observacion` varchar(255) DEFAULT NULL,
-  `orden` int(10) UNSIGNED NOT NULL DEFAULT 1
+  `precio_referencial` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `observacion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `orden` int UNSIGNED NOT NULL DEFAULT '1'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -339,29 +340,29 @@ CREATE TABLE `cotizacion_beneficio` (
 --
 
 CREATE TABLE `cotizacion_detalle` (
-  `id` int(11) NOT NULL,
-  `id_cotizacion` int(11) NOT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`id_cliente_planta_area`)),
-  `id_servicio` int(11) DEFAULT NULL,
-  `id_producto` int(11) DEFAULT NULL,
-  `id_catalogo_cap_aud` bigint(20) UNSIGNED DEFAULT NULL,
+  `id` int NOT NULL,
+  `id_cotizacion` int NOT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_servicio` int DEFAULT NULL,
+  `id_producto` int DEFAULT NULL,
+  `id_catalogo_cap_aud` bigint UNSIGNED DEFAULT NULL,
   `descripcion_manual` varchar(255) DEFAULT NULL,
-  `cantidad` int(11) NOT NULL,
+  `cantidad` int NOT NULL,
   `precio_unitario` decimal(10,2) NOT NULL,
   `frecuencia_sugerida` varchar(100) DEFAULT NULL,
   `modalidad_sugerida` varchar(50) DEFAULT NULL,
   `op_tecnicos` char(4) DEFAULT NULL,
   `supervisor` char(4) DEFAULT NULL,
-  `horas_capacitacion` int(11) DEFAULT NULL,
-  `num_participantes` int(11) DEFAULT NULL,
+  `horas_capacitacion` int DEFAULT NULL,
+  `num_participantes` int DEFAULT NULL,
   `fecha_servicio` date DEFAULT NULL,
-  `medida_tanque` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`medida_tanque`)),
+  `medida_tanque` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `fosfina_producto` varchar(200) DEFAULT NULL,
-  `fosfina_cantidad` int(11) DEFAULT NULL,
-  `meses_implementacion` int(11) DEFAULT NULL,
-  `frecuencia_visita` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`frecuencia_visita`))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  `fosfina_cantidad` int DEFAULT NULL,
+  `meses_implementacion` int DEFAULT NULL,
+  `frecuencia_visita` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin
+) ;
 
 --
 -- Volcado de datos para la tabla `cotizacion_detalle`
@@ -382,12 +383,12 @@ INSERT INTO `cotizacion_detalle` (`id`, `id_cotizacion`, `id_cliente_planta`, `i
 --
 
 CREATE TABLE `detalle_entrada_devolucion_fabricacion` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_entrada_devolucion_fabricacion` int(10) UNSIGNED NOT NULL,
-  `tipo` enum('EntradaProducto','DevolucionInsumo','ConsumoDiferenciaInsumo') NOT NULL,
-  `id_producto` int(11) NOT NULL,
+  `id` int UNSIGNED NOT NULL,
+  `id_entrada_devolucion_fabricacion` int UNSIGNED NOT NULL,
+  `tipo` enum('EntradaProducto','DevolucionInsumo','ConsumoDiferenciaInsumo') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id_producto` int NOT NULL,
   `cantidad` decimal(12,3) NOT NULL,
-  `observacion` text DEFAULT NULL,
+  `observacion` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -409,15 +410,15 @@ INSERT INTO `detalle_entrada_devolucion_fabricacion` (`id`, `id_entrada_devoluci
 --
 
 CREATE TABLE `detalle_entrega_epp` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_entrega_epp` bigint(20) UNSIGNED NOT NULL,
-  `id_producto` int(11) NOT NULL,
-  `cantidad` int(11) NOT NULL DEFAULT 1,
-  `observacion` varchar(255) DEFAULT NULL,
-  `condicion_devolucion` varchar(255) DEFAULT NULL,
-  `observacion_devolucion` varchar(255) DEFAULT NULL,
-  `estado_item` enum('Activo','Devuelto','Reemplazado') NOT NULL DEFAULT 'Activo',
-  `id_entrega_reemplazo` bigint(20) UNSIGNED DEFAULT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_entrega_epp` bigint UNSIGNED NOT NULL,
+  `id_producto` int NOT NULL,
+  `cantidad` int NOT NULL DEFAULT '1',
+  `observacion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `condicion_devolucion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `observacion_devolucion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado_item` enum('Activo','Devuelto','Reemplazado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Activo',
+  `id_entrega_reemplazo` bigint UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -436,13 +437,13 @@ INSERT INTO `detalle_entrega_epp` (`id`, `id_entrega_epp`, `id_producto`, `canti
 --
 
 CREATE TABLE `detalle_ordenes_compra` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_orden_compra` bigint(20) UNSIGNED NOT NULL,
-  `id_producto` int(11) NOT NULL,
-  `cantidad` int(11) NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_compra` bigint UNSIGNED NOT NULL,
+  `id_producto` int NOT NULL,
+  `cantidad` int NOT NULL,
   `precio_unitario` decimal(12,4) NOT NULL,
   `subtotal` decimal(12,4) NOT NULL,
-  `observacion` varchar(300) DEFAULT NULL,
+  `observacion` varchar(300) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -454,10 +455,10 @@ CREATE TABLE `detalle_ordenes_compra` (
 --
 
 CREATE TABLE `detalle_orden_asesoria` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_orden_asesoria` int(10) UNSIGNED NOT NULL,
-  `item` varchar(255) DEFAULT NULL,
-  `descripcion` text DEFAULT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_asesoria` int UNSIGNED NOT NULL,
+  `item` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `descripcion` text COLLATE utf8mb4_unicode_ci
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -467,10 +468,10 @@ CREATE TABLE `detalle_orden_asesoria` (
 --
 
 CREATE TABLE `detalle_orden_capacitacion_equipos` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_orden_capacitacion` int(10) UNSIGNED NOT NULL,
-  `equipo` varchar(255) NOT NULL,
-  `disposicion` varchar(255) NOT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_capacitacion` int UNSIGNED NOT NULL,
+  `equipo` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `disposicion` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -480,11 +481,11 @@ CREATE TABLE `detalle_orden_capacitacion_equipos` (
 --
 
 CREATE TABLE `detalle_orden_capacitacion_materiales` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_orden_capacitacion` int(10) UNSIGNED NOT NULL,
-  `material` varchar(255) NOT NULL,
-  `cantidad` int(11) NOT NULL,
-  `disposicion` varchar(255) NOT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_capacitacion` int UNSIGNED NOT NULL,
+  `material` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `cantidad` int NOT NULL,
+  `disposicion` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -494,13 +495,13 @@ CREATE TABLE `detalle_orden_capacitacion_materiales` (
 --
 
 CREATE TABLE `detalle_orden_fabricacion` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_orden_fabricacion` int(10) UNSIGNED NOT NULL,
-  `id_producto_final` int(11) NOT NULL,
+  `id` int UNSIGNED NOT NULL,
+  `id_orden_fabricacion` int UNSIGNED NOT NULL,
+  `id_producto_final` int NOT NULL,
   `cantidad` decimal(12,3) NOT NULL,
-  `receta_snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`receta_snapshot`)),
-  `insumos_requeridos` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`insumos_requeridos`))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `receta_snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `insumos_requeridos` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin
+) ;
 
 --
 -- Volcado de datos para la tabla `detalle_orden_fabricacion`
@@ -516,10 +517,10 @@ INSERT INTO `detalle_orden_fabricacion` (`id`, `id_orden_fabricacion`, `id_produ
 --
 
 CREATE TABLE `detalle_orden_producto` (
-  `id` int(11) NOT NULL,
-  `id_orden_producto` int(11) NOT NULL,
-  `id_producto` int(11) NOT NULL,
-  `cantidad` int(11) DEFAULT NULL,
+  `id` int NOT NULL,
+  `id_orden_producto` int NOT NULL,
+  `id_producto` int NOT NULL,
+  `cantidad` int DEFAULT NULL,
   `precio_unitario` decimal(10,2) DEFAULT NULL,
   `subtotal` decimal(10,2) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -538,15 +539,15 @@ INSERT INTO `detalle_orden_producto` (`id`, `id_orden_producto`, `id_producto`, 
 --
 
 CREATE TABLE `detalle_orden_servicio` (
-  `id` int(11) NOT NULL,
-  `id_orden_servicio` int(11) NOT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`id_cliente_planta_area`)),
-  `id_servicio` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id_orden_servicio` int NOT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_servicio` int NOT NULL,
   `local` varchar(100) DEFAULT NULL,
   `frecuencia` varchar(100) DEFAULT NULL,
   `precio` decimal(10,2) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ;
 
 --
 -- Volcado de datos para la tabla `detalle_orden_servicio`
@@ -565,20 +566,20 @@ INSERT INTO `detalle_orden_servicio` (`id`, `id_orden_servicio`, `id_cliente_pla
 --
 
 CREATE TABLE `entrada_devolucion_fabricacion` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_orden_fabricacion` int(10) UNSIGNED NOT NULL,
-  `id_programacion_fabricacion` int(10) UNSIGNED NOT NULL,
-  `cantidad_esperada_total` decimal(12,3) NOT NULL DEFAULT 0.000,
-  `cantidad_producida_total` decimal(12,3) NOT NULL DEFAULT 0.000,
-  `motivo_diferencia` text DEFAULT NULL,
-  `tiene_sobrante_materia_prima` tinyint(1) NOT NULL DEFAULT 0,
-  `observaciones` text DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
-  `estado` enum('Pendiente','Realizado') NOT NULL DEFAULT 'Pendiente',
+  `id` int UNSIGNED NOT NULL,
+  `id_orden_fabricacion` int UNSIGNED NOT NULL,
+  `id_programacion_fabricacion` int UNSIGNED NOT NULL,
+  `cantidad_esperada_total` decimal(12,3) NOT NULL DEFAULT '0.000',
+  `cantidad_producida_total` decimal(12,3) NOT NULL DEFAULT '0.000',
+  `motivo_diferencia` text COLLATE utf8mb4_unicode_ci,
+  `tiene_sobrante_materia_prima` tinyint(1) NOT NULL DEFAULT '0',
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
+  `creado_por` int DEFAULT NULL,
+  `estado` enum('Pendiente','Realizado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Pendiente',
   `fecha_realizado` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
-  `tiene_diferencia_materia_prima` tinyint(1) DEFAULT 0
+  `tiene_diferencia_materia_prima` tinyint(1) DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -595,17 +596,17 @@ INSERT INTO `entrada_devolucion_fabricacion` (`id`, `id_orden_fabricacion`, `id_
 --
 
 CREATE TABLE `entrega_epp` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `numero_entrega` varchar(20) NOT NULL,
-  `id_tecnico` int(11) NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `numero_entrega` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id_tecnico` int NOT NULL,
   `fecha_entrega` date NOT NULL,
   `fecha_devolucion` date DEFAULT NULL,
-  `estado` enum('Entregado','Devuelto') NOT NULL DEFAULT 'Entregado',
-  `motivo_entrega` enum('Primera Asignación','Reemplazo por Daño','Reemplazo por Desgaste','Reemplazo por Pérdida','Reposición Periódica','Solicitud del Técnico') NOT NULL DEFAULT 'Primera Asignación',
-  `registrado_por` int(11) NOT NULL,
-  `devuelto_por` int(11) DEFAULT NULL,
-  `observaciones` text DEFAULT NULL,
-  `motivo_devolucion` text DEFAULT NULL,
+  `estado` enum('Entregado','Devuelto') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Entregado',
+  `motivo_entrega` enum('Primera Asignación','Reemplazo por Daño','Reemplazo por Desgaste','Reemplazo por Pérdida','Reposición Periódica','Solicitud del Técnico') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Primera Asignación',
+  `registrado_por` int NOT NULL,
+  `devuelto_por` int DEFAULT NULL,
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
+  `motivo_devolucion` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -624,14 +625,14 @@ INSERT INTO `entrega_epp` (`id`, `numero_entrega`, `id_tecnico`, `fecha_entrega`
 --
 
 CREATE TABLE `equipo` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `descripcion` varchar(100) NOT NULL,
   `marca` varchar(100) NOT NULL,
   `modelo` varchar(100) NOT NULL,
-  `serie` int(11) NOT NULL,
+  `serie` int NOT NULL,
   `encargado` varchar(100) NOT NULL,
   `responsable` varchar(100) NOT NULL,
-  `contacto` int(11) NOT NULL,
+  `contacto` int NOT NULL,
   `imagen` varchar(500) DEFAULT NULL,
   `estado` enum('Activo','Inactivo') DEFAULT 'Activo'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -655,18 +656,18 @@ INSERT INTO `equipo` (`id`, `descripcion`, `marca`, `modelo`, `serie`, `encargad
 --
 
 CREATE TABLE `exponentes` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `nombre` varchar(100) NOT NULL,
-  `apellidos` varchar(100) NOT NULL,
-  `especialidad` varchar(200) DEFAULT NULL,
-  `profesion` varchar(200) DEFAULT NULL,
-  `telefono` varchar(20) DEFAULT NULL,
-  `email` varchar(150) DEFAULT NULL,
-  `institucion` varchar(200) DEFAULT NULL,
-  `notas` text DEFAULT NULL,
-  `estado` enum('Activo','Inactivo') NOT NULL DEFAULT 'Activo',
-  `id_tecnico_vinculado` bigint(20) UNSIGNED DEFAULT NULL,
-  `presentacion` varchar(5000) DEFAULT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `nombre` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `apellidos` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `especialidad` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `profesion` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `telefono` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `email` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `institucion` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `notas` text COLLATE utf8mb4_unicode_ci,
+  `estado` enum('Activo','Inactivo') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Activo',
+  `id_tecnico_vinculado` bigint UNSIGNED DEFAULT NULL,
+  `presentacion` varchar(5000) COLLATE utf8mb4_unicode_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -676,13 +677,13 @@ CREATE TABLE `exponentes` (
 --
 
 CREATE TABLE `failed_jobs` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `uuid` varchar(255) NOT NULL,
-  `connection` text NOT NULL,
-  `queue` text NOT NULL,
-  `payload` longtext NOT NULL,
-  `exception` longtext NOT NULL,
-  `failed_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `id` bigint UNSIGNED NOT NULL,
+  `uuid` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `connection` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `queue` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `exception` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `failed_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -692,12 +693,12 @@ CREATE TABLE `failed_jobs` (
 --
 
 CREATE TABLE `inventario` (
-  `id` int(11) NOT NULL,
-  `id_productos` int(11) DEFAULT NULL,
-  `cantidad_disponible` int(11) NOT NULL,
-  `stock_seguridad` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id_productos` int DEFAULT NULL,
+  `cantidad_disponible` int NOT NULL,
+  `stock_seguridad` int NOT NULL,
   `Tipo` enum('Entrada','Salida') DEFAULT NULL,
-  `Cantidad_total` int(11) NOT NULL
+  `Cantidad_total` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
@@ -744,17 +745,17 @@ INSERT INTO `inventario` (`id`, `id_productos`, `cantidad_disponible`, `stock_se
 --
 
 CREATE TABLE `inventario_ajustes` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_producto` int(11) NOT NULL,
-  `stock_anterior` int(11) NOT NULL,
-  `stock_nuevo` int(11) NOT NULL,
-  `diferencia` int(11) NOT NULL,
-  `tipo_ajuste` enum('Entrada','Salida') NOT NULL,
-  `motivo` varchar(120) NOT NULL,
-  `observacion` text DEFAULT NULL,
-  `id_usuario` int(11) DEFAULT NULL,
-  `fecha_ajuste` timestamp NOT NULL DEFAULT current_timestamp(),
-  `id_kardex` bigint(20) UNSIGNED DEFAULT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_producto` int NOT NULL,
+  `stock_anterior` int NOT NULL,
+  `stock_nuevo` int NOT NULL,
+  `diferencia` int NOT NULL,
+  `tipo_ajuste` enum('Entrada','Salida') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `motivo` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `observacion` text COLLATE utf8mb4_unicode_ci,
+  `id_usuario` int DEFAULT NULL,
+  `fecha_ajuste` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id_kardex` bigint UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -786,13 +787,13 @@ INSERT INTO `inventario_ajustes` (`id`, `id_producto`, `stock_anterior`, `stock_
 --
 
 CREATE TABLE `jobs` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `queue` varchar(255) NOT NULL,
-  `payload` longtext NOT NULL,
-  `attempts` tinyint(3) UNSIGNED NOT NULL,
-  `reserved_at` int(10) UNSIGNED DEFAULT NULL,
-  `available_at` int(10) UNSIGNED NOT NULL,
-  `created_at` int(10) UNSIGNED NOT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `queue` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `attempts` tinyint UNSIGNED NOT NULL,
+  `reserved_at` int UNSIGNED DEFAULT NULL,
+  `available_at` int UNSIGNED NOT NULL,
+  `created_at` int UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -802,16 +803,16 @@ CREATE TABLE `jobs` (
 --
 
 CREATE TABLE `job_batches` (
-  `id` varchar(255) NOT NULL,
-  `name` varchar(255) NOT NULL,
-  `total_jobs` int(11) NOT NULL,
-  `pending_jobs` int(11) NOT NULL,
-  `failed_jobs` int(11) NOT NULL,
-  `failed_job_ids` longtext NOT NULL,
-  `options` mediumtext DEFAULT NULL,
-  `cancelled_at` int(11) DEFAULT NULL,
-  `created_at` int(11) NOT NULL,
-  `finished_at` int(11) DEFAULT NULL
+  `id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `total_jobs` int NOT NULL,
+  `pending_jobs` int NOT NULL,
+  `failed_jobs` int NOT NULL,
+  `failed_job_ids` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `options` mediumtext COLLATE utf8mb4_unicode_ci,
+  `cancelled_at` int DEFAULT NULL,
+  `created_at` int NOT NULL,
+  `finished_at` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -821,18 +822,18 @@ CREATE TABLE `job_batches` (
 --
 
 CREATE TABLE `kardex` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_producto` int(11) NOT NULL,
-  `tipo_movimiento` enum('Entrada','Salida') NOT NULL,
-  `cantidad` int(11) NOT NULL,
-  `stock_anterior` int(11) NOT NULL,
-  `stock_posterior` int(11) NOT NULL,
-  `motivo` varchar(100) NOT NULL,
-  `referencia` varchar(100) DEFAULT NULL,
-  `id_referencia` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_usuario` int(11) DEFAULT NULL,
-  `observacion` text DEFAULT NULL,
-  `fecha_movimiento` timestamp NOT NULL DEFAULT current_timestamp()
+  `id` bigint UNSIGNED NOT NULL,
+  `id_producto` int NOT NULL,
+  `tipo_movimiento` enum('Entrada','Salida') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `cantidad` int NOT NULL,
+  `stock_anterior` int NOT NULL,
+  `stock_posterior` int NOT NULL,
+  `motivo` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `referencia` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `id_referencia` bigint UNSIGNED DEFAULT NULL,
+  `id_usuario` int DEFAULT NULL,
+  `observacion` text COLLATE utf8mb4_unicode_ci,
+  `fecha_movimiento` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -878,10 +879,10 @@ INSERT INTO `kardex` (`id`, `id_producto`, `tipo_movimiento`, `cantidad`, `stock
 --
 
 CREATE TABLE `mantenimiento` (
-  `id` int(11) NOT NULL,
-  `id_programacion` int(10) UNSIGNED DEFAULT NULL,
-  `id_equipo` int(11) DEFAULT NULL,
-  `id_actmanten` int(11) DEFAULT NULL,
+  `id` int NOT NULL,
+  `id_programacion` int UNSIGNED DEFAULT NULL,
+  `id_equipo` int DEFAULT NULL,
+  `id_actmanten` int DEFAULT NULL,
   `fecha` datetime NOT NULL,
   `observaciones` varchar(100) DEFAULT NULL,
   `estado` enum('Pendiente','Realizado','Vencido') NOT NULL DEFAULT 'Pendiente'
@@ -910,17 +911,17 @@ INSERT INTO `mantenimiento` (`id`, `id_programacion`, `id_equipo`, `id_actmanten
 --
 
 CREATE TABLE `mantenimiento_vehiculo` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_programacion` int(10) UNSIGNED DEFAULT NULL,
-  `id_vehiculo` int(11) NOT NULL,
-  `motivo` varchar(255) NOT NULL,
-  `tipo_mantenimiento` enum('Preventivo','Correctivo') NOT NULL,
+  `id` int UNSIGNED NOT NULL,
+  `id_programacion` int UNSIGNED DEFAULT NULL,
+  `id_vehiculo` int NOT NULL,
+  `motivo` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tipo_mantenimiento` enum('Preventivo','Correctivo') COLLATE utf8mb4_unicode_ci NOT NULL,
   `fecha_programada` datetime NOT NULL,
   `fecha_realizado` datetime DEFAULT NULL,
-  `kilometraje` int(11) DEFAULT NULL,
-  `observaciones` varchar(255) DEFAULT NULL,
-  `estado` enum('Programado','Realizado','Vencido','Cancelado') NOT NULL DEFAULT 'Programado',
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `kilometraje` int DEFAULT NULL,
+  `observaciones` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado` enum('Programado','Realizado','Vencido','Cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Programado',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -931,9 +932,9 @@ CREATE TABLE `mantenimiento_vehiculo` (
 --
 
 CREATE TABLE `migrations` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `migration` varchar(255) NOT NULL,
-  `batch` int(11) NOT NULL
+  `id` int UNSIGNED NOT NULL,
+  `migration` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `batch` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -943,7 +944,7 @@ CREATE TABLE `migrations` (
 --
 
 CREATE TABLE `multicim` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `nombre_empresa` varchar(100) NOT NULL,
   `alias_empresa` varchar(100) NOT NULL,
   `ruc` varchar(11) NOT NULL,
@@ -968,29 +969,29 @@ INSERT INTO `multicim` (`id`, `nombre_empresa`, `alias_empresa`, `ruc`, `cuenta_
 --
 
 CREATE TABLE `oei_fichas` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `n_ficha` varchar(20) NOT NULL,
-  `id_programacion` int(11) NOT NULL,
-  `id_tecnico` int(11) NOT NULL,
+  `id_programacion` int NOT NULL,
+  `id_tecnico` int NOT NULL,
   `fecha_servicio` date NOT NULL,
   `hora_inicio_servicio` time DEFAULT NULL,
   `hora_fin_servicio` time DEFAULT NULL,
-  `diagnostico_previo` text DEFAULT NULL,
-  `condicion_sanitaria` text DEFAULT NULL,
-  `observaciones_tecnicas` text DEFAULT NULL,
-  `acciones_realizadas` text DEFAULT NULL,
-  `fotos_evidencia` text DEFAULT NULL,
+  `diagnostico_previo` text,
+  `condicion_sanitaria` text,
+  `observaciones_tecnicas` text,
+  `acciones_realizadas` text,
+  `fotos_evidencia` text,
   `firma_tecnico` varchar(255) DEFAULT NULL,
   `firma_cliente` varchar(255) DEFAULT NULL,
   `nombre_quien_recibe` varchar(100) DEFAULT NULL,
   `estado_servicio` enum('Completo','Parcial','Reprogramado','Cancelado') DEFAULT 'Completo',
-  `recibida_oei` tinyint(1) DEFAULT 0,
-  `recibida_por` int(11) DEFAULT NULL,
+  `recibida_oei` tinyint(1) DEFAULT '0',
+  `recibida_por` int DEFAULT NULL,
   `fecha_recepcion` datetime DEFAULT NULL,
-  `coincide_cronograma` tinyint(1) DEFAULT 1,
-  `creado_por` int(11) DEFAULT NULL,
-  `fecha_creacion` datetime DEFAULT current_timestamp(),
-  `modificado_por` int(11) DEFAULT NULL,
+  `coincide_cronograma` tinyint(1) DEFAULT '1',
+  `creado_por` int DEFAULT NULL,
+  `fecha_creacion` datetime DEFAULT CURRENT_TIMESTAMP,
+  `modificado_por` int DEFAULT NULL,
   `fecha_modificacion` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Fichas técnicas de servicios realizados';
 
@@ -1001,12 +1002,12 @@ CREATE TABLE `oei_fichas` (
 --
 
 CREATE TABLE `oei_ficha_anexos` (
-  `id` int(11) NOT NULL,
-  `id_ficha` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id_ficha` int NOT NULL,
   `tipo_anexo` enum('Plano','Foto','Documento','Otro') NOT NULL,
   `descripcion` varchar(255) DEFAULT NULL,
   `ruta_archivo` varchar(255) NOT NULL,
-  `fecha_carga` datetime DEFAULT current_timestamp()
+  `fecha_carga` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Anexos adicionales de las fichas técnicas';
 
 -- --------------------------------------------------------
@@ -1016,18 +1017,18 @@ CREATE TABLE `oei_ficha_anexos` (
 --
 
 CREATE TABLE `oei_ficha_monitoreo` (
-  `id` int(11) NOT NULL,
-  `id_ficha` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id_ficha` int NOT NULL,
   `codigo_dispositivo` varchar(20) NOT NULL,
   `tipo_dispositivo` enum('Trampa de Luz','Cebadero','Trampa de Pegamento','Estación','Otro') DEFAULT 'Otro',
   `area_ubicacion` varchar(100) DEFAULT NULL,
   `animal_objetivo` varchar(50) DEFAULT NULL,
   `especimen` varchar(50) DEFAULT NULL,
-  `hallazgo_cantidad` int(11) DEFAULT 0,
+  `hallazgo_cantidad` int DEFAULT '0',
   `estado_dispositivo` enum('Bueno','Regular','Dañado','Reemplazado') DEFAULT 'Bueno',
   `accion_tomada` varchar(255) DEFAULT NULL,
   `foto_evidencia` varchar(255) DEFAULT NULL,
-  `observaciones` text DEFAULT NULL
+  `observaciones` text
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Detalle de monitoreo para gráficos de tendencias';
 
 -- --------------------------------------------------------
@@ -1037,9 +1038,9 @@ CREATE TABLE `oei_ficha_monitoreo` (
 --
 
 CREATE TABLE `oei_informe_detalle_fichas` (
-  `id_informe` int(11) NOT NULL,
-  `id_ficha` int(11) NOT NULL,
-  `orden` int(11) DEFAULT 1
+  `id_informe` int NOT NULL,
+  `id_ficha` int NOT NULL,
+  `orden` int DEFAULT '1'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Relación entre informes y fichas incluidas';
 
 -- --------------------------------------------------------
@@ -1049,26 +1050,26 @@ CREATE TABLE `oei_informe_detalle_fichas` (
 --
 
 CREATE TABLE `oei_informe_final` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `codigo_informe` varchar(20) NOT NULL,
-  `id_cliente` int(11) NOT NULL,
-  `mes_reportado` int(11) NOT NULL,
-  `anio_reportado` int(11) NOT NULL,
+  `id_cliente` int NOT NULL,
+  `mes_reportado` int NOT NULL,
+  `anio_reportado` int NOT NULL,
   `periodo` varchar(7) GENERATED ALWAYS AS (concat(`anio_reportado`,_utf8mb4'-',lpad(`mes_reportado`,2,_utf8mb4'0'))) STORED,
   `fecha_emision` date DEFAULT NULL,
   `fecha_revision` date DEFAULT NULL,
   `fecha_aprobacion` date DEFAULT NULL,
   `fecha_envio_cliente` date DEFAULT NULL,
-  `id_personal_elaboro` int(11) NOT NULL,
-  `id_personal_reviso` int(11) DEFAULT NULL,
-  `id_personal_aprobo` int(11) DEFAULT NULL,
-  `conclusiones_generales` text DEFAULT NULL,
-  `recomendaciones_cliente` text DEFAULT NULL,
-  `observaciones_revision` text DEFAULT NULL,
+  `id_personal_elaboro` int NOT NULL,
+  `id_personal_reviso` int DEFAULT NULL,
+  `id_personal_aprobo` int DEFAULT NULL,
+  `conclusiones_generales` text,
+  `recomendaciones_cliente` text,
+  `observaciones_revision` text,
   `estado_informe` enum('Borrador','En Revisión','Aprobado','Enviado','Rechazado') DEFAULT 'Borrador',
   `ruta_pdf_final` varchar(255) DEFAULT NULL,
-  `fecha_creacion` datetime DEFAULT current_timestamp(),
-  `modificado_por` int(11) DEFAULT NULL,
+  `fecha_creacion` datetime DEFAULT CURRENT_TIMESTAMP,
+  `modificado_por` int DEFAULT NULL,
   `fecha_modificacion` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Informes mensuales para clientes';
 
@@ -1079,22 +1080,22 @@ CREATE TABLE `oei_informe_final` (
 --
 
 CREATE TABLE `ordenes_compra` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `numero_orden_compra` varchar(30) DEFAULT NULL,
-  `numero_cotizacion_proveedor` varchar(60) DEFAULT NULL,
-  `numero_factura` varchar(60) DEFAULT NULL,
-  `id_proveedor` bigint(20) UNSIGNED NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `numero_orden_compra` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `numero_cotizacion_proveedor` varchar(60) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `numero_factura` varchar(60) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `id_proveedor` bigint UNSIGNED NOT NULL,
   `fecha_compra` date NOT NULL,
   `fecha_recepcion` date DEFAULT NULL,
-  `tipo_moneda` enum('PEN','USD') NOT NULL DEFAULT 'PEN',
+  `tipo_moneda` enum('PEN','USD') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PEN',
   `tipo_cambio` decimal(8,4) DEFAULT NULL,
-  `tiene_igv` tinyint(1) NOT NULL DEFAULT 1,
-  `subtotal` decimal(12,4) NOT NULL DEFAULT 0.0000,
-  `igv` decimal(12,4) NOT NULL DEFAULT 0.0000,
-  `total` decimal(12,4) NOT NULL DEFAULT 0.0000,
-  `estado` enum('Pendiente','Recibido','Anulado') NOT NULL DEFAULT 'Pendiente',
-  `id_usuario` int(11) DEFAULT NULL,
-  `observaciones` text DEFAULT NULL,
+  `tiene_igv` tinyint(1) NOT NULL DEFAULT '1',
+  `subtotal` decimal(12,4) NOT NULL DEFAULT '0.0000',
+  `igv` decimal(12,4) NOT NULL DEFAULT '0.0000',
+  `total` decimal(12,4) NOT NULL DEFAULT '0.0000',
+  `estado` enum('Pendiente','Recibido','Anulado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Pendiente',
+  `id_usuario` int DEFAULT NULL,
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1106,27 +1107,27 @@ CREATE TABLE `ordenes_compra` (
 --
 
 CREATE TABLE `orden_asesoria` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `numero_orden` varchar(30) NOT NULL,
-  `id_cotizacion` int(10) UNSIGNED NOT NULL,
-  `id_cliente` int(10) UNSIGNED NOT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_servicio` int(10) UNSIGNED DEFAULT NULL,
-  `id_exponente` int(10) UNSIGNED DEFAULT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `numero_orden` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id_cotizacion` int UNSIGNED NOT NULL,
+  `id_cliente` int UNSIGNED NOT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` bigint UNSIGNED DEFAULT NULL,
+  `id_servicio` int UNSIGNED DEFAULT NULL,
+  `id_exponente` int UNSIGNED DEFAULT NULL,
   `fecha_servicio` date NOT NULL,
   `fecha_aceptacion` date DEFAULT NULL,
   `hora_servicio` time DEFAULT NULL,
-  `modalidad` enum('Presencial','Virtual','Híbrido','Asíncrona') NOT NULL,
-  `num_participantes` int(10) UNSIGNED NOT NULL DEFAULT 1,
-  `num_certificados` int(10) UNSIGNED NOT NULL DEFAULT 0,
-  `subtotal` decimal(12,2) NOT NULL DEFAULT 0.00,
-  `igv` decimal(12,2) NOT NULL DEFAULT 0.00,
-  `incluye_igv` tinyint(1) NOT NULL DEFAULT 1,
-  `costo` decimal(12,2) NOT NULL DEFAULT 0.00,
-  `estado` varchar(20) NOT NULL DEFAULT 'Aprobado',
-  `emitido_por` int(10) UNSIGNED DEFAULT NULL,
-  `observaciones` text DEFAULT NULL
+  `modalidad` enum('Presencial','Virtual','Híbrido','Asíncrona') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `num_participantes` int UNSIGNED NOT NULL DEFAULT '1',
+  `num_certificados` int UNSIGNED NOT NULL DEFAULT '0',
+  `subtotal` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `igv` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `incluye_igv` tinyint(1) NOT NULL DEFAULT '1',
+  `costo` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `estado` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Aprobado',
+  `emitido_por` int UNSIGNED DEFAULT NULL,
+  `observaciones` text COLLATE utf8mb4_unicode_ci
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -1136,9 +1137,9 @@ CREATE TABLE `orden_asesoria` (
 --
 
 CREATE TABLE `orden_asesoria_exponentes` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_orden_asesoria` int(10) UNSIGNED NOT NULL,
-  `id_exponente` int(10) UNSIGNED NOT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_asesoria` int UNSIGNED NOT NULL,
+  `id_exponente` int UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -1148,26 +1149,26 @@ CREATE TABLE `orden_asesoria_exponentes` (
 --
 
 CREATE TABLE `orden_capacitacion_auditoria` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `numero_orden` varchar(20) NOT NULL,
-  `id_cotizacion` int(11) DEFAULT NULL,
-  `id_cliente` int(11) NOT NULL,
-  `id_servicio` int(11) DEFAULT NULL,
-  `id_ponente` int(11) DEFAULT NULL,
-  `id_exponente` int(11) DEFAULT NULL,
+  `id_cotizacion` int DEFAULT NULL,
+  `id_cliente` int NOT NULL,
+  `id_servicio` int DEFAULT NULL,
+  `id_ponente` int DEFAULT NULL,
+  `id_exponente` int DEFAULT NULL,
   `fecha_servicio` date DEFAULT NULL,
   `fecha_aceptacion` date DEFAULT NULL,
   `hora_servicio` time DEFAULT NULL,
   `modalidad` enum('Presencial','Virtual','Híbrido','Asíncrona') DEFAULT NULL,
-  `num_participantes` int(11) DEFAULT NULL,
-  `num_certificados` int(11) DEFAULT NULL,
+  `num_participantes` int DEFAULT NULL,
+  `num_certificados` int DEFAULT NULL,
   `costo` decimal(10,2) DEFAULT NULL,
   `subtotal` decimal(10,2) DEFAULT NULL,
   `igv` decimal(10,2) DEFAULT NULL,
-  `incluye_igv` tinyint(1) NOT NULL DEFAULT 1,
+  `incluye_igv` tinyint(1) NOT NULL DEFAULT '1',
   `estado` varchar(100) DEFAULT NULL,
-  `observaciones` text DEFAULT NULL,
-  `emitido_por` int(10) UNSIGNED DEFAULT NULL,
+  `observaciones` text,
+  `emitido_por` int UNSIGNED DEFAULT NULL,
   `horas_capacitacion` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -1178,10 +1179,10 @@ CREATE TABLE `orden_capacitacion_auditoria` (
 --
 
 CREATE TABLE `orden_capacitacion_ponentes` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_orden_capacitacion` int(11) NOT NULL,
-  `id_ponente` int(11) DEFAULT NULL,
-  `id_exponente` bigint(20) UNSIGNED DEFAULT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_capacitacion` int NOT NULL,
+  `id_ponente` int DEFAULT NULL,
+  `id_exponente` bigint UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -1191,17 +1192,17 @@ CREATE TABLE `orden_capacitacion_ponentes` (
 --
 
 CREATE TABLE `orden_fabricacion` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `codigo` varchar(30) NOT NULL,
+  `id` int UNSIGNED NOT NULL,
+  `codigo` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
   `fecha_orden` date NOT NULL,
-  `motivo` varchar(255) DEFAULT NULL,
-  `estado` enum('Borrador','Confirmada','Programada','Fabricada','Anulada') NOT NULL DEFAULT 'Confirmada',
-  `resumen_insumos` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`resumen_insumos`)),
-  `observaciones` text DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
+  `motivo` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado` enum('Borrador','Confirmada','Programada','Fabricada','Anulada') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Confirmada',
+  `resumen_insumos` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
+  `creado_por` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ;
 
 --
 -- Volcado de datos para la tabla `orden_fabricacion`
@@ -1217,17 +1218,17 @@ INSERT INTO `orden_fabricacion` (`id`, `codigo`, `fecha_orden`, `motivo`, `estad
 --
 
 CREATE TABLE `orden_producto` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `numero_orden` varchar(20) NOT NULL,
-  `id_cotizacion` int(11) DEFAULT NULL,
-  `id_cliente` int(11) NOT NULL,
+  `id_cotizacion` int DEFAULT NULL,
+  `id_cliente` int NOT NULL,
   `fecha_envio` date DEFAULT NULL,
   `fecha_aceptacion` date DEFAULT NULL,
   `total` decimal(10,2) DEFAULT NULL,
   `subtotal` decimal(10,2) DEFAULT NULL,
   `igv` decimal(10,2) DEFAULT NULL,
-  `incluye_igv` tinyint(1) NOT NULL DEFAULT 1,
-  `emitido_por` int(11) DEFAULT NULL,
+  `incluye_igv` tinyint(1) NOT NULL DEFAULT '1',
+  `emitido_por` int DEFAULT NULL,
   `estado` varchar(100) NOT NULL DEFAULT 'Aprobado',
   `observaciones` varchar(500) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1246,19 +1247,19 @@ INSERT INTO `orden_producto` (`id`, `numero_orden`, `id_cotizacion`, `id_cliente
 --
 
 CREATE TABLE `orden_servicio` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `numero_orden` varchar(20) NOT NULL,
   `codigo_doc` varchar(20) DEFAULT 'OS-AC-001',
   `version` varchar(10) DEFAULT '01',
-  `id_cotizacion` int(11) DEFAULT NULL,
-  `id_cliente` int(11) NOT NULL,
+  `id_cotizacion` int DEFAULT NULL,
+  `id_cliente` int NOT NULL,
   `fecha_aceptacion` date DEFAULT NULL,
   `fecha_tentativa` date DEFAULT NULL,
   `total_costo` decimal(10,2) DEFAULT NULL,
   `subtotal` decimal(10,2) DEFAULT NULL,
   `igv` decimal(10,2) DEFAULT NULL,
-  `incluye_igv` tinyint(1) NOT NULL DEFAULT 1,
-  `emitido_por` int(11) DEFAULT NULL,
+  `incluye_igv` tinyint(1) NOT NULL DEFAULT '1',
+  `emitido_por` int DEFAULT NULL,
   `estado` varchar(100) NOT NULL DEFAULT 'Aprobado',
   `observaciones` varchar(500) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1269,7 +1270,7 @@ CREATE TABLE `orden_servicio` (
 
 INSERT INTO `orden_servicio` (`id`, `numero_orden`, `codigo_doc`, `version`, `id_cotizacion`, `id_cliente`, `fecha_aceptacion`, `fecha_tentativa`, `total_costo`, `subtotal`, `igv`, `incluye_igv`, `emitido_por`, `estado`, `observaciones`) VALUES
 (4, 'OS-2026-001', NULL, '01', 2, 4, '2026-04-13', NULL, 1030.00, 1030.00, 0.00, 0, 9, 'Programado', NULL),
-(5, 'OS-2026-002', NULL, '01', 4, 9, '2026-04-13', '2026-04-13', 600.00, 600.00, 0.00, 0, 9, 'Aprobado', NULL);
+(5, 'OS-2026-002', NULL, '01', 4, 9, '2026-04-13', '2026-04-13', 600.00, 600.00, 0.00, 0, 9, 'Programado', NULL);
 
 -- --------------------------------------------------------
 
@@ -1278,13 +1279,13 @@ INSERT INTO `orden_servicio` (`id`, `numero_orden`, `codigo_doc`, `version`, `id
 --
 
 CREATE TABLE `orden_servicio_equipo` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_orden_servicio` int(11) NOT NULL,
-  `id_servicio` int(11) DEFAULT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_equipo` int(11) NOT NULL,
-  `observacion` varchar(255) DEFAULT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_servicio` int NOT NULL,
+  `id_servicio` int DEFAULT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` bigint UNSIGNED DEFAULT NULL,
+  `id_equipo` int NOT NULL,
+  `observacion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -1305,15 +1306,15 @@ INSERT INTO `orden_servicio_equipo` (`id`, `id_orden_servicio`, `id_servicio`, `
 --
 
 CREATE TABLE `orden_servicio_producto` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_orden_servicio` int(11) NOT NULL,
-  `id_servicio` int(11) DEFAULT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_equipo` int(11) DEFAULT NULL,
-  `id_producto` int(11) NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `id_orden_servicio` int NOT NULL,
+  `id_servicio` int DEFAULT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` bigint UNSIGNED DEFAULT NULL,
+  `id_equipo` int DEFAULT NULL,
+  `id_producto` int NOT NULL,
   `cantidad` decimal(10,2) NOT NULL,
-  `observacion` varchar(255) DEFAULT NULL
+  `observacion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -1344,8 +1345,8 @@ INSERT INTO `orden_servicio_producto` (`id`, `id_orden_servicio`, `id_servicio`,
 --
 
 CREATE TABLE `password_reset_tokens` (
-  `email` varchar(255) NOT NULL,
-  `token` varchar(255) NOT NULL,
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1356,16 +1357,16 @@ CREATE TABLE `password_reset_tokens` (
 --
 
 CREATE TABLE `personal` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `apellidos` varchar(100) NOT NULL,
   `celular` char(13) NOT NULL,
   `correo` varchar(50) NOT NULL,
-  `id_area` int(11) DEFAULT NULL,
+  `id_area` int DEFAULT NULL,
   `usuario` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
   `estado` varchar(20) NOT NULL DEFAULT 'Activo',
-  `id_cargo` bigint(20) UNSIGNED DEFAULT NULL
+  `id_cargo` bigint UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
@@ -1381,7 +1382,8 @@ INSERT INTO `personal` (`id`, `nombre`, `apellidos`, `celular`, `correo`, `id_ar
 (6, 'Jorge', 'Quispe', '987654324', 'finanzas@qsci.com', 5, 'finanzas', '$2y$12$XVRwn8kVEv1SQIeU8gAddeVK.jwvJgFUZ4qH12bFRZreY.BglShLO', 'Activo', NULL),
 (7, 'Pedro', 'Vargas', '987654325', 'almacen@qsci.com', 7, 'almacen', '$2y$12$KEhG92xTOrAHtf5EQulU1O2pOp49N6cywQ4nfgJmIhd7CRRcIptye', 'Activo', NULL),
 (8, 'Programacion', 'Servicios', '987654321', 'programacion@qsci.com', 8, 'programa', '$2y$12$HxHvW9C8n/LbgzNJ1EI7Ie/OnC03rKkwjsGhZutXtuNHV2YRaF/NO', 'Activo', 4),
-(9, 'Area', 'Comercial', '987654321', 'asistentec@qsci.com', 1, 'Comercial', '$2y$12$nwicmVjHPit9YQazBED3Pu1RgaX9SU/4Fv3YhD3Q9cRzfKki8mrHS', 'Activo', 2);
+(9, 'Area', 'Comercial', '987654321', 'asistentec@qsci.com', 1, 'Comercial', '$2y$12$nwicmVjHPit9YQazBED3Pu1RgaX9SU/4Fv3YhD3Q9cRzfKki8mrHS', 'Activo', 2),
+(10, 'Yordi', 'Choque', '', 'tecnico@qsci.com', 9, 'tecnico', '123456', 'Activo', NULL);
 
 -- --------------------------------------------------------
 
@@ -1390,12 +1392,12 @@ INSERT INTO `personal` (`id`, `nombre`, `apellidos`, `celular`, `correo`, `id_ar
 --
 
 CREATE TABLE `personal_access_tokens` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `tokenable_type` varchar(255) NOT NULL,
-  `tokenable_id` bigint(20) UNSIGNED NOT NULL,
-  `name` text NOT NULL,
-  `token` varchar(64) NOT NULL,
-  `abilities` text DEFAULT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `tokenable_type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tokenable_id` bigint UNSIGNED NOT NULL,
+  `name` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `abilities` text COLLATE utf8mb4_unicode_ci,
   `last_used_at` timestamp NULL DEFAULT NULL,
   `expires_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -1408,8 +1410,8 @@ CREATE TABLE `personal_access_tokens` (
 
 INSERT INTO `personal_access_tokens` (`id`, `tokenable_type`, `tokenable_id`, `name`, `token`, `abilities`, `last_used_at`, `expires_at`, `created_at`, `updated_at`) VALUES
 (64, 'App\\Models\\Personal', 9, 'auth-token', '816ae0eaf4fd90a941ebec8eb6b8813585af13c2bcf0d29aafd7c927da3a3300', '[\"*\"]', '2026-04-13 18:39:04', NULL, '2026-04-13 16:20:00', '2026-04-13 18:39:04'),
-(77, 'App\\Models\\Personal', 8, 'auth-token', '986a0c931201e17ea0a0af16b5f5b733f46e583aa7944cd34e29842c50539299', '[\"*\"]', '2026-04-13 23:35:44', NULL, '2026-04-13 23:35:23', '2026-04-13 23:35:44'),
-(79, 'App\\Models\\Personal', 1, 'auth-token', '7c396b874c21f61ee4e0e85182ee633d62a924d660052beb22ffd1c94974b563', '[\"*\"]', '2026-04-13 23:37:36', NULL, '2026-04-13 23:37:35', '2026-04-13 23:37:36');
+(84, 'App\\Models\\Personal', 8, 'auth-token', 'ca1aa014721b2309e025b13b2b85f5cb54e0699816d2c389d78371a422c3957d', '[\"*\"]', '2026-04-14 02:20:18', NULL, '2026-04-14 02:19:27', '2026-04-14 02:20:18'),
+(86, 'App\\Models\\Personal', 1, 'auth-token', '5be72c2b582b833b0cd970c055ad2bbc6677932b8b2c3e8aef3274d501aecd92', '[\"*\"]', '2026-04-14 03:58:42', NULL, '2026-04-14 03:57:08', '2026-04-14 03:58:42');
 
 -- --------------------------------------------------------
 
@@ -1418,10 +1420,10 @@ INSERT INTO `personal_access_tokens` (`id`, `tokenable_type`, `tokenable_id`, `n
 --
 
 CREATE TABLE `productos` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `sku` varchar(50) DEFAULT NULL,
   `descripcion` varchar(200) NOT NULL,
-  `id_categoria` int(11) DEFAULT NULL,
+  `id_categoria` int DEFAULT NULL,
   `fecha_vencim` date DEFAULT NULL,
   `ubicacion` varchar(50) NOT NULL,
   `unidad` varchar(20) DEFAULT NULL,
@@ -1432,7 +1434,7 @@ CREATE TABLE `productos` (
   `ingre_activo` varchar(500) DEFAULT NULL,
   `plag_objetivo` varchar(500) DEFAULT NULL,
   `presentacion` varchar(500) DEFAULT NULL,
-  `es_fabricable` tinyint(1) NOT NULL DEFAULT 0
+  `es_fabricable` tinyint(1) NOT NULL DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
@@ -1479,12 +1481,12 @@ INSERT INTO `productos` (`id`, `sku`, `descripcion`, `id_categoria`, `fecha_venc
 --
 
 CREATE TABLE `producto_receta_detalle` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_producto_final` int(11) NOT NULL,
-  `id_producto_insumo` int(11) NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `id_producto_final` int NOT NULL,
+  `id_producto_insumo` int NOT NULL,
   `cantidad` decimal(10,3) NOT NULL,
-  `unidad` varchar(20) DEFAULT NULL,
-  `observacion` varchar(255) DEFAULT NULL
+  `unidad` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `observacion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -1503,21 +1505,21 @@ INSERT INTO `producto_receta_detalle` (`id`, `id_producto_final`, `id_producto_i
 --
 
 CREATE TABLE `programacion_asesoria` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_orden_asesoria` int(11) NOT NULL,
-  `id_supervisor` int(11) DEFAULT NULL,
-  `id_vehiculo` int(11) DEFAULT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` bigint(20) UNSIGNED DEFAULT NULL,
+  `id` int UNSIGNED NOT NULL,
+  `id_orden_asesoria` int NOT NULL,
+  `id_supervisor` int DEFAULT NULL,
+  `id_vehiculo` int DEFAULT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` bigint UNSIGNED DEFAULT NULL,
   `fecha_programada` date NOT NULL,
   `hora_inicio` time NOT NULL,
   `hora_fin` time DEFAULT NULL,
-  `local_sede` varchar(150) DEFAULT NULL,
-  `direccion_completa` varchar(255) DEFAULT NULL,
-  `modalidad_visita` varchar(20) DEFAULT NULL,
-  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecucion','Realizado','Reprogramado','Cancelado') NOT NULL DEFAULT 'Programado',
-  `observaciones` text DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
+  `local_sede` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `direccion_completa` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `modalidad_visita` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecucion','Realizado','Reprogramado','Cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Programado',
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
+  `creado_por` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1529,9 +1531,9 @@ CREATE TABLE `programacion_asesoria` (
 --
 
 CREATE TABLE `programacion_asesoria_exponentes` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_programacion_asesoria` int(11) NOT NULL,
-  `id_exponente` bigint(20) UNSIGNED NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `id_programacion_asesoria` int NOT NULL,
+  `id_exponente` bigint UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1543,20 +1545,20 @@ CREATE TABLE `programacion_asesoria_exponentes` (
 --
 
 CREATE TABLE `programacion_capacitacion` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_orden_capacitacion` int(11) NOT NULL,
-  `id_supervisor` int(11) DEFAULT NULL,
-  `id_vehiculo` int(11) DEFAULT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` bigint(20) UNSIGNED DEFAULT NULL,
+  `id` int UNSIGNED NOT NULL,
+  `id_orden_capacitacion` int NOT NULL,
+  `id_supervisor` int DEFAULT NULL,
+  `id_vehiculo` int DEFAULT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` bigint UNSIGNED DEFAULT NULL,
   `fecha_programada` date NOT NULL,
   `hora_inicio` time NOT NULL,
   `hora_fin` time DEFAULT NULL,
-  `local_sede` varchar(150) DEFAULT NULL,
-  `direccion_completa` varchar(255) DEFAULT NULL,
-  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecucion','Realizado','Reprogramado','Cancelado') NOT NULL DEFAULT 'Programado',
-  `observaciones` text DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
+  `local_sede` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `direccion_completa` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecucion','Realizado','Reprogramado','Cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Programado',
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
+  `creado_por` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1568,9 +1570,9 @@ CREATE TABLE `programacion_capacitacion` (
 --
 
 CREATE TABLE `programacion_capacitacion_exponentes` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_programacion_capacitacion` int(11) NOT NULL,
-  `id_exponente` bigint(20) UNSIGNED NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `id_programacion_capacitacion` int NOT NULL,
+  `id_exponente` bigint UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1582,9 +1584,9 @@ CREATE TABLE `programacion_capacitacion_exponentes` (
 --
 
 CREATE TABLE `programacion_exponentes` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_programacion` bigint(20) UNSIGNED NOT NULL,
-  `id_exponente` bigint(20) UNSIGNED NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `id_programacion` bigint UNSIGNED NOT NULL,
+  `id_exponente` bigint UNSIGNED NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1596,23 +1598,23 @@ CREATE TABLE `programacion_exponentes` (
 --
 
 CREATE TABLE `programacion_fabricacion` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_orden_fabricacion` int(10) UNSIGNED DEFAULT NULL,
-  `motivo_fabricacion` varchar(255) NOT NULL,
-  `productos_fabricacion` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`productos_fabricacion`)),
-  `receta_fabricacion` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`receta_fabricacion`)),
-  `id_tecnico_asignado` int(11) DEFAULT NULL,
-  `tecnicos_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`tecnicos_ids`)),
-  `id_supervisor` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`id_supervisor`)),
+  `id` int UNSIGNED NOT NULL,
+  `id_orden_fabricacion` int UNSIGNED DEFAULT NULL,
+  `motivo_fabricacion` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `productos_fabricacion` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `receta_fabricacion` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_tecnico_asignado` int DEFAULT NULL,
+  `tecnicos_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_supervisor` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `fecha_programada` date NOT NULL,
   `hora_inicio` time NOT NULL,
   `hora_fin` time DEFAULT NULL,
-  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecución','Realizado','Reprogramado','Cancelado') NOT NULL DEFAULT 'Programado',
-  `observaciones` text DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
+  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecución','Realizado','Reprogramado','Cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Programado',
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
+  `creado_por` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ;
 
 --
 -- Volcado de datos para la tabla `programacion_fabricacion`
@@ -1628,14 +1630,14 @@ INSERT INTO `programacion_fabricacion` (`id`, `id_orden_fabricacion`, `motivo_fa
 --
 
 CREATE TABLE `programacion_historial` (
-  `id` int(11) NOT NULL,
-  `id_programacion` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id_programacion` int NOT NULL,
   `campo_modificado` varchar(50) DEFAULT NULL,
   `valor_anterior` varchar(255) DEFAULT NULL,
   `valor_nuevo` varchar(255) DEFAULT NULL,
-  `motivo` text DEFAULT NULL,
-  `modificado_por` int(11) DEFAULT NULL,
-  `fecha_modificacion` datetime DEFAULT current_timestamp()
+  `motivo` text,
+  `modificado_por` int DEFAULT NULL,
+  `fecha_modificacion` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -1645,13 +1647,155 @@ CREATE TABLE `programacion_historial` (
 --
 
 CREATE TABLE `programacion_insumos` (
-  `id` int(11) NOT NULL,
-  `id_programacion` int(11) NOT NULL,
-  `id_producto` int(11) NOT NULL,
-  `cantidad_asignada` int(11) NOT NULL,
-  `cantidad_utilizada` int(11) DEFAULT NULL,
+  `id` int NOT NULL,
+  `id_programacion` int NOT NULL,
+  `id_producto` int NOT NULL,
+  `cantidad_asignada` int NOT NULL,
+  `cantidad_utilizada` int DEFAULT NULL,
   `estado` enum('Asignado','Entregado','Utilizado','Devuelto') DEFAULT 'Asignado'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `programacion_insumos`
+--
+
+INSERT INTO `programacion_insumos` (`id`, `id_programacion`, `id_producto`, `cantidad_asignada`, `cantidad_utilizada`, `estado`) VALUES
+(440, 95, 5, 4, NULL, 'Asignado'),
+(441, 95, 6, 8, NULL, 'Asignado'),
+(442, 95, 7, 4, NULL, 'Asignado'),
+(443, 95, 22, 8, NULL, 'Asignado'),
+(444, 95, 21, 4, NULL, 'Asignado'),
+(445, 96, 5, 4, NULL, 'Asignado'),
+(446, 96, 6, 8, NULL, 'Asignado'),
+(447, 96, 7, 4, NULL, 'Asignado'),
+(448, 96, 22, 8, NULL, 'Asignado'),
+(449, 96, 21, 4, NULL, 'Asignado'),
+(450, 97, 5, 4, NULL, 'Asignado'),
+(451, 97, 6, 8, NULL, 'Asignado'),
+(452, 97, 7, 4, NULL, 'Asignado'),
+(453, 97, 22, 8, NULL, 'Asignado'),
+(454, 97, 21, 4, NULL, 'Asignado'),
+(455, 98, 5, 4, NULL, 'Asignado'),
+(456, 98, 6, 8, NULL, 'Asignado'),
+(457, 98, 7, 4, NULL, 'Asignado'),
+(458, 98, 22, 8, NULL, 'Asignado'),
+(459, 98, 21, 4, NULL, 'Asignado'),
+(460, 99, 5, 4, NULL, 'Asignado'),
+(461, 99, 6, 8, NULL, 'Asignado'),
+(462, 99, 7, 4, NULL, 'Asignado'),
+(463, 99, 22, 8, NULL, 'Asignado'),
+(464, 99, 21, 4, NULL, 'Asignado'),
+(465, 100, 5, 4, NULL, 'Asignado'),
+(466, 100, 6, 8, NULL, 'Asignado'),
+(467, 100, 7, 4, NULL, 'Asignado'),
+(468, 100, 22, 8, NULL, 'Asignado'),
+(469, 100, 21, 4, NULL, 'Asignado'),
+(470, 101, 5, 4, NULL, 'Asignado'),
+(471, 101, 6, 8, NULL, 'Asignado'),
+(472, 101, 7, 4, NULL, 'Asignado'),
+(473, 101, 22, 8, NULL, 'Asignado'),
+(474, 101, 21, 4, NULL, 'Asignado'),
+(475, 102, 5, 4, NULL, 'Asignado'),
+(476, 102, 6, 8, NULL, 'Asignado'),
+(477, 102, 7, 4, NULL, 'Asignado'),
+(478, 102, 22, 8, NULL, 'Asignado'),
+(479, 102, 21, 4, NULL, 'Asignado'),
+(480, 103, 5, 4, NULL, 'Asignado'),
+(481, 103, 6, 8, NULL, 'Asignado'),
+(482, 103, 7, 4, NULL, 'Asignado'),
+(483, 103, 22, 8, NULL, 'Asignado'),
+(484, 103, 21, 4, NULL, 'Asignado'),
+(485, 104, 5, 20, NULL, 'Asignado'),
+(486, 104, 6, 24, NULL, 'Asignado'),
+(487, 104, 26, 8, NULL, 'Asignado'),
+(488, 104, 21, 20, NULL, 'Asignado'),
+(489, 104, 22, 72, NULL, 'Asignado'),
+(490, 105, 5, 20, NULL, 'Asignado'),
+(491, 105, 6, 24, NULL, 'Asignado'),
+(492, 105, 26, 8, NULL, 'Asignado'),
+(493, 105, 21, 20, NULL, 'Asignado'),
+(494, 105, 22, 72, NULL, 'Asignado'),
+(495, 106, 5, 20, NULL, 'Asignado'),
+(496, 106, 6, 24, NULL, 'Asignado'),
+(497, 106, 26, 8, NULL, 'Asignado'),
+(498, 106, 21, 20, NULL, 'Asignado'),
+(499, 106, 22, 72, NULL, 'Asignado'),
+(500, 107, 5, 20, NULL, 'Asignado'),
+(501, 107, 6, 24, NULL, 'Asignado'),
+(502, 107, 26, 8, NULL, 'Asignado'),
+(503, 107, 21, 20, NULL, 'Asignado'),
+(504, 107, 22, 72, NULL, 'Asignado'),
+(505, 108, 5, 20, NULL, 'Asignado'),
+(506, 108, 6, 24, NULL, 'Asignado'),
+(507, 108, 26, 8, NULL, 'Asignado'),
+(508, 108, 21, 20, NULL, 'Asignado'),
+(509, 108, 22, 72, NULL, 'Asignado'),
+(510, 109, 5, 20, NULL, 'Asignado'),
+(511, 109, 6, 24, NULL, 'Asignado'),
+(512, 109, 26, 8, NULL, 'Asignado'),
+(513, 109, 21, 20, NULL, 'Asignado'),
+(514, 109, 22, 72, NULL, 'Asignado'),
+(515, 110, 5, 20, NULL, 'Asignado'),
+(516, 110, 6, 24, NULL, 'Asignado'),
+(517, 110, 26, 8, NULL, 'Asignado'),
+(518, 110, 21, 20, NULL, 'Asignado'),
+(519, 110, 22, 72, NULL, 'Asignado'),
+(520, 111, 5, 20, NULL, 'Asignado'),
+(521, 111, 6, 24, NULL, 'Asignado'),
+(522, 111, 26, 8, NULL, 'Asignado'),
+(523, 111, 21, 20, NULL, 'Asignado'),
+(524, 111, 22, 72, NULL, 'Asignado'),
+(525, 112, 5, 20, NULL, 'Asignado'),
+(526, 112, 6, 24, NULL, 'Asignado'),
+(527, 112, 26, 8, NULL, 'Asignado'),
+(528, 112, 21, 20, NULL, 'Asignado'),
+(529, 112, 22, 72, NULL, 'Asignado'),
+(530, 113, 5, 20, NULL, 'Asignado'),
+(531, 113, 6, 24, NULL, 'Asignado'),
+(532, 113, 26, 8, NULL, 'Asignado'),
+(533, 113, 21, 20, NULL, 'Asignado'),
+(534, 113, 22, 72, NULL, 'Asignado'),
+(535, 114, 5, 20, NULL, 'Asignado'),
+(536, 114, 6, 24, NULL, 'Asignado'),
+(537, 114, 26, 8, NULL, 'Asignado'),
+(538, 114, 21, 20, NULL, 'Asignado'),
+(539, 114, 22, 72, NULL, 'Asignado'),
+(540, 115, 5, 20, NULL, 'Asignado'),
+(541, 115, 6, 24, NULL, 'Asignado'),
+(542, 115, 26, 8, NULL, 'Asignado'),
+(543, 115, 21, 20, NULL, 'Asignado'),
+(544, 115, 22, 72, NULL, 'Asignado'),
+(545, 116, 5, 20, NULL, 'Asignado'),
+(546, 116, 6, 24, NULL, 'Asignado'),
+(547, 116, 26, 8, NULL, 'Asignado'),
+(548, 116, 21, 20, NULL, 'Asignado'),
+(549, 116, 22, 72, NULL, 'Asignado'),
+(550, 117, 5, 20, NULL, 'Asignado'),
+(551, 117, 6, 24, NULL, 'Asignado'),
+(552, 117, 26, 8, NULL, 'Asignado'),
+(553, 117, 21, 20, NULL, 'Asignado'),
+(554, 117, 22, 72, NULL, 'Asignado'),
+(555, 118, 5, 20, NULL, 'Asignado'),
+(556, 118, 6, 24, NULL, 'Asignado'),
+(557, 118, 26, 8, NULL, 'Asignado'),
+(558, 118, 21, 20, NULL, 'Asignado'),
+(559, 118, 22, 72, NULL, 'Asignado'),
+(560, 119, 5, 20, NULL, 'Asignado'),
+(561, 119, 6, 24, NULL, 'Asignado'),
+(562, 119, 26, 8, NULL, 'Asignado'),
+(563, 119, 21, 20, NULL, 'Asignado'),
+(564, 119, 22, 72, NULL, 'Asignado'),
+(565, 120, 5, 20, NULL, 'Asignado'),
+(566, 120, 6, 24, NULL, 'Asignado'),
+(567, 120, 26, 8, NULL, 'Asignado'),
+(568, 120, 21, 20, NULL, 'Asignado'),
+(569, 120, 22, 72, NULL, 'Asignado'),
+(570, 121, 5, 20, NULL, 'Asignado'),
+(571, 121, 6, 24, NULL, 'Asignado'),
+(572, 121, 26, 8, NULL, 'Asignado'),
+(573, 121, 21, 20, NULL, 'Asignado'),
+(574, 121, 22, 72, NULL, 'Asignado'),
+(575, 122, 19, 5, NULL, 'Asignado');
 
 -- --------------------------------------------------------
 
@@ -1660,18 +1804,18 @@ CREATE TABLE `programacion_insumos` (
 --
 
 CREATE TABLE `programacion_mantenimiento` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_equipo` int(11) NOT NULL,
-  `id_actmanten` int(11) NOT NULL,
-  `motivo` varchar(255) DEFAULT NULL,
-  `anio` int(11) NOT NULL,
-  `modo_programacion` enum('Anual','Unica') NOT NULL DEFAULT 'Anual',
-  `frecuencia_meses` int(11) NOT NULL COMMENT 'Cada cuántos meses: 1,2,3,4,6,12',
+  `id` int UNSIGNED NOT NULL,
+  `id_equipo` int NOT NULL,
+  `id_actmanten` int NOT NULL,
+  `motivo` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `anio` int NOT NULL,
+  `modo_programacion` enum('Anual','Unica') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Anual',
+  `frecuencia_meses` int NOT NULL COMMENT 'Cada cuántos meses: 1,2,3,4,6,12',
   `fecha_inicio` date NOT NULL,
-  `total_programados` int(11) NOT NULL DEFAULT 0,
-  `observaciones` varchar(255) DEFAULT NULL,
-  `es_prueba` tinyint(1) NOT NULL DEFAULT 0,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `total_programados` int NOT NULL DEFAULT '0',
+  `observaciones` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `es_prueba` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -1691,15 +1835,15 @@ INSERT INTO `programacion_mantenimiento` (`id`, `id_equipo`, `id_actmanten`, `mo
 --
 
 CREATE TABLE `programacion_mantenimiento_vehiculo` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_vehiculo` int(11) NOT NULL,
-  `motivo` varchar(255) NOT NULL,
-  `anio` int(11) NOT NULL,
-  `frecuencia_meses` int(11) NOT NULL COMMENT 'Cada cuántos meses: 1,2,3,4,6,12',
+  `id` int UNSIGNED NOT NULL,
+  `id_vehiculo` int NOT NULL,
+  `motivo` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `anio` int NOT NULL,
+  `frecuencia_meses` int NOT NULL COMMENT 'Cada cuántos meses: 1,2,3,4,6,12',
   `fecha_inicio` date NOT NULL,
-  `total_programados` int(11) NOT NULL DEFAULT 0,
-  `observaciones` varchar(255) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `total_programados` int NOT NULL DEFAULT '0',
+  `observaciones` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -1709,15 +1853,15 @@ CREATE TABLE `programacion_mantenimiento_vehiculo` (
 --
 
 CREATE TABLE `programacion_notificaciones` (
-  `id` int(11) NOT NULL,
-  `id_programacion` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id_programacion` int NOT NULL,
   `tipo` enum('Asignacion','Modificacion','Recordatorio','Cancelacion') NOT NULL,
   `destinatario_tipo` enum('Tecnico','Cliente','Supervisor') NOT NULL,
-  `id_destinatario` int(11) NOT NULL,
-  `mensaje` text DEFAULT NULL,
-  `enviado` tinyint(1) DEFAULT 0,
+  `id_destinatario` int NOT NULL,
+  `mensaje` text,
+  `enviado` tinyint(1) DEFAULT '0',
   `fecha_envio` datetime DEFAULT NULL,
-  `fecha_creacion` datetime DEFAULT current_timestamp()
+  `fecha_creacion` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -1727,22 +1871,22 @@ CREATE TABLE `programacion_notificaciones` (
 --
 
 CREATE TABLE `programacion_otros` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `motivo` varchar(255) NOT NULL,
-  `id_tecnico_asignado` int(11) DEFAULT NULL,
-  `tecnicos_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`tecnicos_ids`)),
-  `id_supervisor` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`id_supervisor`)),
-  `id_vehiculo` int(11) DEFAULT NULL,
+  `id` int UNSIGNED NOT NULL,
+  `motivo` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id_tecnico_asignado` int DEFAULT NULL,
+  `tecnicos_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_supervisor` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_vehiculo` int DEFAULT NULL,
   `fecha_programada` date NOT NULL,
   `hora_inicio` time NOT NULL,
   `hora_fin` time DEFAULT NULL,
-  `ubicacion_manual` varchar(255) NOT NULL,
-  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecución','Realizado','Reprogramado','Cancelado') NOT NULL DEFAULT 'Programado',
-  `observaciones` text DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
+  `ubicacion_manual` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecución','Realizado','Reprogramado','Cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Programado',
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
+  `creado_por` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ;
 
 -- --------------------------------------------------------
 
@@ -1751,38 +1895,72 @@ CREATE TABLE `programacion_otros` (
 --
 
 CREATE TABLE `programacion_servicio` (
-  `id` int(11) NOT NULL,
-  `id_orden_servicio` int(11) DEFAULT NULL,
-  `id_orden_capacitacion` int(11) DEFAULT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`id_cliente_planta_area`)),
-  `id_servicio` int(11) NOT NULL,
-  `id_tecnico_asignado` int(11) NOT NULL,
-  `id_supervisor` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`id_supervisor`)),
-  `id_vehiculo` int(11) DEFAULT NULL,
+  `id` int NOT NULL,
+  `id_orden_servicio` int DEFAULT NULL,
+  `id_orden_capacitacion` int DEFAULT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_servicio` int NOT NULL,
+  `id_tecnico_asignado` int DEFAULT NULL,
+  `id_supervisor` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_vehiculo` int DEFAULT NULL,
   `fecha_programada` date NOT NULL,
   `dias_semana` varchar(100) DEFAULT NULL COMMENT 'Días de la semana específicos cuando frecuencia es "Días de la semana" (CSV: Lunes,Martes,etc.)',
   `hora_inicio` time NOT NULL,
   `hora_fin` time DEFAULT NULL,
-  `duracion_real` int(11) DEFAULT NULL,
+  `duracion_real` int DEFAULT NULL,
   `local_sede` varchar(150) DEFAULT NULL,
   `direccion_completa` varchar(255) DEFAULT NULL,
   `coordenadas` varchar(50) DEFAULT NULL,
   `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecución','Realizado','Reprogramado','Cancelado') DEFAULT 'Programado',
-  `requiere_asignacion_recursos` tinyint(1) NOT NULL DEFAULT 0,
+  `requiere_asignacion_recursos` tinyint(1) NOT NULL DEFAULT '0',
   `fecha_ejecucion_real` datetime DEFAULT NULL,
-  `certificado_generado` tinyint(1) DEFAULT 0,
+  `certificado_generado` tinyint(1) DEFAULT '0',
   `ruta_pdf_certificado` varchar(255) DEFAULT NULL,
   `ruta_pdf_agenda` varchar(255) DEFAULT NULL,
-  `fotos_evidencia` text DEFAULT NULL,
+  `fotos_evidencia` text,
   `firma_cliente` varchar(255) DEFAULT NULL,
-  `calificacion_cliente` int(11) DEFAULT NULL,
-  `observaciones` text DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
-  `fecha_creacion` datetime DEFAULT current_timestamp(),
-  `modificado_por` int(11) DEFAULT NULL,
+  `calificacion_cliente` int DEFAULT NULL,
+  `observaciones` text,
+  `creado_por` int DEFAULT NULL,
+  `fecha_creacion` datetime DEFAULT CURRENT_TIMESTAMP,
+  `modificado_por` int DEFAULT NULL,
   `fecha_modificacion` datetime DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ;
+
+--
+-- Volcado de datos para la tabla `programacion_servicio`
+--
+
+INSERT INTO `programacion_servicio` (`id`, `id_orden_servicio`, `id_orden_capacitacion`, `id_cliente_planta`, `id_cliente_planta_area`, `id_servicio`, `id_tecnico_asignado`, `id_supervisor`, `id_vehiculo`, `fecha_programada`, `dias_semana`, `hora_inicio`, `hora_fin`, `duracion_real`, `local_sede`, `direccion_completa`, `coordenadas`, `estado_ejecucion`, `requiere_asignacion_recursos`, `fecha_ejecucion_real`, `certificado_generado`, `ruta_pdf_certificado`, `ruta_pdf_agenda`, `fotos_evidencia`, `firma_cliente`, `calificacion_cliente`, `observaciones`, `creado_por`, `fecha_creacion`, `modificado_por`, `fecha_modificacion`) VALUES
+(95, 4, NULL, 1, '[6]', 6, 1, NULL, NULL, '2026-04-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 0, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(96, 4, NULL, 1, '[6]', 6, NULL, NULL, NULL, '2026-05-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(97, 4, NULL, 1, '[6]', 6, NULL, NULL, NULL, '2026-06-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(98, 4, NULL, 1, '[6]', 6, NULL, NULL, NULL, '2026-07-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(99, 4, NULL, 1, '[6]', 6, NULL, NULL, NULL, '2026-08-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(100, 4, NULL, 1, '[6]', 6, NULL, NULL, NULL, '2026-09-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(101, 4, NULL, 1, '[6]', 6, NULL, NULL, NULL, '2026-10-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(102, 4, NULL, 1, '[6]', 6, NULL, NULL, NULL, '2026-11-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(103, 4, NULL, 1, '[6]', 6, NULL, NULL, NULL, '2026-12-14', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:04:25', NULL, '2026-04-13 21:04:25'),
+(104, 5, NULL, 4, '[8]', 6, 1, NULL, NULL, '2026-04-14', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 0, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(105, 5, NULL, 4, '[8]', 6, 1, NULL, NULL, '2026-04-29', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 0, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(106, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-05-14', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(107, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-05-29', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(108, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-06-13', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(109, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-06-28', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(110, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-07-13', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(111, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-07-28', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(112, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-08-12', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(113, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-08-27', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(114, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-09-11', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(115, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-09-26', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(116, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-10-11', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(117, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-10-26', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(118, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-11-10', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(119, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-11-25', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(120, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-12-10', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(121, 5, NULL, 4, '[8]', 6, NULL, NULL, NULL, '2026-12-25', NULL, '13:00:00', '14:00:00', NULL, 'P&D ANDINA ALIMENTOS', 'Av. Industrial Nro 741', NULL, 'Programado', 1, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:05:21', NULL, '2026-04-13 21:05:21'),
+(122, 4, NULL, 1, '[1]', 14, 1, NULL, NULL, '2026-05-10', NULL, '08:00:00', '12:00:00', NULL, 'LINEA FARMACEUTICA', 'Calle Los Telares N° 197 URB. Vulcano', NULL, 'Cancelado', 0, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, 1, '2026-04-13 21:06:08', 1, '2026-04-13 21:20:42');
 
 -- --------------------------------------------------------
 
@@ -1791,13 +1969,23 @@ CREATE TABLE `programacion_servicio` (
 --
 
 CREATE TABLE `programacion_tecnicos` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_programacion` int(11) NOT NULL,
-  `id_tecnico` int(11) NOT NULL,
-  `rol` enum('Principal','Apoyo') NOT NULL DEFAULT 'Apoyo',
+  `id` int UNSIGNED NOT NULL,
+  `id_programacion` int NOT NULL,
+  `id_tecnico` int NOT NULL,
+  `rol` enum('Principal','Apoyo') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Apoyo',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `programacion_tecnicos`
+--
+
+INSERT INTO `programacion_tecnicos` (`id`, `id_programacion`, `id_tecnico`, `rol`, `created_at`, `updated_at`) VALUES
+(29, 95, 1, 'Principal', '2026-04-14 02:04:25', '2026-04-14 02:04:25'),
+(30, 104, 1, 'Principal', '2026-04-14 02:05:21', '2026-04-14 02:05:21'),
+(31, 105, 1, 'Principal', '2026-04-14 02:05:21', '2026-04-14 02:05:21'),
+(32, 122, 1, 'Principal', '2026-04-14 02:06:08', '2026-04-14 02:06:08');
 
 -- --------------------------------------------------------
 
@@ -1806,26 +1994,26 @@ CREATE TABLE `programacion_tecnicos` (
 --
 
 CREATE TABLE `programacion_visita` (
-  `id` int(10) UNSIGNED NOT NULL,
-  `id_cliente` int(11) NOT NULL,
-  `tipo_visita` varchar(120) NOT NULL,
-  `id_tecnico_asignado` int(11) DEFAULT NULL,
-  `tecnicos_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`tecnicos_ids`)),
-  `id_supervisor` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`id_supervisor`)),
-  `id_vehiculo` int(11) DEFAULT NULL,
-  `id_cliente_planta` bigint(20) UNSIGNED DEFAULT NULL,
-  `id_cliente_planta_area` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`id_cliente_planta_area`)),
+  `id` int UNSIGNED NOT NULL,
+  `id_cliente` int NOT NULL,
+  `tipo_visita` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id_tecnico_asignado` int DEFAULT NULL,
+  `tecnicos_ids` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_supervisor` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  `id_vehiculo` int DEFAULT NULL,
+  `id_cliente_planta` bigint UNSIGNED DEFAULT NULL,
+  `id_cliente_planta_area` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
   `fecha_programada` date NOT NULL,
   `hora_inicio` time NOT NULL,
   `hora_fin` time DEFAULT NULL,
-  `local_sede` varchar(150) DEFAULT NULL,
-  `direccion_completa` varchar(255) DEFAULT NULL,
-  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecución','Realizado','Reprogramado','Cancelado') NOT NULL DEFAULT 'Programado',
-  `observaciones` text DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
+  `local_sede` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `direccion_completa` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado_ejecucion` enum('Programado','Confirmado','En Camino','En Ejecución','Realizado','Reprogramado','Cancelado') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Programado',
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
+  `creado_por` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ;
 
 -- --------------------------------------------------------
 
@@ -1834,19 +2022,19 @@ CREATE TABLE `programacion_visita` (
 --
 
 CREATE TABLE `proveedores` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `razon_social` varchar(200) NOT NULL,
-  `ruc` varchar(20) DEFAULT NULL,
-  `nombre_comercial` varchar(200) DEFAULT NULL,
-  `contacto_nombre` varchar(150) DEFAULT NULL,
-  `contacto_telefono` varchar(30) DEFAULT NULL,
-  `contacto_email` varchar(150) DEFAULT NULL,
-  `direccion` varchar(300) DEFAULT NULL,
-  `banco` varchar(100) DEFAULT NULL,
-  `numero_cuenta` varchar(50) DEFAULT NULL,
-  `cci` varchar(50) DEFAULT NULL,
-  `estado` enum('Activo','Inactivo') NOT NULL DEFAULT 'Activo',
-  `observaciones` text DEFAULT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `razon_social` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ruc` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `nombre_comercial` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `contacto_nombre` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `contacto_telefono` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `contacto_email` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `direccion` varchar(300) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `banco` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `numero_cuenta` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `cci` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `estado` enum('Activo','Inactivo') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Activo',
+  `observaciones` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1858,19 +2046,19 @@ CREATE TABLE `proveedores` (
 --
 
 CREATE TABLE `proyecciones` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `actividad` varchar(100) NOT NULL,
-  `id_multicim` int(11) NOT NULL,
-  `id_orden_servicio` int(11) DEFAULT NULL,
-  `id_orden_producto` int(11) DEFAULT NULL,
-  `id_orden_capacitacion_auditoria` int(11) DEFAULT NULL,
+  `id_multicim` int NOT NULL,
+  `id_orden_servicio` int DEFAULT NULL,
+  `id_orden_producto` int DEFAULT NULL,
+  `id_orden_capacitacion_auditoria` int DEFAULT NULL,
   `n_factura` varchar(100) NOT NULL,
   `monto_detrax` decimal(10,2) NOT NULL,
   `total_final` decimal(10,2) NOT NULL,
   `fecha_factura` date DEFAULT NULL,
-  `dias_credito` int(11) NOT NULL,
+  `dias_credito` int NOT NULL,
   `fecha_vcto` date DEFAULT NULL,
-  `dia_vencer` int(11) DEFAULT NULL,
+  `dia_vencer` int DEFAULT NULL,
   `fecha_pago` date DEFAULT NULL,
   `fecha_ejecucion` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1882,37 +2070,37 @@ CREATE TABLE `proyecciones` (
 --
 
 CREATE TABLE `rrhh_asistencia` (
-  `id` int(11) NOT NULL,
-  `id_personal` int(11) DEFAULT NULL,
-  `id_tecnico` int(11) DEFAULT NULL,
-  `id_programacion` int(11) DEFAULT NULL,
+  `id` int NOT NULL,
+  `id_personal` int DEFAULT NULL,
+  `id_tecnico` int DEFAULT NULL,
+  `id_programacion` int DEFAULT NULL,
   `fecha` date NOT NULL,
   `tipo_registro` enum('Oficina','Campo') NOT NULL,
   `hora_entrada` time NOT NULL,
   `hora_salida` time DEFAULT NULL,
   `hora_inicio_almuerzo` time DEFAULT NULL,
   `hora_fin_almuerzo` time DEFAULT NULL,
-  `exceso_almuerzo_minutos` int(11) NOT NULL DEFAULT 0,
+  `exceso_almuerzo_minutos` int NOT NULL DEFAULT '0',
   `hora_esperada_entrada` time DEFAULT NULL,
   `hora_esperada_salida` time DEFAULT NULL,
   `gps_entrada` varchar(100) DEFAULT NULL,
   `gps_salida` varchar(100) DEFAULT NULL,
   `distancia_cliente_metros` decimal(10,2) DEFAULT NULL,
-  `dentro_rango_50m` tinyint(1) DEFAULT 0,
+  `dentro_rango_50m` tinyint(1) DEFAULT '0',
   `foto_entrada` varchar(255) DEFAULT NULL,
   `foto_salida` varchar(255) DEFAULT NULL,
-  `fotos_servicio` text DEFAULT NULL,
+  `fotos_servicio` text,
   `horas_trabajadas` decimal(5,2) DEFAULT NULL,
-  `tardanza_minutos` int(11) DEFAULT 0,
-  `tiempo_extra_minutos` int(11) NOT NULL DEFAULT 0,
-  `horas_extra_asignadas` tinyint(1) NOT NULL DEFAULT 0,
+  `tardanza_minutos` int DEFAULT '0',
+  `tiempo_extra_minutos` int NOT NULL DEFAULT '0',
+  `horas_extra_asignadas` tinyint(1) NOT NULL DEFAULT '0',
   `hora_inicio_extra` time DEFAULT NULL,
   `estado` enum('Puntual','Tardanza','Falta','Fuera de Rango','Incompleto','Justificada') DEFAULT 'Incompleto',
-  `observaciones` text DEFAULT NULL,
+  `observaciones` text,
   `justificacion` varchar(255) DEFAULT NULL,
   `registrado_via` enum('AppSheet','Web','Manual') DEFAULT 'AppSheet',
-  `fecha_creacion` datetime DEFAULT current_timestamp(),
-  `modificado_por` int(11) DEFAULT NULL,
+  `fecha_creacion` datetime DEFAULT CURRENT_TIMESTAMP,
+  `modificado_por` int DEFAULT NULL,
   `fecha_modificacion` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Registro unificado de asistencia para administrativos y técnicos';
 
@@ -1931,15 +2119,15 @@ INSERT INTO `rrhh_asistencia` (`id`, `id_personal`, `id_tecnico`, `id_programaci
 --
 
 CREATE TABLE `rrhh_horarios` (
-  `id` int(11) NOT NULL,
-  `id_personal` int(11) DEFAULT NULL,
-  `id_tecnico` int(11) DEFAULT NULL,
+  `id` int NOT NULL,
+  `id_personal` int DEFAULT NULL,
+  `id_tecnico` int DEFAULT NULL,
   `dia_semana` enum('Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo') NOT NULL,
   `hora_entrada_esperada` time NOT NULL,
   `hora_salida_esperada` time NOT NULL,
-  `tolerancia_minutos` int(11) DEFAULT 10,
-  `activo` tinyint(1) DEFAULT 1,
-  `es_descanso` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Si es true, es día de descanso (no se marca asistencia)'
+  `tolerancia_minutos` int DEFAULT '10',
+  `activo` tinyint(1) DEFAULT '1',
+  `es_descanso` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Si es true, es día de descanso (no se marca asistencia)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Horarios laborales esperados por empleado';
 
 --
@@ -2018,14 +2206,14 @@ INSERT INTO `rrhh_horarios` (`id`, `id_personal`, `id_tecnico`, `dia_semana`, `h
 --
 
 CREATE TABLE `rrhh_justificaciones` (
-  `id` int(11) NOT NULL,
-  `id_asistencia` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id_asistencia` int NOT NULL,
   `tipo` enum('Tardanza','Falta','Salida Anticipada','Permiso') NOT NULL,
   `motivo` text NOT NULL,
   `documento_respaldo` varchar(255) DEFAULT NULL,
-  `aprobado_por` int(11) DEFAULT NULL,
+  `aprobado_por` int DEFAULT NULL,
   `estado_aprobacion` enum('Pendiente','Aprobado','Rechazado') DEFAULT 'Pendiente',
-  `fecha_solicitud` datetime DEFAULT current_timestamp(),
+  `fecha_solicitud` datetime DEFAULT CURRENT_TIMESTAMP,
   `fecha_respuesta` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Justificaciones de tardanzas y faltas';
 
@@ -2036,13 +2224,13 @@ CREATE TABLE `rrhh_justificaciones` (
 --
 
 CREATE TABLE `servicios` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `descripcion` varchar(100) NOT NULL,
   `estado` enum('activo','inactivo') DEFAULT 'activo',
-  `duracion_estimada` int(11) DEFAULT 60 COMMENT 'Duración estimada en minutos',
-  `requiere_movilidad` tinyint(1) DEFAULT 0 COMMENT 'Si necesita vehículo (asignar a Jordi)',
-  `requiere_certificado` tinyint(1) DEFAULT 0 COMMENT 'Si genera certificado al finalizar',
+  `duracion_estimada` int DEFAULT '60' COMMENT 'Duración estimada en minutos',
+  `requiere_movilidad` tinyint(1) DEFAULT '0' COMMENT 'Si necesita vehículo (asignar a Jordi)',
+  `requiere_certificado` tinyint(1) DEFAULT '0' COMMENT 'Si genera certificado al finalizar',
   `plantilla_certificado` varchar(255) DEFAULT NULL COMMENT 'Ruta de plantilla PDF'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -2073,12 +2261,12 @@ INSERT INTO `servicios` (`id`, `nombre`, `descripcion`, `estado`, `duracion_esti
 --
 
 CREATE TABLE `servicio_producto` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `id_servicio` int(11) NOT NULL,
-  `id_producto` int(11) NOT NULL,
-  `id_equipo` int(11) DEFAULT NULL,
-  `cantidad_default` decimal(10,2) NOT NULL DEFAULT 1.00,
-  `observacion` varchar(255) DEFAULT NULL
+  `id` bigint UNSIGNED NOT NULL,
+  `id_servicio` int NOT NULL,
+  `id_producto` int NOT NULL,
+  `id_equipo` int DEFAULT NULL,
+  `cantidad_default` decimal(10,2) NOT NULL DEFAULT '1.00',
+  `observacion` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -2088,12 +2276,12 @@ CREATE TABLE `servicio_producto` (
 --
 
 CREATE TABLE `sessions` (
-  `id` varchar(255) NOT NULL,
-  `user_id` bigint(20) UNSIGNED DEFAULT NULL,
-  `ip_address` varchar(45) DEFAULT NULL,
-  `user_agent` text DEFAULT NULL,
-  `payload` longtext NOT NULL,
-  `last_activity` int(11) NOT NULL
+  `id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint UNSIGNED DEFAULT NULL,
+  `ip_address` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `user_agent` text COLLATE utf8mb4_unicode_ci,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `last_activity` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -2103,17 +2291,17 @@ CREATE TABLE `sessions` (
 --
 
 CREATE TABLE `tecnicos` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `apellidos` varchar(100) NOT NULL,
   `dni` char(8) NOT NULL,
   `celular` char(13) DEFAULT NULL,
   `correo` varchar(100) DEFAULT NULL,
   `especialidad` varchar(100) DEFAULT NULL,
-  `autorizado_conducir` tinyint(1) DEFAULT 0,
-  `carga_maxima_semanal` int(11) DEFAULT 40,
+  `autorizado_conducir` tinyint(1) DEFAULT '0',
+  `carga_maxima_semanal` int DEFAULT '40',
   `estado` enum('Activo','Inactivo','Licencia') DEFAULT 'Activo',
-  `id_exponente_vinculado` bigint(20) UNSIGNED DEFAULT NULL
+  `id_exponente_vinculado` bigint UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
@@ -2130,14 +2318,14 @@ INSERT INTO `tecnicos` (`id`, `nombre`, `apellidos`, `dni`, `celular`, `correo`,
 --
 
 CREATE TABLE `tecnico_disponibilidad` (
-  `id` int(11) NOT NULL,
-  `id_tecnico` int(11) NOT NULL,
+  `id` int NOT NULL,
+  `id_tecnico` int NOT NULL,
   `fecha` date NOT NULL,
   `tipo` enum('Laboral','Descanso','Vacaciones','Licencia','Feriado') DEFAULT 'Laboral',
-  `horas_disponibles` int(11) DEFAULT 8,
+  `horas_disponibles` int DEFAULT '8',
   `observaciones` varchar(255) DEFAULT NULL,
-  `creado_por` int(11) DEFAULT NULL,
-  `fecha_registro` datetime DEFAULT current_timestamp()
+  `creado_por` int DEFAULT NULL,
+  `fecha_registro` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -2147,12 +2335,12 @@ CREATE TABLE `tecnico_disponibilidad` (
 --
 
 CREATE TABLE `users` (
-  `id` bigint(20) UNSIGNED NOT NULL,
-  `name` varchar(255) NOT NULL,
-  `email` varchar(255) NOT NULL,
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `email_verified_at` timestamp NULL DEFAULT NULL,
-  `password` varchar(255) NOT NULL,
-  `remember_token` varchar(100) DEFAULT NULL,
+  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `remember_token` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -2164,11 +2352,11 @@ CREATE TABLE `users` (
 --
 
 CREATE TABLE `vehiculos` (
-  `id` int(11) NOT NULL,
+  `id` int NOT NULL,
   `placa` varchar(10) NOT NULL,
   `modelo` varchar(50) DEFAULT NULL,
   `marca` varchar(50) DEFAULT NULL,
-  `anio` int(11) DEFAULT NULL,
+  `anio` int DEFAULT NULL,
   `capacidad_carga` decimal(8,2) DEFAULT NULL,
   `estado` enum('Disponible','En Uso','Mantenimiento','Fuera de Servicio') DEFAULT 'Disponible'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -2888,469 +3076,469 @@ ALTER TABLE `vehiculos`
 -- AUTO_INCREMENT de la tabla `actividades_mantenieminto`
 --
 ALTER TABLE `actividades_mantenieminto`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `area`
 --
 ALTER TABLE `area`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT de la tabla `caja_chica`
 --
 ALTER TABLE `caja_chica`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `cargo`
 --
 ALTER TABLE `cargo`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `catalogo_capacitacion_auditoria`
 --
 ALTER TABLE `catalogo_capacitacion_auditoria`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `categoria`
 --
 ALTER TABLE `categoria`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `cliente`
 --
 ALTER TABLE `cliente`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `cliente_planta`
 --
 ALTER TABLE `cliente_planta`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `cliente_planta_area`
 --
 ALTER TABLE `cliente_planta_area`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT de la tabla `cotizacion`
 --
 ALTER TABLE `cotizacion`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `cotizacion_beneficio`
 --
 ALTER TABLE `cotizacion_beneficio`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `cotizacion_detalle`
 --
 ALTER TABLE `cotizacion_detalle`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_entrada_devolucion_fabricacion`
 --
 ALTER TABLE `detalle_entrada_devolucion_fabricacion`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_entrega_epp`
 --
 ALTER TABLE `detalle_entrega_epp`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_ordenes_compra`
 --
 ALTER TABLE `detalle_ordenes_compra`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_orden_asesoria`
 --
 ALTER TABLE `detalle_orden_asesoria`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_orden_capacitacion_equipos`
 --
 ALTER TABLE `detalle_orden_capacitacion_equipos`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_orden_capacitacion_materiales`
 --
 ALTER TABLE `detalle_orden_capacitacion_materiales`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_orden_fabricacion`
 --
 ALTER TABLE `detalle_orden_fabricacion`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_orden_producto`
 --
 ALTER TABLE `detalle_orden_producto`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_orden_servicio`
 --
 ALTER TABLE `detalle_orden_servicio`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `entrada_devolucion_fabricacion`
 --
 ALTER TABLE `entrada_devolucion_fabricacion`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `entrega_epp`
 --
 ALTER TABLE `entrega_epp`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `equipo`
 --
 ALTER TABLE `equipo`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT de la tabla `exponentes`
 --
 ALTER TABLE `exponentes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `failed_jobs`
 --
 ALTER TABLE `failed_jobs`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `inventario`
 --
 ALTER TABLE `inventario`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
 
 --
 -- AUTO_INCREMENT de la tabla `inventario_ajustes`
 --
 ALTER TABLE `inventario_ajustes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT de la tabla `jobs`
 --
 ALTER TABLE `jobs`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `kardex`
 --
 ALTER TABLE `kardex`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=98;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=98;
 
 --
 -- AUTO_INCREMENT de la tabla `mantenimiento`
 --
 ALTER TABLE `mantenimiento`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT de la tabla `mantenimiento_vehiculo`
 --
 ALTER TABLE `mantenimiento_vehiculo`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `migrations`
 --
 ALTER TABLE `migrations`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `multicim`
 --
 ALTER TABLE `multicim`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `oei_fichas`
 --
 ALTER TABLE `oei_fichas`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `oei_ficha_anexos`
 --
 ALTER TABLE `oei_ficha_anexos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `oei_ficha_monitoreo`
 --
 ALTER TABLE `oei_ficha_monitoreo`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `oei_informe_final`
 --
 ALTER TABLE `oei_informe_final`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `ordenes_compra`
 --
 ALTER TABLE `ordenes_compra`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_asesoria`
 --
 ALTER TABLE `orden_asesoria`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_asesoria_exponentes`
 --
 ALTER TABLE `orden_asesoria_exponentes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_capacitacion_auditoria`
 --
 ALTER TABLE `orden_capacitacion_auditoria`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_capacitacion_ponentes`
 --
 ALTER TABLE `orden_capacitacion_ponentes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_fabricacion`
 --
 ALTER TABLE `orden_fabricacion`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_producto`
 --
 ALTER TABLE `orden_producto`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_servicio`
 --
 ALTER TABLE `orden_servicio`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_servicio_equipo`
 --
 ALTER TABLE `orden_servicio_equipo`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT de la tabla `orden_servicio_producto`
 --
 ALTER TABLE `orden_servicio_producto`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT de la tabla `personal`
 --
 ALTER TABLE `personal`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `personal_access_tokens`
 --
 ALTER TABLE `personal_access_tokens`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=80;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=87;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`
 --
 ALTER TABLE `productos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
 
 --
 -- AUTO_INCREMENT de la tabla `producto_receta_detalle`
 --
 ALTER TABLE `producto_receta_detalle`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_asesoria`
 --
 ALTER TABLE `programacion_asesoria`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_asesoria_exponentes`
 --
 ALTER TABLE `programacion_asesoria_exponentes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_capacitacion`
 --
 ALTER TABLE `programacion_capacitacion`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_capacitacion_exponentes`
 --
 ALTER TABLE `programacion_capacitacion_exponentes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_exponentes`
 --
 ALTER TABLE `programacion_exponentes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_fabricacion`
 --
 ALTER TABLE `programacion_fabricacion`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_historial`
 --
 ALTER TABLE `programacion_historial`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_insumos`
 --
 ALTER TABLE `programacion_insumos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=576;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_mantenimiento`
 --
 ALTER TABLE `programacion_mantenimiento`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_mantenimiento_vehiculo`
 --
 ALTER TABLE `programacion_mantenimiento_vehiculo`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_notificaciones`
 --
 ALTER TABLE `programacion_notificaciones`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_otros`
 --
 ALTER TABLE `programacion_otros`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_servicio`
 --
 ALTER TABLE `programacion_servicio`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_tecnicos`
 --
 ALTER TABLE `programacion_tecnicos`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
 
 --
 -- AUTO_INCREMENT de la tabla `programacion_visita`
 --
 ALTER TABLE `programacion_visita`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `proveedores`
 --
 ALTER TABLE `proveedores`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `proyecciones`
 --
 ALTER TABLE `proyecciones`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `rrhh_asistencia`
 --
 ALTER TABLE `rrhh_asistencia`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `rrhh_horarios`
 --
 ALTER TABLE `rrhh_horarios`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=64;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=64;
 
 --
 -- AUTO_INCREMENT de la tabla `rrhh_justificaciones`
 --
 ALTER TABLE `rrhh_justificaciones`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `servicios`
 --
 ALTER TABLE `servicios`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de la tabla `servicio_producto`
 --
 ALTER TABLE `servicio_producto`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `tecnicos`
 --
 ALTER TABLE `tecnicos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `tecnico_disponibilidad`
 --
 ALTER TABLE `tecnico_disponibilidad`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `vehiculos`
 --
 ALTER TABLE `vehiculos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- Restricciones para tablas volcadas

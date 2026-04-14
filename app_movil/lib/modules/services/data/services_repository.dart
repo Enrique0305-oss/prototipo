@@ -44,8 +44,31 @@ class ServicesRepository {
   ];
 
   Future<List<ServiceTask>> getTodayServices() async {
+    return getServicesByDateRange(
+      from: DateTime.now(),
+      to: DateTime.now(),
+    );
+  }
+
+  Future<List<ServiceTask>> getServicesByDateRange({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final start = DateTime(from.year, from.month, from.day);
+    final end = DateTime(to.year, to.month, to.day);
+
+    if (end.isBefore(start)) {
+      throw ApiException('La fecha final no puede ser menor que la inicial', 400, const {});
+    }
+
     if (AppConfig.useMockData) {
       return _mockServices
+          .where((service) {
+            final serviceDate = DateTime.tryParse(service.date);
+            if (serviceDate == null) return false;
+            final onlyDate = DateTime(serviceDate.year, serviceDate.month, serviceDate.day);
+            return !onlyDate.isBefore(start) && !onlyDate.isAfter(end);
+          })
           .map(
             (s) => s.copyWith(),
           )
@@ -57,8 +80,14 @@ class ServicesRepository {
       throw ApiException('No hay sesion activa', 401, const {});
     }
 
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final query = <String, String>{'fecha': today};
+    final query = <String, String>{};
+    if (start == end) {
+      query['fecha'] = DateFormat('yyyy-MM-dd').format(start);
+    } else {
+      query['fecha_inicio'] = DateFormat('yyyy-MM-dd').format(start);
+      query['fecha_fin'] = DateFormat('yyyy-MM-dd').format(end);
+    }
+
     if (AppConfig.technicianId > 0) {
       query['id_tecnico'] = AppConfig.technicianId.toString();
     }

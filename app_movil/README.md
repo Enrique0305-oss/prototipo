@@ -28,7 +28,17 @@ Base inicial de app Flutter para tecnicos, conectada al backend Laravel en la ca
 
 ## Configuracion local
 
-Por defecto la app inicia en modo visual/demo (sin backend), para poder revisar pantallas y flujo UX.
+Por defecto la app inicia en modo real (con backend), usando login contra la tabla personal.
+
+Si estas en emulador Android, usa por defecto:
+
+- http://10.0.2.2:8000/api
+
+Si estas en celular fisico, usa la IP local de tu PC:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000/api
+```
 
 Si quieres forzar explicitamente el modo demo:
 
@@ -36,15 +46,11 @@ Si quieres forzar explicitamente el modo demo:
 flutter run --dart-define=USE_MOCK_DATA=true
 ```
 
-Cuando ya tengas backend local y quieras usar login/API real:
+Si quieres forzar explicitamente modo real:
 
 ```bash
 flutter run --dart-define=USE_MOCK_DATA=false --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
 ```
-
-La URL base por defecto para API real es:
-
-- http://10.0.2.2:8000/api
 
 Puedes cambiarla en runtime con dart-define:
 

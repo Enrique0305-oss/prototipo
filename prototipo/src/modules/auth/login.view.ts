@@ -1,7 +1,7 @@
 import './login.css';
 import { authService } from './auth.service';
 import type { Credenciales, LoginError } from './auth.types';
-const LOGO_URL = "http://backend.qsci-system.com/images/menu.png";
+const LOGO_URL = "http://127.0.0.1:8000/images/menu.png";
 
 export function renderLogin() {
   return `

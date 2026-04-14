@@ -9,7 +9,7 @@ class AppConfig {
   // --dart-define=USE_MOCK_DATA=true
   static const bool useMockData = bool.fromEnvironment(
     'USE_MOCK_DATA',
-    defaultValue: true,
+    defaultValue: false,
   );
 
   // Si quieres filtrar por un tecnico fijo de prueba:

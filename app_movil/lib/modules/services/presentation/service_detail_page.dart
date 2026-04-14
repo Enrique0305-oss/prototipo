@@ -46,6 +46,32 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     return distance != null && distance <= AppConfig.serviceGeofenceMeters;
   }
 
+  _StatusPalette _paletteForStatus(String status) {
+    final normalized = status.toLowerCase();
+    if (normalized.contains('cancel')) {
+      return const _StatusPalette(
+        colors: [Color(0xFFF35454), Color(0xFFE11E1E)],
+        badgeBackground: Color(0x40FFFFFF),
+      );
+    }
+    if (normalized.contains('realizado') || normalized.contains('complet')) {
+      return const _StatusPalette(
+        colors: [Color(0xFF18B89A), Color(0xFF12A56E)],
+        badgeBackground: Color(0x40FFFFFF),
+      );
+    }
+    if (normalized.contains('program')) {
+      return const _StatusPalette(
+        colors: [Color(0xFF3F7EF0), Color(0xFF2B5FDE)],
+        badgeBackground: Color(0x40FFFFFF),
+      );
+    }
+    return const _StatusPalette(
+      colors: [Color(0xFF4E6283), Color(0xFF394E6D)],
+      badgeBackground: Color(0x40FFFFFF),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -96,6 +122,14 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = _paletteForStatus(widget.service.status);
+    final hasSchedule =
+      (widget.service.startTime != null && widget.service.startTime!.trim().isNotEmpty) ||
+      (widget.service.endTime != null && widget.service.endTime!.trim().isNotEmpty);
+    final schedule = hasSchedule
+      ? '${(widget.service.startTime ?? '').trim()} - ${(widget.service.endTime ?? '').trim()}'
+      : null;
+
     final servicePoint = widget.service.latitude != null && widget.service.longitude != null
         ? LatLng(widget.service.latitude!, widget.service.longitude!)
         : null;
@@ -107,21 +141,69 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.service.title, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 6),
-                  Text(widget.service.client),
-                  const SizedBox(height: 4),
-                  Text(widget.service.address ?? 'Sin direccion'),
-                  const SizedBox(height: 4),
-                  Text('Estado actual: ${widget.service.status}'),
-                ],
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: palette.colors,
               ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.service.title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: palette.badgeBackground,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        widget.service.status,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.service.client,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.service.address ?? 'Sin direccion',
+                  style: const TextStyle(color: Color(0xE6FFFFFF)),
+                ),
+                if (schedule != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    schedule,
+                    style: const TextStyle(
+                      color: Color(0xE6FFFFFF),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -215,4 +297,11 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
       ),
     );
   }
+}
+
+class _StatusPalette {
+  const _StatusPalette({required this.colors, required this.badgeBackground});
+
+  final List<Color> colors;
+  final Color badgeBackground;
 }
