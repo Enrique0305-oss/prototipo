@@ -26,6 +26,7 @@ export interface Programacion {
   id_cliente_planta?: number | null;
   id_cliente_planta_area?: number | null;
   estado_ejecucion: EstadoEjecucion;
+  requiere_asignacion_recursos?: boolean;
   fecha_ejecucion_real?: string;
   observaciones?: string;
   creado_por?: number;
@@ -148,4 +149,19 @@ export interface EstadisticasProgramacion {
   reprogramados: number;
   cancelados: number;
   total: number;
+}
+
+export interface ResumenPendientesRecursos {
+  vencidas: number;
+  proximos_7_dias: number;
+  proximos_2_dias: number;
+  total_pendientes: number;
+  items: Array<{
+    id: number;
+    id_orden_servicio: number;
+    id_servicio: number;
+    fecha_programada: string;
+    hora_inicio?: string | null;
+    hora_fin?: string | null;
+  }>;
 }

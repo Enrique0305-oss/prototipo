@@ -74,7 +74,7 @@ Route::prefix('v1')->group(function () {
 });
 
 // Rutas PROTEGIDAS (requieren token Sanctum)
-Route::prefix('v1')->middleware(['auth:sanctum', CacheJsonGetResponses::class])->group(function () {
+Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -337,6 +337,7 @@ Route::prefix('v1')->middleware(['auth:sanctum', CacheJsonGetResponses::class])-
 
     // Programación de Servicios
     Route::get('/programacion-servicio/estadisticas/resumen', [ProgramacionServicioController::class, 'estadisticas']);
+    Route::get('/programacion-servicio/resumen-pendientes-recursos', [ProgramacionServicioController::class, 'resumenPendientesRecursos']);
     Route::get('/programacion-servicio/ods-disponibles', [ProgramacionServicioController::class, 'getODSDisponibles']);
     Route::get('/programacion-servicio/capacitaciones-disponibles', [ProgramacionServicioController::class, 'getCapacitacionesDisponibles']);
     Route::post('/programacion-servicio/preview-anual', [ProgramacionServicioController::class, 'previewAnual']);

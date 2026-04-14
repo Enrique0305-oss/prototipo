@@ -210,6 +210,7 @@ class ProgramacionServicioController extends Controller
                 'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
                 'id_cliente_planta_area' => $areaIdsJson,
                 'estado_ejecucion'   => 'Programado',
+                'requiere_asignacion_recursos' => false,
                 'observaciones'      => $validated['observaciones'] ?? null,
                 'dias_semana'        => $validated['dias_semana'] ?? null,
                 'creado_por'         => $idUsuario,
@@ -280,6 +281,7 @@ class ProgramacionServicioController extends Controller
             'id_cliente_planta_area' => 'nullable',
             'observaciones'       => 'nullable|string',
             'dias_semana'         => 'nullable|string|max:100',
+            'aplicar_recursos_mes_actual' => 'nullable|boolean',
         ]);
 
         // Calcular fechas
@@ -303,12 +305,22 @@ class ProgramacionServicioController extends Controller
         try {
             $idUsuario = $request->user()?->id;
             $creadas = [];
+            $pendientesRecursos = 0;
+            $fechaBase = Carbon::parse($validated['fecha_inicio']);
+            $aplicarRecursosMesActual = (bool) ($validated['aplicar_recursos_mes_actual'] ?? false);
 
             $areaIdsJson = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area'] ?? null);
 
-            foreach ($fechas as $fecha) {
+            foreach ($fechas as $index => $fecha) {
+                $fechaProgramada = Carbon::parse($fecha);
+                $asignarRecursos = $index === 0 || (
+                    $aplicarRecursosMesActual
+                    && $fechaProgramada->month === $fechaBase->month
+                    && $fechaProgramada->year === $fechaBase->year
+                );
+
                 $tecnicosAsignados = $this->normalizeTecnicosIds($validated['id_tecnico_asignado'] ?? null, $validated['tecnicos_ids'] ?? []);
-                if (!empty($tecnicosAsignados)) {
+                if ($asignarRecursos && !empty($tecnicosAsignados)) {
                     $conflicto = ScheduleConflictService::validarTecnicos(
                         $tecnicosAsignados,
                         $fecha,
@@ -329,9 +341,9 @@ class ProgramacionServicioController extends Controller
                 $prog = ProgramacionServicio::create([
                     'id_orden_servicio'  => $validated['id_orden_servicio'],
                     'id_servicio'        => $validated['id_servicio'],
-                    'id_tecnico_asignado'=> $validated['id_tecnico_asignado'],
-                    'id_supervisor'      => !empty($validated['id_supervisor']) ? $this->normalizePersonalIds($validated['id_supervisor']) : null,
-                    'id_vehiculo'        => $validated['id_vehiculo'] ?? null,
+                    'id_tecnico_asignado'=> $asignarRecursos ? $validated['id_tecnico_asignado'] : null,
+                    'id_supervisor'      => $asignarRecursos && !empty($validated['id_supervisor']) ? $this->normalizePersonalIds($validated['id_supervisor']) : null,
+                    'id_vehiculo'        => $asignarRecursos ? ($validated['id_vehiculo'] ?? null) : null,
                     'fecha_programada'   => $fecha,
                     'hora_inicio'        => $validated['hora_inicio'],
                     'hora_fin'           => $validated['hora_fin'] ?? null,
@@ -341,12 +353,17 @@ class ProgramacionServicioController extends Controller
                     'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
                     'id_cliente_planta_area' => $areaIdsJson,
                     'estado_ejecucion'   => 'Programado',
+                    'requiere_asignacion_recursos' => !$asignarRecursos,
                     'observaciones'      => $validated['observaciones'] ?? null,
                     'dias_semana'        => $validated['dias_semana'] ?? null,
                     'creado_por'         => $idUsuario,
                 ]);
 
-                $this->syncTecnicos($prog, $validated['id_tecnico_asignado'], $validated['tecnicos_ids'] ?? []);
+                if ($asignarRecursos) {
+                    $this->syncTecnicos($prog, $validated['id_tecnico_asignado'], $validated['tecnicos_ids'] ?? []);
+                } else {
+                    $pendientesRecursos++;
+                }
                 $this->asignarInsumosDesdeReceta($prog, $idUsuario);
                 $creadas[] = $prog;
             }
@@ -365,6 +382,7 @@ class ProgramacionServicioController extends Controller
                 'message' => count($creadas) . ' programaciones creadas exitosamente',
                 'data' => $creadas,
                 'total' => count($creadas),
+                'pendientes_recursos' => $pendientesRecursos,
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -463,8 +481,41 @@ class ProgramacionServicioController extends Controller
             ? $tecnicosIds
             : $prog->tecnicos()->pluck('tecnicos.id')->map(fn ($id) => (int) $id)->all();
 
+        $supervisores = array_key_exists('id_supervisor', $validated) ? ($validated['id_supervisor'] ?? null) : $prog->id_supervisor;
+        $vehiculo = array_key_exists('id_vehiculo', $validated)
+            ? (is_numeric($validated['id_vehiculo'] ?? null) ? (int) $validated['id_vehiculo'] : null)
+            : (is_numeric($prog->id_vehiculo ?? null) ? (int) $prog->id_vehiculo : null);
+        $horaInicioFinal = array_key_exists('hora_inicio', $validated)
+            ? ($validated['hora_inicio'] ?? null)
+            : ($prog->hora_inicio ? Carbon::parse((string) $prog->hora_inicio)->format('H:i:s') : null);
+        $horaFinFinal = array_key_exists('hora_fin', $validated)
+            ? ($validated['hora_fin'] ?? null)
+            : ($prog->hora_fin ? Carbon::parse((string) $prog->hora_fin)->format('H:i:s') : null);
+
         $tecnicosFinales = $this->normalizeTecnicosIds($principal, $listaTecnicos);
-        if ($requiereValidacionConflicto && !empty($tecnicosFinales)) {
+        $editoRecursos = array_key_exists('id_tecnico_asignado', $validated)
+            || $tecnicosIds !== null
+            || array_key_exists('id_supervisor', $validated)
+            || array_key_exists('id_vehiculo', $validated)
+            || array_key_exists('hora_inicio', $validated)
+            || array_key_exists('hora_fin', $validated);
+
+        $requiereAsignacionRecursos = (bool) $prog->requiere_asignacion_recursos;
+        if ($requiereAsignacionRecursos || $editoRecursos) {
+            $requiereAsignacionRecursos = !$this->tieneRecursosCompletos(
+                is_numeric($principal) ? (int) $principal : null,
+                $listaTecnicos,
+                $supervisores,
+                $vehiculo,
+                $horaInicioFinal,
+                $horaFinFinal
+            );
+        }
+
+        $activaRecursosEnEstaEdicion = (bool) $prog->requiere_asignacion_recursos && !$requiereAsignacionRecursos;
+        $debeValidarConflictos = !$requiereAsignacionRecursos && ($requiereValidacionConflicto || $activaRecursosEnEstaEdicion);
+
+        if ($debeValidarConflictos && !empty($tecnicosFinales)) {
             $conflicto = ScheduleConflictService::validarTecnicos(
                 $tecnicosFinales,
                 (string) ($validated['fecha_programada'] ?? $prog->fecha_programada),
@@ -486,6 +537,7 @@ class ProgramacionServicioController extends Controller
             $validated['id_cliente_planta_area'] = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area']);
         }
 
+        $validated['requiere_asignacion_recursos'] = $requiereAsignacionRecursos;
         $validated['modificado_por'] = $request->user()?->id;
         $prog->update($validated);
 
@@ -508,6 +560,43 @@ class ProgramacionServicioController extends Controller
             'success' => true,
             'message' => 'Programación actualizada',
             'data' => $prog,
+        ]);
+    }
+
+    public function resumenPendientesRecursos(Request $request)
+    {
+        $hoy = Carbon::today();
+        $base = ProgramacionServicio::query()
+            ->where('requiere_asignacion_recursos', true)
+            ->where('estado_ejecucion', '!=', 'Cancelado');
+
+        $vencidas = (clone $base)
+            ->whereDate('fecha_programada', '<', $hoy)
+            ->count();
+
+        $proximos7 = (clone $base)
+            ->whereBetween('fecha_programada', [$hoy->toDateString(), $hoy->copy()->addDays(7)->toDateString()])
+            ->count();
+
+        $proximos2 = (clone $base)
+            ->whereBetween('fecha_programada', [$hoy->toDateString(), $hoy->copy()->addDays(2)->toDateString()])
+            ->count();
+
+        $items = (clone $base)
+            ->whereDate('fecha_programada', '>=', $hoy)
+            ->orderBy('fecha_programada', 'asc')
+            ->limit(10)
+            ->get(['id', 'id_orden_servicio', 'id_servicio', 'fecha_programada', 'hora_inicio', 'hora_fin']);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'vencidas' => $vencidas,
+                'proximos_7_dias' => $proximos7,
+                'proximos_2_dias' => $proximos2,
+                'total_pendientes' => $vencidas + (clone $base)->whereDate('fecha_programada', '>=', $hoy)->count(),
+                'items' => $items,
+            ],
         ]);
     }
 
@@ -1394,6 +1483,24 @@ class ProgramacionServicioController extends Controller
         }
 
         return array_values(array_unique(array_filter(array_map('intval', $ids), fn (int $id) => $id > 0)));
+    }
+
+    private function tieneRecursosCompletos(
+        ?int $principalId,
+        array $tecnicosIds,
+        mixed $supervisores,
+        ?int $vehiculoId,
+        ?string $horaInicio,
+        ?string $horaFin
+    ): bool {
+        $tecnicos = $this->normalizeTecnicosIds($principalId, $tecnicosIds);
+
+        $tieneHoraInicio = !empty(trim((string) ($horaInicio ?? '')));
+        $tieneHoraFin = !empty(trim((string) ($horaFin ?? '')));
+
+        return !empty($tecnicos)
+            && $tieneHoraInicio
+            && $tieneHoraFin;
     }
 
     /**

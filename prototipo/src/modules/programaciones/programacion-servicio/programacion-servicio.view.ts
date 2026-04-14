@@ -13,6 +13,7 @@ import type {
   EstadoEjecucion,
   VistaProgramacion,
   SugerenciaSiguiente,
+  ResumenPendientesRecursos,
 } from './programacion-servicio.types';
 
 // ═══════════ Estado global ═══════════
@@ -39,6 +40,47 @@ let plantaIdServicioSeleccionado: number | null = null;
 let clientesAceptados: any[] = [];
 let plantasClienteVisita: any[] = [];
 let ordenesFabricacionDisponiblesData: any[] = [];
+let resumenPendientesRecursos: ResumenPendientesRecursos = {
+  vencidas: 0,
+  proximos_7_dias: 0,
+  proximos_2_dias: 0,
+  total_pendientes: 0,
+  items: [],
+};
+
+function renderResumenPendientesRecursos(): string {
+  const total = Number(resumenPendientesRecursos.total_pendientes || 0);
+  const p7 = Number(resumenPendientesRecursos.proximos_7_dias || 0);
+  const p2 = Number(resumenPendientesRecursos.proximos_2_dias || 0);
+  const vencidas = Number(resumenPendientesRecursos.vencidas || 0);
+
+  if (total <= 0) {
+    return '';
+  }
+
+  const nivel = p2 > 0 || vencidas > 0
+    ? { bg: '#fef2f2', bd: '#fecaca', tx: '#991b1b', title: 'Pendientes críticos de recursos' }
+    : { bg: '#eff6ff', bd: '#bfdbfe', tx: '#1e3a8a', title: 'Pendientes de asignación de recursos' };
+
+  return `
+    <div style="margin:0 0 10px;padding:10px 12px;border:1px solid ${nivel.bd};background:${nivel.bg};border-radius:10px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:700;font-size:13px;color:${nivel.tx};">${nivel.title}</div>
+        <div style="font-size:12px;color:#334155;margin-top:2px;">Tienes <strong>${total}</strong> servicios sin recursos completos.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:12px;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:3px 10px;">7 días: <strong>${p7}</strong></span>
+        <span style="font-size:12px;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:3px 10px;">2 días: <strong>${p2}</strong></span>
+        <span style="font-size:12px;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:3px 10px;">Vencidas: <strong>${vencidas}</strong></span>
+      </div>
+    </div>`;
+}
+
+function actualizarResumenPendientesUI() {
+  const wrap = document.getElementById('progResumenPendientesWrap');
+  if (!wrap) return;
+  wrap.innerHTML = renderResumenPendientesRecursos();
+}
 
 function extractList<T = any>(response: any): T[] {
   const raw = response?.data ?? response;
@@ -777,6 +819,8 @@ export function renderProgramacionServicio(): string {
       </div>
     </div>
 
+    <div id="progResumenPendientesWrap">${renderResumenPendientesRecursos()}</div>
+
     <div class="prog-layout" style="display:flex;flex-direction:column;gap:10px;">
       <div id="progFiltrosWrap" style="width:100%;">
         <div class="prog-sidebar" id="progSidebar" style="width:100%;max-width:none;">
@@ -936,11 +980,12 @@ async function cargarDatosIniciales() {
       anio: fechaActual.getFullYear(),
     };
 
-    const [resServicio, resVisita, resFabricacion, resOtros] = await Promise.all([
+    const [resServicio, resVisita, resFabricacion, resOtros, resumenPendientesRes] = await Promise.all([
       programacionService.getAll(filtrosBase),
       programacionService.getAllProgramacionVisita(filtrosBase),
       programacionService.getAllProgramacionFabricacion(filtrosBase),
       programacionService.getAllProgramacionOtros(filtrosBase),
+      programacionService.getResumenPendientesRecursos(),
     ]);
 
     const programacionesServicio = resServicio.data || [];
@@ -1004,6 +1049,7 @@ async function cargarDatosIniciales() {
 
     const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
     if (estRes.data) estadisticas = estRes.data;
+    if (resumenPendientesRes?.data) resumenPendientesRecursos = resumenPendientesRes.data;
   } catch (err) {
     console.error('Error cargando datos programaciones:', err);
   }
@@ -1016,11 +1062,12 @@ async function recargarProgramaciones() {
       anio: fechaActual.getFullYear(),
     };
 
-    const [resServicio, resVisita, resFabricacion, resOtros] = await Promise.all([
+    const [resServicio, resVisita, resFabricacion, resOtros, resumenPendientesRes] = await Promise.all([
       programacionService.getAll(filtrosBase),
       programacionService.getAllProgramacionVisita(filtrosBase),
       programacionService.getAllProgramacionFabricacion(filtrosBase),
       programacionService.getAllProgramacionOtros(filtrosBase),
+      programacionService.getResumenPendientesRecursos(),
     ]);
 
     const programacionesServicio = resServicio.data || [];
@@ -1064,9 +1111,11 @@ async function recargarProgramaciones() {
 
     const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
     if (estRes.data) estadisticas = estRes.data;
+    if (resumenPendientesRes?.data) resumenPendientesRecursos = resumenPendientesRes.data;
   } catch (err) {
     console.error('Error recargando programaciones:', err);
   }
+  actualizarResumenPendientesUI();
   renderSidebar();
   renderCalendario();
   bindToggleFiltrosProg();
@@ -1271,6 +1320,30 @@ function badgeModalidadProgramacion(p: Programacion): string {
   return `<span style="background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">${texto}</span>`;
 }
 
+function badgePendienteRecursos(p: Programacion): string {
+  if (!(p as any).requiere_asignacion_recursos) {
+    return '';
+  }
+
+  return '<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Pendiente recursos</span>';
+}
+
+function estiloTarjetaPendienteMensual(p: Programacion): string {
+  if (!(p as any).requiere_asignacion_recursos) {
+    return '';
+  }
+
+  return 'style="background:linear-gradient(135deg,#93c5fd,#60a5fa);box-shadow:0 2px 6px rgba(59,130,246,0.2);"';
+}
+
+function estiloTarjetaPendienteSemanal(p: Programacion): string {
+  if (!(p as any).requiere_asignacion_recursos) {
+    return '';
+  }
+
+  return 'style="border-left-color:#60a5fa;background:#dbeafe;"';
+}
+
 function normalizarFrecuenciaVisitaDetalle(frecuenciaVisita: any): Array<{ mes: string; presencial: number; virtual: number; frecuencia: string }> {
   if (!frecuenciaVisita) return [];
 
@@ -1364,9 +1437,9 @@ function renderVistaMensual(): string {
       <div class="prog-calendar-day ${isToday ? 'highlighted' : ''}">
         <span class="prog-day-number">${d}</span>
         ${servicios.slice(0, 3).map(s => `
-          <div class="prog-event ${getColorByState(s.estado_ejecucion)}" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
+          <div class="prog-event ${getColorByState(s.estado_ejecucion)}" ${estiloTarjetaPendienteMensual(s)} data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
             <div class="prog-event-title">${clienteNombre(s)}</div>
-            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)}</div>
+            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)} ${badgePendienteRecursos(s)}</div>
             <div class="prog-event-time">${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
           </div>
         `).join('')}
@@ -1432,9 +1505,9 @@ function renderVistaSemanal(): string {
                 ${servicios.map(s => {
                   const color = getColorByState(s.estado_ejecucion);
                   return `
-                  <div class="prog-week-card prog-week-card-${color}" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
+                  <div class="prog-week-card prog-week-card-${color}" ${estiloTarjetaPendienteSemanal(s)} data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
                     <div class="prog-week-card-title">${clienteNombre(s)}</div>
-                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)}</div>
+                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)} ${badgePendienteRecursos(s)}</div>
                     <div class="prog-week-card-time"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
                     <div class="prog-week-card-tech"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre).join(', ') : (s.tecnico ? s.tecnico.nombre : '—')}</div>
                     <span class="prog-week-card-badge">${s.estado_ejecucion}</span>
@@ -1479,7 +1552,7 @@ function renderVistaDiaria(): string {
                   <span class="prog-status-badge ${s.estado_ejecucion}">${s.estado_ejecucion}</span>
                 </div>
                 <div class="prog-day-service-details">
-                  <div><strong>Actividad:</strong> ${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)}</div>
+                  <div><strong>Actividad:</strong> ${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)} ${badgePendienteRecursos(s)}</div>
                   <div><strong>Técnico:</strong> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre + ' ' + t.apellidos).join(', ') : (s.tecnico ? s.tecnico.nombre + ' ' + s.tecnico.apellidos : 'Sin asignar')}</div>
                   <div><strong>Local:</strong> ${s.planta ? s.planta.nombre : (s.local_sede || '—')}</div>
                   ${s.vehiculo ? `<div><strong>Vehículo:</strong> ${s.vehiculo.placa} - ${s.vehiculo.marca} ${s.vehiculo.modelo}</div>` : ''}
@@ -1999,6 +2072,7 @@ async function abrirEdicion(p: Programacion) {
   const px = p as ProgramacionExtendida;
   const isVisita = px.tipo_programacion === 'visita' || !!(px as any).id_cliente;
   const isAsesoria = px.tipo_programacion === 'asesoria' || !!px.orden_asesoria || !!(px as any).ordenAsesoria;
+  const isPendienteRecursos = !!(p as any).requiere_asignacion_recursos;
   const ordenAsesoria = (px as any).ordenAsesoria || px.orden_asesoria || {};
 
   const fechaActual = normalizarFecha(p.fecha_programada || '');
@@ -2067,8 +2141,8 @@ async function abrirEdicion(p: Programacion) {
                   <small style="display:block;margin-top:6px;color:#64748b;font-size:11px;">Mes fijo: ${mesActual ? String(mesActual).padStart(2, '0') : '--'}/${anioActual || '----'}</small>
                 </div>`
               : `<div class="prog-form-group"><label class="prog-form-label">Fecha</label><input type="date" class="prog-form-control" name="fecha_programada" value="${normalizarFecha(p.fecha_programada || '')}"></div>`}
-            <div class="prog-form-group"><label class="prog-form-label">Hora Inicio</label><input type="time" class="prog-form-control" name="hora_inicio" value="${fmtH(p.hora_inicio)}"></div>
-            <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin" value="${fmtH(p.hora_fin || '')}"></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Inicio</label><input type="time" class="prog-form-control" name="hora_inicio" value="${isPendienteRecursos ? '' : fmtH(p.hora_inicio)}"></div>
+            <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin" value="${isPendienteRecursos ? '' : fmtH(p.hora_fin || '')}"></div>
           </div>
         </div>
         <div class="prog-form-section">
@@ -2087,8 +2161,8 @@ async function abrirEdicion(p: Programacion) {
                 <label class="prog-form-label">Técnicos Asignados <span style="font-weight:400;font-size:12px;color:#888;">(primero = principal)</span></label>
                 <div class="prog-tecnicos-list" id="editTecnicosCheckboxes" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
                   ${tecnicosData.map(t => {
-                    const isAssigned = p.tecnicos?.some(pt => pt.id === t.id) || t.id === p.id_tecnico_asignado;
-                    const isPrincipal = t.id === p.id_tecnico_asignado;
+                    const isAssigned = !isPendienteRecursos && (p.tecnicos?.some(pt => pt.id === t.id) || t.id === p.id_tecnico_asignado);
+                    const isPrincipal = !isPendienteRecursos && t.id === p.id_tecnico_asignado;
                     return `
                     <label class="prog-tecnico-check" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;">
                       <input type="checkbox" name="tecnicos_ids" value="${t.id}" ${isAssigned ? 'checked' : ''} style="accent-color:#4f7cff;">
@@ -2119,7 +2193,7 @@ async function abrirEdicion(p: Programacion) {
             <label class="prog-form-label">Vehículo</label>
             <select class="prog-form-control" name="id_vehiculo">
               <option value="">Sin vehículo</option>
-              ${vehiculosData.map(v => `<option value="${v.id}" ${v.id === p.id_vehiculo ? 'selected' : ''}>${v.placa} - ${v.marca} ${v.modelo}</option>`).join('')}
+              ${vehiculosData.map(v => `<option value="${v.id}" ${!isPendienteRecursos && v.id === p.id_vehiculo ? 'selected' : ''}>${v.placa} - ${v.marca} ${v.modelo}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -2169,7 +2243,9 @@ async function abrirEdicion(p: Programacion) {
     const personalAdministrativoSelectEdit = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
     if (personalAdministrativoSelectEdit) {
       personalAdministrativoSelectEdit.innerHTML = personalData.map(pe => `<option value="${pe.id}">${pe.nombre} ${pe.apellidos}</option>`).join('');
-      const personalAsignado = Array.isArray((p as any).personal_administrativo)
+      const personalAsignado = isPendienteRecursos
+        ? []
+        : Array.isArray((p as any).personal_administrativo)
         ? (p as any).personal_administrativo.map((item: any) => Number(item.id)).filter((id: number) => id > 0)
         : normalizePersonalIds((p as any).id_supervisor);
       Array.from(personalAdministrativoSelectEdit.options).forEach((opt) => {
@@ -2302,7 +2378,19 @@ async function abrirEdicion(p: Programacion) {
       cerrarModal('modalDetalleProgramacion');
       await recargarProgramaciones();
       mostrarToast('success', 'Actualizada', 'La programación fue actualizada correctamente');
-    } catch (err) { mostrarToast('error', 'Error', 'No se pudieron guardar los cambios'); console.error(err); }
+    } catch (err: any) {
+      const status = err?.status || err?.response?.status;
+      const message = err?.data?.message || err?.response?.data?.message || 'No se pudieron guardar los cambios';
+      const tieneConflicto = !!(err?.data?.conflicto || err?.response?.data?.conflicto);
+
+      if (status === 422 || tieneConflicto) {
+        mostrarToast('warning', 'Conflicto de Horarios', message);
+      } else {
+        mostrarToast('error', 'Error', message);
+      }
+
+      console.error(err);
+    }
   });
 }
 
@@ -2566,6 +2654,13 @@ function renderFormNueva(body: HTMLElement) {
               <div class="prog-form-group"><label class="prog-form-label">Fecha Inicio <span class="prog-required">*</span></label><input type="date" class="prog-form-control" name="fecha_inicio_anual" id="fechaInicioAnual"></div>
               <div class="prog-form-group"><label class="prog-form-label">Hora Inicio</label><input type="time" class="prog-form-control" name="hora_inicio_anual" value="08:00"></div>
               <div class="prog-form-group"><label class="prog-form-label">Hora Fin</label><input type="time" class="prog-form-control" name="hora_fin_anual" value="12:00"></div>
+            </div>
+            <div style="margin-top:8px;padding:10px 12px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:8px;display:grid;gap:8px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#1e3a8a;font-size:13px;font-weight:600;">
+                <input type="checkbox" id="checkAplicarRecursosMesActual" checked style="accent-color:#2563eb;">
+                Aplicar recursos al mes de la fecha de inicio
+              </label>
+              <div style="font-size:12px;color:#334155;">La primera fecha siempre se crea con recursos. Las fechas siguientes quedarán pendientes y se completan al editar cada servicio.</div>
             </div>
             <button type="button" class="prog-btn-secondary" id="btnPreviewAnual" style="margin-top:8px;">Vista Previa de Fechas</button>
             <div id="previewAnualResult" style="margin-top:12px;"></div>
@@ -2844,7 +2939,7 @@ function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: str
     const [h, m] = hora.split(':').map(Number);
     return (h || 0) * 60 + (m || 0);
   };
-  
+
   const inicioNuevo = horaAMinutos(horaInicio);
   const finNuevo = horaAMinutos(horaFin);
   
@@ -2852,6 +2947,7 @@ function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: str
   for (const prog of programacionesData) {
     // Ignorar programaciones canceladas
     if (prog.estado_ejecucion === 'Cancelado') continue;
+    if ((prog as any).requiere_asignacion_recursos) continue;
     
     // Verificar si el técnico es el mismo
     const tieneAlMismo = tecnicosIds.includes(prog.id_tecnico_asignado) || 
@@ -3639,6 +3735,7 @@ async function submitAnual(body: HTMLElement) {
   const fechaInicio = (body.querySelector('[name="fecha_inicio_anual"]') as HTMLInputElement).value;
   const horaInicio = (body.querySelector('[name="hora_inicio_anual"]') as HTMLInputElement).value;
   const horaFin = (body.querySelector('[name="hora_fin_anual"]') as HTMLInputElement).value;
+  const aplicarRecursosMesActual = !!(body.querySelector('#checkAplicarRecursosMesActual') as HTMLInputElement | null)?.checked;
 
   if (!frecuencia || !fechaInicio) { mostrarToast('warning', 'Datos incompletos', 'Seleccione un servicio con frecuencia y fecha de inicio'); return; }
   if (esFrecuenciaUnica(frecuencia)) {
@@ -3666,6 +3763,7 @@ async function submitAnual(body: HTMLElement) {
     fecha_inicio: fechaInicio,
     hora_inicio: horaInicio || '08:00',
     hora_fin: horaFin || '12:00',
+    aplicar_recursos_mes_actual: aplicarRecursosMesActual,
     id_cliente_planta: idPlantaSel,
     id_cliente_planta_area: resolveAreaIdNuevaProgramacion(idPlantaSel),
     local_sede: getPlantaNombre(idPlantaSel) || '',
@@ -3694,7 +3792,11 @@ async function submitAnual(body: HTMLElement) {
     cerrarModal('modalNuevaProgramacion');
     await recargarProgramaciones();
     const total = res.total_programaciones || (res.data ? res.data.length : 0);
-    mostrarToast('success', 'Programación Anual Creada', `Se crearon ${total} programaciones exitosamente`);
+    const pendientes = Number((res as any).pendientes_recursos || 0);
+    const mensaje = pendientes > 0
+      ? `Se crearon ${total} programaciones. ${pendientes} quedaron pendientes de recursos (resumen visible en pantalla).`
+      : `Se crearon ${total} programaciones exitosamente`;
+    mostrarToast('success', 'Programación Anual Creada', mensaje);
   } catch (err: any) {
     let message = err?.data?.message || err?.response?.data?.message || 'No se pudo crear la programación anual';
     const errors = err?.data?.errors || err?.response?.data?.errors;

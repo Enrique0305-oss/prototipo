@@ -8,6 +8,7 @@ import type {
 	EstadisticasProgramacion,
 	PreviewAnual,
 	SugerenciaSiguiente,
+	ResumenPendientesRecursos,
 } from '../programaciones.types';
 
 interface ApiResponse<T> {
@@ -78,6 +79,10 @@ export const programacionServicioService = {
 		if (mes) params.mes = mes;
 		if (anio) params.anio = anio;
 		return apiClient.get<ApiResponse<EstadisticasProgramacion>>('/programacion-servicio/estadisticas/resumen', params);
+	},
+
+	getResumenPendientesRecursos: async () => {
+		return apiClient.get<ApiResponse<ResumenPendientesRecursos>>('/programacion-servicio/resumen-pendientes-recursos');
 	},
 
 	getTecnicos: async () => {
