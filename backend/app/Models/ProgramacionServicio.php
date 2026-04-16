@@ -28,7 +28,8 @@ class ProgramacionServicio extends Model
         'id_cliente_planta_area',
         'local_sede',
         'direccion_completa',
-        'coordenadas',
+        'latitud',
+        'longitud',
         'estado_ejecucion',
         'requiere_asignacion_recursos',
         'fecha_ejecucion_real',
@@ -55,6 +56,8 @@ class ProgramacionServicio extends Model
         'fecha_creacion' => 'datetime',
         'fecha_modificacion' => 'datetime',
         'id_supervisor' => 'array',
+        'latitud' => 'float',
+        'longitud' => 'float',
     ];
 
     const CREATED_AT = 'fecha_creacion';

@@ -815,6 +815,10 @@ function escHtml(s: string): string {
 
 function abrirFormPlanta(idCliente: number, planta?: any) {
   const isEdit = !!planta;
+  const coordenadasRaw = isEdit ? (planta.coordenadas || '').toString() : '';
+  const coordenadasPartes = coordenadasRaw.split(',').map((v: string) => v.trim());
+  const latitudInicial = isEdit ? (planta.latitud ?? coordenadasPartes[0] ?? '') : '';
+  const longitudInicial = isEdit ? (planta.longitud ?? coordenadasPartes[1] ?? '') : '';
   const prev = document.getElementById('modal-form-planta');
   if (prev) prev.remove();
 
@@ -854,8 +858,12 @@ function abrirFormPlanta(idCliente: number, planta?: any) {
               <input type="text" name="referencia" maxlength="255" class="form-input" value="${isEdit ? escHtml(planta.referencia || '') : ''}">
             </div>
             <div class="form-group">
-              <label>Coordenadas GPS</label>
-              <input type="text" name="coordenadas" maxlength="80" class="form-input" value="${isEdit ? escHtml(planta.coordenadas || '') : ''}" placeholder="-12.04, -77.02">
+              <label>Latitud</label>
+              <input type="number" name="latitud" step="any" min="-90" max="90" class="form-input" value="${escHtml(String(latitudInicial || ''))}" placeholder="-12.04000000">
+            </div>
+            <div class="form-group">
+              <label>Longitud</label>
+              <input type="number" name="longitud" step="any" min="-180" max="180" class="form-input" value="${escHtml(String(longitudInicial || ''))}" placeholder="-77.02000000">
             </div>
             <div class="form-group">
               <label>Estado</label>

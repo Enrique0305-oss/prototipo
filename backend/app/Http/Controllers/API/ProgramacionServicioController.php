@@ -162,7 +162,8 @@ class ProgramacionServicioController extends Controller
             'hora_fin'          => 'nullable',
             'local_sede'        => 'nullable|string|max:150',
             'direccion_completa'=> 'nullable|string|max:255',
-            'coordenadas'       => 'nullable|string|max:50',
+            'latitud'           => 'nullable|numeric|between:-90,90',
+            'longitud'          => 'nullable|numeric|between:-180,180',
             'id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
             'id_cliente_planta_area' => 'nullable',
             'observaciones'     => 'nullable|string',
@@ -195,7 +196,7 @@ class ProgramacionServicioController extends Controller
             // Crear la programación
             $areaIdsJson = $this->normalizeAreaIdsForJson($validated['id_cliente_planta_area'] ?? null);
 
-            $prog = ProgramacionServicio::create([
+            $programacionData = [
                 'id_orden_servicio'  => $validated['id_orden_servicio'],
                 'id_servicio'        => $validated['id_servicio'],
                 'id_tecnico_asignado'=> $validated['id_tecnico_asignado'],
@@ -206,7 +207,8 @@ class ProgramacionServicioController extends Controller
                 'hora_fin'           => $validated['hora_fin'] ?? null,
                 'local_sede'         => $validated['local_sede'] ?? null,
                 'direccion_completa' => $validated['direccion_completa'] ?? null,
-                'coordenadas'        => $validated['coordenadas'] ?? null,
+                'latitud'            => $validated['latitud'] ?? null,
+                'longitud'           => $validated['longitud'] ?? null,
                 'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
                 'id_cliente_planta_area' => $areaIdsJson,
                 'estado_ejecucion'   => 'Programado',
@@ -214,7 +216,9 @@ class ProgramacionServicioController extends Controller
                 'observaciones'      => $validated['observaciones'] ?? null,
                 'dias_semana'        => $validated['dias_semana'] ?? null,
                 'creado_por'         => $idUsuario,
-            ]);
+            ];
+
+            $prog = ProgramacionServicio::create($programacionData);
 
             // Sincronizar técnicos en la tabla pivot
             $this->syncTecnicos($prog, $validated['id_tecnico_asignado'], $validated['tecnicos_ids'] ?? []);
@@ -276,7 +280,8 @@ class ProgramacionServicioController extends Controller
             'hora_fin'            => 'nullable',
             'local_sede'          => 'nullable|string|max:150',
             'direccion_completa'  => 'nullable|string|max:255',
-            'coordenadas'         => 'nullable|string|max:50',
+            'latitud'             => 'nullable|numeric|between:-90,90',
+            'longitud'            => 'nullable|numeric|between:-180,180',
             'id_cliente_planta'   => 'nullable|integer|exists:cliente_planta,id',
             'id_cliente_planta_area' => 'nullable',
             'observaciones'       => 'nullable|string',
@@ -338,7 +343,7 @@ class ProgramacionServicioController extends Controller
                     }
                 }
 
-                $prog = ProgramacionServicio::create([
+                $programacionData = [
                     'id_orden_servicio'  => $validated['id_orden_servicio'],
                     'id_servicio'        => $validated['id_servicio'],
                     'id_tecnico_asignado'=> $asignarRecursos ? $validated['id_tecnico_asignado'] : null,
@@ -349,7 +354,8 @@ class ProgramacionServicioController extends Controller
                     'hora_fin'           => $validated['hora_fin'] ?? null,
                     'local_sede'         => $validated['local_sede'] ?? null,
                     'direccion_completa' => $validated['direccion_completa'] ?? null,
-                    'coordenadas'        => $validated['coordenadas'] ?? null,
+                    'latitud'            => $validated['latitud'] ?? null,
+                    'longitud'           => $validated['longitud'] ?? null,
                     'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
                     'id_cliente_planta_area' => $areaIdsJson,
                     'estado_ejecucion'   => 'Programado',
@@ -357,7 +363,9 @@ class ProgramacionServicioController extends Controller
                     'observaciones'      => $validated['observaciones'] ?? null,
                     'dias_semana'        => $validated['dias_semana'] ?? null,
                     'creado_por'         => $idUsuario,
-                ]);
+                ];
+
+                $prog = ProgramacionServicio::create($programacionData);
 
                 if ($asignarRecursos) {
                     $this->syncTecnicos($prog, $validated['id_tecnico_asignado'], $validated['tecnicos_ids'] ?? []);
@@ -458,7 +466,8 @@ class ProgramacionServicioController extends Controller
             'hora_fin'            => 'nullable',
             'local_sede'          => 'nullable|string|max:150',
             'direccion_completa'  => 'nullable|string|max:255',
-            'coordenadas'         => 'nullable|string|max:50',
+            'latitud'             => 'nullable|numeric|between:-90,90',
+            'longitud'            => 'nullable|numeric|between:-180,180',
             'id_cliente_planta'   => 'nullable|integer|exists:cliente_planta,id',
             'id_cliente_planta_area' => 'nullable',
             'estado_ejecucion'    => 'sometimes|in:Programado,Confirmado,En Camino,En Ejecución,Realizado,Reprogramado,Cancelado',

@@ -4,21 +4,53 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cargo;
+use App\Models\Personal;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class CargoController extends Controller
 {
+    private function puedeVerIt(?Personal $usuario): bool
+    {
+        if (!$usuario) {
+            return false;
+        }
+
+        $usuario->loadMissing('area');
+        $areaNombre = mb_strtolower(trim((string) ($usuario->area?->nombre ?? '')));
+
+        return in_array($areaNombre, ['gerencia', 'it'], true);
+    }
+
+    private function esAreaIt(?int $idArea): bool
+    {
+        if (!$idArea) {
+            return false;
+        }
+
+        return mb_strtolower(trim((string) optional(\App\Models\Area::find($idArea))->nombre)) === 'it';
+    }
+
     /**
      * Listar todos los cargos con paginación
      */
     public function index(Request $request): JsonResponse
     {
         $query = Cargo::query();
+        $puedeVerIt = $this->puedeVerIt($request->user());
 
         // Filtro por área
         if ($request->has('id_area') && $request->id_area) {
             $query->where('id_area', $request->id_area);
+        }
+
+        if (!$puedeVerIt) {
+            $query->where(function ($q) {
+                $q->whereNull('id_area')
+                  ->orWhereHas('area', function ($areaQuery) {
+                      $areaQuery->whereRaw('LOWER(nombre) <> ?', ['it']);
+                  });
+            });
         }
 
         // Filtro por estado
@@ -52,6 +84,13 @@ class CargoController extends Controller
      */
     public function porArea($idArea): JsonResponse
     {
+        if ($this->esAreaIt((int) $idArea) && !$this->puedeVerIt(request()->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No encontrado'
+            ], 404);
+        }
+
         $cargos = Cargo::where('id_area', $idArea)
             ->where('estado', 'activo')
             ->select('id', 'nombre', 'descripcion')
@@ -77,6 +116,13 @@ class CargoController extends Controller
             ], 404);
         }
 
+        if ($this->esAreaIt($cargo->id_area) && !$this->puedeVerIt(request()->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cargo no encontrado'
+            ], 404);
+        }
+
         return response()->json([
             'success' => true,
             'data' => $cargo
@@ -94,6 +140,13 @@ class CargoController extends Controller
             'descripcion' => 'nullable|string|max:500',
             'estado' => 'nullable|in:activo,inactivo',
         ]);
+
+        if (!empty($validated['id_area']) && $this->esAreaIt((int) $validated['id_area']) && !$this->puedeVerIt($request->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tiene permisos para asignar cargos al área IT'
+            ], 403);
+        }
 
         try {
             $cargo = Cargo::create($validated);
@@ -131,6 +184,13 @@ class CargoController extends Controller
             'descripcion' => 'nullable|string|max:500',
             'estado' => 'nullable|in:activo,inactivo',
         ]);
+
+        if (isset($validated['id_area']) && $this->esAreaIt((int) $validated['id_area']) && !$this->puedeVerIt($request->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tiene permisos para asignar cargos al área IT'
+            ], 403);
+        }
 
         try {
             $cargo->update($validated);

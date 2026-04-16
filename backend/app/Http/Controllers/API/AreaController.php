@@ -9,12 +9,25 @@ use Illuminate\Http\JsonResponse;
 
 class AreaController extends Controller
 {
+    private function puedeVerIt(?\App\Models\Personal $usuario): bool
+    {
+        if (!$usuario) {
+            return false;
+        }
+
+        $usuario->loadMissing('area');
+        $areaNombre = mb_strtolower(trim((string) ($usuario->area?->nombre ?? '')));
+
+        return in_array($areaNombre, ['gerencia', 'it'], true);
+    }
+
     /**
      * Listar todas las áreas
      */
     public function index(Request $request): JsonResponse
     {
         $query = Area::query();
+        $puedeVerIt = $this->puedeVerIt($request->user());
 
         // Filtro por búsqueda
         if ($request->has('search')) {
@@ -29,6 +42,10 @@ class AreaController extends Controller
         } else {
             // Por defecto solo activos
             $query->where('estado', 'Activo');
+        }
+
+        if (!$puedeVerIt) {
+            $query->whereRaw('LOWER(nombre) <> ?', ['it']);
         }
 
         // Ordenar
@@ -56,6 +73,13 @@ class AreaController extends Controller
         $area = Area::find($id);
 
         if (!$area) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Área no encontrada'
+            ], 404);
+        }
+
+        if (mb_strtolower(trim((string) $area->nombre)) === 'it' && !$this->puedeVerIt(request()->user())) {
             return response()->json([
                 'success' => false,
                 'message' => 'Área no encontrada'

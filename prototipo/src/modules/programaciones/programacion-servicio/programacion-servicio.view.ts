@@ -784,6 +784,22 @@ function getPlantaNombre(idPlanta: number | null): string {
   return planta ? (planta.nombre || '') : '';
 }
 
+function getPlantaLatitud(idPlanta: number | null): number | null {
+  if (!idPlanta) return null;
+  const planta = plantasClienteDataProg.find((p: any) => p.id == idPlanta);
+  if (!planta || planta.latitud === undefined || planta.latitud === null || planta.latitud === '') return null;
+  const valor = Number(planta.latitud);
+  return Number.isFinite(valor) ? valor : null;
+}
+
+function getPlantaLongitud(idPlanta: number | null): number | null {
+  if (!idPlanta) return null;
+  const planta = plantasClienteDataProg.find((p: any) => p.id == idPlanta);
+  if (!planta || planta.longitud === undefined || planta.longitud === null || planta.longitud === '') return null;
+  const valor = Number(planta.longitud);
+  return Number.isFinite(valor) ? valor : null;
+}
+
 // ═══════════ Render principal ═══════════
 
 export function renderProgramacionServicio(): string {
@@ -2341,6 +2357,8 @@ async function abrirEdicion(p: Programacion) {
     data.id_cliente_planta_area = idAreaSel.length > 0 ? idAreaSel : null;
     data.local_sede = getPlantaNombre(idPlantaSel) || '';
     data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
+    data.latitud = getPlantaLatitud(idPlantaSel);
+    data.longitud = getPlantaLongitud(idPlantaSel);
 
     if (isAsesoria) {
       // En asesoría solo se edita el día, preservando mes y año actuales.
@@ -2993,6 +3011,8 @@ async function submitIndividual(body: HTMLElement) {
   data.id_cliente_planta_area = resolveAreaIdNuevaProgramacion(idPlantaSel);
   data.local_sede = getPlantaNombre(idPlantaSel) || '';
   data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
+  data.latitud = getPlantaLatitud(idPlantaSel);
+  data.longitud = getPlantaLongitud(idPlantaSel);
 
   // Recoger técnicos seleccionados
   const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
@@ -3768,6 +3788,8 @@ async function submitAnual(body: HTMLElement) {
     id_cliente_planta_area: resolveAreaIdNuevaProgramacion(idPlantaSel),
     local_sede: getPlantaNombre(idPlantaSel) || '',
     direccion_completa: getPlantaDireccion(idPlantaSel) || '',
+    latitud: getPlantaLatitud(idPlantaSel),
+    longitud: getPlantaLongitud(idPlantaSel),
     observaciones: fd.get('observaciones') || '',
   };
 

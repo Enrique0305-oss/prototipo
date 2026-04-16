@@ -105,7 +105,7 @@
 
             <div class="issued-container">
                 <div class="issued-name">
-                    {{ $cotizacion->creador?->nombre ?? 'N/A' }} {{ $cotizacion->creador?->apellido ?? '' }}
+                    {{ $cotizacion->creador?->nombre ?? 'N/A' }} {{ $cotizacion->creador?->apellidos ?? $cotizacion->creador?->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
                     {{ $cotizacion->creador?->cargo?->nombre ?? 'Gerente Comercial' }}
@@ -973,7 +973,7 @@
                     Atentamente,
                 </div> <br>
                 <div class="issued-name">
-                    {{ $gerenteComercial->nombre ?? 'N/A' }} {{ $gerenteComercial->apellido ?? '' }}
+                    {{ $gerenteComercial->nombre ?? 'N/A' }} {{ $gerenteComercial->apellidos ?? $gerenteComercial->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
                     {{ $gerenteComercial->cargo?->nombre ?? 'N/A' }}

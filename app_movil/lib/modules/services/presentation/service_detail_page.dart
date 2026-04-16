@@ -1,7 +1,8 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/utils/distance_utils.dart';
@@ -24,6 +25,8 @@ class ServiceDetailPage extends StatefulWidget {
 }
 
 class _ServiceDetailPageState extends State<ServiceDetailPage> {
+  static const Color _navy = Color(0xFF1F3C68);
+
   Position? _position;
   String? _locationError;
   bool _loading = true;
@@ -131,13 +134,21 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
       : null;
 
     final servicePoint = widget.service.latitude != null && widget.service.longitude != null
-        ? LatLng(widget.service.latitude!, widget.service.longitude!)
-        : null;
+      ? LatLng(widget.service.latitude!, widget.service.longitude!)
+      : null;
 
-    final techPoint = _position != null ? LatLng(_position!.latitude, _position!.longitude) : null;
+    final techPoint = _position != null
+      ? LatLng(_position!.latitude, _position!.longitude)
+      : null;
+
+    final mapCenter = techPoint ?? servicePoint;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalle del servicio')),
+      appBar: AppBar(
+        title: const Text('Detalle del servicio'),
+        backgroundColor: _navy,
+        foregroundColor: Colors.white,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -210,52 +221,70 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
           Text('Validacion por ubicacion', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (servicePoint == null)
-            const Text('Este servicio no tiene coordenadas configuradas en backend.')
+            Text(
+              'Este servicio no tiene coordenadas de destino en backend. '
+              'Lat: ${widget.service.latitude?.toStringAsFixed(6) ?? '-'} | '
+              'Lng: ${widget.service.longitude?.toStringAsFixed(6) ?? '-'}',
+              style: const TextStyle(color: Colors.orange),
+            )
+          else
+            const Text(
+              'Se muestra destino y tu ubicacion actual para validar el rango de 100m.',
+            ),
+          const SizedBox(height: 8),
+          if (mapCenter == null)
+            const Text('No se pudo obtener una ubicacion valida para mostrar el mapa.')
           else
             SizedBox(
-              height: 280,
+              height: 300,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCenter: techPoint ?? servicePoint,
-                    initialZoom: 16,
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: mapCenter,
+                    zoom: 16,
                   ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.qsci.appmovil',
+                  gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                    Factory<OneSequenceGestureRecognizer>(
+                      () => EagerGestureRecognizer(),
                     ),
-                    CircleLayer(
-                      circles: [
-                        CircleMarker(
-                          point: servicePoint,
-                          radius: AppConfig.serviceGeofenceMeters.toDouble(),
-                          useRadiusInMeter: true,
-                          color: Colors.green.withValues(alpha: 0.2),
-                          borderStrokeWidth: 2,
-                          borderColor: Colors.green,
-                        ),
-                      ],
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: servicePoint,
-                          width: 42,
-                          height: 42,
-                          child: const Icon(Icons.place, color: Colors.red, size: 38),
-                        ),
-                        if (techPoint != null)
-                          Marker(
-                            point: techPoint,
-                            width: 38,
-                            height: 38,
-                            child: const Icon(Icons.my_location, color: Colors.blue, size: 30),
-                          ),
-                      ],
-                    ),
-                  ],
+                  },
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
+                  zoomControlsEnabled: true,
+                  zoomGesturesEnabled: true,
+                  scrollGesturesEnabled: true,
+                  rotateGesturesEnabled: true,
+                  tiltGesturesEnabled: false,
+                  compassEnabled: true,
+                  mapToolbarEnabled: false,
+                  markers: {
+                    if (servicePoint != null)
+                      Marker(
+                        markerId: const MarkerId('service-point'),
+                        position: servicePoint,
+                        infoWindow: const InfoWindow(title: 'Destino del servicio'),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                      ),
+                    if (techPoint != null)
+                      Marker(
+                        markerId: const MarkerId('tech-point'),
+                        position: techPoint,
+                        infoWindow: const InfoWindow(title: 'Tu ubicacion actual'),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+                      ),
+                  },
+                  circles: {
+                    if (servicePoint != null)
+                      Circle(
+                        circleId: const CircleId('service-radius'),
+                        center: servicePoint,
+                        radius: AppConfig.serviceGeofenceMeters.toDouble(),
+                        fillColor: Colors.green.withValues(alpha: 0.18),
+                        strokeColor: Colors.green,
+                        strokeWidth: 2,
+                      ),
+                  },
                 ),
               ),
             ),
@@ -271,6 +300,25 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: _canStart ? Colors.green.shade700 : Colors.orange.shade800,
+              ),
+            ),
+          const SizedBox(height: 4),
+          if (servicePoint == null)
+            const Text(
+              'No se puede validar el rango sin coordenadas de destino.',
+              style: TextStyle(
+                color: Colors.orange,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            Text(
+              _canStart
+                  ? 'Estas dentro del rango permitido para iniciar.'
+                  : 'Debes estar a 100 metros o menos del punto del servicio para iniciar.',
+              style: TextStyle(
+                color: _canStart ? Colors.green.shade700 : Colors.orange.shade800,
+                fontWeight: FontWeight.w600,
               ),
             ),
           const SizedBox(height: 14),

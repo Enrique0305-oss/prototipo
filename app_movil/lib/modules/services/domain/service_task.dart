@@ -72,6 +72,18 @@ class ServiceTask {
     Map<String, dynamic> programacion,
     Map<String, dynamic> planta,
   ) {
+    final latProgramacion = _parseCoordinateValue(programacion['latitud']);
+    final lngProgramacion = _parseCoordinateValue(programacion['longitud']);
+    if (latProgramacion != null && lngProgramacion != null) {
+      return (latProgramacion, lngProgramacion);
+    }
+
+    final latPlanta = _parseCoordinateValue(planta['latitud']);
+    final lngPlanta = _parseCoordinateValue(planta['longitud']);
+    if (latPlanta != null && lngPlanta != null) {
+      return (latPlanta, lngPlanta);
+    }
+
     // Prioridad: coordenadas de programacion; fallback: coordenadas de planta.
     final rawProgramacion = (programacion['coordenadas'] ?? '').toString().trim();
     if (rawProgramacion.isNotEmpty) {
@@ -90,6 +102,19 @@ class ServiceTask {
     }
 
     return (null, null);
+  }
+
+  static double? _parseCoordinateValue(dynamic raw) {
+    if (raw == null) {
+      return null;
+    }
+
+    final normalized = raw.toString().trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    return double.tryParse(normalized);
   }
 
   static (double?, double?) _parseCoordinates(String raw) {

@@ -573,12 +573,13 @@ class CotizacionController extends Controller
             ], 404);
         }
 
-        // Obtener el Gerente Comercial del Área de Gerencia
-        $gerenteComercial = \App\Models\Personal::whereHas('cargo', function($q) {
+        // Obtener solo gerente comercial activo del área de Gerencia.
+        // Si hay más de uno, prioriza el registro más reciente.
+        $gerenteComercial = \App\Models\Personal::where('estado', 'Activo')->whereHas('cargo', function($q) {
             $q->where('nombre', 'Gerente Comercial');
         })->whereHas('area', function($q) {
             $q->where('nombre', 'Gerencia');
-        })->with(['cargo', 'area'])->first();
+        })->with(['cargo', 'area'])->orderByDesc('id')->first();
 
         $exponentes = collect();
         if (!empty($cotizacion->exponentes_ids)) {

@@ -11,12 +11,39 @@ use Illuminate\Validation\Rule;
 
 class PersonalController extends Controller
 {
+    private function puedeVerIt(?Personal $usuario): bool
+    {
+        if (!$usuario) {
+            return false;
+        }
+
+        $usuario->loadMissing('area');
+        $areaNombre = mb_strtolower(trim((string) ($usuario->area?->nombre ?? '')));
+
+        return in_array($areaNombre, ['gerencia', 'it'], true);
+    }
+
+    private function esAreaIt(?Area $area): bool
+    {
+        $nombre = mb_strtolower(trim((string) ($area?->nombre ?? '')));
+
+        return $nombre === 'it';
+    }
+
     /**
      * GET /personal/usuarios - Listar todos los usuarios con su área
      */
     public function index(Request $request)
     {
         $query = Personal::with('area', 'cargo');
+        $usuarioAutenticado = $request->user();
+        $puedeVerIt = $this->puedeVerIt($usuarioAutenticado);
+
+        if (!$puedeVerIt) {
+            $query->whereHas('area', function ($q) {
+                $q->whereRaw('LOWER(nombre) <> ?', ['it']);
+            });
+        }
 
         if ($request->filled('search')) {
             $s = $request->search;
@@ -51,6 +78,13 @@ class PersonalController extends Controller
     {
         $personal = Personal::with('area', 'cargo')->findOrFail($id);
 
+        if ($this->esAreaIt($personal->area) && !$this->puedeVerIt(request()->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no encontrado'
+            ], 404);
+        }
+
         return response()->json([
             'success' => true,
             'data' => $personal,
@@ -72,6 +106,16 @@ class PersonalController extends Controller
             'usuario'   => 'required|string|max:100|unique:personal,usuario',
             'password'  => 'required|string|min:6',
         ]);
+
+        if (isset($validated['id_area'])) {
+            $area = Area::find($validated['id_area']);
+            if ($this->esAreaIt($area) && !$this->puedeVerIt($request->user())) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tiene permisos para asignar usuarios al área IT'
+                ], 403);
+            }
+        }
 
         $validated['password'] = Hash::make($validated['password']);
         $validated['estado'] = 'Activo';
@@ -104,6 +148,13 @@ class PersonalController extends Controller
             'password'  => 'nullable|string|min:6',
         ]);
 
+        if ($this->esAreaIt($personal->area) && !$this->puedeVerIt($request->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tiene permisos para modificar usuarios del área IT'
+            ], 403);
+        }
+
         if (!empty($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
         } else {
@@ -126,6 +177,14 @@ class PersonalController extends Controller
     public function toggleEstado($id)
     {
         $personal = Personal::findOrFail($id);
+
+        if ($this->esAreaIt($personal->area) && !$this->puedeVerIt(request()->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tiene permisos para modificar usuarios del área IT'
+            ], 403);
+        }
+
         $personal->estado = $personal->estado === 'Activo' ? 'Inactivo' : 'Activo';
         $personal->save();
 
@@ -151,6 +210,14 @@ class PersonalController extends Controller
         ]);
 
         $personal = Personal::findOrFail($id);
+
+        if ($this->esAreaIt($personal->area) && !$this->puedeVerIt($request->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tiene permisos para modificar usuarios del área IT'
+            ], 403);
+        }
+
         $personal->password = Hash::make($request->password);
         $personal->save();
 
@@ -168,7 +235,15 @@ class PersonalController extends Controller
      */
     public function areasLista()
     {
-        $areas = Area::where('estado', 'Activo')->orderBy('nombre')->get(['id', 'nombre']);
+        $usuarioAutenticado = request()->user();
+        $puedeVerIt = $this->puedeVerIt($usuarioAutenticado);
+
+        $areas = Area::where('estado', 'Activo')
+            ->when(!$puedeVerIt, function ($query) {
+                $query->whereRaw('LOWER(nombre) <> ?', ['it']);
+            })
+            ->orderBy('nombre')
+            ->get(['id', 'nombre']);
 
         return response()->json([
             'success' => true,

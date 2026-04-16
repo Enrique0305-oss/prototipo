@@ -1,9 +1,12 @@
 <?php
 
+use App\Models\Area;
+use App\Models\Personal;
 use App\Models\RrhhAsistencia;
 use Carbon\Carbon;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -66,5 +69,65 @@ Artisan::command('asistencia:auto-cerrar', function () {
 
     $this->info("Auto-cierre completado. Registros cerrados: {$cerrados}");
 })->purpose('Cierra asistencias abiertas al llegar la hora de salida asignada');
+
+Artisan::command('usuario:crear-it-prueba {--nombre=IT} {--apellidos=Demo} {--usuario=it.demo} {--correo=it.demo@qsci.com} {--celular=999999999} {--password=Password123!} {--force}', function () {
+    $area = Area::whereRaw('LOWER(nombre) = ?', ['it'])->first();
+
+    if (!$area) {
+        $area = Area::create([
+            'nombre' => 'IT',
+            'estado' => 'Activo',
+        ]);
+    }
+
+    if ($area->estado !== 'Activo') {
+        $area->update(['estado' => 'Activo']);
+    }
+
+    $usuario = trim((string) $this->option('usuario'));
+    $correo = trim((string) $this->option('correo'));
+    $nombre = trim((string) $this->option('nombre'));
+    $apellidos = trim((string) $this->option('apellidos'));
+    $celular = trim((string) $this->option('celular'));
+    $password = (string) $this->option('password');
+
+    $personal = Personal::where('usuario', $usuario)
+        ->orWhere('correo', $correo)
+        ->first();
+
+    $data = [
+        'nombre' => $nombre,
+        'apellidos' => $apellidos,
+        'celular' => $celular,
+        'correo' => $correo,
+        'id_area' => $area->id,
+        'id_cargo' => null,
+        'usuario' => $usuario,
+        'password' => Hash::make($password),
+        'estado' => 'Activo',
+    ];
+
+    if ($personal) {
+        if (!$this->option('force')) {
+            $this->warn("Ya existe un usuario con usuario/correo coincidente: {$personal->usuario} / {$personal->correo}");
+            $this->line('Usa --force para actualizarlo.');
+            return;
+        }
+
+        $personal->update($data);
+        $this->info("Usuario IT actualizado: {$personal->nombre} {$personal->apellidos}");
+        $this->line("ID: {$personal->id}");
+        $this->line("Área: {$area->nombre}");
+        return;
+    }
+
+    $personal = Personal::create($data);
+
+    $this->info("Usuario IT creado: {$personal->nombre} {$personal->apellidos}");
+    $this->line("ID: {$personal->id}");
+    $this->line("Usuario: {$personal->usuario}");
+    $this->line("Correo: {$personal->correo}");
+    $this->line("Área: {$area->nombre}");
+})->purpose('Crea o actualiza un usuario de prueba en el área IT');
 
 Schedule::command('asistencia:auto-cerrar')->everyMinute()->withoutOverlapping();

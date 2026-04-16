@@ -18,7 +18,7 @@ class AuthController extends Controller
         1 => ['dashboard', 'prospectos', 'cotizaciones', 'servicios', 'logistica', 'marcar-asistencia'],              // Comercial
         2 => ['dashboard', 'ods', 'odp', 'servicios', 'programaciones', 'marcar-asistencia'],                         // Operaciones
         3 => ['dashboard', 'productos', 'categorias', 'logistica', 'cotizaciones', 'marcar-asistencia'],               // Administración
-        4 => ['dashboard', 'rrhh-asistencia', 'rrhh-empleados', 'rrhh-reportes', 'marcar-asistencia'],                // RRHH
+        4 => ['dashboard', 'rrhh-asistencia', 'rrhh-empleados', 'rrhh-reportes', 'marcar-asistencia', 'usuarios'],    // RRHH
         5 => ['dashboard', 'cotizaciones', 'logistica', 'marcar-asistencia'],                                          // Finanzas
         6 => ['*'],                                                                                                     // Gerencia = TODO
         7 => ['dashboard', 'inventario', 'entradas-salidas', 'marcar-asistencia'],                                     // Almacén
@@ -30,6 +30,11 @@ class AuthController extends Controller
     private function resolverPermisos(Personal $personal): array
     {
         $cargoNombre = mb_strtolower(trim((string) optional($personal->cargo)->nombre));
+        $areaNombre = mb_strtolower(trim((string) optional($personal->area)->nombre));
+
+        if (in_array($areaNombre, ['gerencia', 'it'], true)) {
+            return ['*'];
+        }
 
         // Área Programación - Cargo: Programación Servicio
         // Acceso únicamente al módulo de Programaciones (servicio + dashboard) y marcado de asistencia.

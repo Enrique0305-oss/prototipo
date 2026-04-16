@@ -18,6 +18,8 @@ class ClientePlanta extends Model
         'departamento',
         'referencia',
         'coordenadas',
+        'latitud',
+        'longitud',
         'contacto_nombre',
         'contacto_telefono',
         'estado',
