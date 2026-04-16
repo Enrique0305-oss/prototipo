@@ -343,7 +343,7 @@ export function renderTecnicosTab(): string {
           <div class="os-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div class="os-field"><label>Nombre</label><input id="tec-form-nombre" class="os-input" maxlength="100" /></div>
             <div class="os-field"><label>Apellidos</label><input id="tec-form-apellidos" class="os-input" maxlength="100" /></div>
-            <div class="os-field"><label>DNI</label><input id="tec-form-dni" class="os-input" maxlength="8" /></div>
+            <div class="os-field"><label>DNI / CARNET EXTRANJERIA </label><input id="tec-form-dni" class="os-input" maxlength="10" /></div>
             <div class="os-field"><label>Celular</label><input id="tec-form-celular" class="os-input" maxlength="13" /></div>
             <div class="os-field"><label>Correo</label><input id="tec-form-correo" class="os-input" maxlength="100" /></div>
             <div class="os-field"><label>Especialidad</label><input id="tec-form-especialidad" class="os-input" maxlength="100" /></div>

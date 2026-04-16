@@ -1645,8 +1645,8 @@ export async function cargarMarcarAsistencia() {
               <path d="M23 11h-6"></path>
             </svg>
           </div>
-          <h2 style="margin: 0 0 12px; color: #1a2332; font-size: 24px;">Â¡Hoy es tu dÃ­a de descanso!</h2>
-          <p style="color: #64748b; font-size: 16px; margin: 0 0 8px;">Disfruta tu dÃ­a libre, ${personal.nombre.split(' ')[0]} ðŸŽ‰</p>
+          <h2 style="margin: 0 0 12px; color: #1a2332; font-size: 24px;">¡Hoy es tu dí­a de descanso!</h2>
+          <p style="color: #64748b; font-size: 16px; margin: 0 0 8px;">Disfruta tu día libre, ${personal.nombre.split(' ')[0]}</p>
           <p style="color: #94a3b8; font-size: 13px; margin: 0;">No necesitas marcar asistencia hoy.</p>
         </div>
       `;
@@ -2451,7 +2451,6 @@ async function abrirModalHorario(idPersonal: number) {
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <div>
           <h2 style="margin: 0 0 4px; color: #1a2332; font-size: 20px;">Horario Semanal</h2>
-          <p style="margin: 0; color: #64748b; font-size: 14px;">${personal.nombre} â€” ${personal.area}</p>
         </div>
         <button id="modal-horario-close" style="background: none; border: none; cursor: pointer; padding: 8px;">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -2595,10 +2594,10 @@ function abrirModalCopiarHorario(idPersonalDestino: number) {
         <div style="margin-bottom: 20px;">
           <label style="display: block; font-size: 14px; font-weight: 600; color: #334155; margin-bottom: 8px;">Copiar horario de:</label>
           <select id="copiar-origen-select" style="width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px;">
-            ${disponibles.map(e => `<option value="${e.id}">${e.nombre} (${e.area}) â€” ${e.dias_laborales} lab / ${e.dias_descanso} desc</option>`).join('')}
+            ${disponibles.map(e => `<option value="${e.id}">${e.nombre} (${e.area})” ${e.dias_laborales} lab / ${e.dias_descanso} desc</option>`).join('')}
           </select>
         </div>
-        <p style="font-size: 12px; color: #ea580c; margin-bottom: 20px;">âš ï¸ Esto reemplazarÃ¡ el horario actual de ${destino.nombre.split(' ')[0]}.</p>
+        <p style="font-size: 12px; color: #ea580c; margin-bottom: 20px;">Esto reemplazará el horario actual de ${destino.nombre.split(' ')[0]}.</p>
         <div style="display: flex; justify-content: flex-end; gap: 12px;">
           <button id="modal-copiar-cancel" class="btn-secondary" style="padding: 10px 24px;">Cancelar</button>
           <button id="modal-copiar-confirm" class="btn-primary" style="padding: 10px 24px;">

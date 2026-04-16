@@ -530,8 +530,7 @@ export function renderComercialOrdenesServicio() {
                   <tr>
                     <th style="width:40%;">Producto</th>
                     <th style="width:15%;text-align:center;">Cantidad</th>
-                    <th style="width:15%;text-align:center;">Stock Disp.</th>
-                    <th style="width:22%;">Observación</th>
+                    <th style="width:30%;">Observación</th>
                     <th style="width:8%;"></th>
                   </tr>
                 </thead>
@@ -871,7 +870,6 @@ async function cargarDatosCotizacion(cotizacionId: number) {
           id_cliente_planta_area: p.id_cliente_planta_area || null,
           id_equipo: p.id_equipo || null,
           equipo_descripcion: p.equipo_descripcion || '',
-          stock: p.stock,
         }))
       : [];
 
@@ -1146,11 +1144,6 @@ function buildProductoSelectOpts(selectedId: number): string {
     opts += `<option value="${p.id}" ${sel}>${p.descripcion}${p.unidad ? ' (' + p.unidad + ')' : ''}</option>`;
   });
   return opts;
-}
-
-function getStockProducto(idProducto: number): number {
-  const p = productosDisponiblesODS.find(x => x.id === idProducto);
-  return p?.inventario?.cantidad_disponible ?? p?.cantidad_disponible ?? 0;
 }
 
 function getEquipoName(idEquipo?: number | null): string {
@@ -1476,12 +1469,9 @@ function renderProductosODS() {
     // Filas de productos
     rows.forEach(r => {
       const idx = odsProductoRows.indexOf(r);
-      const stock = getStockProducto(r.id_producto);
-      const stockColor = r.cantidad > stock ? 'color:#ef4444;font-weight:600;' : 'color:#16a34a;';
       html += `<tr data-prod-idx="${idx}">
         <td><select class="os-input os-input-sm ods-prod-select" data-idx="${idx}">${buildProductoSelectOpts(r.id_producto)}</select></td>
         <td style="text-align:center;"><input type="number" class="os-input os-input-sm ods-prod-cant" data-idx="${idx}" value="${r.cantidad}" min="0.01" step="0.01" style="width:80px;text-align:center;"></td>
-        <td style="text-align:center;${stockColor}" class="ods-prod-stock" data-idx="${idx}">${stock}</td>
         <td><input type="text" class="os-input os-input-sm ods-prod-obs" data-idx="${idx}" value="${r.observacion || ''}" placeholder="Opcional" maxlength="200"></td>
         <td style="text-align:center;"><button type="button" class="btn-icon ods-prod-remove" data-idx="${idx}" style="color:#ef4444;" title="Eliminar producto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
       </tr>`;
@@ -1530,13 +1520,6 @@ function bindProductosODSEvents() {
       const idx = Number((e.target as HTMLSelectElement).dataset.idx);
       odsProductoRows[idx].id_producto = Number((e.target as HTMLSelectElement).value);
       // Actualizar stock display
-      const stockTd = document.querySelector(`.ods-prod-stock[data-idx="${idx}"]`) as HTMLElement;
-      if (stockTd) {
-        const stock = getStockProducto(odsProductoRows[idx].id_producto);
-        stockTd.textContent = String(stock);
-        stockTd.style.color = odsProductoRows[idx].cantidad > stock ? '#ef4444' : '#16a34a';
-        stockTd.style.fontWeight = odsProductoRows[idx].cantidad > stock ? '600' : 'normal';
-      }
     });
   });
 
@@ -1546,12 +1529,6 @@ function bindProductosODSEvents() {
       const idx = Number((e.target as HTMLInputElement).dataset.idx);
       odsProductoRows[idx].cantidad = parseFloat((e.target as HTMLInputElement).value) || 0;
       // Actualizar color de stock
-      const stockTd = document.querySelector(`.ods-prod-stock[data-idx="${idx}"]`) as HTMLElement;
-      if (stockTd) {
-        const stock = getStockProducto(odsProductoRows[idx].id_producto);
-        stockTd.style.color = odsProductoRows[idx].cantidad > stock ? '#ef4444' : '#16a34a';
-        stockTd.style.fontWeight = odsProductoRows[idx].cantidad > stock ? '600' : 'normal';
-      }
     });
   });
 

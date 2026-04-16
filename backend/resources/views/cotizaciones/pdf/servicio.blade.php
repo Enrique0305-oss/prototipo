@@ -962,7 +962,7 @@
                         <li>Los productos a usar pueden variar de acuerdo a la observación del especialista.</li>
                         <li>Los servicios realizados a partir de las 11:30 pm estarán sujetos a un recargo adicional, el cual será previamente coordinado y aprobado por el cliente.</li>
                         <li>El presupuesto se basa en la metodología actualmente vigente. Sin embargo, si se determina que es necesario evaluar otras opciones de eliminación mediante análisis de tendencia, se aplicará un recargo adicional correspondiente.</li>
-                        <li>Los servicios realizados en días feriados tendrán un recargo del 20% previa coordinación.</li>
+                        <li>Los servicios realizados en días feriados tendrán un recargo del 10% previa coordinación.</li>
                         <li>Vigencia de la oferta: 15 días</li>
                     @endif
                 </ul>
