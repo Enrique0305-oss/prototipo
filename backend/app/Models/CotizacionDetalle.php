@@ -31,7 +31,8 @@ class CotizacionDetalle extends Model
         'fosfina_producto',
         'fosfina_cantidad',
         'meses_implementacion',
-        'frecuencia_visita'
+        'frecuencia_visita',
+        'horario_auditoria'
     ];
 
     protected $casts = [
@@ -43,6 +44,7 @@ class CotizacionDetalle extends Model
         'medida_tanque' => 'array',
         'meses_implementacion' => 'integer',
         'frecuencia_visita' => 'array',
+        'horario_auditoria' => 'array',
         'id_cliente_planta_area' => 'array',
     ];
 

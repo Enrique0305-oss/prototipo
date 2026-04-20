@@ -167,6 +167,7 @@ class CotizacionController extends Controller
             'detalles.*.fecha_servicio' => 'nullable|date',
             'detalles.*.meses_implementacion' => 'nullable|integer|min:1',
             'detalles.*.frecuencia_visita' => 'nullable|array',
+            'detalles.*.horario_auditoria' => 'nullable|array',
         ]);
 
         DB::beginTransaction();
@@ -233,6 +234,7 @@ class CotizacionController extends Controller
                     'fecha_servicio' => $detalle['fecha_servicio'] ?? null,
                     'meses_implementacion' => $detalle['meses_implementacion'] ?? null,
                     'frecuencia_visita' => $detalle['frecuencia_visita'] ?? null,
+                    'horario_auditoria' => $detalle['horario_auditoria'] ?? null,
                 ]);
             }
 
@@ -323,6 +325,7 @@ class CotizacionController extends Controller
             'detalles.*.fecha_servicio' => 'nullable|date',
             'detalles.*.meses_implementacion' => 'nullable|integer|min:1',
             'detalles.*.frecuencia_visita' => 'nullable|array',
+            'detalles.*.horario_auditoria' => 'nullable|array',
         ]);
 
         DB::beginTransaction();
@@ -387,6 +390,7 @@ class CotizacionController extends Controller
                     'fecha_servicio' => $detalle['fecha_servicio'] ?? null,
                     'meses_implementacion' => $detalle['meses_implementacion'] ?? null,
                     'frecuencia_visita' => $detalle['frecuencia_visita'] ?? null,
+                    'horario_auditoria' => $detalle['horario_auditoria'] ?? null,
                 ]);
             }
 

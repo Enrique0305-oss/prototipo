@@ -20,7 +20,6 @@ return new class extends Migration
             $table->time('hora_servicio')->nullable();
             $table->enum('modalidad', ['Presencial', 'Virtual', 'Híbrido', 'Asíncrona']);
             $table->unsignedInteger('duracion_dias')->default(1);
-            $table->decimal('horas_totales', 12, 2)->default(0);
             $table->decimal('subtotal', 12, 2)->default(0);
             $table->decimal('igv', 12, 2)->default(0);
             $table->boolean('incluye_igv')->default(true);

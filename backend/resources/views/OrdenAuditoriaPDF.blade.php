@@ -86,11 +86,15 @@
         </tr>
         <tr>
             <td class="label" style="width: 25%;">FECHA DE AUDITOR&Iacute;A</td>
-            <td colspan="3" class="text-center">{{ $fechaServicio ? $fechaServicio->format('d/m/Y') : '---' }}</td>
+            <td colspan="3" class="text-center">{{ $fechaServicio ? $fechaServicio->format('d/m/Y') : 'POR DEFINIR' }}</td>
         </tr>
         <tr>
-            <td class="label">HORA</td>
-            <td class="text-center" colspan="3">{{ $orden->hora_servicio ? \Carbon\Carbon::parse($orden->hora_servicio)->format('h:i a') : '---' }}</td>
+            <td class="label">HORA INICIO</td>
+            <td class="text-center" colspan="3">{{ $orden->hora_servicio ? \Carbon\Carbon::parse($orden->hora_servicio)->format('H:i') : 'POR DEFINIR' }}</td>
+        </tr>
+        <tr>
+            <td class="label">HORA FIN</td>
+            <td class="text-center" colspan="3">{{ $orden->hora_fin_auditoria ? \Carbon\Carbon::parse($orden->hora_fin_auditoria)->format('H:i') : 'POR DEFINIR' }}</td>
         </tr>
         <tr>
             <td class="label">MODALIDAD</td>
@@ -99,10 +103,6 @@
         <tr>
             <td class="label">DURACI&Oacute;N (D&Iacute;AS)</td>
             <td class="text-center" colspan="3">{{ $orden->duracion_dias ?? 1 }}</td>
-        </tr>
-        <tr>
-            <td class="label">HORAS TOTALES</td>
-            <td class="text-center" colspan="3">{{ number_format((float) ($orden->horas_totales ?? 0), 2) }}</td>
         </tr>
         <tr>
             <td class="label">TOTAL</td>

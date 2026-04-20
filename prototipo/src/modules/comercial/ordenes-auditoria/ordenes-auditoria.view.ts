@@ -81,9 +81,9 @@ function limpiarFormulario() {
   (document.getElementById('oa-fecha-servicio') as HTMLInputElement).value = new Date().toISOString().split('T')[0];
   (document.getElementById('oa-fecha-aceptacion') as HTMLInputElement).value = '';
   (document.getElementById('oa-hora-servicio') as HTMLInputElement).value = '';
+  (document.getElementById('oa-hora-fin') as HTMLInputElement).value = '';
   (document.getElementById('oa-modalidad') as HTMLSelectElement).value = 'Presencial';
   (document.getElementById('oa-duracion-dias') as HTMLInputElement).value = '1';
-  (document.getElementById('oa-horas-totales') as HTMLInputElement).value = '0.00';
   (document.getElementById('oa-igv') as HTMLSelectElement).value = '1';
   (document.getElementById('oa-costo') as HTMLInputElement).value = '0.00';
   (document.getElementById('oa-observaciones') as HTMLTextAreaElement).value = '';
@@ -159,16 +159,17 @@ async function cargarOrdenes() {
 
     tbody.innerHTML = ordenesData.map((o) => {
       const costo = Number(o.costo || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 });
+      const horario = o.hora_servicio ? `${String(o.hora_servicio).slice(0, 5)}${o.hora_fin_auditoria ? ` a ${String(o.hora_fin_auditoria).slice(0, 5)}` : ''}` : (o.hora_fin_auditoria ? `— a ${String(o.hora_fin_auditoria).slice(0, 5)}` : '-');
       const tipoExp = o.exponentes && o.exponentes.length > 0 ? o.exponentes.map((e: any) => e.nombre).join(', ') : '-';
       return `
         <tr>
           <td><strong>${o.numero_orden || ''}</strong></td>
           <td>${o.cliente?.nombre_empresa || '-'}</td>
           <td>${o.cotizacion?.numero_cotizacion || '-'}</td>
-          <td><div>${formatearFecha(o.fecha_servicio)}</div><small style="color:#64748b;">${o.hora_servicio || ''}</small></td>
+          <td><div>${formatearFecha(o.fecha_servicio)}</div><small style="color:#64748b;">${o.hora_servicio ? String(o.hora_servicio).slice(0, 5) : '--'} a ${o.hora_fin_auditoria ? String(o.hora_fin_auditoria).slice(0, 5) : '--'}</small></td>
           <td><span class="oc-badge oc-badge-cyan">${o.modalidad || '-'}</span></td>
           <td style="text-align:center;">${o.duracion_dias ?? '-'}</td>
-          <td style="text-align:center;">${Number(o.horas_totales || 0).toFixed(2)}</td>
+          <td style="text-align:center;">${horario}</td>
           <td><strong>S/ ${costo}</strong></td>
           <td><span style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:#dcfce7;color:#166534;">${o.estado || 'Aprobado'}</span></td>
           <td>
@@ -232,7 +233,8 @@ async function cargarDesdeCotizacion(cotizacionId: number) {
   (document.getElementById('oa-fecha-aceptacion') as HTMLInputElement).value = data.cotizacion?.fecha_aceptacion || data.cotizacion?.fecha_emision || '';
   (document.getElementById('oa-fecha-servicio') as HTMLInputElement).value = data.detalles?.[0]?.fecha_servicio || new Date().toISOString().split('T')[0];
   (document.getElementById('oa-duracion-dias') as HTMLInputElement).value = String(data.duracion_dias || data.detalles?.[0]?.meses_implementacion || 1);
-  (document.getElementById('oa-horas-totales') as HTMLInputElement).value = Number(data.horas_totales || 0).toFixed(2);
+  (document.getElementById('oa-hora-servicio') as HTMLInputElement).value = data.hora_servicio || data.horario_auditoria?.inicio || '';
+  (document.getElementById('oa-hora-fin') as HTMLInputElement).value = data.hora_fin_auditoria || data.horario_auditoria?.fin || '';
   (document.getElementById('oa-costo') as HTMLInputElement).value = Number(data.costo_total || 0).toFixed(2);
   const detalle = data.servicio?.modalidad_sugerida;
   if (detalle) {
@@ -251,7 +253,7 @@ async function cargarDesdeCotizacion(cotizacionId: number) {
     detallesInfo.innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div><strong>Duración:</strong> ${data.duracion_dias || 1} día(s)</div>
-        <div><strong>Horas totales:</strong> ${Number(data.horas_totales || 0).toFixed(2)} h</div>
+        <div><strong>Horario:</strong> ${(data.hora_servicio || data.horario_auditoria?.inicio || '--')} a ${(data.hora_fin_auditoria || data.horario_auditoria?.fin || '--')}</div>
       </div>
     `;
     detallesInfo.style.display = 'block';
@@ -297,9 +299,9 @@ async function abrirEditar(id: number) {
     (document.getElementById('oa-fecha-servicio') as HTMLInputElement).value = (orden.fecha_servicio || '').split('T')[0] || '';
     (document.getElementById('oa-fecha-aceptacion') as HTMLInputElement).value = (orden.fecha_aceptacion || '').split('T')[0] || '';
     (document.getElementById('oa-hora-servicio') as HTMLInputElement).value = orden.hora_servicio || '';
+    (document.getElementById('oa-hora-fin') as HTMLInputElement).value = orden.hora_fin_auditoria || '';
     (document.getElementById('oa-modalidad') as HTMLSelectElement).value = orden.modalidad || 'Presencial';
     (document.getElementById('oa-duracion-dias') as HTMLInputElement).value = String(orden.duracion_dias || 1);
-    (document.getElementById('oa-horas-totales') as HTMLInputElement).value = Number(orden.horas_totales || 0).toFixed(2);
     (document.getElementById('oa-costo') as HTMLInputElement).value = Number(orden.subtotal || orden.costo || 0).toFixed(2);
     (document.getElementById('oa-igv') as HTMLSelectElement).value = orden.incluye_igv ? '1' : '0';
     (document.getElementById('oa-observaciones') as HTMLTextAreaElement).value = orden.observaciones || '';
@@ -323,9 +325,9 @@ async function guardar() {
     fecha_servicio: (document.getElementById('oa-fecha-servicio') as HTMLInputElement).value,
     fecha_aceptacion: (document.getElementById('oa-fecha-aceptacion') as HTMLInputElement).value || null,
     hora_servicio: (document.getElementById('oa-hora-servicio') as HTMLInputElement).value || null,
+    hora_fin_auditoria: (document.getElementById('oa-hora-fin') as HTMLInputElement).value || null,
     modalidad: (document.getElementById('oa-modalidad') as HTMLSelectElement).value,
     duracion_dias: Number((document.getElementById('oa-duracion-dias') as HTMLInputElement).value || 1),
-    horas_totales: Number((document.getElementById('oa-horas-totales') as HTMLInputElement).value || 0),
     costo: Number((document.getElementById('oa-costo') as HTMLInputElement).value || 0),
     incluye_igv: (document.getElementById('oa-igv') as HTMLSelectElement).value !== '0',
     observaciones: (document.getElementById('oa-observaciones') as HTMLTextAreaElement).value.trim() || null,
@@ -422,7 +424,7 @@ export function renderComercialOrdenesAuditoria() {
           <input type="hidden" id="oa-edit-id">
           <input type="hidden" id="oa-id-usuario">
           <div class="oc-section"><h3 class="oc-section-title">Información General</h3><div class="oc-grid"><div class="oc-field"><label class="oc-label">N° Orden</label><input type="text" id="oa-numero-orden" class="oc-input" readonly></div><div class="oc-field"><label class="oc-label">Cotización Referencia <span class="oc-required">*</span></label><select id="oa-cotizacion-ref" class="oc-input"><option value="">Seleccione una cotización...</option></select></div><div class="oc-field"><label class="oc-label">Cliente</label><input type="text" id="oa-cliente-nombre" class="oc-input" readonly><input type="hidden" id="oa-cliente-id"></div><div class="oc-field"><label class="oc-label">RUC</label><input type="text" id="oa-cliente-ruc" class="oc-input" readonly></div></div></div>
-          <div class="oc-section"><h3 class="oc-section-title">Datos de la Auditoría</h3><div class="oc-grid"><div class="oc-field"><label class="oc-label">Servicio / Auditoría</label><input type="text" id="oa-servicio-nombre" class="oc-input" readonly><input type="hidden" id="oa-servicio-id"></div><div class="oc-field"><label class="oc-label">Fecha de Auditoría <span class="oc-required">*</span></label><input type="date" id="oa-fecha-servicio" class="oc-input"></div><div class="oc-field"><label class="oc-label">Fecha de Aceptación</label><input type="date" id="oa-fecha-aceptacion" class="oc-input" disabled></div><div class="oc-field"><label class="oc-label">Hora de Auditoría</label><input type="time" id="oa-hora-servicio" class="oc-input"></div><div class="oc-field"><label class="oc-label">Modalidad <span class="oc-required">*</span></label><select id="oa-modalidad" class="oc-input"><option value="Presencial">Presencial</option><option value="Virtual">Virtual</option><option value="Híbrido">Híbrido</option><option value="Asíncrona">Asíncrona</option></select></div><div class="oc-field"><label class="oc-label">Duración (días)</label><input type="number" id="oa-duracion-dias" class="oc-input" min="1" value="1"></div><div class="oc-field"><label class="oc-label">Horas totales</label><input type="number" id="oa-horas-totales" class="oc-input" min="0" step="0.01" value="0.00"></div><div class="oc-field" style="grid-column: 1 / -1;"><label class="oc-label">Exponente(s)</label><div id="oa-exponentes-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div><select id="oa-exponente-selector" class="oc-input"><option value="">+ Agregar exponente...</option></select></div></div></div>
+          <div class="oc-section"><h3 class="oc-section-title">Datos de la Auditoría</h3><div class="oc-grid"><div class="oc-field"><label class="oc-label">Servicio / Auditoría</label><input type="text" id="oa-servicio-nombre" class="oc-input" readonly><input type="hidden" id="oa-servicio-id"></div><div class="oc-field"><label class="oc-label">Fecha de Auditoría <span class="oc-required">*</span></label><input type="date" id="oa-fecha-servicio" class="oc-input"></div><div class="oc-field"><label class="oc-label">Fecha de Aceptación</label><input type="date" id="oa-fecha-aceptacion" class="oc-input" disabled></div><div class="oc-field"><label class="oc-label">Hora inicio</label><input type="time" id="oa-hora-servicio" class="oc-input"></div><div class="oc-field"><label class="oc-label">Hora fin</label><input type="time" id="oa-hora-fin" class="oc-input"></div><div class="oc-field"><label class="oc-label">Modalidad <span class="oc-required">*</span></label><select id="oa-modalidad" class="oc-input"><option value="Presencial">Presencial</option><option value="Virtual">Virtual</option><option value="Híbrido">Híbrido</option><option value="Asíncrona">Asíncrona</option></select></div><div class="oc-field"><label class="oc-label">Duración (días)</label><input type="number" id="oa-duracion-dias" class="oc-input" min="1" value="1"></div><div class="oc-field" style="grid-column: 1 / -1;"><label class="oc-label">Exponente(s)</label><div id="oa-exponentes-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div><select id="oa-exponente-selector" class="oc-input"><option value="">+ Agregar exponente...</option></select></div></div></div>
           <div id="oa-detalles-info" style="display:none;margin-bottom:20px;"></div>
           <div class="oc-section"><h3 class="oc-section-title">Costos</h3><div class="oc-grid"><div class="oc-field"><label class="oc-label">IGV (18%)</label><select id="oa-igv" class="oc-input"><option value="1" selected>Sí - Con IGV</option><option value="0">No - Sin IGV</option></select></div><div class="oc-field"><label class="oc-label">Subtotal <span class="oc-required">*</span></label><input type="number" id="oa-costo" class="oc-input" min="0" step="0.01" value="0.00"></div></div><div id="oa-desglose-costos" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin-top:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="color:#64748b;font-size:13px;">Subtotal:</span><span style="font-weight:500;color:#1e293b;" id="oa-display-subtotal">S/ 0.00</span></div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="color:#64748b;font-size:13px;">IGV (18%):</span><span style="font-weight:500;color:#1e293b;" id="oa-display-igv">S/ 0.00</span></div><div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding-top:8px;"><span style="font-weight:600;color:#0f172a;font-size:14px;">Total:</span><span style="font-weight:700;color:#0f172a;font-size:16px;" id="oa-display-total">S/ 0.00</span></div><div class="oc-field" style="grid-column: 1 / -1;"><label class="oc-label">Observaciones</label><textarea id="oa-observaciones" class="oc-input" rows="3" placeholder="Observaciones adicionales..."></textarea></div></div></div>
         </div>

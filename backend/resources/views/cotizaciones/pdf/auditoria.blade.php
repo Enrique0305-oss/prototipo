@@ -174,25 +174,9 @@
             $fechaAuditoria = $detallePlan?->fecha_servicio;
             $duracionDias = $detallePlan?->meses_implementacion;
             $modalidadPlan = $detallePlan?->modalidad_sugerida;
-            $frecuenciaVisita = $detallePlan?->frecuencia_visita;
-
-            $frecuenciaOrdenada = collect();
-            $horasTotalesAuditoria = 0;
-            if (is_array($frecuenciaVisita)) {
-                $frecuenciaOrdenada = collect($frecuenciaVisita)
-                    ->sortBy(function ($valor, $clave) {
-                        if (preg_match('/\d+/', (string) $clave, $m)) {
-                            return (int) $m[0];
-                        }
-                        return 9999;
-                    });
-
-                foreach ($frecuenciaOrdenada as $filaHoras) {
-                    $horasTotalesAuditoria += (float) ($filaHoras['h'] ?? 0);
-                }
-            }
-
-            $tieneHorasAuditoria = $frecuenciaOrdenada->isNotEmpty() && $horasTotalesAuditoria > 0;
+            $horarioAuditoria = $detallePlan?->horario_auditoria ?? null;
+            $horaInicioAuditoria = is_array($horarioAuditoria) ? ($horarioAuditoria['inicio'] ?? $horarioAuditoria['hora_inicio'] ?? null) : null;
+            $horaFinAuditoria = is_array($horarioAuditoria) ? ($horarioAuditoria['fin'] ?? $horarioAuditoria['hora_fin'] ?? null) : null;
         @endphp
         <!-- PÃGINA DE PROPUESTA TÃ‰CNICA -->
         <div class="contenido-desplazado">
@@ -220,9 +204,6 @@
             <div class="seccion-descripcion">
                     A continuación, se detallarán la lista de actividades incluidas en el servicio.
             </div>
-            <div class="issued-name">
-                &nbsp;&nbsp;&nbsp;&nbsp;2.1 Alcance de auditoria
-            </div>
 
             <div class="proposal-text miniword-content" style="margin-bottom: 16px; margin-top: 6px;">
                 @if($cotizacion->propuesta_tecnica)
@@ -242,7 +223,7 @@
                     @if(!empty($fechaAuditoria))
                         {{ \Carbon\Carbon::parse($fechaAuditoria)->format('d/m/Y') }}
                     @else
-                        No definido
+                        Por definir
                     @endif
                 </p>
                 <p>
@@ -258,62 +239,13 @@
                     @endif
                 </p>
                 <p>
-                    <strong>Horas de auditoria (totales):</strong>
-                    @if($tieneHorasAuditoria)
-                        {{ number_format($horasTotalesAuditoria, 2) }} h
+                    <strong>Horario de auditoria:</strong>
+                    @if(!empty($horaInicioAuditoria) && !empty($horaFinAuditoria))
+                        {{ $horaInicioAuditoria }} a {{ $horaFinAuditoria }}
                     @else
-                        No definido
+                        Por definir
                     @endif
                 </p>
-                <p><strong>Detalle de horas por día:</strong></p>
-                @if($frecuenciaOrdenada->isNotEmpty())
-                    @php
-                        $itemsList = [];
-                        foreach($frecuenciaOrdenada as $key => $value) {
-                            $itemsList[] = ['key' => $key, 'value' => $value];
-                        }
-                        $count = count($itemsList);
-                        $halfCount = ceil($count / 2);
-                    @endphp
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <tr>
-                            <td style="width: 50%; vertical-align: top; padding-right: 10px;">
-                                @foreach($itemsList as $index => $item)
-                                    @if($index < $halfCount)
-                                        @php
-                                            $diaKey = $item['key'];
-                                            $frecuenciaDia = $item['value'];
-                                            preg_match('/\d+/', (string) $diaKey, $m);
-                                            $numeroDia = isset($m[0]) ? (int) $m[0] : null;
-                                            $horasDia = (float) ($frecuenciaDia['h'] ?? 0);
-                                        @endphp
-                                        <p style="margin: 0 0 4px 0; font-size: 12px;">
-                                            - {{ $numeroDia ? 'DIA ' . $numeroDia : strtoupper((string) $diaKey) }}: {{ number_format($horasDia, 2) }} h
-                                        </p>
-                                    @endif
-                                @endforeach
-                            </td>
-                            <td style="width: 50%; vertical-align: top; padding-left: 10px;">
-                                @foreach($itemsList as $index => $item)
-                                    @if($index >= $halfCount)
-                                        @php
-                                            $diaKey = $item['key'];
-                                            $frecuenciaDia = $item['value'];
-                                            preg_match('/\d+/', (string) $diaKey, $m);
-                                            $numeroDia = isset($m[0]) ? (int) $m[0] : null;
-                                            $horasDia = (float) ($frecuenciaDia['h'] ?? 0);
-                                        @endphp
-                                        <p style="margin: 0 0 4px 0; font-size: 12px;">
-                                            - {{ $numeroDia ? 'DIA ' . $numeroDia : strtoupper((string) $diaKey) }}: {{ number_format($horasDia, 2) }} h
-                                        </p>
-                                    @endif
-                                @endforeach
-                            </td>
-                        </tr>
-                    </table>
-                @else
-                    <p>No definido</p>
-                @endif
             </div>
 
             

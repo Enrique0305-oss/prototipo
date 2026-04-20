@@ -49,9 +49,9 @@ class OrdenAuditoriaController extends Controller
                     'fecha_servicio' => optional($orden->fecha_servicio)->format('Y-m-d'),
                     'fecha_aceptacion' => optional($orden->fecha_aceptacion)->format('Y-m-d'),
                     'hora_servicio' => $orden->hora_servicio ? $orden->hora_servicio->format('H:i') : null,
+                    'hora_fin_auditoria' => $orden->hora_fin_auditoria ? $orden->hora_fin_auditoria->format('H:i') : null,
                     'modalidad' => $orden->modalidad,
                     'duracion_dias' => $orden->duracion_dias,
-                    'horas_totales' => $orden->horas_totales,
                     'subtotal' => $orden->subtotal,
                     'igv' => $orden->igv,
                     'incluye_igv' => (bool) $orden->incluye_igv,
@@ -145,13 +145,9 @@ class OrdenAuditoriaController extends Controller
         $exponentesIds = array_values(array_filter((array) ($cotizacion->exponentes_ids ?? []), fn ($id) => !empty($id)));
         $exponentes = empty($exponentesIds) ? collect([]) : Exponente::whereIn('id', $exponentesIds)->get();
 
-        $frecuenciaVisita = $detalle?->frecuencia_visita;
-        $horasTotales = 0;
-        if (is_array($frecuenciaVisita)) {
-            foreach ($frecuenciaVisita as $fila) {
-                $horasTotales += (float) ($fila['h'] ?? 0);
-            }
-        }
+        $horarioAuditoria = $detalle?->horario_auditoria;
+        $horaInicioAuditoria = is_array($horarioAuditoria) ? ($horarioAuditoria['inicio'] ?? $horarioAuditoria['hora_inicio'] ?? null) : null;
+        $horaFinAuditoria = is_array($horarioAuditoria) ? ($horarioAuditoria['fin'] ?? $horarioAuditoria['hora_fin'] ?? null) : null;
 
         return response()->json(['success' => true, 'data' => [
             'cotizacion' => [
@@ -173,7 +169,12 @@ class OrdenAuditoriaController extends Controller
             ],
             'costo_total' => (float) $cotizacion->total,
             'duracion_dias' => $detalle?->meses_implementacion ?? 1,
-            'horas_totales' => $horasTotales,
+            'hora_servicio' => $horaInicioAuditoria,
+            'hora_fin_auditoria' => $horaFinAuditoria,
+            'horario_auditoria' => [
+                'inicio' => $horaInicioAuditoria,
+                'fin' => $horaFinAuditoria,
+            ],
             'detalles' => $cotizacion->detalles->map(fn ($d) => [
                 'id_servicio' => $d->id_servicio,
                 'id_catalogo_cap_aud' => $d->id_catalogo_cap_aud,
@@ -183,6 +184,7 @@ class OrdenAuditoriaController extends Controller
                 'fecha_servicio' => optional($d->fecha_servicio)->format('Y-m-d'),
                 'meses_implementacion' => $d->meses_implementacion,
                 'frecuencia_visita' => $d->frecuencia_visita,
+                'horario_auditoria' => $d->horario_auditoria,
             ]),
             'exponentes' => $exponentes->map(fn ($e) => [
                 'id' => $e->id,
@@ -199,6 +201,7 @@ class OrdenAuditoriaController extends Controller
                 'modalidad_sugerida' => $detalle->modalidad_sugerida,
                 'meses_implementacion' => $detalle->meses_implementacion,
                 'frecuencia_visita' => $detalle->frecuencia_visita,
+                'horario_auditoria' => $detalle->horario_auditoria,
             ] : null,
         ]]);
     }
@@ -213,9 +216,9 @@ class OrdenAuditoriaController extends Controller
             'fecha_servicio' => 'required|date',
             'fecha_aceptacion' => 'nullable|date',
             'hora_servicio' => 'nullable|date_format:H:i',
+            'hora_fin_auditoria' => 'nullable|date_format:H:i',
             'modalidad' => 'required|in:Presencial,Virtual,Híbrido,Hibrido,Asíncrona,Asincrona',
             'duracion_dias' => 'required|integer|min:1',
-            'horas_totales' => 'required|numeric|min:0',
             'costo' => 'required|numeric|min:0',
             'incluye_igv' => 'nullable|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
@@ -255,9 +258,9 @@ class OrdenAuditoriaController extends Controller
                 'fecha_servicio' => $validated['fecha_servicio'],
                 'fecha_aceptacion' => $validated['fecha_aceptacion'] ?? null,
                 'hora_servicio' => $validated['hora_servicio'] ?? null,
+                'hora_fin_auditoria' => $validated['hora_fin_auditoria'] ?? null,
                 'modalidad' => $validated['modalidad'],
                 'duracion_dias' => $validated['duracion_dias'],
-                'horas_totales' => $validated['horas_totales'],
                 'subtotal' => $subtotal,
                 'igv' => $igv,
                 'incluye_igv' => $incluyeIgv,
@@ -308,9 +311,9 @@ class OrdenAuditoriaController extends Controller
             'fecha_servicio' => 'sometimes|date',
             'fecha_aceptacion' => 'nullable|date',
             'hora_servicio' => 'nullable|date_format:H:i',
+            'hora_fin_auditoria' => 'nullable|date_format:H:i',
             'modalidad' => 'sometimes|in:Presencial,Virtual,Híbrido,Hibrido,Asíncrona,Asincrona',
             'duracion_dias' => 'sometimes|integer|min:1',
-            'horas_totales' => 'sometimes|numeric|min:0',
             'costo' => 'sometimes|numeric|min:0',
             'incluye_igv' => 'nullable|boolean',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',

@@ -459,6 +459,16 @@ function formatearFrecuenciaVisita(frecuenciaVis: any): string {
   return meses.length > 0 ? meses.join(' | ') : '—';
 }
 
+function formatearHorarioAuditoria(horarioAuditoria: any): string {
+  if (!horarioAuditoria || typeof horarioAuditoria !== 'object') return '—';
+
+  const inicio = String(horarioAuditoria.inicio || horarioAuditoria.hora_inicio || '').trim();
+  const fin = String(horarioAuditoria.fin || horarioAuditoria.hora_fin || '').trim();
+
+  if (!inicio || !fin) return '—';
+  return `${inicio} a ${fin}`;
+}
+
 function obtenerInfoImplementacionAsesor(cotizacion: any): { meses: number | null; frecuencia: string } {
   const meses = cotizacion.detalles?.[0]?.meses_implementacion || null;
   const frecuencia = cotizacion.detalles?.[0]?.frecuencia_visita || null;
@@ -466,21 +476,13 @@ function obtenerInfoImplementacionAsesor(cotizacion: any): { meses: number | nul
   return { meses, frecuencia: frecuenciaFormato };
 }
 
-function obtenerInfoImplementacionAuditoria(cotizacion: any): { dias: number | null; horasTexto: string } {
+function obtenerInfoImplementacionAuditoria(cotizacion: any): { dias: number | null; horarioTexto: string } {
   const dias = cotizacion.detalles?.[0]?.meses_implementacion || null;
-  const frecuencia = cotizacion.detalles?.[0]?.frecuencia_visita || null;
-  if (!frecuencia || typeof frecuencia !== 'object') {
-    return { dias, horasTexto: '—' };
-  }
-
-  let totalHoras = 0;
-  Object.keys(frecuencia).forEach((diaKey: string) => {
-    totalHoras += Number(frecuencia[diaKey]?.h || 0);
-  });
+  const horario = cotizacion.detalles?.[0]?.horario_auditoria || cotizacion.detalles?.[0]?.frecuencia_visita || null;
 
   return {
     dias,
-    horasTexto: totalHoras > 0 ? `${totalHoras} h totales` : '—',
+    horarioTexto: formatearHorarioAuditoria(horario),
   };
 }
 
@@ -516,23 +518,22 @@ function generarTablaFrecuenciaVisita(panelEl: HTMLElement) {
   container.innerHTML = html;
 }
 
-function generarTablaHorasPorDiaAuditoria(panelEl: HTMLElement) {
+function generarTablaHorarioAuditoria(panelEl: HTMLElement) {
   const diasInput = panelEl.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null;
   const container = panelEl.querySelector('#cot-frecuencia-visita-container') as HTMLElement | null;
   if (!diasInput || !container) return;
 
-  const dias = Math.max(1, parseInt(diasInput.value || '1', 10));
-  let html = `<div style="display:grid;grid-template-columns:120px 160px;gap:8px;align-items:center;font-size:12px;">
-    <div style="font-weight:600;color:#475569;">Día</div>
-    <div style="text-align:center;font-weight:600;color:#475569;">Horas por día</div>
-  </div>`;
-
-  for (let i = 1; i <= dias; i++) {
-    html += `<div style="display:grid;grid-template-columns:120px 160px;gap:8px;margin-top:8px;align-items:center;">
-      <div style="font-weight:500;color:#1e293b;">Día ${i}</div>
-      <input type="number" id="cot-auditoria-horas-d${i}" class="form-control" value="0" min="0" step="0.5" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:13px;text-align:center;">
-    </div>`;
-  }
+  const html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end;font-size:12px;">
+    <div>
+      <label style="display:block;font-weight:600;color:#475569;margin-bottom:6px;">Hora inicio <span style="color:#94a3b8;font-weight:500;">(--:--)</span></label>
+      <input type="time" id="cot-auditoria-hora-inicio" class="form-control" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:13px;">
+    </div>
+    <div>
+      <label style="display:block;font-weight:600;color:#475569;margin-bottom:6px;">Hora fin <span style="color:#94a3b8;font-weight:500;">(--:--)</span></label>
+      <input type="time" id="cot-auditoria-hora-fin" class="form-control" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:13px;">
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:#64748b;">El horario se aplicará durante todos los días de implementación.</div>`;
 
   container.innerHTML = html;
 }
@@ -938,7 +939,7 @@ function renderizarTabla() {
         const esAsesoria = tipoNorm.includes('asesor');
         const esAuditoria = tipoNorm.includes('auditor');
         const infoImplAsesoria = esAsesoria ? obtenerInfoImplementacionAsesor(cot) : { meses: null, frecuencia: '—' };
-        const infoImplAuditoria = esAuditoria ? obtenerInfoImplementacionAuditoria(cot) : { dias: null, horasTexto: '—' };
+        const infoImplAuditoria = esAuditoria ? obtenerInfoImplementacionAuditoria(cot) : { dias: null, horarioTexto: '—' };
         const implementacionHtml = esAsesoria && infoImplAsesoria.meses
       ? `<div style="font-size:11px;color:#64748b;">
          ${infoImplAsesoria.meses} mes${infoImplAsesoria.meses !== 1 ? 'es' : ''}<br/>
@@ -947,7 +948,7 @@ function renderizarTabla() {
        : esAuditoria && infoImplAuditoria.dias
        ? `<div style="font-size:11px;color:#64748b;">
          ${infoImplAuditoria.dias} día${infoImplAuditoria.dias !== 1 ? 's' : ''}<br/>
-         <span style="color:#94a3b8;font-size:10px;">${infoImplAuditoria.horasTexto}</span>
+         <span style="color:#94a3b8;font-size:10px;">${infoImplAuditoria.horarioTexto}</span>
           </div>`
       : '';
 
@@ -1253,7 +1254,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           <input type="number" id="cot-cap-fecha-servicio" class="form-control" value="1" min="1" step="1" style="max-width:180px; width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px;">
         </div>
         <div class="form-group">
-          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">${tipoFijo === 'Auditoria' ? 'Horas por día' : 'Frecuencia por Visita'}</label>
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">${tipoFijo === 'Auditoria' ? 'Horario de Auditoría' : 'Frecuencia por Visita'}</label>
           <div id="cot-frecuencia-visita-container" style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#fff;"></div>
         </div>
       </div>
@@ -1356,7 +1357,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
               <button type="button" class="btn-secondary" id="btn-del-col" style="padding:6px 10px;">Eliminar columna</button>
             </div>
 
-            <div id="editor-wrapper" style="display: block;">
+            <div id="editor-wrapper" style="display: block; max-width: 900px; width: 80%; margin: 0 auto;">
                 <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Use el editor para dar formato a los objetivos y actividades tal cual aparecerán en el PDF.</p>
                 <div id="editor-propuesta" style="height: 700px; background: #fff;"></div>
             </div>
@@ -1605,6 +1606,18 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           ],
         }
       });
+
+      // Evita desborde horizontal cuando se escribe texto largo sin espacios.
+      const qlContainer = container.querySelector('.ql-container') as HTMLElement | null;
+      const qlEditor = container.querySelector('.ql-editor') as HTMLElement | null;
+      if (qlContainer) {
+        qlContainer.style.overflowX = 'hidden';
+      }
+      if (qlEditor) {
+        qlEditor.style.whiteSpace = 'pre-wrap';
+        qlEditor.style.overflowWrap = 'anywhere';
+        qlEditor.style.wordBreak = 'break-word';
+      }
 
       console.log('[QUILL] ✅ Quill inicializado correctamente:', !!quillInstance);
       
@@ -1885,22 +1898,18 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     if (tipoFijo === 'Asesoria') {
       generarTablaFrecuenciaVisita(panelEl);
     } else if (tipoFijo === 'Auditoria') {
-      generarTablaHorasPorDiaAuditoria(panelEl);
+      generarTablaHorarioAuditoria(panelEl);
     }
 
     panelEl.querySelector('#cot-cap-fecha-servicio')?.addEventListener('change', () => {
       if (tipoFijo === 'Asesoria') {
         generarTablaFrecuenciaVisita(panelEl);
-      } else if (tipoFijo === 'Auditoria') {
-        generarTablaHorasPorDiaAuditoria(panelEl);
       }
       aplicarDatosCapacitacionGlobalATodasLasLineas(panelEl);
     });
     panelEl.querySelector('#cot-cap-fecha-servicio')?.addEventListener('input', () => {
       if (tipoFijo === 'Asesoria') {
         generarTablaFrecuenciaVisita(panelEl);
-      } else if (tipoFijo === 'Auditoria') {
-        generarTablaHorasPorDiaAuditoria(panelEl);
       }
     });
     panelEl.querySelector('#cot-cap-horas')?.addEventListener('input', () => {
@@ -2448,13 +2457,13 @@ async function poblarFormularioEdicion(panelEl: HTMLElement, cotizacion: any) {
         diasInput.value = String(primerDetalleAuditoria?.meses_implementacion ?? 1);
       }
 
-      generarTablaHorasPorDiaAuditoria(panelEl);
-      const frecuVis = primerDetalleAuditoria?.frecuencia_visita;
-      if (frecuVis && typeof frecuVis === 'object') {
-        Object.keys(frecuVis).forEach((diaKey: string) => {
-          const hInput = document.getElementById(`cot-auditoria-horas-${diaKey}`) as HTMLInputElement;
-          if (hInput) hInput.value = String(frecuVis[diaKey]?.h ?? 0);
-        });
+      generarTablaHorarioAuditoria(panelEl);
+      const horarioAuditoria = primerDetalleAuditoria?.horario_auditoria || primerDetalleAuditoria?.frecuencia_visita;
+      if (horarioAuditoria && typeof horarioAuditoria === 'object') {
+        const inicioInput = document.getElementById('cot-auditoria-hora-inicio') as HTMLInputElement | null;
+        const finInput = document.getElementById('cot-auditoria-hora-fin') as HTMLInputElement | null;
+        if (inicioInput) inicioInput.value = String(horarioAuditoria.inicio || horarioAuditoria.hora_inicio || '');
+        if (finInput) finInput.value = String(horarioAuditoria.fin || horarioAuditoria.hora_fin || '');
       }
     }
   }
@@ -3374,8 +3383,9 @@ async function guardarCotizacion(tipoFijo?: string) {
     ? parseInt((panelActivoElement.querySelector('#cot-cap-fecha-servicio') as HTMLInputElement | null)?.value || '1', 10)
     : null;
   
-  // Capturar frecuencia por visita para Asesoría y horas por día para Auditoria
+  // Capturar frecuencia por visita para Asesoría y horario para Auditoria
   let frecuenciaPorVisitaGlobal: any = null;
+  let horarioAuditoriaGlobal: any = null;
   if (esAsesoria && mesesImplementacionGlobal) {
     frecuenciaPorVisitaGlobal = {};
     for (let i = 1; i <= mesesImplementacionGlobal; i++) {
@@ -3389,12 +3399,17 @@ async function guardarCotizacion(tipoFijo?: string) {
       };
     }
   } else if (esAuditoria && mesesImplementacionGlobal) {
-    frecuenciaPorVisitaGlobal = {};
-    for (let i = 1; i <= mesesImplementacionGlobal; i++) {
-      const hInput = document.getElementById(`cot-auditoria-horas-d${i}`) as HTMLInputElement;
-      frecuenciaPorVisitaGlobal[`d${i}`] = {
-        h: parseFloat(hInput?.value || '0') || 0,
-      };
+    const inicioInput = document.getElementById('cot-auditoria-hora-inicio') as HTMLInputElement | null;
+    const finInput = document.getElementById('cot-auditoria-hora-fin') as HTMLInputElement | null;
+    const inicio = String(inicioInput?.value || '').trim();
+    const fin = String(finInput?.value || '').trim();
+    horarioAuditoriaGlobal = {
+      inicio,
+      fin,
+    };
+
+    if (!inicio || !fin) {
+      horarioAuditoriaGlobal = null;
     }
   }
 
@@ -3430,7 +3445,8 @@ async function guardarCotizacion(tipoFijo?: string) {
     const numParticipantes = esCapacitacion ? numParticipantesGlobal : null;
     const fechaServicio = esCapacitacion ? fechaServicioGlobal : null;
     const mesesImplementacion = (esAsesoria || esAuditoria) ? mesesImplementacionGlobal : null;
-    const frecuenciaVisita = (esAsesoria || esAuditoria) ? frecuenciaPorVisitaGlobal : null;
+    const frecuenciaVisita = esAsesoria ? frecuenciaPorVisitaGlobal : null;
+    const horarioAuditoria = esAuditoria ? horarioAuditoriaGlobal : null;
 
     const {
       id_servicio,
@@ -3465,6 +3481,7 @@ async function guardarCotizacion(tipoFijo?: string) {
       fecha_servicio: fechaServicio,
       meses_implementacion: mesesImplementacion,
       frecuencia_visita: frecuenciaVisita,
+      horario_auditoria: horarioAuditoria,
     });
   });
 

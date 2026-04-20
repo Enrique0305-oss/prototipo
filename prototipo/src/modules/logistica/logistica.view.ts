@@ -271,12 +271,12 @@ export function renderServiciosDisponiblesTab() {
             <input type="text" id="servicio-nombre" class="form-input" maxlength="100" placeholder="Ej: Fumigaci├│n Residencial">
           </div>
           <div class="form-group">
-            <label class="form-label">Descripci├│n <span style="color:#ef4444">*</span></label>
+            <label class="form-label">Descripción <span style="color:#ef4444">*</span></label>
             <input type="text" id="servicio-descripcion" class="form-input" maxlength="100" placeholder="Breve descripci├│n del servicio">
           </div>
           <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div class="form-group">
-              <label class="form-label">Duraci├│n Estimada (min)</label>
+              <label class="form-label">Duración Estimada (min)</label>
               <input type="number" id="servicio-duracion" class="form-input" min="1" value="60" placeholder="60">
             </div>
             <div class="form-group">
