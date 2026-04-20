@@ -16,7 +16,7 @@ class CatalogoCapacitacionAuditoriaController extends Controller
     {
         $query = CatalogoCapacitacionAuditoria::query();
 
-        // Filtro por tipo (Capacitación / Auditoría)
+        // Filtro por tipo (Capacitación / Asesoría / Auditoria)
         if ($request->has('tipo') && $request->tipo) {
             $query->where('tipo', $request->tipo);
         }
@@ -84,7 +84,7 @@ class CatalogoCapacitacionAuditoriaController extends Controller
     {
         try {
             $validated = $request->validate([
-                'tipo' => 'required|in:Capacitación,Asesoría',
+                'tipo' => 'required|in:Capacitación,Asesoría,Auditoria',
                 'nombre' => 'required|string|max:200',
                 'descripcion' => 'nullable|string',
                 'precio_referencial' => 'nullable|numeric|min:0',
@@ -132,7 +132,7 @@ class CatalogoCapacitacionAuditoriaController extends Controller
             }
 
             $validated = $request->validate([
-                'tipo' => 'in:Capacitación,Asesoría',
+                'tipo' => 'in:Capacitación,Asesoría,Auditoria',
                 'nombre' => 'string|max:200',
                 'descripcion' => 'nullable|string',
                 'precio_referencial' => 'nullable|numeric|min:0',
@@ -248,7 +248,8 @@ class CatalogoCapacitacionAuditoriaController extends Controller
             $activos = CatalogoCapacitacionAuditoria::where('estado', 'activo')->count();
             $inactivos = CatalogoCapacitacionAuditoria::where('estado', 'inactivo')->count();
             $capacitaciones = CatalogoCapacitacionAuditoria::where('tipo', 'Capacitación')->where('estado', 'activo')->count();
-            $aseorias = CatalogoCapacitacionAuditoria::where('tipo', 'Asesoría')->where('estado', 'activo')->count();
+            $asesorias = CatalogoCapacitacionAuditoria::where('tipo', 'Asesoría')->where('estado', 'activo')->count();
+            $auditorias = CatalogoCapacitacionAuditoria::where('tipo', 'Auditoria')->where('estado', 'activo')->count();
 
             return response()->json([
                 'success' => true,
@@ -257,7 +258,8 @@ class CatalogoCapacitacionAuditoriaController extends Controller
                     'activos' => $activos,
                     'inactivos' => $inactivos,
                     'capacitaciones' => $capacitaciones,
-                    'asesorias' => $aseorias,
+                    'asesorias' => $asesorias,
+                    'auditorias' => $auditorias,
                 ]
             ]);
 

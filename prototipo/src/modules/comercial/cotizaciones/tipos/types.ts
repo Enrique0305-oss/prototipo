@@ -1,4 +1,4 @@
-export type TipoCotizacion = 'Servicio' | 'Producto' | 'Capacitacion' | 'Asesoria';
+export type TipoCotizacion = 'Servicio' | 'Producto' | 'Capacitacion' | 'Asesoria' | 'Auditoria';
 
 export interface DetalleItemIds {
   id_servicio: number | null;

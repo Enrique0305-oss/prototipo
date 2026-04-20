@@ -118,7 +118,7 @@
                             }
                         @endphp
                         
-                        {{ $textoMostrar ?: 'Asesoría y Servicios Especializados' }}
+                        {{ $textoMostrar ?: 'Auditoria y Servicios Especializados' }}
                     </span>.
                 </p>
                 <p>
@@ -171,11 +171,13 @@
 
         @php
             $detallePlan = $cotizacion->detalles->first();
-            $tiempoImplementacion = $detallePlan?->meses_implementacion;
+            $fechaAuditoria = $detallePlan?->fecha_servicio;
+            $duracionDias = $detallePlan?->meses_implementacion;
             $modalidadPlan = $detallePlan?->modalidad_sugerida;
             $frecuenciaVisita = $detallePlan?->frecuencia_visita;
 
             $frecuenciaOrdenada = collect();
+            $horasTotalesAuditoria = 0;
             if (is_array($frecuenciaVisita)) {
                 $frecuenciaOrdenada = collect($frecuenciaVisita)
                     ->sortBy(function ($valor, $clave) {
@@ -184,7 +186,13 @@
                         }
                         return 9999;
                     });
+
+                foreach ($frecuenciaOrdenada as $filaHoras) {
+                    $horasTotalesAuditoria += (float) ($filaHoras['h'] ?? 0);
+                }
             }
+
+            $tieneHorasAuditoria = $frecuenciaOrdenada->isNotEmpty() && $horasTotalesAuditoria > 0;
         @endphp
         <!-- PÃGINA DE PROPUESTA TÃ‰CNICA -->
         <div class="contenido-desplazado">
@@ -213,35 +221,51 @@
                     A continuación, se detallarán la lista de actividades incluidas en el servicio.
             </div>
             <div class="issued-name">
-                &nbsp;&nbsp;&nbsp;&nbsp;2.1 Objetivos
+                &nbsp;&nbsp;&nbsp;&nbsp;2.1 Alcance de auditoria
             </div>
 
-            <div class="proposal-text" style="margin-bottom: 16px; margin-top: 6px;">
-                @if(!empty($cotizacion->objetivos_asesoria))
-                    {!! nl2br(e($cotizacion->objetivos_asesoria)) !!}
+            <div class="proposal-text miniword-content" style="margin-bottom: 16px; margin-top: 6px;">
+                @if($cotizacion->propuesta_tecnica)
+                    {!! $cotizacion->propuesta_tecnica !!}
                 @else
-                    <p>No se registraron objetivos de asesoría.</p>
+                    <p>No se definió el contenido del miniword para esta cotización.</p>
                 @endif
             </div>
 
             <div class="issued-name">
-                &nbsp;&nbsp;&nbsp;&nbsp;2.2 Plan de trabajo
+                &nbsp;&nbsp;&nbsp;&nbsp;2.2 Tiempo auditoria
             </div>
 
             <div class="proposal-text" style="margin-bottom: 20px; margin-top: 6px;">
                 <p>
-                    <strong>Tiempo de implementación:</strong>
-                    @if(!empty($tiempoImplementacion))
-                        {{ $tiempoImplementacion }} mes{{ (int)$tiempoImplementacion === 1 ? '' : 'es' }}
+                    <strong>Fecha de auditoria:</strong>
+                    @if(!empty($fechaAuditoria))
+                        {{ \Carbon\Carbon::parse($fechaAuditoria)->format('d/m/Y') }}
                     @else
                         No definido
                     @endif
                 </p>
                 <p>
                     <strong>Modalidad:</strong>
-                    {{ !empty($modalidadPlan) ? $modalidadPlan : 'No definida' }}
+                    {{ !empty($modalidadPlan) ? $modalidadPlan : 'No definido' }}
                 </p>
-                <p><strong>Frecuencia de visita:</strong></p>
+                <p>
+                    <strong>Duración (días):</strong>
+                    @if(!empty($duracionDias))
+                        {{ $duracionDias }} día{{ (int)$duracionDias === 1 ? '' : 's' }}
+                    @else
+                        No definido
+                    @endif
+                </p>
+                <p>
+                    <strong>Horas de auditoria (totales):</strong>
+                    @if($tieneHorasAuditoria)
+                        {{ number_format($horasTotalesAuditoria, 2) }} h
+                    @else
+                        No definido
+                    @endif
+                </p>
+                <p><strong>Detalle de horas por día:</strong></p>
                 @if($frecuenciaOrdenada->isNotEmpty())
                     @php
                         $itemsList = [];
@@ -257,16 +281,14 @@
                                 @foreach($itemsList as $index => $item)
                                     @if($index < $halfCount)
                                         @php
-                                            $mesKey = $item['key'];
-                                            $frecuenciaMes = $item['value'];
-                                            preg_match('/\d+/', (string) $mesKey, $m);
-                                            $numeroMes = isset($m[0]) ? (int) $m[0] : null;
-                                            $presencial = (int) ($frecuenciaMes['p'] ?? 0);
-                                            $virtual = (int) ($frecuenciaMes['v'] ?? 0);
-                                            $frecuenciaFila = trim((string) ($frecuenciaMes['f'] ?? ''));
+                                            $diaKey = $item['key'];
+                                            $frecuenciaDia = $item['value'];
+                                            preg_match('/\d+/', (string) $diaKey, $m);
+                                            $numeroDia = isset($m[0]) ? (int) $m[0] : null;
+                                            $horasDia = (float) ($frecuenciaDia['h'] ?? 0);
                                         @endphp
                                         <p style="margin: 0 0 4px 0; font-size: 12px;">
-                                            - {{ $numeroMes ? $numeroMes . 'er MES.' : strtoupper((string) $mesKey) . '.' }} {{ $presencial }} presencial y {{ $virtual }} virtual{{ $frecuenciaFila !== '' ? ' - ' . $frecuenciaFila : '' }}
+                                            - {{ $numeroDia ? 'DIA ' . $numeroDia : strtoupper((string) $diaKey) }}: {{ number_format($horasDia, 2) }} h
                                         </p>
                                     @endif
                                 @endforeach
@@ -275,16 +297,14 @@
                                 @foreach($itemsList as $index => $item)
                                     @if($index >= $halfCount)
                                         @php
-                                            $mesKey = $item['key'];
-                                            $frecuenciaMes = $item['value'];
-                                            preg_match('/\d+/', (string) $mesKey, $m);
-                                            $numeroMes = isset($m[0]) ? (int) $m[0] : null;
-                                            $presencial = (int) ($frecuenciaMes['p'] ?? 0);
-                                            $virtual = (int) ($frecuenciaMes['v'] ?? 0);
-                                            $frecuenciaFila = trim((string) ($frecuenciaMes['f'] ?? ''));
+                                            $diaKey = $item['key'];
+                                            $frecuenciaDia = $item['value'];
+                                            preg_match('/\d+/', (string) $diaKey, $m);
+                                            $numeroDia = isset($m[0]) ? (int) $m[0] : null;
+                                            $horasDia = (float) ($frecuenciaDia['h'] ?? 0);
                                         @endphp
                                         <p style="margin: 0 0 4px 0; font-size: 12px;">
-                                            - {{ $numeroMes ? $numeroMes . 'er MES.' : strtoupper((string) $mesKey) . '.' }} {{ $presencial }} presencial y {{ $virtual }} virtual{{ $frecuenciaFila !== '' ? ' - ' . $frecuenciaFila : '' }}
+                                            - {{ $numeroDia ? 'DIA ' . $numeroDia : strtoupper((string) $diaKey) }}: {{ number_format($horasDia, 2) }} h
                                         </p>
                                     @endif
                                 @endforeach
@@ -292,21 +312,13 @@
                         </tr>
                     </table>
                 @else
-                    <p>No definida</p>
-                @endif
-            </div>
-
-            <div class="proposal-text miniword-content" style="margin-bottom: 20px;">
-                @if($cotizacion->propuesta_tecnica)
-                    {!! $cotizacion->propuesta_tecnica !!}
-                @else
-                    <p>Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.</p>
+                    <p>No definido</p>
                 @endif
             </div>
 
             
             <div class="payment-header-text">
-                EQUIPO DE ASESORES LÍDERES- QSCI GROUP
+                EQUIPO DE AUDITORES LIDERES- QSCI GROUP
             </div>
             <div class="seccion-descripcion"; "font-size: 13px;">
                 @if($exponentes->count() > 0)
@@ -315,26 +327,13 @@
                     @endforeach
                 @endif
             </div>
-            <div class="issued-name">
-                &nbsp;&nbsp;&nbsp;&nbsp;2.3 Coordinación del servicio y requisitos para el servicio en la modalidad virtual <br><br>
-
-                <div style="margin-left: 40px; font-weight: normal;">
-                    1. QSCI Consulting designará a un representante responsable de realizar las
-                    coordinaciones del servicio con la empresa solicitante. <br>
-                    2. QSCI Consulting será el responsable de hacer cumplir la actividad
-                    propuesta y requiere del compromiso de la empresa de facilitar el tiempo
-                    al personal asignado en las actividades programadas. <br>
-                    3. La disponibilidad del curso es de acuerdo a coordinación de la empresa
-                    contratante y nuestra empresa.
-                </div>
-            </div>
 
             <!-- III. PROPUESTA ECONÓMICA -->
             <div class="seccion-titulo">
                 <span class="seccion-titulo-num">III.</span> PROPUESTA ECONÓMICA
             </div>
             <div class="seccion-descripcion">
-                    El siguiente cuadro muestra la respectiva cotización por el servicio de capacitación:
+                    El siguiente cuadro muestra la respectiva cotización por el servicio de auditoria:
             </div>
             <table class="products-table">
                 <thead>
@@ -348,7 +347,7 @@
                     @foreach($cotizacion->detalles as $index => $detalle)
                     <tr>
                         <td class="text-center">
-                            CAP-{{ str_pad($detalle->id_catalogo_cap_aud ?? ($index + 1), 4, '0', STR_PAD_LEFT) }}
+                            AUD-{{ str_pad($detalle->id_catalogo_cap_aud ?? ($index + 1), 4, '0', STR_PAD_LEFT) }}
                         </td>
                         <td>
                             <strong>{{ $detalle->catalogoCapAud->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}</strong><br>
@@ -408,7 +407,6 @@
                 <p class="payment-header-text">Condiciones de pago</p>
                 <ul>
                     <li style="font-size: 13px; margin-bottom: 5px;">La factura por concepto será de acuerdo a la Orden de la Compra o Servicio enviada previamente.</li>
-                    <li style="font-size: 13px; margin-bottom: 5px;">Crédito 30 días, luego de haber sido realizada la Capacitación.</li>
                 </ul>
                 <p class="payment-header-text">Información de pago:</p>
                 <p style="font-size: 13px; margin-bottom: 5px;"> - Información de pago: Cuenta BCP</p>
@@ -444,17 +442,6 @@
                 <ul>
                     <li style="font-size: 13px; margin-bottom: 5px;">Capacitaciones certificadas a nombre de QSCI COnsulting y del COlegio de Biólogos del Perú Región Lima VII</li>
                     <li style="font-size: 13px; margin-bottom: 5px;">Personal calificado con experiencia certificada en Calidad e Inocuidad Alimentaria</li>
-                </ul>
-
-                <p class="payment-header-text">Consideraciones</p>
-                <ul>
-                    <li style="font-size: 13px; margin-bottom: 5px;">
-                        Se requiere de la disposición del cliente para proporcionar la información necesaria para el buen desarrollo de las actividades propuestas,
-                        además de la accesibilidad a  planta tanto en línea parada como en producción.</li>
-                    <li style="font-size: 13px; margin-bottom: 5px;">
-                        Los servicios realizados a partir de las 11:30 pm estarán sujetos a un recargo adicional, el cual será previamente coordinado y aprobado por el cliente.</li>
-                    <li style="font-size: 13px; margin-bottom: 5px;">
-                        Los servicios realizados en días feriados tendrán un recargo del 20% previa coordinación.</li>
                 </ul>
             </div>
 

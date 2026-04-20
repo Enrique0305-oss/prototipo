@@ -1,4 +1,5 @@
 ﻿// Recursos Humanos View
+import * as ExcelJS from 'exceljs';
 import { Chart, registerables } from 'chart.js';
 import { rrhhService, type MiEstadoResponse, type EmpleadoHorarioResumen, type DiaHorario, type AsistenciaAdminRecord, type RrhhReporteDashboardResponse } from '../../services/rrhhService';
 import { authService } from '../auth/auth.service';
@@ -61,7 +62,7 @@ export function tieneAccesoCompletoRecursosHumanos(): boolean {
 
 export function getTabsRecursosHumanosPermitidos(): string[] {
   if (tieneAccesoCompletoRecursosHumanos()) {
-    return ['asistencia', 'marcar', 'horarios', 'empleados', 'tecnicos', 'reportes'];
+    return ['asistencia', 'marcar', 'horarios', 'tecnicos', 'reportes'];
   }
   return ['asistencia', 'marcar'];
 }
@@ -105,8 +106,43 @@ function formatearFechaLegible(fechaRaw: string | null | undefined): string {
   return `${d}/${mo}/${y}`;
 }
 
+function fechaISOConOffset(dias: number): string {
+  const fecha = new Date();
+  fecha.setDate(fecha.getDate() + dias);
+  return fecha.toISOString().split('T')[0];
+}
+
+function recorrerFechasISO(desde: string, hasta: string): string[] {
+  const fechas: string[] = [];
+  const fechaInicio = new Date(`${desde}T00:00:00`);
+  const fechaFin = new Date(`${hasta}T00:00:00`);
+
+  if (Number.isNaN(fechaInicio.getTime()) || Number.isNaN(fechaFin.getTime())) {
+    return fechas;
+  }
+
+  for (let fechaActual = new Date(fechaInicio); fechaActual <= fechaFin; fechaActual.setDate(fechaActual.getDate() + 1)) {
+    fechas.push(fechaActual.toISOString().split('T')[0]);
+  }
+
+  return fechas;
+}
+
+function descargarExcelBuffer(buffer: ArrayBuffer, nombreArchivo: string): void {
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = nombreArchivo;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(url);
+}
+
 function renderFilaMiAsistenciaSemana(dia: MiEstadoResponse['data']['semana'][number]): string {
   const fecha = formatearFechaLegible(dia.fecha);
+  const horas = formatearHorasRegistro(dia.horas);
 
   return `
     <tr>
@@ -114,7 +150,7 @@ function renderFilaMiAsistenciaSemana(dia: MiEstadoResponse['data']['semana'][nu
       <td>${fecha}</td>
       <td>${dia.entrada || '--:-- --'}</td>
       <td>${dia.salida || '--:-- --'}</td>
-      <td>${dia.horas || '--'}</td>
+      <td>${horas}</td>
       <td><span class="status-indicator ${estadoAsistenciaClase(dia.estado || 'pendiente')}">${dia.estado || 'Pendiente'}</span></td>
     </tr>
   `;
@@ -169,7 +205,7 @@ export async function cargarAsistenciaPersonal(fecha?: string) {
       return fechaRegistro === fechaUsar;
     });
     const estadoHoy = asistencia_hoy?.estado || 'Sin registro';
-    const horasHoy = asistencia_hoy?.horas_trabajadas != null ? `${Number(asistencia_hoy.horas_trabajadas).toFixed(2)} hrs` : '--';
+    const horasHoy = asistencia_hoy?.horas_trabajadas != null ? formatearHorasRegistro(asistencia_hoy.horas_trabajadas) : '--';
 
     body.innerHTML = `
       <div class="stats-row" style="margin-bottom: 24px;">
@@ -247,18 +283,29 @@ export async function cargarAsistenciaPersonal(fecha?: string) {
 // Tab: Asistencia
 export function renderAsistenciaTab() {
   const hoy = new Date().toISOString().split('T')[0];
+  const quincenaDesde = fechaISOConOffset(-14);
   return `
     <div id="asistencia-admin-container">
-      <div class="search-filter-bar" style="margin-bottom: 16px;">
+      <div class="search-filter-bar" style="margin-bottom: 16px; gap: 12px; flex-wrap: wrap;">
         <div class="search-input-wrapper">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
           <input type="text" placeholder="Buscar trabajador..." class="search-input" id="asistencia-admin-search">
         </div>
-        <input type="date" class="op-filter-select" id="asistencia-admin-fecha" value="${hoy}">
-        <button class="btn-filter" id="asistencia-admin-btn-cargar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-          Cargar
-        </button>
+        <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <input type="date" class="op-filter-select" id="asistencia-admin-fecha" value="${hoy}">
+          <button class="btn-filter" id="asistencia-admin-btn-cargar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+            Cargar
+          </button>
+        </div>
+        <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-left: auto;">
+          <input type="date" class="op-filter-select" id="asistencia-admin-desde" value="${quincenaDesde}">
+          <input type="date" class="op-filter-select" id="asistencia-admin-hasta" value="${hoy}">
+          <button class="btn-secondary" id="asistencia-admin-btn-exportar" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Exportar Excel
+          </button>
+        </div>
       </div>
       <div id="asistencia-admin-body">
         <div style="text-align: center; padding: 40px;">
@@ -285,17 +332,270 @@ function estadoAsistenciaClase(estado: string): string {
 }
 
 function minutosAHorasTexto(minutos: number): string {
-  if (minutos <= 0) return '0 min';
-  const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
+  if (!Number.isFinite(minutos) || minutos <= 0) return '0 min';
+  const minutosNormalizados = Math.round(minutos);
+  const h = Math.floor(minutosNormalizados / 60);
+  const m = minutosNormalizados % 60;
   if (h === 0) return `${m} min`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}min`;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m} min`;
+}
+
+function horasDecimalATexto(horas: number): string {
+  if (!Number.isFinite(horas) || horas <= 0) return '0 min';
+  const minutosTotales = Math.round(horas * 60);
+  return minutosAHorasTexto(minutosTotales);
+}
+
+function formatearHorasRegistro(valor: number | string | null | undefined): string {
+  if (valor == null) return '--';
+
+  if (typeof valor === 'number') {
+    return horasDecimalATexto(valor);
+  }
+
+  const limpio = valor.trim();
+  if (!limpio) return '--';
+
+  const numerico = Number(limpio.replace(',', '.').replace(/[^\d.-]/g, ''));
+  if (!Number.isNaN(numerico)) {
+    return horasDecimalATexto(numerico);
+  }
+
+  return limpio;
+}
+
+function crearNombreArchivoExcel(prefijo: string, desde: string, hasta: string): string {
+  return `${prefijo}_${desde}_a_${hasta}.xlsx`;
+}
+
+function aplicarEstiloTituloHoja(sheet: ExcelJS.Worksheet, texto: string, columnas: number, colorHex: string = '1F4E78'): void {
+  sheet.addRow([texto]);
+  sheet.mergeCells(1, 1, 1, columnas);
+  const row = sheet.getRow(1);
+  row.height = 24;
+  row.font = { bold: true, color: { argb: 'FFFFFF' }, size: 13 };
+  row.alignment = { horizontal: 'center', vertical: 'middle' };
+  row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorHex } };
+}
+
+function aplicarEstiloEncabezado(row: ExcelJS.Row, colorHex: string = 'D9EAF7'): void {
+  row.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: '1F1F1F' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorHex } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'B7C9D6' } },
+      left: { style: 'thin', color: { argb: 'B7C9D6' } },
+      bottom: { style: 'thin', color: { argb: 'B7C9D6' } },
+      right: { style: 'thin', color: { argb: 'B7C9D6' } },
+    };
+  });
+}
+
+function aplicarEstadoExcel(celda: ExcelJS.Cell, estado: string): void {
+  const normalizado = (estado || '').toLowerCase();
+  let fill = 'E2E8F0';
+  let font = '1F2937';
+
+  if (normalizado.includes('puntual')) {
+    fill = 'DCFCE7';
+    font = '166534';
+  } else if (normalizado.includes('tardanza')) {
+    fill = 'FEF3C7';
+    font = '92400E';
+  } else if (normalizado.includes('falt') || normalizado.includes('ausent')) {
+    fill = 'FEE2E2';
+    font = '991B1B';
+  } else if (normalizado.includes('curso')) {
+    fill = 'DBEAFE';
+    font = '1D4ED8';
+  }
+
+  celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+  celda.font = { bold: true, color: { argb: font } };
+  celda.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+}
+
+async function exportarReporteResumenRRHH(): Promise<void> {
+  const mesEl = document.getElementById('rrhh-reportes-mes') as HTMLSelectElement | null;
+  const areaEl = document.getElementById('rrhh-reportes-area') as HTMLSelectElement | null;
+  const vistaEl = document.getElementById('rrhh-reportes-vista') as HTMLSelectElement | null;
+
+  if (!mesEl || !areaEl || !vistaEl) return;
+
+  const resp = await rrhhService.getReporteDashboard(mesEl.value, areaEl.value);
+  if (!resp.success) {
+    throw new Error('No se pudo generar el Excel del resumen');
+  }
+
+  const data = resp.data;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'QSCI Group';
+  workbook.created = new Date();
+
+  const resumenSheet = workbook.addWorksheet('Resumen');
+  aplicarEstiloTituloHoja(resumenSheet, 'REPORTE RRHH - RESUMEN', 2, '2C4A7C');
+  resumenSheet.addRow(['Periodo', formatearMes(data.filtros.mes)]);
+  resumenSheet.addRow(['Área', data.filtros.area || 'Todos']);
+  resumenSheet.addRow(['Vista', vistaEl.value === 'diaria' ? 'Diaria' : 'Semanal']);
+  resumenSheet.addRow([]);
+  resumenSheet.addRow(['KPI', 'Valor']);
+  aplicarEstiloEncabezado(resumenSheet.getRow(6), 'DBEAFE');
+
+  [
+    ['Horas trabajadas totales', horasDecimalesATextoLargo(Number(data.kpis.horas_trabajadas_totales) || 0)],
+    ['Horas efectivas', horasDecimalesATextoLargo(Number(data.kpis.horas_efectivas) || 0)],
+    ['Tardanza total', minutosATextoLargo(Number(data.kpis.tiempo_total_tardanza_minutos) || 0)],
+    ['Almuerzo total', minutosATextoLargo(Number(data.kpis.tiempo_total_almuerzo_minutos) || 0)],
+    ['Promedio almuerzo', minutosATextoLargo(Number(data.kpis.promedio_almuerzo_minutos) || 0)],
+    ['Exceso almuerzo', minutosATextoLargo(Number(data.kpis.tiempo_exceso_almuerzo_minutos) || 0)],
+    ['Tardanza inicio almuerzo', minutosATextoLargo(Number(data.kpis.tardanza_inicio_almuerzo_minutos) || 0)],
+    ['Asistencia promedio', `${Number(data.kpis.asistencia_promedio).toFixed(1)}%`],
+    ['Tardanzas del mes', Number(data.kpis.tardanzas_mes) || 0],
+    ['Ausencias del mes', Number(data.kpis.ausencias_mes) || 0],
+    ['Tiempo extra total', minutosATextoLargo(Number(data.kpis.tiempo_extra_total_minutos) || 0)],
+    ['Jornada promedio', horasDecimalesATextoLargo(Number(data.kpis.jornada_promedio_horas) || 0)],
+  ].forEach((fila) => resumenSheet.addRow(fila));
+
+  resumenSheet.getColumn(1).width = 32;
+  resumenSheet.getColumn(2).width = 24;
+
+  const porAreaSheet = workbook.addWorksheet('Por área');
+  porAreaSheet.addRow(['Área', 'Horas', 'Asistencia', 'Tardanza', 'Tardanzas']);
+  aplicarEstiloEncabezado(porAreaSheet.getRow(1), 'DBEAFE');
+  data.por_area.forEach((item) => {
+    porAreaSheet.addRow([
+      item.area,
+      horasDecimalesATextoCorto(Number(item.horas) || 0),
+      `${Number(item.asistencia).toFixed(1)}%`,
+      minutosATexto(Number(item.tardanza_minutos) || 0),
+      Number(item.tardanzas) || 0,
+    ]);
+  });
+  porAreaSheet.getColumn(1).width = 28;
+  porAreaSheet.getColumn(2).width = 14;
+  porAreaSheet.getColumn(3).width = 14;
+  porAreaSheet.getColumn(4).width = 16;
+  porAreaSheet.getColumn(5).width = 12;
+
+  const topSheet = workbook.addWorksheet('Top empleados');
+  topSheet.addRow(['Empleado', 'Área', 'Asistencia', 'Puntualidad']);
+  aplicarEstiloEncabezado(topSheet.getRow(1), 'DBEAFE');
+  data.top_empleados.forEach((item) => {
+    topSheet.addRow([
+      item.empleado,
+      item.area,
+      `${Number(item.asistencia).toFixed(1)}%`,
+      nivelPuntualidad(Number(item.puntualidad) || 0).texto,
+    ]);
+  });
+  topSheet.getColumn(1).width = 34;
+  topSheet.getColumn(2).width = 24;
+  topSheet.getColumn(3).width = 14;
+  topSheet.getColumn(4).width = 16;
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  descargarExcelBuffer(buffer, crearNombreArchivoExcel('reporte_rrhh_resumen', data.filtros.mes, data.filtros.area || 'todos'));
+}
+
+async function exportarAsistenciaQuincenalExcel(): Promise<void> {
+  const desdeEl = document.getElementById('asistencia-admin-desde') as HTMLInputElement | null;
+  const hastaEl = document.getElementById('asistencia-admin-hasta') as HTMLInputElement | null;
+
+  if (!desdeEl || !hastaEl) return;
+
+  const desde = desdeEl.value;
+  const hasta = hastaEl.value;
+
+  if (!desde || !hasta) {
+    mostrarNotificacionAsistencia('Debes indicar un rango desde/hasta.', 'error');
+    return;
+  }
+
+  if (desde > hasta) {
+    mostrarNotificacionAsistencia('La fecha Desde no puede ser mayor que Hasta.', 'error');
+    return;
+  }
+
+  const fechas = recorrerFechasISO(desde, hasta);
+  if (fechas.length === 0) {
+    mostrarNotificacionAsistencia('El rango de fechas no es válido.', 'error');
+    return;
+  }
+
+  const registros: Array<AsistenciaAdminRecord & { fecha_reporte: string }> = [];
+
+  for (const fecha of fechas) {
+    const resp = await rrhhService.getListaAdmin(fecha);
+    if (resp.success) {
+      registros.push(...resp.data.map((registro) => ({ ...registro, fecha_reporte: registro.fecha || fecha })));
+    }
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'QSCI Group';
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet('Reporte asistencia');
+  aplicarEstiloTituloHoja(sheet, 'REPORTE DE ASISTENCIA', 9, '2C4A7C');
+  sheet.addRow(['Desde', formatearFechaLegible(desde)]);
+  sheet.addRow(['Hasta', formatearFechaLegible(hasta)]);
+  sheet.addRow(['Total de registros', registros.length]);
+  sheet.addRow([]);
+
+  const headerRow = sheet.addRow(['Fecha', 'Trabajador', 'Área', 'Entrada', 'Salida', 'Tardanza', 'Tiempo de almuerzo', 'Horas trabajadas', 'Estado']);
+  aplicarEstiloEncabezado(headerRow, 'DBEAFE');
+
+  registros
+    .sort((a, b) => `${a.fecha_reporte}-${a.nombre}`.localeCompare(`${b.fecha_reporte}-${b.nombre}`))
+    .forEach((registro) => {
+      const row = sheet.addRow([
+        formatearFechaLegible(registro.fecha_reporte),
+        registro.nombre,
+        registro.area,
+        registro.entrada ?? '--:-- --',
+        registro.salida ?? '--:-- --',
+        registro.tardanza_minutos > 0 ? minutosAHorasTexto(registro.tardanza_minutos) : '0 min',
+        registro.tiempo_almuerzo_minutos != null
+          ? minutosAHorasTexto(registro.tiempo_almuerzo_minutos)
+          : (registro.hora_inicio_almuerzo && !registro.hora_fin_almuerzo ? 'En curso' : '--'),
+        registro.horas_trabajadas != null ? formatearHorasRegistro(registro.horas_trabajadas) : '--',
+        registro.estado,
+      ]);
+
+      row.eachCell((cell, columnNumber) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'D1D5DB' } },
+          left: { style: 'thin', color: { argb: 'D1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'D1D5DB' } },
+          right: { style: 'thin', color: { argb: 'D1D5DB' } },
+        };
+        cell.alignment = { vertical: 'middle', wrapText: true };
+        if (columnNumber === 9) {
+          aplicarEstadoExcel(cell, String(registro.estado));
+        }
+      });
+    });
+
+  sheet.getColumn(1).width = 14;
+  sheet.getColumn(2).width = 34;
+  sheet.getColumn(3).width = 22;
+  sheet.getColumn(4).width = 12;
+  sheet.getColumn(5).width = 12;
+  sheet.getColumn(6).width = 14;
+  sheet.getColumn(7).width = 18;
+  sheet.getColumn(8).width = 16;
+  sheet.getColumn(9).width = 14;
+  sheet.views = [{ state: 'frozen', ySplit: 5 }];
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  descargarExcelBuffer(buffer, crearNombreArchivoExcel('reporte_asistencia', desde, hasta));
 }
 
 function renderFilaAsistenciaAdmin(r: AsistenciaAdminRecord): string {
   const fechaDisplay = r.fecha ? (() => { const [y, mo, d] = r.fecha.split('-'); return `${d}/${mo}/${y}`; })() : '--';
-  const horas = r.horas_trabajadas != null ? `${Number(r.horas_trabajadas).toFixed(2)} hrs` : '-- hrs';
+  const horas = r.horas_trabajadas != null ? formatearHorasRegistro(r.horas_trabajadas) : '--';
   const tardanza = r.tardanza_minutos > 0 ? minutosAHorasTexto(r.tardanza_minutos) : '0 min';
   const almuerzo = r.tiempo_almuerzo_minutos != null
     ? minutosAHorasTexto(r.tiempo_almuerzo_minutos)
@@ -343,6 +643,25 @@ export async function cargarAsistenciaAdmin(fecha?: string) {
   `;
 
   document.getElementById('asistencia-admin-btn-cargar')?.addEventListener('click', () => cargarAsistenciaAdmin(), { once: true });
+
+  const exportarBtn = document.getElementById('asistencia-admin-btn-exportar') as HTMLButtonElement | null;
+  if (exportarBtn && !exportarBtn.dataset.bound) {
+    exportarBtn.dataset.bound = '1';
+    exportarBtn.addEventListener('click', async () => {
+      exportarBtn.disabled = true;
+      const textoOriginal = exportarBtn.innerHTML;
+      exportarBtn.innerHTML = 'Exportando...';
+      try {
+        await exportarAsistenciaQuincenalExcel();
+        mostrarNotificacionAsistencia('Excel quincenal generado correctamente.', 'success');
+      } catch (err: any) {
+        mostrarNotificacionAsistencia(err?.message || 'Error al exportar Excel', 'error');
+      } finally {
+        exportarBtn.disabled = false;
+        exportarBtn.innerHTML = textoOriginal;
+      }
+    });
+  }
 
   try {
     const resp = await rrhhService.getListaAdmin(fechaUsar);
@@ -1027,8 +1346,19 @@ export async function cargarReportesRRHH() {
 
   if (exportarBtn && !exportarBtn.dataset.bound) {
     exportarBtn.dataset.bound = '1';
-    exportarBtn.addEventListener('click', () => {
-      mostrarNotificacionAsistencia('Exportacion disponible en la siguiente iteracion del modulo.', 'warning');
+    exportarBtn.addEventListener('click', async () => {
+      exportarBtn.disabled = true;
+      const textoOriginal = exportarBtn.innerHTML;
+      exportarBtn.innerHTML = 'Exportando...';
+      try {
+        await exportarReporteResumenRRHH();
+        mostrarNotificacionAsistencia('Excel del resumen generado correctamente.', 'success');
+      } catch (err: any) {
+        mostrarNotificacionAsistencia(err?.message || 'Error al exportar resumen RRHH', 'error');
+      } finally {
+        exportarBtn.disabled = false;
+        exportarBtn.innerHTML = textoOriginal;
+      }
     });
   }
 
@@ -2585,7 +2915,6 @@ export function renderRecursosHumanos() {
     asistencia: 'Asistencia',
     marcar: 'Marcar Asistencia',
     horarios: 'Horarios',
-    empleados: 'Empleados',
     tecnicos: 'Técnicos',
     reportes: 'Reportes',
   };
@@ -2597,14 +2926,7 @@ export function renderRecursosHumanos() {
     <div class="page-header-with-breadcrumb">
       <div class="breadcrumb">Gestión de Recursos Humanos</div>
       <div class="page-actions">
-        <button class="btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Exportar Excel
-        </button>
-        <button class="btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-          Exportar PDF
-        </button>
+        
       </div>
     </div>
 

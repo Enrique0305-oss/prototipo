@@ -47,6 +47,11 @@ class Cliente extends Model
         return $this->hasMany(OrdenCapacitacionAuditoria::class, 'id_cliente');
     }
 
+    public function ordenesAuditoria()
+    {
+        return $this->hasMany(OrdenAuditoria::class, 'id_cliente');
+    }
+
     public function plantas()
     {
         return $this->hasMany(ClientePlanta::class, 'id_cliente');

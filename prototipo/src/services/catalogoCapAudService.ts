@@ -3,7 +3,7 @@ import type { ApiResponse, PaginationParams } from '../core/api/types';
 
 export interface CatalogoCapAud {
   id: number;
-  tipo: 'Capacitación' | 'Auditoría';
+  tipo: 'Capacitación' | 'Asesoría' | 'Auditoria';
   nombre: string;
   descripcion: string | null;
   precio_referencial: number | null;
@@ -28,7 +28,7 @@ export const catalogoCapAudService = {
   },
 
   create: async (data: {
-    tipo: 'Capacitación' | 'Auditoría';
+    tipo: 'Capacitación' | 'Asesoría' | 'Auditoria';
     nombre: string;
     descripcion?: string;
     precio_referencial?: number;

@@ -8,6 +8,7 @@ use App\Models\CotizacionDetalle;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Multicim;
 
@@ -129,7 +130,7 @@ class CotizacionController extends Controller
         $validated = $request->validate([
             'id_cliente' => 'required|exists:cliente,id',
             'id_multicim' => 'required|exists:multicim,id',
-            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion,Asesoria',
+            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion,Asesoria,Auditoria',
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
             'propuesta_tecnica' => 'nullable|string',
@@ -284,7 +285,7 @@ class CotizacionController extends Controller
         $validated = $request->validate([
             'id_cliente' => 'required|exists:cliente,id',
             'id_multicim' => 'required|exists:multicim,id',
-            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion,Asesoria',
+            'tipo_cotizacion' => 'required|in:Servicio,Producto,Capacitacion,Asesoria,Auditoria',
             'fecha_emision' => 'nullable|date',
             'incluye_igv' => 'sometimes|boolean',
             'observaciones' => 'nullable|string',
@@ -536,7 +537,12 @@ class CotizacionController extends Controller
             ->whereDoesntHave('ordenCapacitacionAuditoria')
             ->count();
 
-        $total = $producto + $servicio + $capacitacion;
+        $auditoria = Cotizacion::where('estado', 'Aceptada')
+            ->where('tipo_cotizacion', 'Auditoria')
+            ->whereDoesntHave('ordenAuditoria')
+            ->count();
+
+        $total = $producto + $servicio + $capacitacion + $auditoria;
 
         return response()->json([
             'success' => true,
@@ -545,6 +551,7 @@ class CotizacionController extends Controller
                 'producto' => $producto,
                 'servicio' => $servicio,
                 'capacitacion' => $capacitacion,
+                'auditoria' => $auditoria,
             ]
         ]);
     }
@@ -591,6 +598,7 @@ class CotizacionController extends Controller
             'Producto' => 'cotizaciones.pdf.producto',
             'Capacitacion' => 'cotizaciones.pdf.capacitacion',
             'Asesoria' => 'cotizaciones.pdf.asesoria',
+            'Auditoria' => 'cotizaciones.pdf.auditoria',
             default => 'CotizacionPDF',
         };
 
@@ -613,7 +621,7 @@ class CotizacionController extends Controller
 
             return $pdf->stream('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
         } catch (\Throwable $e) {
-            \Log::error('Error generando PDF de cotizacion', [
+            Log::error('Error generando PDF de cotizacion', [
                 'cotizacion_id' => $id,
                 'tipo_cotizacion' => $cotizacion->tipo_cotizacion ?? null,
                 'pdf_view' => $pdfView,

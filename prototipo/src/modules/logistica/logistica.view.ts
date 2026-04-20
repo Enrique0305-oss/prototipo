@@ -353,12 +353,12 @@ export function renderServiciosDisponiblesTab() {
     </div>
 
     <!-- ============================================ -->
-    <!-- CATALOGO DE CAPACITACIONES Y Asesorias -->
+    <!-- CATALOGO DE CAPACITACIONES, ASESORIAS Y AUDITORIA -->
     <!-- ============================================ -->
     <div style="margin-top:40px;padding-top:32px;border-top:2px solid #e2e8f0;">
       <h2 style="font-size:20px;font-weight:700;color:#1a2332;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-        Catalogo de Capacitaciones y Asesorias
+        Catalogo de Capacitaciones, Asesorias y Auditoria
       </h2>
 
       <div class="search-filter-bar">
@@ -370,6 +370,7 @@ export function renderServiciosDisponiblesTab() {
           <option value="">Todos los tipos</option>
           <option value="Capacitación">Capacitaciones</option>
           <option value="Asesoría">Asesoría</option>
+          <option value="Auditoria">Auditoria</option>
         </select>
         <select class="filter-select" id="catalogo-filter-estado">
           <option value="activo">Activos</option>
@@ -409,6 +410,7 @@ export function renderServiciosDisponiblesTab() {
             <select id="catalogo-tipo" class="form-input">
               <option value="Capacitación">Capacitación</option>
               <option value="Asesoría">Asesoría</option>
+              <option value="Auditoria">Auditoria</option>
             </select>
           </div>
           <div class="form-group">
@@ -1192,7 +1194,7 @@ async function cargarCatalogo() {
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px;display:block;">
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
           </svg>
-          <p>No se encontraron capacitaciones ni auditorías</p>
+          <p>No se encontraron capacitaciones, asesorías ni auditorías</p>
         </div>`;
       return;
     }
@@ -1252,7 +1254,7 @@ function limpiarFormCatalogo() {
 
 function abrirModalNuevoCatalogo() {
   limpiarFormCatalogo();
-  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitación / Asesoría';
+  (document.getElementById('modal-catalogo-titulo') as HTMLElement).textContent = 'Nueva Capacitación / Asesoría / Auditoria';
   (document.getElementById('modal-catalogo') as HTMLElement).style.display = 'flex';
 }
 
@@ -1288,7 +1290,7 @@ function abrirModalEliminarCatalogo(id: number, nombre: string) {
 
 async function guardarCatalogo() {
   const id = (document.getElementById('catalogo-id') as HTMLInputElement).value;
-  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitación' | 'Asesoría';
+  const tipo = (document.getElementById('catalogo-tipo') as HTMLSelectElement).value as 'Capacitación' | 'Asesoría' | 'Auditoria';
   const nombre = (document.getElementById('catalogo-nombre') as HTMLInputElement).value.trim();
   const descripcion = (document.getElementById('catalogo-descripcion') as HTMLTextAreaElement).value.trim() || undefined;
   const precio = (document.getElementById('catalogo-precio') as HTMLInputElement).value;

@@ -7,6 +7,7 @@ use App\Http\Controllers\API\CotizacionController;
 use App\Models\OrdenServicio;
 use App\Http\Controllers\API\OrdenServicioController;
 use App\Http\Controllers\API\OrdenCapacitacionAuditoriaController;
+use App\Http\Controllers\API\OrdenAuditoriaController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -35,6 +36,9 @@ Route::get('/orden-servicio/pdf/{id}', [OrdenServicioController::class, 'generar
 // Ruta para generar el PDF
 Route::get('/orden-capacitacion/pdf/{id}', [OrdenCapacitacionAuditoriaController::class, 'descargarPdf'])
     ->name('orden.capacitacion.pdf');
+
+Route::get('/orden-auditoria/pdf/{id}', [OrdenAuditoriaController::class, 'descargarPdf'])
+    ->name('orden.auditoria.pdf');
 
 // Ruta de prueba (vista HTML)
 Route::get('/cotizacion/test/{id}', function($id) {

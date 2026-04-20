@@ -4,18 +4,68 @@ export class ApiError extends Error {
   public status: number;
   public statusText: string;
   public data?: any;
+  public method?: string;
+  public url?: string;
 
   constructor(
     status: number,
     statusText: string,
-    data?: any
+    data?: any,
+    method?: string,
+    url?: string
   ) {
     super(`API Error ${status}: ${statusText}`);
     this.name = 'ApiError';
     this.status = status;
     this.statusText = statusText;
     this.data = data;
+    this.method = method;
+    this.url = url;
   }
+}
+
+type RequestMeta = {
+  method: string;
+  url: string;
+};
+
+function stripHtmlTags(input: string): string {
+  return input
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function toPreview(input: string, max = 600): string {
+  const trimmed = input.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max)}...` : trimmed;
+}
+
+export function getApiErrorDebugInfo(error: unknown): Record<string, any> {
+  if (!(error instanceof ApiError)) {
+    return { type: 'unknown', error };
+  }
+
+  const parsed = error.data?.parsedBody || {};
+
+  return {
+    type: 'ApiError',
+    status: error.status,
+    statusText: error.statusText,
+    method: error.method,
+    url: error.url,
+    message: error.data?.message || parsed?.message || error.message,
+    exception: error.data?.exception || parsed?.exception,
+    file: error.data?.file || parsed?.file,
+    line: error.data?.line || parsed?.line,
+    trace: error.data?.trace || parsed?.trace,
+    responseHeaders: error.data?.headers,
+    bodyPreview: error.data?.bodyPreview,
+    rawBody: error.data?.rawBody,
+    parsedBody: parsed,
+  };
 }
 
 export class ApiClient {
@@ -34,7 +84,7 @@ export class ApiClient {
       headers: this.getHeaders(),
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'GET', url });
   }
 
   async post<T>(endpoint: string, data?: any): Promise<T> {
@@ -45,7 +95,7 @@ export class ApiClient {
       body: JSON.stringify(data),
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'POST', url });
   }
 
   async postFormData<T>(endpoint: string, formData: FormData): Promise<T> {
@@ -62,7 +112,7 @@ export class ApiClient {
       body: formData,
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'POST', url });
   }
 
   async patch<T>(endpoint: string, data?: any): Promise<T> {
@@ -73,7 +123,7 @@ export class ApiClient {
       body: JSON.stringify(data),
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'PATCH', url });
   }
 
   async put<T>(endpoint: string, data?: any): Promise<T> {
@@ -84,7 +134,7 @@ export class ApiClient {
       body: JSON.stringify(data),
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'PUT', url });
   }
 
   async delete<T>(endpoint: string): Promise<T> {
@@ -94,7 +144,7 @@ export class ApiClient {
       headers: this.getHeaders(),
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'DELETE', url });
   }
 
   private buildURL(endpoint: string, params?: Record<string, any>): string {
@@ -130,19 +180,39 @@ export class ApiClient {
     return headers;
   }
 
-  private async handleResponse<T>(response: Response): Promise<T> {
+  private async handleResponse<T>(response: Response, requestMeta: RequestMeta): Promise<T> {
     if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = { message: response.statusText };
+      const rawBody = await response.text();
+      const contentType = response.headers.get('content-type') || '';
+      const headers = Object.fromEntries(response.headers.entries());
+      let parsedBody: any = null;
+
+      if (rawBody) {
+        try {
+          parsedBody = JSON.parse(rawBody);
+        } catch {
+          parsedBody = null;
+        }
       }
+
+      const plainPreview = rawBody
+        ? toPreview(contentType.includes('text/html') ? stripHtmlTags(rawBody) : rawBody)
+        : '';
+
+      const errorData = {
+        message: parsedBody?.message || plainPreview || response.statusText || 'Error inesperado del servidor',
+        headers,
+        parsedBody,
+        rawBody,
+        bodyPreview: plainPreview,
+      };
       
       throw new ApiError(
         response.status,
         response.statusText,
-        errorData
+        errorData,
+        requestMeta.method,
+        requestMeta.url
       );
     }
 
@@ -166,16 +236,26 @@ export class ApiClient {
         const raw = await response.text();
         if (raw) {
           try {
-            errorData = JSON.parse(raw);
+            const parsed = JSON.parse(raw);
+            errorData = {
+              message: parsed?.message || response.statusText,
+              parsedBody: parsed,
+              rawBody: raw,
+              bodyPreview: toPreview(raw),
+            };
           } catch {
-            errorData = { message: raw };
+            errorData = {
+              message: toPreview(stripHtmlTags(raw)) || response.statusText,
+              rawBody: raw,
+              bodyPreview: toPreview(stripHtmlTags(raw)),
+            };
           }
         }
       } catch {
         // Mantener mensaje por defecto si no se puede leer el body.
       }
 
-      throw new ApiError(response.status, response.statusText, errorData);
+      throw new ApiError(response.status, response.statusText, errorData, 'GET', url);
     }
 
     const blob = await response.blob();

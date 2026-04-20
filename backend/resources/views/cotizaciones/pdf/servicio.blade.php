@@ -810,7 +810,6 @@
             <div class="seccion-descripcion">
                     El siguiente cuadro muestra la respectiva cotización por el servicio brindado:
             </div>
-            <div class="products-title">Detalle de Servicios</div>
             <table class="products-table">
                 <thead>
                     <tr>

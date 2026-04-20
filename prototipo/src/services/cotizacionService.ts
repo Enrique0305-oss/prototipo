@@ -67,6 +67,21 @@ function getAsesoriaNombreParaArchivo(cotizacion: any): string {
   return 'Plan de Asesorías';
 }
 
+function getAuditoriaNombreParaArchivo(cotizacion: any): string {
+  const detalles = Array.isArray(cotizacion?.detalles) ? cotizacion.detalles : [];
+  const nombres = Array.from(new Set(
+    detalles
+      .map((d: any) => String(d?.catalogo_cap_aud?.nombre || d?.descripcion_manual || '').trim())
+      .filter((n: string) => n.length > 0)
+  )) as string[];
+
+  if (nombres.length === 1) {
+    return nombres[0];
+  }
+
+  return 'Plan de Auditoria';
+}
+
 function getProductoNombreParaArchivo(cotizacion: any): string {
   const detalles = Array.isArray(cotizacion?.detalles) ? cotizacion.detalles : [];
   const nombres = Array.from(new Set(
@@ -103,6 +118,10 @@ function buildPdfFilename(cotizacion: any, tipo: string): string {
     case 'asesoria':
       nombre = getAsesoriaNombreParaArchivo(cotizacion);
       tipoTexto = 'asesoría';
+      break;
+    case 'auditoria':
+      nombre = getAuditoriaNombreParaArchivo(cotizacion);
+      tipoTexto = 'auditoria';
       break;
     case 'producto':
       nombre = getProductoNombreParaArchivo(cotizacion);

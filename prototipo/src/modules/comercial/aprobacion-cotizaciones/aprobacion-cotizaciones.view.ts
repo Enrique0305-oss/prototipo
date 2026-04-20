@@ -12,6 +12,8 @@ const TIPOS_TAB = [
   { key: 'Servicio', label: 'Servicios', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>' },
   { key: 'Producto', label: 'Productos', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>' },
   { key: 'Capacitacion', label: 'Capacitaciones', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>' },
+  { key: 'Asesoria', label: 'Asesorías', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>' },
+  { key: 'Auditoria', label: 'Auditoria', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>' },
 ];
 
 export function renderAprobacionCotizaciones() {
@@ -238,6 +240,7 @@ function getBadgeTipo(tipo: string): string {
     case 'Producto': return '<span class="aprob-badge aprob-badge-purple">Producto</span>';
     case 'Capacitacion': return '<span class="aprob-badge aprob-badge-cyan">Capacitación</span>';
     case 'Asesoria': return '<span class="aprob-badge aprob-badge-blue">Asesoría</span>';
+    case 'Auditoria': return '<span class="aprob-badge aprob-badge-blue">Auditoria</span>';
     default: return '<span class="aprob-badge aprob-badge-info">' + tipo + '</span>';
   }
 }
