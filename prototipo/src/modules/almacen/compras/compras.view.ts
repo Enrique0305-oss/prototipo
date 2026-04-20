@@ -3,8 +3,9 @@ import './compras.css';
 import { ordenCompraService, type OrdenCompra } from './compras.service';
 import { proveedorService, type Proveedor } from '../proveedores/proveedores.service';
 import { productoService } from '../../../services/productoService';
+import { loteService } from '../../../services/loteService';
 import { mostrarToast, confirmarAccion } from '../../../shared/toast';
-import type { Producto } from '../../../core/api/types';
+import type { Producto, Lote } from '../../../core/api/types';
 
 // ─── Estado del módulo ────────────────────────────────────────────────────────
 let ocData: OrdenCompra[] = [];
@@ -169,6 +170,7 @@ export function renderAlmacenCompras(): string {
           <thead>
             <tr>
               <th style="min-width:240px">PRODUCTO</th>
+              <th style="min-width:120px">LOTE</th>
               <th style="min-width:90px">CANTIDAD</th>
               <th style="min-width:120px">PRECIO UNIT.</th>
               <th style="min-width:100px">SUBTOTAL</th>
@@ -504,7 +506,7 @@ function abrirModalForm(oc?: OrdenCompra) {
   const tbody = document.getElementById('oc-detalle-tbody')!;
   tbody.innerHTML = '';
   if (oc?.detalles?.length) {
-    oc.detalles.forEach(d => agregarFila(d.id_producto, d.cantidad, d.precio_unitario));
+    oc.detalles.forEach(d => agregarFila(d.id_producto, d.cantidad, d.precio_unitario, d.id_lote ?? undefined));
   } else {
     agregarFila();
   }
@@ -518,7 +520,7 @@ function cerrarModalForm() {
   editingOcId = null;
 }
 
-function agregarFila(idProducto?: number, cantidad?: number, precio?: number) {
+function agregarFila(idProducto?: number, cantidad?: number, precio?: number, idLote?: number) {
   const tbody = document.getElementById('oc-detalle-tbody')!;
   const idx = ++filaDetCount;
   const optionsProd = productosData.map(p =>
@@ -532,6 +534,11 @@ function agregarFila(idProducto?: number, cantidad?: number, precio?: number) {
       <select class="prov-input-sm oc-det-producto" data-row="${idx}">
         <option value="">Seleccionar...</option>
         ${optionsProd}
+      </select>
+    </td>
+    <td>
+      <select class="prov-input-sm oc-det-lote" data-row="${idx}" ${idProducto ? '' : 'disabled'}>
+        <option value="">Seleccionar lote...</option>
       </select>
     </td>
     <td>
@@ -551,10 +558,33 @@ function agregarFila(idProducto?: number, cantidad?: number, precio?: number) {
   `;
   tbody.appendChild(tr);
   bindFilaEvents(tr, idx);
+  
+  // Cargar lotes si hay producto seleccionado
+  if (idProducto) {
+    cargarLotesEnFila(idx, idProducto, idLote);
+  }
+  
   calcularSubtotalFila(idx);
 }
 
 function bindFilaEvents(tr: HTMLTableRowElement, idx: number) {
+  const selectProducto = tr.querySelector<HTMLSelectElement>('.oc-det-producto');
+  
+  selectProducto?.addEventListener('change', async () => {
+    const idProd = parseInt(selectProducto.value || '0');
+    if (idProd) {
+      // Habilitar select de lotes y cargar
+      await cargarLotesEnFila(idx, idProd);
+    } else {
+      // Deshabilitar select de lotes
+      const selectLote = tr.querySelector<HTMLSelectElement>('.oc-det-lote');
+      if (selectLote) {
+        selectLote.disabled = true;
+        selectLote.innerHTML = '<option value="">Seleccionar lote...</option>';
+      }
+    }
+  });
+
   tr.querySelector<HTMLInputElement>('.oc-det-cantidad')?.addEventListener('input', () => {
     calcularSubtotalFila(idx);
     actualizarTotales();
@@ -567,6 +597,30 @@ function bindFilaEvents(tr: HTMLTableRowElement, idx: number) {
     tr.remove();
     actualizarTotales();
   });
+}
+
+async function cargarLotesEnFila(rowIdx: number, idProducto: number, idLoteSeleccionado?: number) {
+  const selectLote = document.querySelector<HTMLSelectElement>(`.oc-det-lote[data-row="${rowIdx}"]`);
+  if (!selectLote) return;
+
+  try {
+    const response = await loteService.getByProducto(idProducto);
+    if (response.success && response.data) {
+      const lotes = response.data.filter((l: Lote) => l.estado === 'Activo' && l.cantidad > 0); // Solo lotes activos con stock
+      selectLote.innerHTML = '<option value="">Seleccionar lote...</option>' + 
+        lotes.map((lote: Lote) => 
+          `<option value="${lote.id}" ${lote.id === idLoteSeleccionado ? 'selected' : ''}>${lote.numero_lote}</option>`
+        ).join('');
+      selectLote.disabled = false;
+    } else {
+      selectLote.innerHTML = '<option value="">Sin lotes disponibles</option>';
+      selectLote.disabled = true;
+    }
+  } catch (error) {
+    console.error('Error cargando lotes:', error);
+    selectLote.innerHTML = '<option value="">Error cargando lotes</option>';
+    selectLote.disabled = true;
+  }
 }
 
 function calcularSubtotalFila(idx: number) {
@@ -610,16 +664,17 @@ async function guardarOrden() {
 
   // Recopilar detalles
   const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('#oc-detalle-tbody tr'));
-  const detalles: Array<{id_producto: number; cantidad: number; precio_unitario: number}> = [];
+  const detalles: Array<{id_producto: number; id_lote?: number | null; cantidad: number; precio_unitario: number}> = [];
   for (const row of rows) {
     const idx = row.dataset.rowIdx!;
     const idProd = parseInt((document.querySelector<HTMLSelectElement>(`.oc-det-producto[data-row="${idx}"]`)?.value) || '0');
+    const idLote = parseInt((document.querySelector<HTMLSelectElement>(`.oc-det-lote[data-row="${idx}"]`)?.value) || '0');
     const cant = parseFloat((document.querySelector<HTMLInputElement>(`.oc-det-cantidad[data-row="${idx}"]`)?.value) || '0');
     const precio = parseFloat((document.querySelector<HTMLInputElement>(`.oc-det-precio[data-row="${idx}"]`)?.value) || '0');
     if (!idProd) { mostrarToast('warning', 'Detalle incompleto', 'Seleccione un producto en cada fila'); return; }
     if (cant <= 0) { mostrarToast('warning', 'Cantidad inválida', 'La cantidad debe ser mayor a 0'); return; }
     if (precio <= 0) { mostrarToast('warning', 'Precio inválido', 'El precio debe ser mayor a 0'); return; }
-    detalles.push({ id_producto: idProd, cantidad: cant, precio_unitario: precio });
+    detalles.push({ id_producto: idProd, id_lote: idLote || null, cantidad: cant, precio_unitario: precio });
   }
   if (!detalles.length) { mostrarToast('warning', 'Sin productos', 'Agregue al menos un producto'); return; }
 
@@ -746,13 +801,14 @@ async function abrirDetalle(id: number) {
           <table class="prov-detail-table">
             <thead>
               <tr>
-                <th>PRODUCTO</th><th>CANT.</th><th>PRECIO UNIT.</th><th>SUBTOTAL</th>
+                <th>PRODUCTO</th><th>LOTE</th><th>CANT.</th><th>PRECIO UNIT.</th><th>SUBTOTAL</th>
               </tr>
             </thead>
             <tbody>
               ${(o.detalles || []).map(d => `
                 <tr>
                   <td>${d.producto?.descripcion || `Prod. #${d.id_producto}`}</td>
+                  <td>${d.lote?.numero_lote || (d.id_lote ? `Lote #${d.id_lote}` : '-')}</td>
                   <td>${d.cantidad}</td>
                   <td>${sym} ${num(d.precio_unitario)}</td>
                   <td>${sym} ${num(d.subtotal ?? d.cantidad * d.precio_unitario)}</td>
@@ -761,12 +817,12 @@ async function abrirDetalle(id: number) {
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="3" style="text-align:right">Subtotal:</td>
+                <td colspan="4" style="text-align:right">Subtotal:</td>
                 <td>${sym} ${num(o.subtotal)}</td>
               </tr>
-              ${o.tiene_igv ? `<tr><td colspan="3" style="text-align:right">IGV (18%):</td><td>${sym} ${num(o.igv)}</td></tr>` : ''}
+              ${o.tiene_igv ? `<tr><td colspan="4" style="text-align:right">IGV (18%):</td><td>${sym} ${num(o.igv)}</td></tr>` : ''}
               <tr>
-                <td colspan="3" style="text-align:right;font-size:15px">TOTAL:</td>
+                <td colspan="4" style="text-align:right;font-size:15px">TOTAL:</td>
                 <td style="font-size:15px;color:#1e3a5f">${sym} ${num(o.total)}</td>
               </tr>
             </tfoot>

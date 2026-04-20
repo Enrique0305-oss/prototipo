@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:intl/intl.dart';
 
 import '../../../core/config/app_config.dart';
@@ -88,7 +90,10 @@ class ServicesRepository {
       query['fecha_fin'] = DateFormat('yyyy-MM-dd').format(end);
     }
 
-    if (AppConfig.technicianId > 0) {
+    final technicianId = await _authRepository.getTechnicianId();
+    if (technicianId != null && technicianId > 0) {
+      query['id_tecnico'] = technicianId.toString();
+    } else if (AppConfig.technicianId > 0) {
       query['id_tecnico'] = AppConfig.technicianId.toString();
     }
 
@@ -133,6 +138,7 @@ class ServicesRepository {
     required int id,
     String? observations,
     int? durationMinutes,
+    List<ServiceEvidenceUpload> evidencePhotos = const <ServiceEvidenceUpload>[],
   }) async {
     if (AppConfig.useMockData) {
       final index = _mockServices.indexWhere((s) => s.id == id);
@@ -158,10 +164,107 @@ class ServicesRepository {
       body['duracion_real'] = durationMinutes;
     }
 
-    await _apiClient.patch(
+    if (evidencePhotos.isEmpty) {
+      await _apiClient.patch(
+        '/v1/programacion-servicio/$id/completar',
+        token: token,
+        body: body,
+      );
+      return;
+    }
+
+    final files = evidencePhotos
+        .map(
+          (photo) => MultipartFilePayload(
+            field: 'fotos_evidencia[]',
+            path: photo.path,
+            filename: photo.name,
+          ),
+        )
+        .toList(growable: false);
+
+    final meta = evidencePhotos
+        .map(
+          (photo) => {
+            'service_id': photo.serviceId,
+            'service_title': photo.serviceTitle,
+          },
+        )
+        .toList(growable: false);
+
+    await _apiClient.multipart(
+      'POST',
       '/v1/programacion-servicio/$id/completar',
       token: token,
-      body: body,
+      fields: {
+        ...body.map((key, value) => MapEntry(key, value.toString())),
+        'fotos_evidencia_meta': jsonEncode(meta),
+        '_method': 'PATCH',
+      },
+      files: files,
     );
+  }
+
+  Future<DateTime> startService({required int id}) async {
+    if (AppConfig.useMockData) {
+      return DateTime.now();
+    }
+
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesion activa', 401, const {});
+    }
+
+    final response = await _apiClient.patch(
+      '/v1/programacion-servicio/$id/iniciar',
+      token: token,
+      body: const <String, dynamic>{},
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    final raw = (data?['started_at'] ?? '').toString().trim();
+    if (raw.isEmpty) {
+      return DateTime.now();
+    }
+
+    final parsed = DateTime.tryParse(raw.replaceAll(' ', 'T'));
+    return parsed ?? DateTime.now();
+  }
+
+  Future<DateTime> startServices({required List<int> ids}) async {
+    if (ids.isEmpty) {
+      return DateTime.now();
+    }
+
+    DateTime? minStartedAt;
+    for (final id in ids) {
+      final startedAt = await startService(id: id);
+      if (minStartedAt == null || startedAt.isBefore(minStartedAt)) {
+        minStartedAt = startedAt;
+      }
+    }
+
+    return minStartedAt ?? DateTime.now();
+  }
+
+  Future<void> completeServices({
+    required List<int> ids,
+    String? observations,
+    int? durationMinutes,
+    List<ServiceEvidenceUpload> evidencePhotos = const <ServiceEvidenceUpload>[],
+  }) async {
+    final groupedEvidence = <int, List<ServiceEvidenceUpload>>{};
+    for (final evidence in evidencePhotos) {
+      groupedEvidence.putIfAbsent(evidence.serviceId, () => <ServiceEvidenceUpload>[]).add(evidence);
+    }
+
+    for (final id in ids) {
+      await completeService(
+        id: id,
+        observations: observations,
+        durationMinutes: durationMinutes,
+        evidencePhotos: groupedEvidence[id] ?? const <ServiceEvidenceUpload>[],
+      );
+    }
   }
 }

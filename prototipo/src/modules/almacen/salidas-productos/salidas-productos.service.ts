@@ -3,9 +3,14 @@ import { apiClient } from '../../../core/api/api.client';
 export interface OrdenProductoSalidaDetalle {
   id: number;
   id_producto: number;
+  id_lote?: number | null;
   cantidad: number;
   precio_unitario: number;
   subtotal: number;
+  lote?: {
+    id: number;
+    numero_lote: string;
+  };
   producto?: {
     id: number;
     descripcion: string;
@@ -43,6 +48,7 @@ export interface ConfirmarSalidaOrdenProductoPayload {
   id_orden_producto: number;
   detalles: Array<{
     id_producto: number;
+    id_lote: number;
     cantidad_entregada: number;
   }>;
   observacion?: string;

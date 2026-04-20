@@ -1,9 +1,296 @@
+import { API_CONFIG } from '../../core/api/api.config'
+import type { Programacion } from '../programaciones/programaciones.types'
+
 // Operaciones e Informes View
+
+type ProgramacionConEvidencias = Programacion & {
+  id_grupo_programacion?: number | null;
+  fotos_evidencia?: unknown;
+}
+
+type ServiceEvidenceEntry = {
+  path: string;
+  serviceId: number | null;
+  serviceTitle: string | null;
+}
+
+type ServicioRealizadoEnProgreso = {
+  key: string;
+  servicios: Set<string>;
+  cliente: string;
+  fechaRaw: string;
+  tecnicos: Set<string>;
+  evidenciasPorServicio: Map<string, Set<string>>;
+}
+
+export type ServicioRealizadoCardViewModel = {
+  key: string;
+  titulo: string;
+  fechaLabel: string;
+  tecnicosLabel: string;
+  previewImages: string[];
+  extraCount: number;
+  secciones: Array<{ servicio: string; imagenes: string[] }>;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function formatFecha(value?: string): string {
+  if (!value) return 'Sin fecha';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString('es-PE');
+}
+
+function resolvePhotoUrl(raw: string): string {
+  const value = (raw || '').trim();
+  if (!value) return '';
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value;
+  }
+
+  const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
+  const normalized = value.startsWith('/') ? value.substring(1) : value;
+
+  if (normalized.startsWith('storage/')) {
+    return `${base}/${normalized}`;
+  }
+
+  if (normalized.startsWith('public/')) {
+    return `${base}/storage/${normalized.substring('public/'.length)}`;
+  }
+
+  return `${base}/storage/${normalized}`;
+}
+
+function parseEvidenceEntries(value: unknown): ServiceEvidenceEntry[] {
+  if (value == null) return [];
+
+  let entries: unknown = value;
+  if (typeof entries === 'string') {
+    const raw = entries.trim();
+    if (!raw) return [];
+    try {
+      entries = JSON.parse(raw);
+    } catch {
+      return [{ path: raw, serviceId: null, serviceTitle: null }];
+    }
+  }
+
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+
+  const mapped: ServiceEvidenceEntry[] = [];
+  for (const item of entries) {
+    if (typeof item === 'string') {
+      const path = item.trim();
+      if (path) mapped.push({ path, serviceId: null, serviceTitle: null });
+      continue;
+    }
+
+    if (item && typeof item === 'object') {
+      const obj = item as Record<string, unknown>;
+      const path = String(obj.path ?? '').trim();
+      if (!path) continue;
+      const serviceIdRaw = obj.service_id;
+      const serviceId = typeof serviceIdRaw === 'number'
+        ? serviceIdRaw
+        : (typeof serviceIdRaw === 'string' ? Number.parseInt(serviceIdRaw, 10) : NaN);
+      const serviceTitle = String(obj.service_title ?? '').trim() || null;
+
+      mapped.push({
+        path,
+        serviceId: Number.isFinite(serviceId) ? serviceId : null,
+        serviceTitle,
+      });
+    }
+  }
+
+  return mapped;
+}
+
+function getTecnicosList(item: Programacion): string[] {
+  const names = new Set<string>();
+
+  if (Array.isArray(item.tecnicos) && item.tecnicos.length > 0) {
+    item.tecnicos
+      .map((t) => `${t.nombre ?? ''} ${t.apellidos ?? ''}`.trim())
+      .filter((n) => n.length > 0)
+      .forEach((name) => names.add(name));
+  }
+
+  if (item.tecnico) {
+    const full = `${item.tecnico.nombre ?? ''} ${item.tecnico.apellidos ?? ''}`.trim();
+    if (full) names.add(full);
+  }
+
+  return Array.from(names);
+}
+
+export function mapServiciosRealizadosCards(items: Programacion[]): ServicioRealizadoCardViewModel[] {
+  const agrupados = new Map<string, ServicioRealizadoEnProgreso>();
+
+  for (const baseItem of items) {
+    const item = baseItem as ProgramacionConEvidencias;
+    const groupId = typeof item.id_grupo_programacion === 'number' && item.id_grupo_programacion > 0
+      ? item.id_grupo_programacion
+      : null;
+    const key = groupId ? `group-${groupId}` : `service-${item.id}`;
+
+    const servicio = (item.servicio?.nombre || `Servicio #${item.id_servicio}`).trim();
+    const cliente = (item.orden_servicio?.cliente?.nombre_empresa || 'Cliente sin nombre').trim();
+    const fechaRaw = (item.fecha_ejecucion_real || item.fecha_programada || '').trim();
+
+    if (!agrupados.has(key)) {
+      agrupados.set(key, {
+        key,
+        servicios: new Set<string>(),
+        cliente,
+        fechaRaw,
+        tecnicos: new Set<string>(),
+        evidenciasPorServicio: new Map<string, Set<string>>(),
+      });
+    }
+
+    const card = agrupados.get(key)!;
+    if (servicio) {
+      card.servicios.add(servicio);
+    }
+    if (!card.cliente && cliente) {
+      card.cliente = cliente;
+    }
+
+    if (fechaRaw) {
+      const incoming = Date.parse(fechaRaw);
+      const current = Date.parse(card.fechaRaw);
+      if (Number.isNaN(current) || (!Number.isNaN(incoming) && incoming > current)) {
+        card.fechaRaw = fechaRaw;
+      }
+    }
+
+    getTecnicosList(item).forEach((name) => card.tecnicos.add(name));
+
+    const evidencias = parseEvidenceEntries(item.fotos_evidencia);
+    for (const evidencia of evidencias) {
+      const serviceLabel = (evidencia.serviceTitle || servicio || 'Servicio').trim();
+      if (!card.evidenciasPorServicio.has(serviceLabel)) {
+        card.evidenciasPorServicio.set(serviceLabel, new Set<string>());
+      }
+
+      const photoUrl = resolvePhotoUrl(evidencia.path);
+      if (photoUrl) {
+        card.evidenciasPorServicio.get(serviceLabel)!.add(photoUrl);
+      }
+    }
+  }
+
+  const cards = Array.from(agrupados.values()).sort((a, b) => {
+    const da = Date.parse(a.fechaRaw);
+    const db = Date.parse(b.fechaRaw);
+    if (Number.isNaN(da) && Number.isNaN(db)) return 0;
+    if (Number.isNaN(da)) return 1;
+    if (Number.isNaN(db)) return -1;
+    return db - da;
+  });
+
+  return cards.map((card) => {
+    const sections = Array.from(card.evidenciasPorServicio.entries()).map(([servicio, imagenes]) => ({
+      servicio,
+      imagenes: Array.from(imagenes),
+    }));
+
+    const allImages = sections.flatMap((section) => section.imagenes);
+    const uniqueImages = Array.from(new Set(allImages));
+
+    return {
+      key: card.key,
+      titulo: `${Array.from(card.servicios).join(' + ') || 'Servicio'} - ${card.cliente || 'Cliente sin nombre'}`,
+      fechaLabel: formatFecha(card.fechaRaw),
+      tecnicosLabel: Array.from(card.tecnicos).join(', ') || 'Sin técnico asignado',
+      previewImages: uniqueImages.slice(0, 2),
+      extraCount: Math.max(0, uniqueImages.length - 2),
+      secciones: sections,
+    };
+  });
+}
+
+export function renderServiciosRealizadosCards(cards: ServicioRealizadoCardViewModel[]): string {
+  if (cards.length === 0) {
+    return '<p style="color:#64748b; margin:0;">No hay servicios realizados para mostrar.</p>';
+  }
+
+  return cards.map((card) => {
+    const photosBlock = card.previewImages.length > 0
+      ? `
+          <div class="report-photos">
+            ${card.previewImages.map((url) => `
+              <div class="photo-thumb" style="overflow:hidden;">
+                <img src="${escapeHtml(url)}" alt="Evidencia" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" />
+              </div>
+            `).join('')}
+            ${card.extraCount > 0 ? `<div class="photo-count">+${card.extraCount}</div>` : ''}
+          </div>
+        `
+      : '<div class="report-photos"><span style="color:#64748b;font-size:14px;">Sin imágenes registradas</span></div>';
+
+    return `
+      <div class="report-card">
+        <div class="report-header">
+          <h4>${escapeHtml(card.titulo)}</h4>
+          <span class="report-date">${escapeHtml(card.fechaLabel)}</span>
+        </div>
+        <div class="report-details">
+          <p><strong>Técnico(s):</strong> ${escapeHtml(card.tecnicosLabel)}</p>
+        </div>
+        ${photosBlock}
+        <button class="btn-secondary fullwidth js-open-imagenes-completas" data-card-key="${escapeHtml(card.key)}" ${card.secciones.length === 0 ? 'disabled' : ''}>Ver imágenes completas</button>
+      </div>
+    `;
+  }).join('');
+}
+
+export function renderServicioImagenesModal(card: ServicioRealizadoCardViewModel): string {
+  return `
+    <div class="modal-overlay js-close-imagenes-modal" style="position:fixed;inset:0;background:rgba(15,23,42,0.65);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px;">
+      <div class="modal-content" style="background:#fff;border-radius:14px;max-width:980px;width:min(980px,100%);max-height:90vh;overflow:auto;padding:20px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">
+          <div>
+            <h3 style="margin:0 0 6px 0;font-size:20px;color:#0f172a;">Imágenes completas</h3>
+            <p style="margin:0;color:#475569;">${escapeHtml(card.titulo)}</p>
+          </div>
+          <button class="btn-secondary js-close-imagenes-modal" type="button">Cerrar</button>
+        </div>
+        ${card.secciones.map((section) => `
+          <div style="margin-top:16px;">
+            <h4 style="margin:0 0 10px 0;color:#1e3a8a;font-size:16px;">${escapeHtml(section.servicio)} (${section.imagenes.length})</h4>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;">
+              ${section.imagenes.map((img) => `
+                <a href="${escapeHtml(img)}" target="_blank" rel="noopener noreferrer" style="display:block;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#f8fafc;">
+                  <img src="${escapeHtml(img)}" alt="Evidencia ${escapeHtml(section.servicio)}" style="width:100%;height:140px;object-fit:cover;display:block;" loading="lazy" />
+                </a>
+              `).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
 
 // Tab: Servicios del Día
 export function renderServiciosDiaTab() {
   return `
-    <div class="stats-row" style="margin-bottom: 24px;">
+    <div class="stats-row" style="margin-bottom: 24px; grid-template-columns: repeat(4, minmax(0, 1fr));">
       <div class="stat-box">
         <div class="stat-box-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
@@ -42,179 +329,10 @@ export function renderServiciosDiaTab() {
       </div>
     </div>
 
-    <div class="table-container">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>SERVICIO</th>
-            <th>CLIENTE</th>
-            <th>TÉCNICO</th>
-            <th>HORA</th>
-            <th>TIPO</th>
-            <th>ESTADO</th>
-            <th>FICHA</th>
-            <th>ACCIONES</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><clipboard></clipboard></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">OS-2025-089</div>
-                  <div class="equipment-id">Fumigación Industrial</div>
-                </div>
-              </div>
-            </td>
-            <td>Logística Transandina</td>
-            <td>Juan Ramírez</td>
-            <td>08:30 AM</td>
-            <td><span class="badge">Fumigación</span></td>
-            <td><span class="status-indicator success">Completado</span></td>
-            <td>
-              <span class="evidence-badge">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Entregada
-              </span>
-            </td>
-            <td>
-              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Informe</button>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><clipboard></clipboard></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">OS-2025-090</div>
-                  <div class="equipment-id">Desratización</div>
-                </div>
-              </div>
-            </td>
-            <td>Farmacéutica Central</td>
-            <td>María Soto</td>
-            <td>10:00 AM</td>
-            <td><span class="badge blue">Desratización</span></td>
-            <td><span class="status-indicator warning">En Proceso</span></td>
-            <td>
-              <span class="evidence-badge pending">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                Pendiente
-              </span>
-            </td>
-            <td>
-              <button class="action-btn">⋮</button>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><clipboard></clipboard></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">OS-2025-091</div>
-                  <div class="equipment-id">Mantenimiento Preventivo</div>
-                </div>
-              </div>
-            </td>
-            <td>Almacenes del Norte</td>
-            <td>Pedro López</td>
-            <td>02:00 PM</td>
-            <td><span class="badge green">Mantenimiento</span></td>
-            <td><span class="status-indicator success">Completado</span></td>
-            <td>
-              <span class="evidence-badge">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Entregada
-              </span>
-            </td>
-            <td>
-              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Informe</button>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><clipboard></clipboard></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">OS-2025-092</div>
-                  <div class="equipment-id">Fumigación Residencial</div>
-                </div>
-              </div>
-            </td>
-            <td>Condominio Las Flores</td>
-            <td>Carlos Mendoza</td>
-            <td>04:00 PM</td>
-            <td><span class="badge">Fumigación</span></td>
-            <td><span class="status-indicator">Programado</span></td>
-            <td>
-              <span class="evidence-badge pending">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                Pendiente
-              </span>
-            </td>
-            <td>
-              <button class="action-btn">⋮</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
     <div class="recent-reports">
       <h3 style="margin-top: 32px; margin-bottom: 16px;">Informes Recientes con Evidencias</h3>
-      <div class="reports-grid">
-        <div class="report-card">
-          <div class="report-header">
-            <h4>Fumigación - Logística Transandina</h4>
-            <span class="report-date">15/01/2025</span>
-          </div>
-          <div class="report-details">
-            <p><strong>Técnico:</strong> Juan Ramírez</p>
-            <p><strong>Tipo:</strong> Control de Plagas</p>
-            <p><strong>Productos:</strong> Cipermetrina 25% EC</p>
-          </div>
-          <div class="report-photos">
-            <div class="photo-thumb">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-            </div>
-            <div class="photo-thumb">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-            </div>
-            <div class="photo-count">+3</div>
-          </div>
-          <button class="btn-secondary fullwidth">Ver Informe Completo</button>
-        </div>
-
-        <div class="report-card">
-          <div class="report-header">
-            <h4>Mantenimiento - Almacenes del Norte</h4>
-            <span class="report-date">15/01/2025</span>
-          </div>
-          <div class="report-details">
-            <p><strong>Técnico:</strong> Pedro López</p>
-            <p><strong>Tipo:</strong> Preventivo</p>
-            <p><strong>Equipos:</strong> Nebulizador X-200</p>
-          </div>
-          <div class="report-photos">
-            <div class="photo-thumb">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-            </div>
-            <div class="photo-thumb">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-            </div>
-            <div class="photo-count">+2</div>
-          </div>
-          <button class="btn-secondary fullwidth">Ver Informe Completo</button>
-        </div>
+      <div class="reports-grid" id="operaciones-servicios-realizados-list">
+        <p style="color:#64748b; margin:0;">Cargando servicios realizados...</p>
       </div>
     </div>
   `;
@@ -363,7 +481,7 @@ export function renderInformesClienteTab() {
       </table>
     </div>
 
-    <div class="stats-row" style="margin-top: 24px;">
+    <div class="stats-row" style="margin-top: 24px; grid-template-columns: repeat(4, minmax(0, 1fr));">
       <div class="stat-box">
         <div class="stat-box-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
@@ -440,7 +558,7 @@ export function renderReportesGeneralesTab() {
       </button>
     </div>
 
-    <div class="stats-row" style="margin-bottom: 24px;">
+    <div class="stats-row" style="margin-bottom: 24px; grid-template-columns: repeat(4, minmax(0, 1fr));">
       <div class="stat-box">
         <div class="stat-box-icon blue">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><clipboard></clipboard></svg>

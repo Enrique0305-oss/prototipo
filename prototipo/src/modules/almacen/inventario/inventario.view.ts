@@ -1,9 +1,10 @@
 import { productoService } from '../../../services/productoService';
 import { categoriaService } from '../../../services/categoriaService';
+import { loteService } from '../../../services/loteService';
 import { mostrarToast } from '../../../shared/toast';
 import { kardexService, type KardexMovimiento } from '../../../services/kardexService';
 import { inventarioAjusteService, type InventarioAjuste } from '../../../services/inventarioAjusteService';
-import type { Producto, EstadisticasProductos, Categoria, ProductoRecetaDetalle } from '../../../core/api/types';
+import type { Producto, EstadisticasProductos, Categoria, ProductoRecetaDetalle, Lote } from '../../../core/api/types';
 
 // Estado global para el módulo de inventario
 let productosData: Producto[] = [];
@@ -23,8 +24,20 @@ type RecetaDraftItem = {
   observacion: string;
 };
 
+type LoteDraftItem = {
+  id?: number; // ID del lote si viene de la BD
+  numero_lote: string;
+  fecha_vencimiento: string;
+  cantidad: number;
+  observacion: string;
+};
+
 let recetaDraftNuevo: RecetaDraftItem[] = [];
 let recetaDraftEditar: RecetaDraftItem[] = [];
+let lotesDraftNuevo: LoteDraftItem[] = [];
+let lotesDraftEditar: LoteDraftItem[] = [];
+let loteEditandoIndex: number | null = null; // Rastrear cual lote está siendo editado (editar)
+let loteNuevoEditandoIndex: number | null = null; // Rastrear cual lote está siendo editado (nuevo)
 
 function getBackendOrigin(): string {
   const fallback = 'https://backend.qsci-system.com';
@@ -269,6 +282,7 @@ export function renderKardexTab() {
           <tr>
             <th>FECHA</th>
             <th>PRODUCTO</th>
+            <th>LOTE</th>
             <th>TIPO</th>
             <th>CANTIDAD</th>
             <th>STOCK ANT.</th>
@@ -280,7 +294,7 @@ export function renderKardexTab() {
         </thead>
         <tbody id="kardex-table-body">
           <tr>
-            <td colspan="9" style="text-align: center; padding: 40px;">
+            <td colspan="10" style="text-align: center; padding: 40px;">
               <div class="loading-text">Cargando movimientos...</div>
             </td>
           </tr>
@@ -360,6 +374,7 @@ export function renderAjustesInventarioTab() {
             <tr>
               <th>FECHA</th>
               <th>PRODUCTO</th>
+              <th>LOTE</th>
               <th>TIPO</th>
               <th>STOCK ANT.</th>
               <th>STOCK NUEVO</th>
@@ -371,7 +386,7 @@ export function renderAjustesInventarioTab() {
           </thead>
           <tbody id="ajuste-inv-historial-body">
             <tr>
-              <td colspan="9" style="text-align:center; padding:32px; color:#94a3b8;">Cargando historial...</td>
+              <td colspan="10" style="text-align:center; padding:32px; color:#94a3b8;">Cargando historial...</td>
             </tr>
           </tbody>
         </table>
@@ -391,9 +406,16 @@ export function renderAjustesInventarioTab() {
         </div>
         <form id="form-ajuste-inventario" class="modal-body">
           <input type="hidden" id="ajuste-inv-id-producto">
+          <input type="hidden" id="ajuste-inv-id-lote">
           <div class="form-group">
             <label>Producto</label>
             <input type="text" id="ajuste-inv-producto" class="form-input" readonly>
+          </div>
+          <div class="form-group">
+            <label>Lote *</label>
+            <select id="ajuste-inv-lote" class="form-input" required>
+              <option value="">Seleccionar lote...</option>
+            </select>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div class="form-group">
@@ -458,6 +480,7 @@ export function renderAjustesInventarioTab() {
 let kardexData: KardexMovimiento[] = [];
 let ajusteInvProductos: Producto[] = [];
 let ajusteInvHistorial: InventarioAjuste[] = [];
+let ajusteInvLotesActuales: Lote[] = [];
 
 export async function initKardexEvents() {
   // Cargar estadísticas y movimientos en paralelo
@@ -504,7 +527,7 @@ async function loadKardexMovimientos() {
   const tbody = document.getElementById('kardex-table-body');
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;"><div class="loading-text">Cargando movimientos...</div></td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;"><div class="loading-text">Cargando movimientos...</div></td></tr>`;
 
   // Recoger filtros
   const search = (document.getElementById('kardex-search') as HTMLInputElement)?.value || '';
@@ -527,7 +550,7 @@ async function loadKardexMovimientos() {
     }
   } catch (err) {
     console.error('Error cargando kardex:', err);
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar movimientos</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:#ef4444;">Error al cargar movimientos</td></tr>`;
   }
 }
 
@@ -536,7 +559,7 @@ function renderKardexRows(movimientos: KardexMovimiento[]) {
   if (!tbody) return;
 
   if (movimientos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:#64748b;">No se encontraron movimientos de kardex</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:#64748b;">No se encontraron movimientos de kardex</td></tr>`;
     const infoEl = document.getElementById('kardex-pagination-info');
     if (infoEl) infoEl.textContent = '0 movimientos';
     return;
@@ -554,6 +577,7 @@ function renderKardexRows(movimientos: KardexMovimiento[]) {
       <tr>
         <td>${fecha}</td>
         <td>${mov.producto}</td>
+        <td>${mov.numero_lote || '—'}</td>
         <td><span class="badge ${tipoClass}">${mov.tipo_movimiento}</span></td>
         <td class="${cantClass}">${cantSign}${mov.cantidad}</td>
         <td>${mov.stock_anterior}</td>
@@ -639,13 +663,14 @@ export async function initAjustesInventarioEvents() {
     e.preventDefault();
 
     const idProducto = Number((document.getElementById('ajuste-inv-id-producto') as HTMLInputElement).value);
+    const idLote = Number((document.getElementById('ajuste-inv-lote') as HTMLSelectElement).value);
     const stockActual = Number((document.getElementById('ajuste-inv-stock-actual') as HTMLInputElement).value);
     const stockNuevo = Number((document.getElementById('ajuste-inv-stock-nuevo') as HTMLInputElement).value);
     const motivo = (document.getElementById('ajuste-inv-motivo') as HTMLSelectElement).value;
     const observacion = (document.getElementById('ajuste-inv-observacion') as HTMLTextAreaElement).value.trim();
     const submitBtn = (e.currentTarget as HTMLFormElement).querySelector('button[type="submit"]') as HTMLButtonElement | null;
 
-    if (!idProducto || !motivo || Number.isNaN(stockNuevo) || stockNuevo < 0) {
+    if (!idProducto || !idLote || !motivo || Number.isNaN(stockNuevo) || stockNuevo < 0) {
       mostrarToast('warning', 'Atención', 'Complete los campos obligatorios del ajuste');
       return;
     }
@@ -668,6 +693,7 @@ export async function initAjustesInventarioEvents() {
 
       await inventarioAjusteService.crear({
         id_producto: idProducto,
+        id_lote: idLote,
         stock_nuevo: stockNuevo,
         motivo,
         observacion: observacion || undefined,
@@ -802,13 +828,57 @@ function abrirModalAjusteInventario(idProducto: number) {
 
   (document.getElementById('ajuste-inv-id-producto') as HTMLInputElement).value = String(idProducto);
   (document.getElementById('ajuste-inv-producto') as HTMLInputElement).value = producto.descripcion;
+  (document.getElementById('ajuste-inv-id-lote') as HTMLInputElement).value = '';
   (document.getElementById('ajuste-inv-stock-actual') as HTMLInputElement).value = String(stockActual);
   (document.getElementById('ajuste-inv-stock-nuevo') as HTMLInputElement).value = String(stockActual);
   (document.getElementById('ajuste-inv-motivo') as HTMLSelectElement).value = '';
   (document.getElementById('ajuste-inv-observacion') as HTMLTextAreaElement).value = '';
 
+  cargarLotesAjusteInventario(idProducto);
+
   const modal = document.getElementById('modal-ajuste-inventario');
   if (modal) modal.style.display = 'flex';
+}
+
+async function cargarLotesAjusteInventario(idProducto: number) {
+  const selectLote = document.getElementById('ajuste-inv-lote') as HTMLSelectElement | null;
+  const stockActualInput = document.getElementById('ajuste-inv-stock-actual') as HTMLInputElement | null;
+  const stockNuevoInput = document.getElementById('ajuste-inv-stock-nuevo') as HTMLInputElement | null;
+  if (!selectLote || !stockActualInput || !stockNuevoInput) return;
+
+  selectLote.innerHTML = '<option value="">Cargando lotes...</option>';
+  selectLote.disabled = true;
+  ajusteInvLotesActuales = [];
+
+  try {
+    const res = await loteService.getByProducto(idProducto);
+    if (!res.success || !res.data) {
+      selectLote.innerHTML = '<option value="">Sin lotes disponibles</option>';
+      return;
+    }
+
+    ajusteInvLotesActuales = res.data.filter((l) => l.estado === 'Activo');
+    if (!ajusteInvLotesActuales.length) {
+      selectLote.innerHTML = '<option value="">Sin lotes activos</option>';
+      return;
+    }
+
+    selectLote.innerHTML = '<option value="">Seleccionar lote...</option>' +
+      ajusteInvLotesActuales.map((l) => `<option value="${l.id}">${l.numero_lote}</option>`).join('');
+    selectLote.disabled = false;
+
+    selectLote.onchange = () => {
+      const idLote = Number(selectLote.value || '0');
+      const lote = ajusteInvLotesActuales.find((l) => l.id === idLote);
+      const stockLote = lote ? Number(lote.cantidad_disponible ?? lote.cantidad ?? 0) : 0;
+      (document.getElementById('ajuste-inv-id-lote') as HTMLInputElement).value = idLote ? String(idLote) : '';
+      stockActualInput.value = String(stockLote);
+      stockNuevoInput.value = String(stockLote);
+    };
+  } catch (error) {
+    selectLote.innerHTML = '<option value="">Error al cargar lotes</option>';
+    mostrarToast('error', 'Error', 'No se pudieron cargar los lotes del producto');
+  }
 }
 
 async function cargarHistorialAjustesInventario() {
@@ -829,7 +899,7 @@ async function cargarHistorialAjustesInventario() {
     ajusteInvHistorial = response?.data || [];
     renderHistorialAjustesInventario();
   } catch (error) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:28px; color:#dc2626;">Error al cargar historial</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:28px; color:#dc2626;">Error al cargar historial</td></tr>';
   }
 }
 
@@ -838,7 +908,7 @@ function renderHistorialAjustesInventario() {
   if (!tbody) return;
 
   if (!ajusteInvHistorial.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:28px; color:#64748b;">No hay ajustes registrados</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:28px; color:#64748b;">No hay ajustes registrados</td></tr>';
     return;
   }
 
@@ -861,6 +931,7 @@ function renderHistorialAjustesInventario() {
       <tr>
         <td>${fecha}</td>
         <td>${item.producto}</td>
+        <td>${item.numero_lote || '—'}</td>
         <td>${badge}</td>
         <td>${item.stock_anterior}</td>
         <td>${item.stock_nuevo}</td>
@@ -1640,12 +1711,6 @@ function renderModalNuevoProducto(): string {
             </div>
 
             <div class="form-group">
-              <label for="producto-lote">Número de Lote</label>
-              <input type="text" id="producto-lote" name="n_lote"
-                     placeholder="Ej: L2026-001" class="form-input">
-            </div>
-
-            <div class="form-group">
               <label for="producto-ubicacion">Ubicación</label>
               <input type="text" id="producto-ubicacion" name="ubicacion"
                      placeholder="Ej: Almacén A - Estante 3" class="form-input">
@@ -1672,11 +1737,6 @@ function renderModalNuevoProducto(): string {
             </div>
 
             <div class="form-group">
-              <label for="producto-fecha-vencim">Fecha de Vencimiento</label>
-              <input type="date" id="producto-fecha-vencim" name="fecha_vencim" class="form-input">
-            </div>
-
-            <div class="form-group">
               <label for="producto-estado">Estado</label>
               <select id="producto-estado" name="estado" class="form-input">
                 <option value="Activo">Activo</option>
@@ -1700,6 +1760,40 @@ function renderModalNuevoProducto(): string {
               <label for="producto-presentacion">Presentación</label>
               <input type="text" id="producto-presentacion" name="presentacion"
                      placeholder="Ej: 250ml" class="form-input">
+            </div>
+
+            <!-- Sección de Lotes -->
+            <div class="form-group" style="grid-column: 1 / -1; border: 1px solid #d1d5db; border-radius: 10px; padding: 16px; background: #f9fafb; overflow: hidden;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 14px; font-weight: 700; color: #111827;">Gestión de Lotes</h3>
+                <button type="button" id="btn-agregar-lote" class="btn-secondary" 
+                        style="width: 32px; min-width: 32px; padding: 8px 0; font-size: 18px; line-height: 1;">
+                  +
+                </button>
+              </div>
+              
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; align-items: start;">
+                <div style="min-width: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: #374151;">Número de Lote</label>
+                  <input type="text" id="lote-numero" placeholder="Ej: L2026-001" 
+                         class="form-input" style="font-size: 13px; padding: 8px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div style="min-width: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: #374151;">Fecha Vencimiento</label>
+                  <input type="date" id="lote-fecha-venc" class="form-input" style="font-size: 13px; padding: 8px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div style="min-width: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: #374151;">Cantidad</label>
+                  <input type="number" id="lote-cantidad" placeholder="0" min="1" 
+                         class="form-input" style="font-size: 13px; padding: 8px; width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+
+              <div id="lotes-list-nuevo" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; background: white;">
+                <div style="padding: 16px; text-align: center; color: #9ca3af; font-size: 13px;">
+                  Sin lotes agregados. Agrega al menos un lote para el producto.
+                </div>
+              </div>
             </div>
 
             <div class="form-group" style="grid-column: 1 / -1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #f8fafc;">
@@ -1729,19 +1823,19 @@ function renderModalNuevoProducto(): string {
               <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">JPG, PNG o WEBP • Máx. 5MB</div>
             </div>
           </div>
-
-          <div class="modal-footer" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
-            <button type="button" class="btn-secondary" onclick="cerrarModalNuevoProducto()">
-              Cancelar
-            </button>
-            <button type="submit" class="btn-primary">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              Guardar Producto
-            </button>
-          </div>
         </form>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="cerrarModalNuevoProducto()">
+            Cancelar
+          </button>
+          <button type="submit" form="form-nuevo-producto" class="btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Guardar Producto
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -2096,6 +2190,12 @@ function abrirModalNuevoProducto() {
         });
       }
 
+      // Event listeners para lotes
+      const btnAgregarLote = document.getElementById('btn-agregar-lote') as HTMLButtonElement;
+      if (btnAgregarLote) {
+        btnAgregarLote.addEventListener('click', agregarLoteNuevoProducto);
+      }
+
       // Cerrar al hacer clic fuera del modal
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -2111,9 +2211,16 @@ function cerrarModalNuevoProducto() {
   if (modal) {
     modal.style.display = 'none';
     recetaDraftNuevo = [];
+    lotesDraftNuevo = [];
+    loteNuevoEditandoIndex = null;
     const form = document.getElementById('form-nuevo-producto') as HTMLFormElement;
     if (form) {
       form.reset();
+    }
+    // Restablecer lista de lotes
+    const lotesList = document.getElementById('lotes-list-nuevo');
+    if (lotesList) {
+      lotesList.innerHTML = `<div style="padding: 16px; text-align: center; color: #9ca3af; font-size: 13px;">Sin lotes agregados. Agrega al menos un lote para el producto.</div>`;
     }
   }
 }
@@ -2187,6 +2294,16 @@ async function handleSubmitNuevoProducto(e: Event) {
       cantidad: Number(item.cantidad),
       unidad: item.unidad || null,
       observacion: item.observacion || null,
+    }));
+  }
+
+  // Validar lotes
+  if (lotesDraftNuevo.length > 0) {
+    data.lotes = lotesDraftNuevo.map((lote) => ({
+      numero_lote: lote.numero_lote,
+      fecha_vencimiento: lote.fecha_vencimiento,
+      cantidad: Number(lote.cantidad),
+      observacion: lote.observacion || undefined,
     }));
   }
 
@@ -2312,12 +2429,6 @@ function renderModalEditarProducto(producto: Producto): string {
             </div>
 
             <div class="form-group">
-              <label for="edit-lote">Número de Lote</label>
-              <input type="text" id="edit-lote" name="n_lote"
-                     value="${producto.n_lote}" class="form-input">
-            </div>
-
-            <div class="form-group">
               <label for="edit-ubicacion">Ubicación</label>
               <input type="text" id="edit-ubicacion" name="ubicacion"
                      value="${producto.ubicacion}" class="form-input">
@@ -2344,12 +2455,6 @@ function renderModalEditarProducto(producto: Producto): string {
             </div>
 
             <div class="form-group">
-              <label for="edit-fecha-vencim">Fecha de Vencimiento</label>
-              <input type="date" id="edit-fecha-vencim" name="fecha_vencim" 
-                     value="${producto.fecha_vencim || ''}" class="form-input">
-            </div>
-
-            <div class="form-group">
               <label for="edit-estado">Estado</label>
               <select id="edit-estado" name="estado" class="form-input">
                 <option value="Activo" ${producto.estado === 'Activo' ? 'selected' : ''}>Activo</option>
@@ -2373,6 +2478,39 @@ function renderModalEditarProducto(producto: Producto): string {
               <label for="edit-presentacion">Presentación</label>
               <input type="text" id="edit-presentacion" name="presentacion"
                      value="${producto.presentacion || ''}" placeholder="Ej: 250ml" class="form-input">
+            </div>
+
+            <div class="form-group" style="grid-column: 1 / -1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #f8fafc;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+                <label style="display: block; font-weight: 600; color: #374151; margin: 0;">Gestión de Lotes</label>
+                <button type="button" id="btn-agregar-lote-edit" class="btn-secondary" 
+                        style="width: 32px; min-width: 32px; padding: 8px 0; font-size: 18px; line-height: 1;">
+                  +
+                </button>
+              </div>
+              
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; overflow: hidden;">
+                <div style="min-width: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: #374151;">Número de Lote</label>
+                  <input type="text" id="lote-numero-edit" placeholder="Ej: L2026-001" 
+                         class="form-input" style="font-size: 13px; padding: 8px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div style="min-width: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: #374151;">Fecha Vencimiento</label>
+                  <input type="date" id="lote-fecha-venc-edit" class="form-input" style="font-size: 13px; padding: 8px; width: 100%; box-sizing: border-box;">
+                </div>
+                <div style="min-width: 0;">
+                  <label style="font-size: 12px; font-weight: 600; color: #374151;">Cantidad</label>
+                  <input type="number" id="lote-cantidad-edit" placeholder="0" min="1" 
+                         class="form-input" style="font-size: 13px; padding: 8px; width: 100%; box-sizing: border-box;">
+                </div>
+              </div>
+
+              <div id="lotes-list-editar" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; background: white;">
+                <div style="padding: 16px; text-align: center; color: #9ca3af; font-size: 13px;">
+                  Sin lotes. Los lotes existentes aparecerán aquí.
+                </div>
+              </div>
             </div>
 
             <div class="form-group" style="grid-column: 1 / -1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #f8fafc;">
@@ -2456,6 +2594,24 @@ async function abrirModalEditarProducto(id: number) {
     observacion: item.observacion || '',
   }));
 
+  // Cargar lotes existentes del producto
+  lotesDraftEditar = [];
+  try {
+    const lotesResponse = await loteService.getByProducto(id);
+    if (lotesResponse.success && lotesResponse.data) {
+      lotesDraftEditar = lotesResponse.data.map((lote: Lote) => ({
+        id: lote.id,
+        numero_lote: lote.numero_lote || '',
+        fecha_vencimiento: lote.fecha_vencimiento || '',
+        cantidad: Number(lote.cantidad || 0),
+        observacion: lote.observacion || '',
+      }));
+    }
+  } catch (error) {
+    console.log('Error cargando lotes:', error);
+    lotesDraftEditar = [];
+  }
+
   // Eliminar modal anterior si existe
   const modalAnterior = document.getElementById('modal-editar-producto');
   if (modalAnterior) modalAnterior.remove();
@@ -2466,9 +2622,20 @@ async function abrirModalEditarProducto(id: number) {
   const form = document.getElementById('form-editar-producto') as HTMLFormElement;
 
   // Eventos de cerrar
-  document.getElementById('btn-cerrar-editar')?.addEventListener('click', () => modal.remove());
-  document.getElementById('btn-cancelar-editar')?.addEventListener('click', () => modal.remove());
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  document.getElementById('btn-cerrar-editar')?.addEventListener('click', () => {
+    loteEditandoIndex = null;
+    modal.remove();
+  });
+  document.getElementById('btn-cancelar-editar')?.addEventListener('click', () => {
+    loteEditandoIndex = null;
+    modal.remove();
+  });
+  modal.addEventListener('click', (e) => { 
+    if (e.target === modal) {
+      loteEditandoIndex = null;
+      modal.remove();
+    }
+  });
 
   const checkFabricable = document.getElementById('edit-es-fabricable') as HTMLInputElement;
   const btnReceta = document.getElementById('btn-configurar-receta-edit') as HTMLButtonElement;
@@ -2483,6 +2650,15 @@ async function abrirModalEditarProducto(id: number) {
     btnReceta.addEventListener('click', () => abrirModalReceta('editar', producto!.id));
     actualizarResumenReceta('editar');
   }
+
+  // Event listeners para lotes
+  const btnAgregarLoteEdit = document.getElementById('btn-agregar-lote-edit') as HTMLButtonElement;
+  if (btnAgregarLoteEdit) {
+    btnAgregarLoteEdit.addEventListener('click', agregarLoteEditarProducto);
+  }
+
+  // Actualizar lista de lotes al cargar el modal
+  actualizarListaLotesEditar();
 
   // Zona de imagen: click, preview y eliminar
   const zonaImagenEdit = document.getElementById('zona-imagen-editar');
@@ -2629,6 +2805,48 @@ async function abrirModalEditarProducto(id: number) {
           }
         }
 
+        // Sincronizar lotes: obtener lotes originales de la BD
+        const lotesOriginalesResponse = await loteService.getByProducto(productoId);
+        const lotesOriginales = lotesOriginalesResponse.data || [];
+        const idsLotesActuales = lotesDraftEditar.filter(l => l.id).map(l => l.id);
+
+        // Eliminar lotes que fueron quitados
+        for (const loteOriginal of lotesOriginales) {
+          if (!idsLotesActuales.includes(loteOriginal.id)) {
+            try {
+              await loteService.delete(loteOriginal.id);
+            } catch (err) {
+              console.error('Error eliminando lote:', err);
+            }
+          }
+        }
+
+        // Actualizar lotes existentes que cambiaron fecha
+        for (const lote of lotesDraftEditar) {
+          if (lote.id) { // Lote existente en la BD
+            const loteOriginal = lotesOriginales.find((l: Lote) => l.id === lote.id);
+            if (loteOriginal && loteOriginal.fecha_vencimiento !== lote.fecha_vencimiento) {
+              try {
+                await loteService.update(lote.id, { fecha_vencimiento: lote.fecha_vencimiento });
+              } catch (err) {
+                console.error('Error actualizando lote:', err);
+              }
+            }
+          } else {
+            // Lote nuevo agregado en la modal
+            try {
+              await loteService.create(productoId, {
+                numero_lote: lote.numero_lote,
+                fecha_vencimiento: lote.fecha_vencimiento,
+                cantidad: lote.cantidad,
+                observacion: lote.observacion,
+              });
+            } catch (err) {
+              console.error('Error creando lote:', err);
+            }
+          }
+        }
+
         modal.remove();
         mostrarToast('success', 'Producto actualizado', `${data.descripcion || 'Producto'} se actualizó correctamente`);
         await cargarProductos();
@@ -2718,6 +2936,326 @@ function confirmarEliminarProducto(id: number) {
       btn.disabled = false;
       btn.textContent = 'Eliminar';
     }
+  });
+}
+
+// ===== FUNCIONES PARA GESTIÓN DE LOTES =====
+
+function agregarLoteNuevoProducto() {
+  const numeroLote = (document.getElementById('lote-numero') as HTMLInputElement)?.value?.trim();
+  const fechaVenc = (document.getElementById('lote-fecha-venc') as HTMLInputElement)?.value;
+  const cantidadStr = (document.getElementById('lote-cantidad') as HTMLInputElement)?.value;
+
+  if (!numeroLote || !fechaVenc || !cantidadStr) {
+    mostrarToast('warning', 'Campos requeridos', 'Por favor completa todos los campos del lote');
+    return;
+  }
+
+  const cantidad = parseInt(cantidadStr);
+  if (isNaN(cantidad) || cantidad <= 0) {
+    mostrarToast('warning', 'Cantidad inválida', 'La cantidad debe ser un número mayor a 0');
+    return;
+  }
+
+  // Verificar que el número de lote no sea duplicado
+  if (lotesDraftNuevo.some(l => l.numero_lote === numeroLote)) {
+    mostrarToast('warning', 'Lote duplicado', 'Ya existe un lote con este número');
+    return;
+  }
+
+  // Agregar lote
+  lotesDraftNuevo.push({
+    numero_lote: numeroLote,
+    fecha_vencimiento: fechaVenc,
+    cantidad: cantidad,
+    observacion: '',
+  });
+
+  // Limpiar inputs
+  (document.getElementById('lote-numero') as HTMLInputElement).value = '';
+  (document.getElementById('lote-fecha-venc') as HTMLInputElement).value = '';
+  (document.getElementById('lote-cantidad') as HTMLInputElement).value = '';
+
+  // Actualizar lista visual
+  actualizarListaLotes();
+
+  mostrarToast('success', 'Lote agregado', `Lote ${numeroLote} agregado correctamente`);
+}
+
+function eliminarLoteNuevoProducto(index: number) {
+  lotesDraftNuevo.splice(index, 1);
+  actualizarListaLotes();
+}
+
+function actualizarListaLotes() {
+  const container = document.getElementById('lotes-list-nuevo');
+  if (!container) return;
+
+  if (lotesDraftNuevo.length === 0) {
+    container.innerHTML = `<div style="padding: 16px; text-align: center; color: #9ca3af; font-size: 13px;">Sin lotes agregados. Agrega al menos un lote para el producto.</div>`;
+    return;
+  }
+
+  const table = `
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <thead style="background: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
+        <tr>
+          <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #374151;">Lote</th>
+          <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #374151;">Vencimiento</th>
+          <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #374151;">Cantidad</th>
+          <th style="padding: 12px 16px; text-align: center; font-weight: 600; color: #374151;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lotesDraftNuevo.map((lote, idx) => {
+          const estaEditando = loteNuevoEditandoIndex === idx;
+          if (estaEditando) {
+            return `
+              <tr style="border-bottom: 1px solid #e5e7eb; background: #f0fdf4;">
+                <td style="padding: 12px 16px;"><input type="text" value="${lote.numero_lote}" disabled 
+                    style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: #f3f4f6; color: #9ca3af; font-size: 12px;"></td>
+                <td style="padding: 12px 16px;"><input type="date" id="fecha-nuevo-${idx}" value="${lote.fecha_vencimiento?.split('T')[0] || lote.fecha_vencimiento}" 
+                    style="width: 100%; padding: 6px 8px; border: 1px solid #10b981; border-radius: 4px; font-size: 12px;"></td>
+                <td style="padding: 12px 16px;"><input type="number" value="${lote.cantidad}" disabled 
+                    style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: #f3f4f6; color: #9ca3af; font-size: 12px;"></td>
+                <td style="padding: 12px 16px; text-align: center;">
+                  <button type="button" class="btn-guardar-lote-nuevo" data-index="${idx}"
+                          style="background: #10b981; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; margin-right: 4px;">
+                    Guardar
+                  </button>
+                  <button type="button" class="btn-cancelar-lote-nuevo" data-index="${idx}"
+                          style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+                    Cancelar
+                  </button>
+                </td>
+              </tr>
+            `;
+          } else {
+            return `
+              <tr style="border-bottom: 1px solid #e5e7eb; hover { background: #f9fafb; }">
+                <td style="padding: 12px 16px;">${lote.numero_lote}</td>
+                <td style="padding: 12px 16px;">${lote.fecha_vencimiento?.split('T')[0] || lote.fecha_vencimiento}</td>
+                <td style="padding: 12px 16px;"><strong>${lote.cantidad}</strong></td>
+                <td style="padding: 12px 16px; text-align: center;">
+                  <button type="button" class="btn-editar-lote-nuevo" data-index="${idx}"
+                          style="background: #dbeafe; color: #0284c7; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; margin-right: 6px;">
+                    Editar
+                  </button>
+                  <button type="button" class="btn-eliminar-lote" data-index="${idx}"
+                          style="background: #fee2e2; color: #dc2626; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            `;
+          }
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+
+  container.innerHTML = table;
+
+  // Agregar event listeners a botones de editar
+  container.querySelectorAll('.btn-editar-lote-nuevo').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
+      loteNuevoEditandoIndex = idx;
+      actualizarListaLotes();
+    });
+  });
+
+  // Agregar event listeners a botones de guardar
+  container.querySelectorAll('.btn-guardar-lote-nuevo').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
+      const nuevaFecha = (document.getElementById(`fecha-nuevo-${idx}`) as HTMLInputElement).value;
+      
+      if (!nuevaFecha) {
+        mostrarToast('warning', 'Campo requerido', 'Por favor selecciona una fecha de vencimiento');
+        return;
+      }
+
+      lotesDraftNuevo[idx].fecha_vencimiento = nuevaFecha;
+      loteNuevoEditandoIndex = null;
+      actualizarListaLotes();
+      mostrarToast('success', 'Lote actualizado', 'Fecha actualizada correctamente');
+    });
+  });
+
+  // Agregar event listeners a botones de cancelar
+  container.querySelectorAll('.btn-cancelar-lote-nuevo').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      loteNuevoEditandoIndex = null;
+      actualizarListaLotes();
+    });
+  });
+
+  // Agregar event listeners a botones de eliminar
+  container.querySelectorAll('.btn-eliminar-lote').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
+      eliminarLoteNuevoProducto(idx);
+    });
+  });
+}
+
+function agregarLoteEditarProducto() {
+  const numeroLote = (document.getElementById('lote-numero-edit') as HTMLInputElement)?.value?.trim();
+  const fechaVenc = (document.getElementById('lote-fecha-venc-edit') as HTMLInputElement)?.value;
+  const cantidadStr = (document.getElementById('lote-cantidad-edit') as HTMLInputElement)?.value;
+
+  if (!numeroLote || !fechaVenc || !cantidadStr) {
+    mostrarToast('warning', 'Campos requeridos', 'Por favor completa todos los campos del lote');
+    return;
+  }
+
+  const cantidad = parseInt(cantidadStr);
+  if (isNaN(cantidad) || cantidad <= 0) {
+    mostrarToast('warning', 'Cantidad inválida', 'La cantidad debe ser un número mayor a 0');
+    return;
+  }
+
+  // Verificar que el número de lote no sea duplicado
+  if (lotesDraftEditar.some(l => l.numero_lote === numeroLote)) {
+    mostrarToast('warning', 'Lote duplicado', 'Ya existe un lote con este número');
+    return;
+  }
+
+  // Agregar lote
+  lotesDraftEditar.push({
+    numero_lote: numeroLote,
+    fecha_vencimiento: fechaVenc,
+    cantidad: cantidad,
+    observacion: '',
+  });
+
+  // Limpiar inputs
+  (document.getElementById('lote-numero-edit') as HTMLInputElement).value = '';
+  (document.getElementById('lote-fecha-venc-edit') as HTMLInputElement).value = '';
+  (document.getElementById('lote-cantidad-edit') as HTMLInputElement).value = '';
+
+  // Actualizar lista visual
+  actualizarListaLotesEditar();
+
+  mostrarToast('success', 'Lote agregado', `Lote ${numeroLote} agregado correctamente`);
+}
+
+function eliminarLoteEditarProducto(index: number) {
+  lotesDraftEditar.splice(index, 1);
+  actualizarListaLotesEditar();
+}
+
+function actualizarListaLotesEditar() {
+  const container = document.getElementById('lotes-list-editar');
+  if (!container) return;
+
+  if (lotesDraftEditar.length === 0) {
+    container.innerHTML = `<div style="padding: 16px; text-align: center; color: #9ca3af; font-size: 13px;">Sin lotes. Los lotes existentes aparecerán aquí.</div>`;
+    return;
+  }
+
+  const table = `
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <thead style="background: #f3f4f6; border-bottom: 1px solid #e5e7eb;">
+        <tr>
+          <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #374151;">Lote</th>
+          <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #374151;">Vencimiento</th>
+          <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #374151;">Cantidad</th>
+          <th style="padding: 12px 16px; text-align: center; font-weight: 600; color: #374151;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lotesDraftEditar.map((lote, idx) => {
+          const estaEditando = loteEditandoIndex === idx;
+          if (estaEditando) {
+            return `
+              <tr style="border-bottom: 1px solid #e5e7eb; background: #f0fdf4;">
+                <td style="padding: 12px 16px;"><input type="text" value="${lote.numero_lote}" disabled 
+                    style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: #f3f4f6; color: #9ca3af; font-size: 12px;"></td>
+                <td style="padding: 12px 16px;"><input type="date" id="fecha-edit-${idx}" value="${lote.fecha_vencimiento?.split('T')[0]}" 
+                    style="width: 100%; padding: 6px 8px; border: 1px solid #10b981; border-radius: 4px; font-size: 12px;"></td>
+                <td style="padding: 12px 16px;"><input type="number" value="${lote.cantidad}" disabled 
+                    style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: #f3f4f6; color: #9ca3af; font-size: 12px;"></td>
+                <td style="padding: 12px 16px; text-align: center;">
+                  <button type="button" class="btn-guardar-lote-inline" data-index="${idx}"
+                          style="background: #10b981; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; margin-right: 4px;">
+                    Guardar
+                  </button>
+                  <button type="button" class="btn-cancelar-lote-inline" data-index="${idx}"
+                          style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+                    Cancelar
+                  </button>
+                </td>
+              </tr>
+            `;
+          } else {
+            return `
+              <tr style="border-bottom: 1px solid #e5e7eb; hover { background: #f9fafb; }">
+                <td style="padding: 12px 16px;">${lote.numero_lote}</td>
+                <td style="padding: 12px 16px;">${lote.fecha_vencimiento?.split('T')[0] || 'N/A'}</td>
+                <td style="padding: 12px 16px;"><strong>${lote.cantidad}</strong></td>
+                <td style="padding: 12px 16px; text-align: center;">
+                  <button type="button" class="btn-editar-lote-inline" data-index="${idx}"
+                          style="background: #dbeafe; color: #0284c7; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; margin-right: 6px;">
+                    Editar
+                  </button>
+                  <button type="button" class="btn-eliminar-lote-inline" data-index="${idx}"
+                          style="background: #fee2e2; color: #dc2626; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            `;
+          }
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+
+  container.innerHTML = table;
+
+  // Agregar event listeners a botones de editar
+  container.querySelectorAll('.btn-editar-lote-inline').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
+      loteEditandoIndex = idx;
+      actualizarListaLotesEditar();
+    });
+  });
+
+  // Agregar event listeners a botones de guardar
+  container.querySelectorAll('.btn-guardar-lote-inline').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
+      const nuevaFecha = (document.getElementById(`fecha-edit-${idx}`) as HTMLInputElement).value;
+      
+      if (!nuevaFecha) {
+        mostrarToast('warning', 'Campo requerido', 'Por favor selecciona una fecha de vencimiento');
+        return;
+      }
+
+      lotesDraftEditar[idx].fecha_vencimiento = nuevaFecha;
+      loteEditandoIndex = null;
+      actualizarListaLotesEditar();
+      mostrarToast('success', 'Lote actualizado', 'Fecha actualizada correctamente');
+    });
+  });
+
+  // Agregar event listeners a botones de cancelar
+  container.querySelectorAll('.btn-cancelar-lote-inline').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      loteEditandoIndex = null;
+      actualizarListaLotesEditar();
+    });
+  });
+
+  // Agregar event listeners a botones de eliminar
+  container.querySelectorAll('.btn-eliminar-lote-inline').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
+      eliminarLoteEditarProducto(idx);
+    });
   });
 }
 

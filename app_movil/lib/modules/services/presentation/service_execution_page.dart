@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,10 +12,12 @@ class ServiceExecutionPage extends StatefulWidget {
     super.key,
     required this.service,
     required this.repository,
+    this.groupedServices,
   });
 
   final ServiceTask service;
   final ServicesRepository repository;
+  final List<ServiceTask>? groupedServices;
 
   @override
   State<ServiceExecutionPage> createState() => _ServiceExecutionPageState();
@@ -23,8 +26,82 @@ class ServiceExecutionPage extends StatefulWidget {
 class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
   final _observationController = TextEditingController();
   final _picker = ImagePicker();
-  final List<XFile> _photos = <XFile>[];
+  final List<_EvidenceDraft> _evidence = <_EvidenceDraft>[];
   bool _saving = false;
+  bool _starting = true;
+  DateTime? _startedAt;
+  int _elapsedSeconds = 0;
+  Timer? _timer;
+
+  List<ServiceTask> get _effectiveServices {
+    final grouped = widget.groupedServices;
+    if (grouped != null && grouped.isNotEmpty) {
+      return grouped;
+    }
+    return <ServiceTask>[widget.service];
+  }
+
+  bool get _isGrouped => _effectiveServices.length > 1;
+
+  ServiceTask get _representativeService => _effectiveServices.first;
+
+  List<int> get _serviceIds => _effectiveServices.map((e) => e.id).toSet().toList(growable: false);
+
+  String get _mergedTitle {
+    final unique = _effectiveServices
+        .map((s) => s.title.trim())
+        .where((x) => x.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (unique.isEmpty) return 'Servicios agrupados';
+    return unique.join(' + ');
+  }
+
+  String? get _mergedSchedule {
+    int? minStart;
+    int? maxEnd;
+    for (final s in _effectiveServices) {
+      final start = _timeToMinutes(s.startTime);
+      final end = _timeToMinutes(s.endTime);
+      if (start != null) {
+        minStart = (minStart == null || start < minStart) ? start : minStart;
+      }
+      if (end != null) {
+        maxEnd = (maxEnd == null || end > maxEnd) ? end : maxEnd;
+      }
+    }
+    if (minStart == null && maxEnd == null) return null;
+    final from = _minutesToHhmm(minStart ?? 0);
+    final to = _minutesToHhmm(maxEnd ?? minStart ?? 0);
+    return '$from - $to';
+  }
+
+  int? _timeToMinutes(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return null;
+    final normalized = value.contains('T') ? value.split('T').last : value;
+    if (normalized.length < 5) return null;
+    final hhmm = normalized.substring(0, 5);
+    final parts = hhmm.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return (h * 60) + m;
+  }
+
+  String _minutesToHhmm(int totalMinutes) {
+    final h = (totalMinutes ~/ 60).toString().padLeft(2, '0');
+    final m = (totalMinutes % 60).toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  String _formatElapsed(int totalSeconds) {
+    final hours = (totalSeconds ~/ 3600).toString().padLeft(2, '0');
+    final minutes = ((totalSeconds % 3600) ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$hours:$minutes:$seconds';
+  }
 
   _StatusPalette _paletteForStatus(String status) {
     final normalized = status.toLowerCase();
@@ -41,31 +118,179 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _markStart();
+  }
+
+  Future<void> _markStart() async {
+    setState(() => _starting = true);
+    try {
+      final startedAt = await widget.repository.startServices(ids: _serviceIds);
+      if (!mounted) return;
+
+      _startedAt = startedAt;
+      final now = DateTime.now();
+      _elapsedSeconds = now.difference(startedAt).inSeconds;
+      if (_elapsedSeconds < 0) _elapsedSeconds = 0;
+
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted || _startedAt == null) return;
+        setState(() {
+          _elapsedSeconds = DateTime.now().difference(_startedAt!).inSeconds;
+          if (_elapsedSeconds < 0) _elapsedSeconds = 0;
+        });
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _starting = false);
+    }
+  }
+
+  @override
   void dispose() {
+    _timer?.cancel();
     _observationController.dispose();
     super.dispose();
   }
 
-  Future<void> _addFromGallery() async {
-    final picked = await _picker.pickMultiImage(imageQuality: 75);
-    if (picked.isEmpty) return;
-    setState(() => _photos.addAll(picked));
+  Future<ServiceTask?> _selectServiceForEvidence() async {
+    if (!_isGrouped) {
+      return _representativeService;
+    }
+
+    int? selectedServiceId;
+    return showDialog<ServiceTask>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return AlertDialog(
+              title: const Text('¿A qué servicio pertenece la foto?'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _effectiveServices.map((service) {
+                      return RadioListTile<int>(
+                        value: service.id,
+                        groupValue: selectedServiceId,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(service.title),
+                        subtitle: Text(service.address ?? service.client),
+                        onChanged: (value) {
+                          setLocalState(() {
+                            selectedServiceId = value;
+                          });
+                        },
+                      );
+                    }).toList(growable: false),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: selectedServiceId == null
+                      ? null
+                      : () {
+                          final selected = _effectiveServices.firstWhere(
+                            (service) => service.id == selectedServiceId,
+                          );
+                          Navigator.of(dialogContext).pop(selected);
+                        },
+                  child: const Text('Continuar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _takePhoto() async {
+    final selectedService = await _selectServiceForEvidence();
+    if (selectedService == null) return;
+
     final photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 75);
     if (photo == null) return;
-    setState(() => _photos.add(photo));
+
+    setState(() {
+      _evidence.add(
+        _EvidenceDraft(
+          file: photo,
+          serviceId: selectedService.id,
+          serviceTitle: selectedService.title,
+        ),
+      );
+    });
+  }
+
+  Map<String, List<_EvidenceDraft>> _groupedEvidenceByService() {
+    final grouped = <String, List<_EvidenceDraft>>{};
+    for (final item in _evidence) {
+      final key = item.serviceTitle.trim().isEmpty ? 'Servicio' : item.serviceTitle;
+      grouped.putIfAbsent(key, () => <_EvidenceDraft>[]).add(item);
+    }
+    return grouped;
+  }
+
+  Widget _buildElapsedCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF4FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFB6D4F7)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.timer_outlined, color: Color(0xFF1F3C68)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _starting
+                  ? 'Registrando inicio por técnico...'
+                  : 'Tiempo en curso: ${_formatElapsed(_elapsedSeconds)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1F3C68),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _finalizeService() async {
     setState(() => _saving = true);
     try {
-      await widget.repository.completeService(
-        id: widget.service.id,
+      await widget.repository.completeServices(
+        ids: _serviceIds,
         observations: _observationController.text.trim().isEmpty
             ? null
             : _observationController.text.trim(),
+        durationMinutes: _elapsedSeconds > 0 ? (_elapsedSeconds / 60).ceil() : null,
+        evidencePhotos: _evidence
+            .map(
+              (draft) => ServiceEvidenceUpload(
+                path: draft.file.path,
+                name: draft.file.name,
+                serviceId: draft.serviceId,
+                serviceTitle: draft.serviceTitle,
+              ),
+            )
+            .toList(growable: false),
       );
 
       if (!mounted) return;
@@ -85,13 +310,8 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = _paletteForStatus(widget.service.status);
-    final hasSchedule =
-        (widget.service.startTime != null && widget.service.startTime!.trim().isNotEmpty) ||
-        (widget.service.endTime != null && widget.service.endTime!.trim().isNotEmpty);
-    final schedule = hasSchedule
-        ? '${(widget.service.startTime ?? '').trim()} - ${(widget.service.endTime ?? '').trim()}'
-        : null;
+    final palette = _paletteForStatus(_representativeService.status);
+    final schedule = _mergedSchedule;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Servicio en curso')),
@@ -112,7 +332,7 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.service.client,
+                  _representativeService.client,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -121,13 +341,20 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  widget.service.title,
+                  _mergedTitle,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
                     fontSize: 20,
                   ),
                 ),
+                if (_isGrouped) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_effectiveServices.length} servicios agrupados',
+                    style: const TextStyle(color: Color(0xE6FFFFFF), fontWeight: FontWeight.w600),
+                  ),
+                ],
                 if (schedule != null) ...[
                   const SizedBox(height: 2),
                   Text(
@@ -140,59 +367,70 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
                 ],
                 const SizedBox(height: 4),
                 Text(
-                  widget.service.address ?? 'Sin direccion',
+                  _representativeService.address ?? 'Sin direccion',
                   style: const TextStyle(color: Color(0xE6FFFFFF)),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _addFromGallery,
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('Galeria'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _takePhoto,
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('Camara'),
-                ),
-              ),
-            ],
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _takePhoto,
+              icon: const Icon(Icons.camera_alt_outlined),
+              label: const Text('Camara'),
+            ),
           ),
           const SizedBox(height: 10),
           Text(
-            'Evidencias (${_photos.length})',
+            'Evidencias (${_evidence.length})',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          if (_photos.isEmpty)
+          if (_evidence.isEmpty)
             const Text('Aun no hay fotos agregadas')
           else
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _photos.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemBuilder: (context, index) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.file(
-                    File(_photos[index].path),
-                    fit: BoxFit.cover,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _groupedEvidenceByService().entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${entry.key} (${entry.value.length})',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1F3C68),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: entry.value.length,
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                        ),
+                        itemBuilder: (context, index) {
+                          final item = entry.value[index];
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.file(
+                              File(item.file.path),
+                              fit: BoxFit.cover,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 );
-              },
+              }).toList(growable: false),
             ),
           const SizedBox(height: 14),
           TextField(
@@ -204,8 +442,10 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
             ),
           ),
           const SizedBox(height: 16),
+          _buildElapsedCard(),
+          const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _saving ? null : _finalizeService,
+            onPressed: (_saving || _starting) ? null : _finalizeService,
             icon: const Icon(Icons.check_circle_outline),
             label: _saving
                 ? const SizedBox(
@@ -219,6 +459,18 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
       ),
     );
   }
+}
+
+class _EvidenceDraft {
+  const _EvidenceDraft({
+    required this.file,
+    required this.serviceId,
+    required this.serviceTitle,
+  });
+
+  final XFile file;
+  final int serviceId;
+  final String serviceTitle;
 }
 
 class _StatusPalette {

@@ -19,7 +19,7 @@ class CargoController extends Controller
         $usuario->loadMissing('area');
         $areaNombre = mb_strtolower(trim((string) ($usuario->area?->nombre ?? '')));
 
-        return in_array($areaNombre, ['gerencia', 'it'], true);
+        return $areaNombre === 'it';
     }
 
     private function esAreaIt(?int $idArea): bool

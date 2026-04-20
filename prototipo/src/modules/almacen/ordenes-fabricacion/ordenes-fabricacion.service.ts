@@ -98,12 +98,17 @@ export interface ProgramacionFabricacionEntradaDevolucion {
     id: number;
     tipo: 'EntradaProducto' | 'DevolucionInsumo' | 'ConsumoDiferenciaInsumo';
     id_producto: number;
+    id_lote?: number | null;
     cantidad: number;
     observacion?: string | null;
     producto?: {
       id: number;
       descripcion: string;
       unidad?: string | null;
+    } | null;
+    lote?: {
+      id: number;
+      numero_lote: string;
     } | null;
   }>;
   cantidad_esperada_total?: number;
@@ -136,6 +141,7 @@ export const ordenesFabricacionService = {
     id_programacion: number;
     insumos?: Array<{
       id_producto: number;
+      id_lote: number;
       cantidad_entregada: number;
     }>;
     observacion?: string;
@@ -162,10 +168,12 @@ export const ordenesFabricacionService = {
     observaciones?: string;
     devoluciones?: Array<{
       id_producto: number;
+      id_lote: number;
       cantidad_devuelta: number;
     }>;
     diferencias_materia_prima?: Array<{
       id_producto: number;
+      id_lote: number;
       cantidad_adicional: number;
     }>;
   }) => {

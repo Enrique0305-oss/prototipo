@@ -7,6 +7,7 @@ use App\Models\DetalleEntradaDevolucionFabricacion;
 use App\Models\EntradaDevolucionFabricacion;
 use App\Models\Inventario;
 use App\Models\Kardex;
+use App\Models\Lote;
 use App\Models\ProgramacionFabricacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,7 @@ class EntradaDevolucionFabricacionController extends Controller
             'ordenFabricacion.detalles.producto',
             'programacionFabricacion.tecnico',
             'detalles.producto',
+            'detalles.lote',
         ]);
 
         if ($request->filled('estado')) {
@@ -73,12 +75,17 @@ class EntradaDevolucionFabricacionController extends Controller
                         'id' => $detalle->id,
                         'tipo' => $detalle->tipo,
                         'id_producto' => $detalle->id_producto,
+                        'id_lote' => $detalle->id_lote,
                         'cantidad' => (float) $detalle->cantidad,
                         'observacion' => $detalle->observacion,
                         'producto' => $detalle->producto ? [
                             'id' => $detalle->producto->id,
                             'descripcion' => $detalle->producto->descripcion,
                             'unidad' => $detalle->producto->unidad,
+                        ] : null,
+                        'lote' => $detalle->lote ? [
+                            'id' => $detalle->lote->id,
+                            'numero_lote' => $detalle->lote->numero_lote,
                         ] : null,
                     ];
                 })->values(),
@@ -106,9 +113,11 @@ class EntradaDevolucionFabricacionController extends Controller
             'observaciones' => 'nullable|string|max:1000',
             'devoluciones' => 'nullable|array',
             'devoluciones.*.id_producto' => 'required_with:devoluciones|integer|exists:productos,id',
+            'devoluciones.*.id_lote' => 'required_with:devoluciones|integer|exists:lotes,id',
             'devoluciones.*.cantidad_devuelta' => 'required_with:devoluciones|numeric|min:0.001',
             'diferencias_materia_prima' => 'nullable|array',
             'diferencias_materia_prima.*.id_producto' => 'required_with:diferencias_materia_prima|integer|exists:productos,id',
+            'diferencias_materia_prima.*.id_lote' => 'required_with:diferencias_materia_prima|integer|exists:lotes,id',
             'diferencias_materia_prima.*.cantidad_adicional' => 'required_with:diferencias_materia_prima|numeric|min:0.001',
         ]);
 
@@ -183,7 +192,7 @@ class EntradaDevolucionFabricacionController extends Controller
         if ($tieneSobrante && $devoluciones->isEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Debe registrar al menos una devolución de materia prima cuando se habilita el sobrante.',
+                'message' => 'Debe registrar al menos una devolucion de materia prima cuando se habilita el sobrante.',
             ], 422);
         }
 
@@ -214,7 +223,7 @@ class EntradaDevolucionFabricacionController extends Controller
             if (!$insumosSugeridos->has($idProducto)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'La diferencia de materia prima contiene un insumo no asociado a la receta de fabricación.',
+                    'message' => 'La diferencia de materia prima contiene un insumo no asociado a la receta de fabricacion.',
                 ], 422);
             }
 
@@ -232,6 +241,40 @@ class EntradaDevolucionFabricacionController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => "Stock insuficiente para registrar diferencia de materia prima en {$descripcion}.",
+                ], 422);
+            }
+        }
+
+        foreach ($devoluciones as $devolucion) {
+            $idProducto = (int) ($devolucion['id_producto'] ?? 0);
+            $idLote = (int) ($devolucion['id_lote'] ?? 0);
+
+            $lote = Lote::query()->where('id', $idLote)->where('id_producto', $idProducto)->first();
+            if (!$lote) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El lote seleccionado no pertenece al producto de devolucion.',
+                ], 422);
+            }
+        }
+
+        foreach ($diferenciasMateriaPrima as $diferencia) {
+            $idProducto = (int) ($diferencia['id_producto'] ?? 0);
+            $idLote = (int) ($diferencia['id_lote'] ?? 0);
+            $cantidadAdicional = (float) ($diferencia['cantidad_adicional'] ?? 0);
+
+            $lote = Lote::query()->where('id', $idLote)->where('id_producto', $idProducto)->first();
+            if (!$lote) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El lote seleccionado no pertenece al insumo de diferencia.',
+                ], 422);
+            }
+
+            if ((float) $lote->cantidad_disponible < $cantidadAdicional) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cantidad insuficiente en lote {$lote->numero_lote} para la diferencia.",
                 ], 422);
             }
         }
@@ -263,11 +306,11 @@ class EntradaDevolucionFabricacionController extends Controller
                     'id_producto' => $idProductoFinal,
                     'tipo_movimiento' => 'Entrada',
                     'cantidad' => $cantidadProducida,
-                    'motivo' => 'Entrada por fabricación',
+                    'motivo' => 'Entrada por fabricacion',
                     'referencia' => $this->buildReferenciaEntrada($programacion->id),
                     'id_referencia' => $registro->id,
                     'id_usuario' => $idUsuario,
-                    'observacion' => 'Ingreso de producto terminado por cierre de fabricación.',
+                    'observacion' => 'Ingreso de producto terminado por cierre de fabricacion.',
                 ]);
 
                 DetalleEntradaDevolucionFabricacion::create([
@@ -280,11 +323,21 @@ class EntradaDevolucionFabricacionController extends Controller
             }
 
             foreach ($devoluciones as $devolucion) {
-                $idProducto = (int) $devolucion['id_producto'];
-                $cantidadDevuelta = (float) $devolucion['cantidad_devuelta'];
+                $idProducto = (int) ($devolucion['id_producto'] ?? 0);
+                $idLote = (int) ($devolucion['id_lote'] ?? 0);
+                $cantidadDevuelta = (float) ($devolucion['cantidad_devuelta'] ?? 0);
                 if ($cantidadDevuelta <= 0) {
                     continue;
                 }
+
+                $lote = Lote::query()->where('id', $idLote)->where('id_producto', $idProducto)->first();
+                if (!$lote) {
+                    continue;
+                }
+
+                // La devolucion regresa material al lote.
+                $lote->increment('cantidad_disponible', $cantidadDevuelta);
+                $lote->increment('cantidad', $cantidadDevuelta);
 
                 $this->ensureInventarioExists($idProducto);
 
@@ -292,28 +345,40 @@ class EntradaDevolucionFabricacionController extends Controller
                     'id_producto' => $idProducto,
                     'tipo_movimiento' => 'Entrada',
                     'cantidad' => $cantidadDevuelta,
-                    'motivo' => 'Devolución por sobrante de fabricación',
+                    'motivo' => 'Devolucion por sobrante de fabricacion',
                     'referencia' => $this->buildReferenciaEntrada($programacion->id),
                     'id_referencia' => $registro->id,
                     'id_usuario' => $idUsuario,
-                    'observacion' => 'Devolución de materia prima por cierre de fabricación.',
+                    'id_lote' => $idLote,
+                    'observacion' => 'Devolucion de materia prima por cierre de fabricacion.',
                 ]);
 
                 DetalleEntradaDevolucionFabricacion::create([
                     'id_entrada_devolucion_fabricacion' => $registro->id,
                     'tipo' => DetalleEntradaDevolucionFabricacion::TIPO_DEVOLUCION_INSUMO,
                     'id_producto' => $idProducto,
+                    'id_lote' => $idLote,
                     'cantidad' => $cantidadDevuelta,
-                    'observacion' => 'Devolución de sobrante',
+                    'observacion' => 'Devolucion de sobrante',
                 ]);
             }
 
             foreach ($diferenciasMateriaPrima as $diferencia) {
-                $idProducto = (int) $diferencia['id_producto'];
-                $cantidadAdicional = (float) $diferencia['cantidad_adicional'];
+                $idProducto = (int) ($diferencia['id_producto'] ?? 0);
+                $idLote = (int) ($diferencia['id_lote'] ?? 0);
+                $cantidadAdicional = (float) ($diferencia['cantidad_adicional'] ?? 0);
                 if ($cantidadAdicional <= 0) {
                     continue;
                 }
+
+                $lote = Lote::query()->where('id', $idLote)->where('id_producto', $idProducto)->first();
+                if (!$lote) {
+                    continue;
+                }
+
+                // El consumo adicional descuenta material del lote.
+                $lote->decrement('cantidad_disponible', $cantidadAdicional);
+                $lote->decrement('cantidad', $cantidadAdicional);
 
                 $this->ensureInventarioExists($idProducto);
 
@@ -321,19 +386,21 @@ class EntradaDevolucionFabricacionController extends Controller
                     'id_producto' => $idProducto,
                     'tipo_movimiento' => 'Salida',
                     'cantidad' => $cantidadAdicional,
-                    'motivo' => 'Salida por diferencia de fabricación',
+                    'motivo' => 'Salida por diferencia de fabricacion',
                     'referencia' => $this->buildReferenciaEntrada($programacion->id),
                     'id_referencia' => $registro->id,
                     'id_usuario' => $idUsuario,
-                    'observacion' => 'Consumo adicional de materia prima por fabricación mayor a la esperada.',
+                    'id_lote' => $idLote,
+                    'observacion' => 'Consumo adicional de materia prima por fabricacion mayor a la esperada.',
                 ]);
 
                 DetalleEntradaDevolucionFabricacion::create([
                     'id_entrada_devolucion_fabricacion' => $registro->id,
                     'tipo' => DetalleEntradaDevolucionFabricacion::TIPO_CONSUMO_DIFERENCIA_INSUMO,
                     'id_producto' => $idProducto,
+                    'id_lote' => $idLote,
                     'cantidad' => $cantidadAdicional,
-                    'observacion' => 'Consumo adicional por diferencia de producción',
+                    'observacion' => 'Consumo adicional por diferencia de produccion',
                 ]);
             }
 
@@ -366,9 +433,19 @@ class EntradaDevolucionFabricacionController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error al registrar entrada/devolucion: ' . $e->getMessage(),
+                'message' => 'Error al registrar entrada/devolucion: ' . $this->sanitizeUtf8($e->getMessage()),
             ], 500);
         }
+    }
+
+    private function sanitizeUtf8(string $value): string
+    {
+        $sanitized = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+        if ($sanitized === false || $sanitized === null || $sanitized === '') {
+            return 'Error interno de codificacion en el mensaje.';
+        }
+
+        return $sanitized;
     }
 
     private function buildResumenProgramacion(ProgramacionFabricacion $programacion): array

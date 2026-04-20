@@ -29,9 +29,14 @@ export interface InsumoProgamacion {
   id: number;
   id_programacion: number;
   id_producto: number;
+  id_lote?: number | null;
   cantidad_asignada: number;
   cantidad_utilizada?: number;
   estado: 'Asignado' | 'Entregado' | 'Utilizado' | 'Devuelto';
+  lote?: {
+    id: number;
+    numero_lote: string;
+  };
   producto?: {
     id: number;
     descripcion: string;
@@ -55,6 +60,7 @@ export interface ConfirmarSalidaPayload {
   id_programacion: number;
   insumos: {
     id_producto: number;
+    id_lote: number;
     cantidad_entregada: number;
   }[];
   observacion?: string;

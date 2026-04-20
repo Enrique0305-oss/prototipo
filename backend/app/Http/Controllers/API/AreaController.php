@@ -18,7 +18,7 @@ class AreaController extends Controller
         $usuario->loadMissing('area');
         $areaNombre = mb_strtolower(trim((string) ($usuario->area?->nombre ?? '')));
 
-        return in_array($areaNombre, ['gerencia', 'it'], true);
+        return $areaNombre === 'it';
     }
 
     /**

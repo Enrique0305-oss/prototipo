@@ -5,6 +5,7 @@ export interface DetalleOrdenCompra {
   id?: number;
   id_orden_compra?: number;
   id_producto: number;
+  id_lote?: number | null;
   cantidad: number;
   precio_unitario: number;
   subtotal?: number;
@@ -15,6 +16,10 @@ export interface DetalleOrdenCompra {
     sku?: string;
     categoria?: { nombre: string };
   };
+  lote?: {
+    id: number;
+    numero_lote: string;
+  } | null;
 }
 
 export interface OrdenCompra {

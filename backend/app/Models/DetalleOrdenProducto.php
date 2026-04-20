@@ -13,6 +13,7 @@ class DetalleOrdenProducto extends Model
     protected $fillable = [
         'id_orden_producto',
         'id_producto',
+        'id_lote',
         'cantidad',
         'precio_unitario',
         'subtotal'
@@ -33,5 +34,10 @@ class DetalleOrdenProducto extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function lote()
+    {
+        return $this->belongsTo(Lote::class, 'id_lote');
     }
 }

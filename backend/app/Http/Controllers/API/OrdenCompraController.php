@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\OrdenCompra;
 use App\Models\DetalleOrdenCompra;
 use App\Models\Kardex;
+use App\Models\Lote;
 use App\Models\Inventario;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -74,6 +75,7 @@ class OrdenCompraController extends Controller
         $orden = OrdenCompra::with([
             'proveedor',
             'detalles.producto.categoria',
+            'detalles.lote',
             'usuario',
         ])->findOrFail($id);
 
@@ -99,6 +101,7 @@ class OrdenCompraController extends Controller
             'observaciones'                => 'nullable|string',
             'detalles'                     => 'required|array|min:1',
             'detalles.*.id_producto'       => 'required|integer|exists:productos,id',
+            'detalles.*.id_lote'           => 'nullable|integer|exists:lotes,id',
             'detalles.*.cantidad'          => 'required|integer|min:1',
             'detalles.*.precio_unitario'   => 'required|numeric|min:0',
             'detalles.*.observacion'       => 'nullable|string|max:300',
@@ -135,6 +138,7 @@ class OrdenCompraController extends Controller
                 DetalleOrdenCompra::create([
                     'id_orden_compra'  => $orden->id,
                     'id_producto'      => $det['id_producto'],
+                    'id_lote'          => $det['id_lote'] ?? null,
                     'cantidad'         => $det['cantidad'],
                     'precio_unitario'  => $det['precio_unitario'],
                     'subtotal'         => round($det['cantidad'] * $det['precio_unitario'], 4),
@@ -147,7 +151,7 @@ class OrdenCompraController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Orden de compra creada: ' . $orden->numero_orden_compra,
-                'data' => $orden->load(['proveedor', 'detalles.producto']),
+                'data' => $orden->load(['proveedor', 'detalles.producto', 'detalles.lote']),
             ], 201);
 
         } catch (\Throwable $e) {
@@ -184,6 +188,7 @@ class OrdenCompraController extends Controller
             'observaciones'                => 'nullable|string',
             'detalles'                     => 'sometimes|required|array|min:1',
             'detalles.*.id_producto'       => 'required|integer|exists:productos,id',
+            'detalles.*.id_lote'           => 'nullable|integer|exists:lotes,id',
             'detalles.*.cantidad'          => 'required|integer|min:1',
             'detalles.*.precio_unitario'   => 'required|numeric|min:0',
             'detalles.*.observacion'       => 'nullable|string|max:300',
@@ -210,6 +215,7 @@ class OrdenCompraController extends Controller
                     DetalleOrdenCompra::create([
                         'id_orden_compra'  => $orden->id,
                         'id_producto'      => $det['id_producto'],
+                        'id_lote'          => $det['id_lote'] ?? null,
                         'cantidad'         => $det['cantidad'],
                         'precio_unitario'  => $det['precio_unitario'],
                         'subtotal'         => round($det['cantidad'] * $det['precio_unitario'], 4),
@@ -224,7 +230,7 @@ class OrdenCompraController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Orden actualizada',
-                'data'    => $orden->fresh(['proveedor', 'detalles.producto']),
+                'data'    => $orden->fresh(['proveedor', 'detalles.producto', 'detalles.lote']),
             ]);
 
         } catch (\Throwable $e) {
@@ -241,7 +247,7 @@ class OrdenCompraController extends Controller
      */
     public function recibir(Request $request, $id): JsonResponse
     {
-        $orden = OrdenCompra::with('detalles.producto')->findOrFail($id);
+        $orden = OrdenCompra::with(['detalles.producto', 'detalles.lote'])->findOrFail($id);
 
         if ($orden->estado !== 'Pendiente') {
             return response()->json([
@@ -257,8 +263,23 @@ class OrdenCompraController extends Controller
         DB::beginTransaction();
         try {
             foreach ($orden->detalles as $det) {
+                if (!empty($det->id_lote)) {
+                    // Si el detalle está asociado a un lote, incrementa ese lote al recibir la OC.
+                    $lote = Lote::where('id', $det->id_lote)
+                        ->where('id_producto', $det->id_producto)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($lote) {
+                        $lote->cantidad = ((int) $lote->cantidad) + (int) $det->cantidad;
+                        $lote->cantidad_disponible = ((int) $lote->cantidad_disponible) + (int) $det->cantidad;
+                        $lote->save();
+                    }
+                }
+
                 Kardex::registrarMovimiento([
                     'id_producto'    => $det->id_producto,
+                    'id_lote'        => $det->id_lote,
                     'tipo_movimiento'=> 'Entrada',
                     'cantidad'       => $det->cantidad,
                     'motivo'         => 'Orden de Compra',
@@ -279,7 +300,7 @@ class OrdenCompraController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Orden recibida. Kardex e inventario actualizados.',
-                'data'    => $orden->fresh(['proveedor', 'detalles.producto']),
+                'data'    => $orden->fresh(['proveedor', 'detalles.producto', 'detalles.lote']),
             ]);
 
         } catch (\Throwable $e) {

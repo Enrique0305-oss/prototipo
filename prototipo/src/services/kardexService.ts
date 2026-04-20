@@ -4,6 +4,8 @@ export interface KardexMovimiento {
   id: number;
   id_producto: number;
   producto: string;
+  id_lote: number | null;
+  numero_lote: string | null;
   tipo_movimiento: 'Entrada' | 'Salida';
   cantidad: number;
   stock_anterior: number;

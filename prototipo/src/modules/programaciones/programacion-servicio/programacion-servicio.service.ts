@@ -27,6 +27,22 @@ export const programacionServicioService = {
 		return apiClient.get<ApiResponse<Programacion[]>>('/programacion-servicio', filtros as any);
 	},
 
+	getGrupos: async (filtros?: Record<string, any>) => {
+		return apiClient.get<ApiResponse<any[]>>('/programacion-servicio/grupos', filtros as any);
+	},
+
+	getGrupoById: async (id: number) => {
+		return apiClient.get<ApiResponse<any>>(`/programacion-servicio/grupos/${id}`);
+	},
+
+	crearGrupo: async (data: { ids_programacion: number[]; observaciones?: string }) => {
+		return apiClient.post<ApiResponse<any>>('/programacion-servicio/grupos', data);
+	},
+
+	desagruparGrupo: async (id: number) => {
+		return apiClient.delete<ApiResponse<null>>(`/programacion-servicio/grupos/${id}`);
+	},
+
 	getById: async (id: number) => {
 		return apiClient.get<ApiResponse<Programacion>>(`/programacion-servicio/${id}`);
 	},

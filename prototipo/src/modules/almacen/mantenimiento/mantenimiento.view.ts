@@ -28,6 +28,7 @@ let progVista: 'lista' | 'calendario' = 'lista';
 let progMesCalendario = new Date().getMonth() + 1;
 let previewFechas: PreviewFecha[] = [];
 let expandedProgramacion: number | null = null;
+let progEditId: number | null = null;
 
 let progDiaSeleccionado: number | null = null;
 let progMantenimientosDelDia: Array<{ id: number; equipo: string; motivo: string; estado: string; mntId: number }> = [];
@@ -104,10 +105,10 @@ function renderMantenimientoTab() {
       <table class="op-table">
         <thead>
           <tr>
-            <th>ID</th>
             <th>EQUIPO</th>
             <th>MOTIVO</th>
             <th>FECHA</th>
+            <th>FRECUENCIA</th>
             <th>OBSERVACIONES</th>
             <th>ACCIONES</th>
           </tr>
@@ -177,6 +178,24 @@ function renderMantenimientoTab() {
         </div>
       </div>
     </div>
+
+    <!-- Modal Detalle Mantenimiento -->
+    <div id="modal-detalle-mant" class="modal-overlay" style="display:none;">
+      <div class="modal-container" style="max-width:560px;">
+        <div class="modal-header">
+          <h2>Detalle de Mantenimiento</h2>
+          <button class="modal-close" id="btn-cerrar-modal-detalle-mant">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" id="detalle-mant-body" style="display:grid; grid-template-columns:1fr 1fr; gap:12px 16px;"></div>
+        <div style="display:flex; justify-content:flex-end; padding:16px 20px; border-top:1px solid #e2e8f0;">
+          <button type="button" id="btn-cerrar-detalle-mant" style="padding:10px 20px; border:1px solid #d1d5db; border-radius:8px; background:#fff; cursor:pointer; font-size:14px;">Cerrar</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -189,6 +208,22 @@ function formatFecha(fecha: string): string {
   const d = new Date(fecha);
   if (isNaN(d.getTime())) return '--';
   return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function normalizarFechaParaInput(fecha: string | null | undefined): string {
+  if (!fecha) return '';
+  const raw = String(fecha).trim();
+  if (!raw) return '';
+
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function getMotivoLabel(act?: ActividadMantenimiento | null): string {
@@ -340,9 +375,15 @@ async function cargarMantenimientos() {
       return;
     }
 
-    tbody.innerHTML = mantenimientos.map(m => `
+    tbody.innerHTML = mantenimientos.map(m => {
+      const frecuenciaMeses = Number((m as any)?.programacion?.frecuencia_meses);
+      const frecuencia = Number.isFinite(frecuenciaMeses) ? frecuenciaLabel(frecuenciaMeses) : '--';
+      const observacionesMantenimiento = ((m as any).observaciones ?? (m as any).observacion ?? '').toString().trim();
+      const observacionesProgramacion = ((m as any)?.programacion?.observaciones ?? '').toString().trim();
+      const observaciones = observacionesMantenimiento || observacionesProgramacion;
+
+      return `
       <tr>
-        <td><strong style="color:#2563eb;">${m.id}</strong></td>
         <td>
           <div style="font-weight:600;">${(m.equipo as any)?.descripcion || 'Equipo #' + m.id_equipo}</div>
           <div style="font-size:12px; color:#94a3b8;">${(m.equipo as any)?.marca || ''} ${(m.equipo as any)?.modelo || ''}</div>
@@ -352,19 +393,18 @@ async function cargarMantenimientos() {
           <div style="margin-top:4px;">${categoriaBadge(getTipoMantenimiento(m.actividad as any))}</div>
         </td>
         <td>${formatFecha(m.fecha)}</td>
-        <td><div style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${m.observaciones || ''}">${m.observaciones || '--'}</div></td>
+        <td>${frecuencia}</td>
+        <td><div style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${observaciones}">${observaciones || '--'}</div></td>
         <td>
           <div class="action-buttons">
-            <button class="action-btn-icon edit btn-editar-mant" data-id="${m.id}" title="Editar">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-            </button>
-            <button class="action-btn-icon delete btn-eliminar-mant" data-id="${m.id}" title="Eliminar">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <button class="action-btn-icon btn-ver-detalle-mant" data-id="${m.id}" title="Ver detalle" style="border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </button>
           </div>
         </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
     bindAccionesMant();
   } catch (error) {
@@ -375,39 +415,54 @@ async function cargarMantenimientos() {
 
 let mantIdToDelete: number | null = null;
 
+function abrirDetalleMantenimiento(m: Mantenimiento) {
+  const modal = document.getElementById('modal-detalle-mant');
+  const body = document.getElementById('detalle-mant-body');
+  if (!modal || !body) return;
+
+  const equipo = (m.equipo as any)?.descripcion || `Equipo #${m.id_equipo}`;
+  const marcaModelo = `${(m.equipo as any)?.marca || ''} ${(m.equipo as any)?.modelo || ''}`.trim() || '--';
+  const motivo = getMotivoLabel(m.actividad as any);
+  const tipo = getTipoMantenimiento(m.actividad as any);
+  const frecuenciaMeses = Number((m as any)?.programacion?.frecuencia_meses);
+  const frecuencia = Number.isFinite(frecuenciaMeses) ? frecuenciaLabel(frecuenciaMeses) : '--';
+  const observacionesMantenimiento = ((m as any).observaciones ?? (m as any).observacion ?? '').toString().trim();
+  const observacionesProgramacion = ((m as any)?.programacion?.observaciones ?? '').toString().trim();
+  const observaciones = observacionesMantenimiento || observacionesProgramacion;
+
+  body.innerHTML = `
+    <div style="grid-column:1/-1; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc;">
+      <strong style="color:#0f172a;">Mantenimiento #${m.id}</strong>
+    </div>
+    <div><div style="font-size:12px; color:#64748b; margin-bottom:4px;">Equipo</div><div style="font-weight:600; color:#0f172a;">${equipo}</div></div>
+    <div><div style="font-size:12px; color:#64748b; margin-bottom:4px;">Marca / Modelo</div><div style="color:#334155;">${marcaModelo}</div></div>
+    <div><div style="font-size:12px; color:#64748b; margin-bottom:4px;">Motivo</div><div style="font-weight:600; color:#0f172a;">${motivo}</div></div>
+    <div><div style="font-size:12px; color:#64748b; margin-bottom:4px;">Tipo</div><div>${categoriaBadge(tipo)}</div></div>
+    <div><div style="font-size:12px; color:#64748b; margin-bottom:4px;">Fecha</div><div style="color:#0f172a;">${formatFecha(m.fecha)}</div></div>
+    <div><div style="font-size:12px; color:#64748b; margin-bottom:4px;">Frecuencia</div><div style="color:#334155;">${frecuencia}</div></div>
+    <div><div style="font-size:12px; color:#64748b; margin-bottom:4px;">ID Programación</div><div style="color:#334155;">${(m as any).id_programacion || '--'}</div></div>
+    <div style="grid-column:1/-1;"><div style="font-size:12px; color:#64748b; margin-bottom:4px;">Observaciones</div><div style="min-height:60px; border:1px solid #e2e8f0; border-radius:8px; padding:10px; background:#fff; color:#334155;">${observaciones || '--'}</div></div>
+  `;
+
+  modal.style.display = 'flex';
+}
+
 function bindAccionesMant() {
-  // Editar
-  document.querySelectorAll('.btn-editar-mant').forEach(btn => {
+  document.querySelectorAll('.btn-ver-detalle-mant').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = Number((btn as HTMLButtonElement).dataset.id);
+      if (!id) return;
       try {
         const resp = await mantenimientoService.getById(id);
-        const m = resp.data;
-        if (!m) return;
-
-        mntEditId = m.id;
-        (document.getElementById('mant-edit-id') as HTMLInputElement).value = String(m.id);
-        (document.getElementById('mant-equipo') as HTMLSelectElement).value = String(m.id_equipo);
-        (document.getElementById('mant-actividad') as HTMLSelectElement).value = String(m.id_actmanten);
-        (document.getElementById('mant-fecha') as HTMLInputElement).value = m.fecha ? m.fecha.split('T')[0] : '';
-        (document.getElementById('mant-observaciones') as HTMLTextAreaElement).value = m.observaciones || '';
-
-        const countEl = document.getElementById('mant-obs-count');
-        if (countEl) countEl.textContent = `(${(m.observaciones || '').length}/100)`;
-
-        document.getElementById('modal-mant-titulo')!.textContent = 'Editar Mantenimiento';
-        document.getElementById('modal-mantenimiento')!.style.display = 'flex';
+        const detalle = resp.data;
+        if (!detalle) {
+          mostrarToast('warning', 'Sin datos', 'No se encontró el detalle del mantenimiento');
+          return;
+        }
+        abrirDetalleMantenimiento(detalle);
       } catch (error) {
-        mostrarToast('error', 'Error', 'No se pudo cargar el mantenimiento');
+        mostrarToast('error', 'Error', 'No se pudo cargar el detalle del mantenimiento');
       }
-    });
-  });
-
-  // Eliminar
-  document.querySelectorAll('.btn-eliminar-mant').forEach(btn => {
-    btn.addEventListener('click', () => {
-      mantIdToDelete = Number((btn as HTMLButtonElement).dataset.id);
-      document.getElementById('modal-eliminar-mant')!.style.display = 'flex';
     });
   });
 }
@@ -426,6 +481,7 @@ function limpiarFormMant() {
 function initMantenimientoTabEvents() {
   const modal = document.getElementById('modal-mantenimiento');
   const modalEliminar = document.getElementById('modal-eliminar-mant');
+  const modalDetalle = document.getElementById('modal-detalle-mant');
 
   // Filtros
   document.getElementById('mnt-filter-equipo')?.addEventListener('change', (e) => {
@@ -461,6 +517,16 @@ function initMantenimientoTabEvents() {
   });
   modalEliminar?.addEventListener('click', (e) => {
     if (e.target === modalEliminar) modalEliminar.style.display = 'none';
+  });
+
+  document.getElementById('btn-cerrar-modal-detalle-mant')?.addEventListener('click', () => {
+    if (modalDetalle) modalDetalle.style.display = 'none';
+  });
+  document.getElementById('btn-cerrar-detalle-mant')?.addEventListener('click', () => {
+    if (modalDetalle) modalDetalle.style.display = 'none';
+  });
+  modalDetalle?.addEventListener('click', (e) => {
+    if (e.target === modalDetalle) modalDetalle.style.display = 'none';
   });
 
   // Contador de caracteres observaciones
@@ -721,7 +787,7 @@ function renderProgramacionAnualTab(): string {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
-          Nueva Programación Anual
+          <span id="prog-form-title">Nueva Programación Anual</span>
         </h3>
 
       </div>
@@ -786,6 +852,9 @@ function renderProgramacionAnualTab(): string {
           </div>
         </div>
         <div style="display:flex; gap:12px; margin-top:20px; align-items:center;">
+          <button type="button" id="btn-cancelar-edicion-programacion" class="btn-primary" style="padding:10px 20px; background:#94a3b8; display:none;">
+            Cancelar edición
+          </button>
           <button type="button" id="btn-preview-programacion" class="btn-primary" style="padding:10px 20px; background:#6366f1;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:4px;">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>
@@ -796,7 +865,7 @@ function renderProgramacionAnualTab(): string {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:4px;">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
-            Confirmar y Programar
+            <span id="prog-submit-label">Confirmar y Programar</span>
           </button>
           <span id="auto-refresh-indicator" style="display:none; font-size:12px; color:#6366f1; margin-left:auto; display:flex; align-items:center; gap:4px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" style="animation: spin 2s linear infinite;">
@@ -864,6 +933,28 @@ function renderProgramacionAnualTab(): string {
         <div style="display:flex; gap:12px; justify-content:center;">
           <button id="btn-cancelar-eliminar-prog" style="padding:10px 20px; border:1px solid #d1d5db; border-radius:8px; background:#fff; cursor:pointer;">Cancelar</button>
           <button id="btn-confirmar-eliminar-prog" style="padding:10px 20px; border:none; border-radius:8px; background:#dc2626; color:#fff; cursor:pointer; font-weight:600;">Eliminar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Observación al Marcar Realizado -->
+    <div id="modal-realizado-observacion" class="modal-overlay" style="display:none;">
+      <div class="modal-container" style="max-width:520px;">
+        <div class="modal-header">
+          <h2>Marcar mantenimiento como realizado</h2>
+          <button class="modal-close" id="btn-cerrar-realizado-observacion">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:0 0 12px; color:#475569; font-size:13px;">Puede registrar una observación para esta fecha antes de completar.</p>
+          <textarea id="realizado-observacion-input" class="search-input" style="width:100%; min-height:90px; resize:vertical;" maxlength="255" placeholder="Ej: Se realizó cambio de filtro y limpieza general."></textarea>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; padding:16px 20px; border-top:1px solid #e2e8f0;">
+          <button type="button" id="btn-cancelar-realizado-observacion" style="padding:10px 18px; border:1px solid #d1d5db; border-radius:8px; background:#fff; cursor:pointer;">Cancelar</button>
+          <button type="button" id="btn-confirmar-realizado-observacion" class="btn-primary" style="padding:10px 18px;">Guardar y marcar realizado</button>
         </div>
       </div>
     </div>
@@ -964,6 +1055,11 @@ function renderProgramacionCard(prog: ProgramacionMantenimiento): string {
             <button class="btn-toggle-prog" data-id="${prog.id}" style="padding:8px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; cursor:pointer;" title="${isExpanded ? 'Contraer' : 'Ver detalle'}">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" style="transform:rotate(${isExpanded ? '180' : '0'}deg); transition:transform 0.2s;">
                 <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <button class="btn-editar-prog" data-id="${prog.id}" style="padding:8px; border:1px solid #bfdbfe; border-radius:8px; background:#eff6ff; cursor:pointer;" title="Editar programación">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
+                <path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
               </svg>
             </button>
             <button class="btn-eliminar-prog" data-id="${prog.id}" style="padding:8px; border:1px solid #fecaca; border-radius:8px; background:#fef2f2; cursor:pointer;" title="Eliminar programación">
@@ -1207,6 +1303,100 @@ async function cargarProgramaciones() {
 }
 
 let progIdToDelete: number | null = null;
+let progMantenimientoToCompletar: number | null = null;
+
+function abrirModalRealizadoObservacion(idMantenimiento: number) {
+  progMantenimientoToCompletar = idMantenimiento;
+  const modal = document.getElementById('modal-realizado-observacion') as HTMLElement | null;
+  const input = document.getElementById('realizado-observacion-input') as HTMLTextAreaElement | null;
+  if (input) input.value = '';
+  if (modal) modal.style.display = 'flex';
+}
+
+function cerrarModalRealizadoObservacion() {
+  const modal = document.getElementById('modal-realizado-observacion') as HTMLElement | null;
+  const input = document.getElementById('realizado-observacion-input') as HTMLTextAreaElement | null;
+  if (input) input.value = '';
+  if (modal) modal.style.display = 'none';
+  progMantenimientoToCompletar = null;
+}
+
+function actualizarUIEdicionProgramacion() {
+  const title = document.getElementById('prog-form-title') as HTMLElement | null;
+  const submitLabel = document.getElementById('prog-submit-label') as HTMLElement | null;
+  const btnCancelarEdicion = document.getElementById('btn-cancelar-edicion-programacion') as HTMLButtonElement | null;
+
+  if (title) title.textContent = progEditId ? 'Editar Programación Anual' : 'Nueva Programación Anual';
+  if (submitLabel) submitLabel.textContent = progEditId ? 'Guardar cambios' : 'Confirmar y Programar';
+  if (btnCancelarEdicion) btnCancelarEdicion.style.display = progEditId ? 'inline-flex' : 'none';
+}
+
+function resetFormularioProgramacionAnual() {
+  progEditId = null;
+  (document.getElementById('prog-equipo') as HTMLSelectElement).value = '';
+  (document.getElementById('prog-tipo') as HTMLSelectElement).value = 'Preventivo';
+  (document.getElementById('prog-modo') as HTMLSelectElement).value = 'Anual';
+  progTipoMantenimiento = 'Preventivo';
+  actualizarOpcionesMotivoProgramacion();
+  actualizarReglasProgramacion();
+  (document.getElementById('prog-motivo') as HTMLInputElement).value = '';
+  (document.getElementById('prog-frecuencia') as HTMLSelectElement).value = '';
+  (document.getElementById('prog-observaciones') as HTMLInputElement).value = '';
+  (document.getElementById('prog-anio') as HTMLInputElement).value = String(new Date().getFullYear());
+  (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value = '';
+
+  const previewContainer = document.getElementById('preview-fechas-container');
+  if (previewContainer) previewContainer.style.display = 'none';
+  const btnConfirmar = document.getElementById('btn-confirmar-programacion') as HTMLButtonElement | null;
+  if (btnConfirmar) btnConfirmar.disabled = true;
+  previewFechas = [];
+  actualizarUIEdicionProgramacion();
+}
+
+async function cargarProgramacionEnFormulario(programacionId: number) {
+  const local = programaciones.find((p) => p.id === programacionId);
+  let prog = local;
+
+  if (!prog) {
+    const resp = await mantenimientoService.getProgramacionById(programacionId);
+    prog = resp.data;
+  }
+
+  if (!prog) {
+    mostrarToast('error', 'Error', 'No se pudo cargar la programación para editar');
+    return;
+  }
+
+  progEditId = prog.id;
+
+  const tipo = (prog.actividad?.tipo_mantenimiento || 'Preventivo') as 'Preventivo' | 'Correctivo';
+  progTipoMantenimiento = tipo === 'Correctivo' ? 'Correctivo' : 'Preventivo';
+
+  (document.getElementById('prog-equipo') as HTMLSelectElement).value = String(prog.equipo?.id || '');
+  (document.getElementById('prog-tipo') as HTMLSelectElement).value = progTipoMantenimiento;
+  (document.getElementById('prog-modo') as HTMLSelectElement).value = prog.modo_programacion || 'Anual';
+  (document.getElementById('prog-motivo') as HTMLInputElement).value = prog.motivo || prog.actividad?.motivo || '';
+  (document.getElementById('prog-frecuencia') as HTMLSelectElement).value = String(prog.frecuencia_meses ?? '');
+  (document.getElementById('prog-anio') as HTMLInputElement).value = String(prog.anio || new Date().getFullYear());
+  (document.getElementById('prog-fecha-inicio') as HTMLInputElement).value = normalizarFechaParaInput(prog.fecha_inicio);
+  (document.getElementById('prog-observaciones') as HTMLInputElement).value = prog.observaciones || '';
+
+  actualizarOpcionesMotivoProgramacion();
+  actualizarReglasProgramacion();
+
+  const previewContainer = document.getElementById('preview-fechas-container');
+  if (previewContainer) previewContainer.style.display = 'none';
+  previewFechas = [];
+
+  const btnConfirmar = document.getElementById('btn-confirmar-programacion') as HTMLButtonElement | null;
+  if (btnConfirmar) btnConfirmar.disabled = false;
+
+  actualizarUIEdicionProgramacion();
+
+  const form = document.getElementById('form-programacion-anual');
+  form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  mostrarToast('success', 'Datos cargados', 'Se cargó la información de la programación en el formulario.');
+}
 
 function bindAccionesCalendario() {
   // Click en celdas del calendario para ver detalles
@@ -1292,6 +1482,20 @@ function bindAccionesProgramaciones() {
     });
   });
 
+  // Editar programación
+  document.querySelectorAll('.btn-editar-prog').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number((btn as HTMLButtonElement).dataset.id);
+      if (!id) return;
+      try {
+        await cargarProgramacionEnFormulario(id);
+      } catch (error) {
+        console.error('Error cargando programación para edición:', error);
+        mostrarToast('error', 'Error', 'No se pudo cargar la programación para editar');
+      }
+    });
+  });
+
   // Eliminar programación
   document.querySelectorAll('.btn-eliminar-prog').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1303,27 +1507,28 @@ function bindAccionesProgramaciones() {
 
   // Marcar como realizado
   document.querySelectorAll('.btn-marcar-realizado').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
       const id = Number((btn as HTMLButtonElement).dataset.id);
-      try {
-        await mantenimientoService.marcarRealizado(id);
-        mostrarToast('success', 'Actualizado', 'Mantenimiento marcado como realizado');
-        cargarProgramaciones();
-      } catch (error) {
-        mostrarToast('error', 'Error', 'No se pudo actualizar el mantenimiento');
-      }
+      if (!id) return;
+      abrirModalRealizadoObservacion(id);
     });
   });
 }
 
 function initProgramacionAnualEvents() {
   const modalEliminar = document.getElementById('modal-eliminar-prog');
+  const modalRealizadoObs = document.getElementById('modal-realizado-observacion');
   const selMes = document.getElementById('prog-filter-mes') as HTMLSelectElement | null;
   if (selMes) selMes.value = String(progMesCalendario);
 
   // Cargar dropdowns y programaciones
   cargarDropdownsProg();
   cargarProgramaciones();
+  actualizarUIEdicionProgramacion();
+
+  document.getElementById('btn-cancelar-edicion-programacion')?.addEventListener('click', () => {
+    resetFormularioProgramacionAnual();
+  });
 
   document.getElementById('prog-tipo')?.addEventListener('change', (e) => {
     progTipoMantenimiento = ((e.target as HTMLSelectElement).value || 'Preventivo') as 'Preventivo' | 'Correctivo';
@@ -1433,7 +1638,7 @@ function initProgramacionAnualEvents() {
     }
 
     try {
-      const resp = await mantenimientoService.programarAnual({
+      const payload = {
         id_equipo,
         motivo,
         tipo_mantenimiento: progTipoMantenimiento,
@@ -1442,25 +1647,19 @@ function initProgramacionAnualEvents() {
         fecha_inicio,
         modo_programacion,
         observaciones: observaciones || undefined,
-      });
+      };
 
-      mostrarToast('success', 'Programación creada', resp.message || 'Los mantenimientos fueron programados correctamente');
+      const resp = progEditId
+        ? await mantenimientoService.actualizarProgramacion(progEditId, payload)
+        : await mantenimientoService.programarAnual(payload);
 
-      // Limpiar formulario
-      (document.getElementById('prog-equipo') as HTMLSelectElement).value = '';
-      (document.getElementById('prog-tipo') as HTMLSelectElement).value = 'Preventivo';
-      (document.getElementById('prog-modo') as HTMLSelectElement).value = 'Anual';
-      progTipoMantenimiento = 'Preventivo';
-      actualizarOpcionesMotivoProgramacion();
-      actualizarReglasProgramacion();
-      (document.getElementById('prog-motivo') as HTMLInputElement).value = '';
-      (document.getElementById('prog-frecuencia') as HTMLSelectElement).value = '';
-      (document.getElementById('prog-observaciones') as HTMLInputElement).value = '';
-      const previewContainer = document.getElementById('preview-fechas-container');
-      if (previewContainer) previewContainer.style.display = 'none';
-      const btnConfirmar = document.getElementById('btn-confirmar-programacion') as HTMLButtonElement;
-      if (btnConfirmar) btnConfirmar.disabled = true;
-      previewFechas = [];
+      mostrarToast(
+        'success',
+        progEditId ? 'Programación actualizada' : 'Programación creada',
+        resp.message || (progEditId ? 'La programación fue actualizada correctamente' : 'Los mantenimientos fueron programados correctamente')
+      );
+
+      resetFormularioProgramacionAnual();
 
       // Actualizar filtro al año creado y recargar
       progFiltroAnio = anio;
@@ -1482,6 +1681,44 @@ function initProgramacionAnualEvents() {
     if (e.target === modalEliminar) modalEliminar.style.display = 'none';
   });
 
+  // ── Modal observación al completar ───────────────────────
+  document.getElementById('btn-cerrar-realizado-observacion')?.addEventListener('click', () => {
+    cerrarModalRealizadoObservacion();
+  });
+  document.getElementById('btn-cancelar-realizado-observacion')?.addEventListener('click', () => {
+    cerrarModalRealizadoObservacion();
+  });
+  modalRealizadoObs?.addEventListener('click', (e) => {
+    if (e.target === modalRealizadoObs) cerrarModalRealizadoObservacion();
+  });
+
+  document.getElementById('btn-confirmar-realizado-observacion')?.addEventListener('click', async () => {
+    if (!progMantenimientoToCompletar) return;
+
+    const btn = document.getElementById('btn-confirmar-realizado-observacion') as HTMLButtonElement | null;
+    const input = document.getElementById('realizado-observacion-input') as HTMLTextAreaElement | null;
+    const observaciones = (input?.value || '').trim();
+
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+    }
+
+    try {
+      await mantenimientoService.marcarRealizado(progMantenimientoToCompletar, observaciones || undefined);
+      cerrarModalRealizadoObservacion();
+      mostrarToast('success', 'Actualizado', 'Mantenimiento marcado como realizado');
+      cargarProgramaciones();
+    } catch (error) {
+      mostrarToast('error', 'Error', 'No se pudo actualizar el mantenimiento');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+    }
+  });
+
   // ── Confirmar eliminar ───────────────────────────────────
   document.getElementById('btn-confirmar-eliminar-prog')?.addEventListener('click', async () => {
     if (!progIdToDelete) return;
@@ -1490,6 +1727,9 @@ function initProgramacionAnualEvents() {
       await mantenimientoService.eliminarProgramacion(progIdToDelete);
       mostrarToast('success', 'Programación eliminada', 'La programación y sus mantenimientos fueron eliminados');
       if (modalEliminar) modalEliminar.style.display = 'none';
+      if (progEditId === progIdToDelete) {
+        resetFormularioProgramacionAnual();
+      }
       progIdToDelete = null;
       cargarProgramaciones();
     } catch (error) {

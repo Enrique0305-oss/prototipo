@@ -61,6 +61,11 @@ class Personal extends Authenticatable
         return $this->hasMany(Cotizacion::class, 'id_personal_creador');
     }
 
+    public function tecnico()
+    {
+        return $this->hasOne(Tecnico::class, 'id_personal');
+    }
+
     // Accessor para nombre completo
     public function getNombreCompletoAttribute()
     {

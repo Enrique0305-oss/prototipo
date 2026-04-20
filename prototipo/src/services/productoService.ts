@@ -3,6 +3,7 @@ import type {
   ApiResponse,
   Producto,
   ProductoRecetaDetalle,
+  Lote,
   ProductoFilters,
   PaginationParams,
   EstadisticasProductos,
@@ -36,6 +37,12 @@ export const productoService = {
     presentacion?: string;
     es_fabricable?: boolean;
     receta?: ProductoRecetaDetalle[];
+    lotes?: Array<{
+      numero_lote: string;
+      fecha_vencimiento: string;
+      cantidad: number;
+      observacion?: string;
+    }>;
     estado?: 'Activo' | 'Inactivo';
   }) => {
     return apiClient.post<ApiResponse<Producto>>('/productos', data);

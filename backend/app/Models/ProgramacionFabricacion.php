@@ -53,6 +53,11 @@ class ProgramacionFabricacion extends Model
         return $this->hasOne(EntradaDevolucionFabricacion::class, 'id_programacion_fabricacion');
     }
 
+    public function salidaDetalles()
+    {
+        return $this->hasMany(SalidaProgramacionFabricacionDetalle::class, 'id_programacion_fabricacion');
+    }
+
     public function getPersonalAdministrativoAttribute(): array
     {
         $ids = $this->normalizePersonalIds($this->attributes['id_supervisor'] ?? null);

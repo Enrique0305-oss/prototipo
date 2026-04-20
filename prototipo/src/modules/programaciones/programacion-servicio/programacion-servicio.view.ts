@@ -48,6 +48,34 @@ let resumenPendientesRecursos: ResumenPendientesRecursos = {
   items: [],
 };
 
+type GrupoProgramacionManual = {
+  id: string;
+  ids: number[];
+  createdAt: number;
+};
+
+type ItemCalendario = {
+  kind: 'single' | 'group';
+  ids: number[];
+  groupId?: string;
+  programaciones: Programacion[];
+  principal: Programacion;
+  fecha: string;
+  horaInicio: string;
+  horaFin: string;
+  clienteLabel: string;
+  plantaLabel: string;
+  tecnicosLabel: string;
+  actividadesLabel: string;
+  estadoLabel: string;
+};
+
+const LOCAL_KEY_GRUPOS_MANUALES = 'prog-servicio-grupos-manuales-v1';
+const GAP_MAX_MINUTOS_AGRUPACION = 5;
+let gruposProgramacionManual: GrupoProgramacionManual[] = [];
+let modoSeleccionAgrupacion = false;
+let idsSeleccionAgrupacion = new Set<number>();
+
 function renderResumenPendientesRecursos(): string {
   const total = Number(resumenPendientesRecursos.total_pendientes || 0);
   const p7 = Number(resumenPendientesRecursos.proximos_7_dias || 0);
@@ -1066,6 +1094,8 @@ async function cargarDatosIniciales() {
     const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
     if (estRes.data) estadisticas = estRes.data;
     if (resumenPendientesRes?.data) resumenPendientesRecursos = resumenPendientesRes.data;
+
+    await cargarGruposProgramacion(filtrosBase);
   } catch (err) {
     console.error('Error cargando datos programaciones:', err);
   }
@@ -1124,10 +1154,13 @@ async function recargarProgramaciones() {
     })) as ProgramacionExtendida[];
 
     programacionesData = [...servicioMapeado, ...visitaMapeado, ...fabricacionMapeado, ...otrosMapeado] as Programacion[];
+    depurarGruposProgramacion();
 
     const estRes = await programacionService.getEstadisticas(fechaActual.getMonth() + 1, fechaActual.getFullYear());
     if (estRes.data) estadisticas = estRes.data;
     if (resumenPendientesRes?.data) resumenPendientesRecursos = resumenPendientesRes.data;
+
+    await cargarGruposProgramacion(filtrosBase);
   } catch (err) {
     console.error('Error recargando programaciones:', err);
   }
@@ -1428,6 +1461,329 @@ function normalizarDiasPorMesDetalle(diasPorMes: any): Record<string, { presenci
   return salida;
 }
 
+async function cargarGruposProgramacion(filtros: Record<string, any>) {
+  try {
+    const res = await programacionService.getGrupos(filtros);
+    const raw = res.data || res;
+    const grupos = Array.isArray(raw) ? raw : (raw as any).data || [];
+
+    gruposProgramacionManual = grupos
+      .map((g: any) => ({
+        id: String(g?.id || ''),
+        ids: Array.isArray(g?.programaciones) ? g.programaciones.map((p: any) => Number(p?.id)).filter((n: number) => Number.isFinite(n) && n > 0) : [],
+        createdAt: Date.now(),
+      }))
+      .filter((g: GrupoProgramacionManual) => g.id && g.ids.length >= 2);
+  } catch {
+    gruposProgramacionManual = [];
+  }
+
+  const idsSeleccionDepurada = Array.from(idsSeleccionAgrupacion).filter((id) => programacionesData.some((p) => p.id === id));
+  idsSeleccionAgrupacion = new Set(idsSeleccionDepurada);
+}
+
+function limpiarSeleccionAgrupacion() {
+  idsSeleccionAgrupacion = new Set<number>();
+}
+
+function obtenerProgramacionPorId(id: number): Programacion | null {
+  const found = programacionesData.find((p) => p.id === id);
+  return found || null;
+}
+
+function obtenerClienteIdProgramacion(p: Programacion): number | null {
+  const px = p as ProgramacionExtendida;
+  const id = Number(
+    p.orden_servicio?.cliente?.id
+    || px.orden_capacitacion?.cliente?.id
+    || px.orden_asesoria?.cliente?.id
+    || px.cliente?.id
+    || 0,
+  );
+  return id > 0 ? id : null;
+}
+
+function obtenerPlantaIdProgramacion(p: Programacion): number | null {
+  const id = Number(p.id_cliente_planta || p.planta?.id || 0);
+  return id > 0 ? id : null;
+}
+
+function obtenerTecnicosIdsProgramacion(p: Programacion): number[] {
+  const ids = (p.tecnicos && p.tecnicos.length > 0)
+    ? p.tecnicos.map((t: any) => Number(t.id))
+    : [Number(p.id_tecnico_asignado || p.tecnico?.id || 0)];
+
+  return Array.from(new Set(ids.filter((n) => Number.isFinite(n) && n > 0))).sort((a, b) => a - b);
+}
+
+function firmaTecnicosProgramacion(p: Programacion): string {
+  return obtenerTecnicosIdsProgramacion(p).join('-');
+}
+
+function parseHoraToMin(hora: string | null | undefined): number {
+  if (!hora) return 0;
+  const hhmm = normalizarHora(String(hora));
+  const [h, m] = hhmm.split(':').map(Number);
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+function esProgramacionAgrupable(p: Programacion): boolean {
+  const tipo = ((p as ProgramacionExtendida).tipo_programacion || 'servicio').toLowerCase();
+  if (tipo !== 'servicio') return false;
+  if (p.estado_ejecucion === 'Cancelado' || p.estado_ejecucion === 'Realizado') return false;
+  return true;
+}
+
+function encontrarGrupoPorProgramacion(idProgramacion: number): GrupoProgramacionManual | null {
+  return gruposProgramacionManual.find((g) => g.ids.includes(idProgramacion)) || null;
+}
+
+function depurarGruposProgramacion() {
+  const idsVigentes = new Set(programacionesData.map((p) => p.id));
+
+  gruposProgramacionManual = gruposProgramacionManual
+    .map((g) => ({
+      ...g,
+      ids: g.ids.filter((id) => idsVigentes.has(id)),
+    }))
+    .filter((g) => g.ids.length >= 2)
+    .filter((g) => {
+      const programas = g.ids
+        .map((id) => obtenerProgramacionPorId(id))
+        .filter((p): p is Programacion => !!p);
+      if (programas.length < 2) return false;
+      const fechas = new Set(programas.map((p) => normalizarFecha(p.fecha_programada || '')));
+      return fechas.size === 1;
+    });
+
+  const seleccionDepurada = Array.from(idsSeleccionAgrupacion).filter((id) => idsVigentes.has(id));
+  idsSeleccionAgrupacion = new Set(seleccionDepurada);
+}
+
+function obtenerLabelTecnicos(p: Programacion): string {
+  if (p.tecnicos && p.tecnicos.length > 0) {
+    return p.tecnicos.map((t: any) => `${t.nombre} ${t.apellidos || ''}`.trim()).join(', ');
+  }
+  if (p.tecnico) {
+    return `${p.tecnico.nombre} ${p.tecnico.apellidos || ''}`.trim();
+  }
+  return 'Sin asignar';
+}
+
+function construirItemCalendarioSingle(p: Programacion): ItemCalendario {
+  return {
+    kind: 'single',
+    ids: [p.id],
+    programaciones: [p],
+    principal: p,
+    fecha: normalizarFecha(p.fecha_programada || ''),
+    horaInicio: normalizarHora(p.hora_inicio || ''),
+    horaFin: normalizarHora(p.hora_fin || ''),
+    clienteLabel: clienteNombre(p),
+    plantaLabel: p.planta?.nombre || p.local_sede || '—',
+    tecnicosLabel: obtenerLabelTecnicos(p),
+    actividadesLabel: nombreActividad(p),
+    estadoLabel: p.estado_ejecucion,
+  };
+}
+
+function construirItemCalendarioGrupo(group: GrupoProgramacionManual, programaciones: Programacion[]): ItemCalendario {
+  const ordenadas = [...programaciones].sort((a, b) => parseHoraToMin(a.hora_inicio) - parseHoraToMin(b.hora_inicio));
+  const principal = ordenadas[0];
+  const finMayor = ordenadas.reduce((max, p) => Math.max(max, parseHoraToMin(p.hora_fin || p.hora_inicio || '00:00')), 0);
+  const hhFin = `${String(Math.floor(finMayor / 60)).padStart(2, '0')}:${String(finMayor % 60).padStart(2, '0')}`;
+
+  const nombresServicios = Array.from(new Set(ordenadas.map((p) => nombreActividad(p)).filter(Boolean))).join(' + ');
+
+  return {
+    kind: 'group',
+    ids: ordenadas.map((p) => p.id),
+    groupId: group.id,
+    programaciones: ordenadas,
+    principal,
+    fecha: normalizarFecha(principal.fecha_programada || ''),
+    horaInicio: normalizarHora(principal.hora_inicio || ''),
+    horaFin: hhFin,
+    clienteLabel: clienteNombre(principal),
+    plantaLabel: principal.planta?.nombre || principal.local_sede || '—',
+    tecnicosLabel: obtenerLabelTecnicos(principal),
+    actividadesLabel: nombresServicios || 'Servicios agrupados',
+    estadoLabel: ordenadas.some((p) => p.estado_ejecucion === 'En Ejecución')
+      ? 'En Ejecución'
+      : ordenadas.some((p) => p.estado_ejecucion === 'En Camino')
+      ? 'En Camino'
+      : principal.estado_ejecucion,
+  };
+}
+
+function obtenerItemsCalendarioPorFecha(fechaIso: string, programacionesDelDia: Programacion[]): ItemCalendario[] {
+  const usados = new Set<number>();
+  const items: ItemCalendario[] = [];
+  const porId = new Map(programacionesDelDia.map((p) => [p.id, p]));
+
+  gruposProgramacionManual.forEach((g) => {
+    const programacionesGrupo = g.ids
+      .map((id) => porId.get(id))
+      .filter((p): p is Programacion => !!p)
+      .filter((p) => normalizarFecha(p.fecha_programada || '') === fechaIso);
+
+    if (programacionesGrupo.length < 2) return;
+
+    programacionesGrupo.forEach((p) => usados.add(p.id));
+    items.push(construirItemCalendarioGrupo(g, programacionesGrupo));
+  });
+
+  programacionesDelDia.forEach((p) => {
+    if (usados.has(p.id)) return;
+    items.push(construirItemCalendarioSingle(p));
+  });
+
+  return items.sort((a, b) => parseHoraToMin(a.horaInicio) - parseHoraToMin(b.horaInicio));
+}
+
+function renderControlesAgrupacionCalendario(): string {
+  const seleccionCount = idsSeleccionAgrupacion.size;
+  const btnSeleccionLabel = modoSeleccionAgrupacion ? 'Salir de selección' : 'Seleccionar servicios para agrupar';
+
+  return `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <button class="prog-btn-secondary" id="btnToggleSeleccionAgrupacion">${btnSeleccionLabel}</button>
+      ${modoSeleccionAgrupacion ? `
+        <span style="font-size:12px;color:#475569;">Seleccionados: <strong>${seleccionCount}</strong></span>
+        <button class="prog-btn-primary" id="btnConfirmarAgrupacion" ${seleccionCount >= 2 ? '' : 'disabled'}>Agrupar</button>
+        <button class="prog-btn-secondary" id="btnCancelarSeleccionAgrupacion">Limpiar</button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderSelectorAgrupacionProgramacion(p: Programacion): string {
+  if (!modoSeleccionAgrupacion) return '';
+  if (!esProgramacionAgrupable(p)) return '';
+
+  const checked = idsSeleccionAgrupacion.has(p.id) ? 'checked' : '';
+  return `
+    <input type="checkbox" class="prog-agrupacion-check" data-prog-id="${p.id}" ${checked} style="cursor:pointer;">
+  `;
+}
+
+function renderAccionDesagrupar(item: ItemCalendario): string {
+  if (item.kind !== 'group' || !item.groupId) return '';
+  return `<button type="button" class="prog-btn-desagrupar" data-group-id="${item.groupId}" style="font-size:11px;padding:2px 8px;border:1px solid #fecaca;background:#fff1f2;color:#b91c1c;border-radius:999px;cursor:pointer;">Desagrupar</button>`;
+}
+
+function validarSeleccionAgrupacion(programacionesSel: Programacion[]): { ok: boolean; mensaje?: string } {
+  if (programacionesSel.length < 2) {
+    return { ok: false, mensaje: 'Seleccione al menos 2 servicios para agrupar' };
+  }
+
+  const noAgrupables = programacionesSel.filter((p) => !esProgramacionAgrupable(p));
+  if (noAgrupables.length > 0) {
+    return { ok: false, mensaje: 'Solo se pueden agrupar programaciones de tipo servicio en estado activo' };
+  }
+
+  const yaAgrupadas = programacionesSel.filter((p) => !!encontrarGrupoPorProgramacion(p.id));
+  if (yaAgrupadas.length > 0) {
+    return { ok: false, mensaje: 'Hay servicios seleccionados que ya están dentro de un grupo. Desagrúpelos primero.' };
+  }
+
+  const fechas = new Set(programacionesSel.map((p) => normalizarFecha(p.fecha_programada || '')));
+  if (fechas.size !== 1) {
+    return { ok: false, mensaje: 'Solo puede agrupar servicios de la misma fecha' };
+  }
+
+  const clientes = new Set(programacionesSel.map((p) => obtenerClienteIdProgramacion(p) || 0));
+  if (clientes.size !== 1 || clientes.has(0)) {
+    return { ok: false, mensaje: 'Para agrupar, todos deben tener el mismo cliente' };
+  }
+
+  const plantas = new Set(programacionesSel.map((p) => obtenerPlantaIdProgramacion(p) || 0));
+  if (plantas.size !== 1 || plantas.has(0)) {
+    return { ok: false, mensaje: 'Para agrupar, todos deben tener la misma planta' };
+  }
+
+  const firmasTecnicos = new Set(programacionesSel.map((p) => firmaTecnicosProgramacion(p)));
+  if (firmasTecnicos.size !== 1 || firmasTecnicos.has('')) {
+    return { ok: false, mensaje: 'Para agrupar, todos deben coincidir en técnicos' };
+  }
+
+  const ordenadas = [...programacionesSel].sort((a, b) => parseHoraToMin(a.hora_inicio) - parseHoraToMin(b.hora_inicio));
+  for (let i = 1; i < ordenadas.length; i++) {
+    const prev = ordenadas[i - 1];
+    const cur = ordenadas[i];
+    const prevFin = parseHoraToMin(prev.hora_fin || prev.hora_inicio || '00:00');
+    const curIni = parseHoraToMin(cur.hora_inicio || '00:00');
+    if (curIni - prevFin > GAP_MAX_MINUTOS_AGRUPACION) {
+      return { ok: false, mensaje: 'Los servicios deben ser consecutivos por hora para poder agruparse' };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function confirmarAgrupacionSeleccionada() {
+  const programacionesSel = Array.from(idsSeleccionAgrupacion)
+    .map((id) => obtenerProgramacionPorId(id))
+    .filter((p): p is Programacion => !!p);
+
+  const validacion = validarSeleccionAgrupacion(programacionesSel);
+  if (!validacion.ok) {
+    mostrarToast('warning', 'No se puede agrupar', validacion.mensaje || 'Validación no superada');
+    return;
+  }
+
+  const ordenadas = [...programacionesSel].sort((a, b) => parseHoraToMin(a.hora_inicio) - parseHoraToMin(b.hora_inicio));
+  try {
+    await programacionService.crearGrupo({
+      ids_programacion: ordenadas.map((p) => p.id),
+    });
+    modoSeleccionAgrupacion = false;
+    limpiarSeleccionAgrupacion();
+    await recargarProgramaciones();
+
+    const inicio = fmtH(ordenadas[0].hora_inicio || '');
+    const finMayor = ordenadas.reduce((max, p) => Math.max(max, parseHoraToMin(p.hora_fin || p.hora_inicio || '00:00')), 0);
+    const finTxt = `${String(Math.floor(finMayor / 60)).padStart(2, '0')}:${String(finMayor % 60).padStart(2, '0')}`;
+    mostrarToast('success', 'Servicios agrupados', `Se creó un bloque de ${inicio} a ${finTxt}`);
+  } catch (err: any) {
+    const msg = err?.data?.message || err?.response?.data?.message || 'No se pudo agrupar los servicios';
+    mostrarToast('error', 'Error', msg);
+  }
+}
+
+async function desagruparServicios(groupId: string) {
+  try {
+    await programacionService.desagruparGrupo(Number(groupId));
+    await recargarProgramaciones();
+    mostrarToast('success', 'Grupo desagrupado', 'Los servicios volvieron a mostrarse por separado');
+  } catch (err: any) {
+    const msg = err?.data?.message || err?.response?.data?.message || 'No se pudo desagrupar';
+    mostrarToast('error', 'Error', msg);
+  }
+}
+
+function toggleSeleccionProgramacion(idProgramacion: number) {
+  if (!modoSeleccionAgrupacion) return;
+  if (idsSeleccionAgrupacion.has(idProgramacion)) {
+    idsSeleccionAgrupacion.delete(idProgramacion);
+  } else {
+    idsSeleccionAgrupacion.add(idProgramacion);
+  }
+  renderCalendario();
+}
+
+function activarModoSeleccionAgrupacion() {
+  modoSeleccionAgrupacion = true;
+  limpiarSeleccionAgrupacion();
+  renderCalendario();
+}
+
+function desactivarModoSeleccionAgrupacion() {
+  modoSeleccionAgrupacion = false;
+  limpiarSeleccionAgrupacion();
+  renderCalendario();
+}
+
 function renderVistaMensual(): string {
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -1449,17 +1805,21 @@ function renderVistaMensual(): string {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const isToday = dateStr === todayS;
     const servicios = programaciones.filter(p => p.fecha_programada === dateStr);
+    const items = obtenerItemsCalendarioPorFecha(dateStr, servicios);
     diasHTML += `
       <div class="prog-calendar-day ${isToday ? 'highlighted' : ''}">
         <span class="prog-day-number">${d}</span>
-        ${servicios.slice(0, 3).map(s => `
-          <div class="prog-event ${getColorByState(s.estado_ejecucion)}" ${estiloTarjetaPendienteMensual(s)} data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
-            <div class="prog-event-title">${clienteNombre(s)}</div>
-            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)} ${badgePendienteRecursos(s)}</div>
-            <div class="prog-event-time">${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
+        ${items.slice(0, 3).map((item) => `
+          <div class="prog-event ${getColorByState(item.estadoLabel)}" ${estiloTarjetaPendienteMensual(item.principal)} ${item.kind === 'single' ? `data-prog-id="${item.principal.id}" data-prog-tipo="${(item.principal as ProgramacionExtendida).tipo_programacion || 'servicio'}"` : `data-prog-group-id="${item.groupId || ''}"`}>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+              <div class="prog-event-title">${item.clienteLabel}</div>
+              ${item.kind === 'single' ? renderSelectorAgrupacionProgramacion(item.principal) : renderAccionDesagrupar(item)}
+            </div>
+            <div class="prog-event-subtitle" style="font-size:11px;opacity:0.9;margin-top:2px;">${item.actividadesLabel}${item.kind === 'group' ? ` <span style="display:inline-block;background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:700;">${item.ids.length} servicios</span>` : ` ${badgeTipoProgramacion(item.principal)} ${(item.principal as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(item.principal) : badgeModalidadProgramacion(item.principal)} ${badgePendienteRecursos(item.principal)}`}</div>
+            <div class="prog-event-time">${fmtH(item.horaInicio)}${item.horaFin ? ' - ' + fmtH(item.horaFin) : ''}</div>
           </div>
         `).join('')}
-        ${servicios.length > 3 ? `<div class="prog-event-more">+${servicios.length - 3} más</div>` : ''}
+        ${items.length > 3 ? `<div class="prog-event-more">+${items.length - 3} más</div>` : ''}
       </div>`;
   }
   const totalCells = startWeekDay + daysInMonth;
@@ -1476,6 +1836,7 @@ function renderVistaMensual(): string {
         <button class="prog-btn-secondary" id="btnHoy">Hoy</button>
         <button class="prog-btn-icon" id="btnNext"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
       </div>
+      ${renderControlesAgrupacionCalendario()}
     </div>
     <div class="prog-calendar-grid">
       <div class="prog-calendar-weekdays">
@@ -1506,6 +1867,7 @@ function renderVistaSemanal(): string {
         <button class="prog-btn-secondary" id="btnHoy">Hoy</button>
         <button class="prog-btn-icon" id="btnNext"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
       </div>
+      ${renderControlesAgrupacionCalendario()}
     </div>
     <div class="prog-week-view">
       <div class="prog-week-timeline">
@@ -1514,22 +1876,26 @@ function renderVistaSemanal(): string {
             const dateStr = fmtDate(d);
             const isToday = dateStr === todayS;
             const servicios = programaciones.filter(p => p.fecha_programada === dateStr);
+            const items = obtenerItemsCalendarioPorFecha(dateStr, servicios);
             return `
             <div class="prog-week-day-column ${isToday ? 'today' : ''}">
               <div class="prog-week-day-header">${diasLabel[i]} ${d.getDate()}</div>
               <div class="prog-week-day-slots">
-                ${servicios.map(s => {
-                  const color = getColorByState(s.estado_ejecucion);
+                ${items.map((item) => {
+                  const color = getColorByState(item.estadoLabel);
                   return `
-                  <div class="prog-week-card prog-week-card-${color}" ${estiloTarjetaPendienteSemanal(s)} data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
-                    <div class="prog-week-card-title">${clienteNombre(s)}</div>
-                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)} ${badgePendienteRecursos(s)}</div>
-                    <div class="prog-week-card-time"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${fmtH(s.hora_inicio)}${s.hora_fin ? ' - ' + fmtH(s.hora_fin) : ''}</div>
-                    <div class="prog-week-card-tech"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre).join(', ') : (s.tecnico ? s.tecnico.nombre : '—')}</div>
-                    <span class="prog-week-card-badge">${s.estado_ejecucion}</span>
+                  <div class="prog-week-card prog-week-card-${color}" ${estiloTarjetaPendienteSemanal(item.principal)} ${item.kind === 'single' ? `data-prog-id="${item.principal.id}" data-prog-tipo="${(item.principal as ProgramacionExtendida).tipo_programacion || 'servicio'}"` : `data-prog-group-id="${item.groupId || ''}"`}>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                      <div class="prog-week-card-title">${item.clienteLabel}</div>
+                      ${item.kind === 'single' ? renderSelectorAgrupacionProgramacion(item.principal) : renderAccionDesagrupar(item)}
+                    </div>
+                    <div class="prog-week-card-subtitle" style="font-size:11px;opacity:0.85;margin:2px 0;font-weight:500;">${item.actividadesLabel}${item.kind === 'group' ? ` <span style="display:inline-block;background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:700;">${item.ids.length} servicios</span>` : ` ${badgeTipoProgramacion(item.principal)} ${(item.principal as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(item.principal) : badgeModalidadProgramacion(item.principal)} ${badgePendienteRecursos(item.principal)}`}</div>
+                    <div class="prog-week-card-time"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${fmtH(item.horaInicio)}${item.horaFin ? ' - ' + fmtH(item.horaFin) : ''}</div>
+                    <div class="prog-week-card-tech"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${item.tecnicosLabel}</div>
+                    <span class="prog-week-card-badge">${item.estadoLabel}</span>
                   </div>`;
                 }).join('')}
-                ${servicios.length === 0 ? '<div class="prog-week-empty">Sin programaciones</div>' : ''}
+                ${items.length === 0 ? '<div class="prog-week-empty">Sin programaciones</div>' : ''}
               </div>
             </div>`;
           }).join('')}
@@ -1541,6 +1907,7 @@ function renderVistaSemanal(): string {
 function renderVistaDiaria(): string {
   const dateStr = fmtDate(fechaActual);
   const programaciones = getProgramacionesFiltradas().filter(p => p.fecha_programada === dateStr);
+  const items = obtenerItemsCalendarioPorFecha(dateStr, programaciones);
   const fechaLabel = fechaActual.toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   return `
@@ -1551,27 +1918,29 @@ function renderVistaDiaria(): string {
         <button class="prog-btn-secondary" id="btnHoy">Hoy</button>
         <button class="prog-btn-icon" id="btnNext"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
       </div>
+      ${renderControlesAgrupacionCalendario()}
     </div>
     <div class="prog-day-view">
       <div class="prog-day-timeline">
         <div class="prog-day-services">
-          ${programaciones.length > 0 ? programaciones.map(s => `
-            <div class="prog-day-service-card" data-prog-id="${s.id}" data-prog-tipo="${(s as ProgramacionExtendida).tipo_programacion || 'servicio'}">
+          ${items.length > 0 ? items.map((item) => `
+            <div class="prog-day-service-card" ${item.kind === 'single' ? `data-prog-id="${item.principal.id}" data-prog-tipo="${(item.principal as ProgramacionExtendida).tipo_programacion || 'servicio'}"` : `data-prog-group-id="${item.groupId || ''}"`}>
               <div class="prog-day-service-time">
-                <div class="prog-time-badge">${fmtH(s.hora_inicio)}</div>
+                <div class="prog-time-badge">${fmtH(item.horaInicio)}</div>
                 <div class="prog-time-line"></div>
-                <div class="prog-time-badge">${fmtH(s.hora_fin || '')}</div>
+                <div class="prog-time-badge">${fmtH(item.horaFin || '')}</div>
               </div>
               <div class="prog-day-service-content">
                 <div class="prog-day-service-header">
-                  <h3>${clienteNombre(s)}</h3>
-                  <span class="prog-status-badge ${s.estado_ejecucion}">${s.estado_ejecucion}</span>
+                  <h3>${item.clienteLabel}</h3>
+                  <span class="prog-status-badge ${item.estadoLabel}">${item.estadoLabel}</span>
                 </div>
+                <div style="display:flex;justify-content:flex-end;margin:4px 0 6px;">${item.kind === 'single' ? renderSelectorAgrupacionProgramacion(item.principal) : renderAccionDesagrupar(item)}</div>
                 <div class="prog-day-service-details">
-                  <div><strong>Actividad:</strong> ${nombreActividad(s)} ${badgeTipoProgramacion(s)} ${(s as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(s) : badgeModalidadProgramacion(s)} ${badgePendienteRecursos(s)}</div>
-                  <div><strong>Técnico:</strong> ${s.tecnicos && s.tecnicos.length > 0 ? s.tecnicos.map(t => t.nombre + ' ' + t.apellidos).join(', ') : (s.tecnico ? s.tecnico.nombre + ' ' + s.tecnico.apellidos : 'Sin asignar')}</div>
-                  <div><strong>Local:</strong> ${s.planta ? s.planta.nombre : (s.local_sede || '—')}</div>
-                  ${s.vehiculo ? `<div><strong>Vehículo:</strong> ${s.vehiculo.placa} - ${s.vehiculo.marca} ${s.vehiculo.modelo}</div>` : ''}
+                  <div><strong>Actividad:</strong> ${item.actividadesLabel}${item.kind === 'group' ? ` <span style="display:inline-block;background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:700;">${item.ids.length} servicios</span>` : ` ${badgeTipoProgramacion(item.principal)} ${(item.principal as ProgramacionExtendida).tipo_programacion === 'asesoria' ? badgeModalidadVisita(item.principal) : badgeModalidadProgramacion(item.principal)} ${badgePendienteRecursos(item.principal)}`}</div>
+                  <div><strong>Técnico:</strong> ${item.tecnicosLabel}</div>
+                  <div><strong>Local:</strong> ${item.plantaLabel}</div>
+                  ${item.principal.vehiculo ? `<div><strong>Vehículo:</strong> ${item.principal.vehiculo.placa} - ${item.principal.vehiculo.marca} ${item.principal.vehiculo.modelo}</div>` : ''}
                 </div>
               </div>
             </div>
@@ -1599,17 +1968,149 @@ function enlazarEventosCalendario() {
     recargarProgramaciones();
   });
 
+  document.getElementById('btnToggleSeleccionAgrupacion')?.addEventListener('click', () => {
+    if (modoSeleccionAgrupacion) {
+      desactivarModoSeleccionAgrupacion();
+      return;
+    }
+    activarModoSeleccionAgrupacion();
+  });
+
+  document.getElementById('btnCancelarSeleccionAgrupacion')?.addEventListener('click', () => {
+    limpiarSeleccionAgrupacion();
+    renderCalendario();
+  });
+
+  document.getElementById('btnConfirmarAgrupacion')?.addEventListener('click', () => {
+    confirmarAgrupacionSeleccionada();
+  });
+
+  document.querySelectorAll('.prog-agrupacion-check').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+    el.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const id = Number((e.currentTarget as HTMLInputElement).dataset.progId || 0);
+      if (!id) return;
+      toggleSeleccionProgramacion(id);
+    });
+  });
+
+  document.querySelectorAll('.prog-btn-desagrupar').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const groupId = String((e.currentTarget as HTMLElement).dataset.groupId || '');
+      if (!groupId) return;
+      desagruparServicios(groupId);
+    });
+  });
+
   document.querySelectorAll('[data-prog-id]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = parseInt((el as HTMLElement).dataset.progId || '0');
       const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion' | 'otros';
+      if (modoSeleccionAgrupacion && id) {
+        toggleSeleccionProgramacion(id);
+        return;
+      }
       if (id) abrirModalDetalle(id, tipo);
+    });
+  });
+
+  document.querySelectorAll('[data-prog-group-id]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const groupId = String((el as HTMLElement).dataset.progGroupId || '');
+      if (!groupId) return;
+      abrirModalDetalleGrupo(groupId);
     });
   });
 }
 
 // ═══════════ Modal Detalle ═══════════
+
+function abrirModalDetalleGrupo(groupId: string) {
+  const modal = document.getElementById('modalDetalleProgramacion');
+  const body = document.getElementById('modalDetalleBody');
+  if (!modal || !body) return;
+
+  const grupo = gruposProgramacionManual.find((g) => String(g.id) === String(groupId));
+  if (!grupo || !Array.isArray(grupo.ids) || grupo.ids.length === 0) {
+    mostrarToast('warning', 'Sin detalle', 'No se encontró el detalle del grupo seleccionado');
+    return;
+  }
+
+  const items = grupo.ids
+    .map((id) => programacionesData.find((p) => p.id === id))
+    .filter((p): p is Programacion => !!p)
+    .sort((a, b) => parseHoraToMin(a.hora_inicio) - parseHoraToMin(b.hora_inicio));
+
+  if (items.length === 0) {
+    mostrarToast('warning', 'Sin detalle', 'No se encontró el detalle del grupo seleccionado');
+    return;
+  }
+
+  const principal = items[0];
+  const horaInicio = fmtH(principal.hora_inicio || '');
+  const finMayor = items.reduce((max, p) => Math.max(max, parseHoraToMin(p.hora_fin || p.hora_inicio || '00:00')), 0);
+  const horaFin = `${String(Math.floor(finMayor / 60)).padStart(2, '0')}:${String(finMayor % 60).padStart(2, '0')}`;
+  const clavesPersonal = items.map((p) => obtenerClavePersonalAdministrativo(p));
+  const personalCoincide = new Set(clavesPersonal).size === 1;
+
+  body.innerHTML = `
+    <div class="prog-detalle-grid">
+      <div class="prog-detalle-section prog-detalle-section-full">
+        <h3 class="prog-detalle-section-title">Detalle de Servicios Agrupados</h3>
+        <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${clienteNombre(principal)}</div></div>
+        <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${principal.planta ? principal.planta.nombre : (principal.local_sede || '—')}</div></div>
+        <div class="prog-detalle-row"><div class="prog-detalle-label">Técnicos:</div><div class="prog-detalle-value">${obtenerLabelTecnicos(principal)}</div></div>
+        ${personalCoincide ? `<div class="prog-detalle-row"><div class="prog-detalle-label">Personal administrativo:</div><div class="prog-detalle-value">${getPersonalAdministrativoLabel(principal)}</div></div>` : ''}
+        <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(principal.fecha_programada)}</div></div>
+        <div class="prog-detalle-row"><div class="prog-detalle-label">Rango agrupado:</div><div class="prog-detalle-value">${horaInicio} - ${horaFin}</div></div>
+      </div>
+      <div class="prog-detalle-section prog-detalle-section-full">
+        <h3 class="prog-detalle-section-title">Servicios incluidos (${items.length})</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">Servicio</th>
+              <th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">Horario</th>
+              ${!personalCoincide ? '<th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">Personal administrativo</th>' : ''}
+              <th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">Estado</th>
+              <th style="padding:8px 10px;text-align:center;border:1px solid #e2e8f0;">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map((p) => `
+              <tr>
+                <td style="padding:8px 10px;border:1px solid #e2e8f0;">${nombreActividad(p)}</td>
+                <td style="padding:8px 10px;border:1px solid #e2e8f0;">${fmtH(p.hora_inicio)} - ${fmtH(p.hora_fin || '')}</td>
+                ${!personalCoincide ? `<td style="padding:8px 10px;border:1px solid #e2e8f0;">${getPersonalAdministrativoLabel(p)}</td>` : ''}
+                <td style="padding:8px 10px;border:1px solid #e2e8f0;"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></td>
+                <td style="padding:8px 10px;text-align:center;border:1px solid #e2e8f0;"><button type="button" class="prog-btn-secondary btn-ver-detalle-servicio-grupo" data-prog-id="${p.id}" style="font-size:12px;padding:4px 10px;">Ver detalle</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="prog-modal-footer"><button type="button" class="prog-btn-secondary" id="btnCerrarDetalleGrupo">Cerrar</button></div>
+    </div>
+  `;
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  body.querySelector('#btnCerrarDetalleGrupo')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
+  body.querySelectorAll('.btn-ver-detalle-servicio-grupo').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      const id = Number((ev.currentTarget as HTMLElement).dataset.progId || 0);
+      if (!id) return;
+      abrirModalDetalle(id, 'servicio');
+    });
+  });
+}
 
 async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' | 'visita' | 'fabricacion' | 'otros' = 'servicio') {
   const modal = document.getElementById('modalDetalleProgramacion');
@@ -3975,14 +4476,62 @@ function getAreasSeleccionadasLabel(p: Programacion): string {
 }
 
 function getPersonalAdministrativoLabel(p: Programacion): string {
-  const px = p as any;
-  const personal = Array.isArray(px.personal_administrativo) ? px.personal_administrativo : [];
-  if (personal.length === 0) return '—';
+  const info = getPersonalAdministrativoInfo(p);
+  if (info.nombres.length === 0) return '—';
 
-  return personal.map((item: any) => {
-    const nombre = `${item?.nombre || ''} ${item?.apellidos || ''}`.trim() || '—';
+  return info.nombres.map((nombre) => {
     return `<span style="display:inline-block;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`;
   }).join('');
+}
+
+function getPersonalAdministrativoInfo(p: Programacion): { ids: number[]; nombres: string[] } {
+  const px = p as any;
+  const idsSet = new Set<number>();
+  const nombresSet = new Set<string>();
+
+  const personal = Array.isArray(px.personal_administrativo) ? px.personal_administrativo : [];
+  personal.forEach((item: any) => {
+    const id = Number(item?.id);
+    if (Number.isFinite(id) && id > 0) idsSet.add(id);
+    const nombre = `${item?.nombre || ''} ${item?.apellidos || ''}`.trim();
+    if (nombre) nombresSet.add(nombre);
+  });
+
+  if (px.supervisor) {
+    const idSup = Number(px.supervisor.id);
+    if (Number.isFinite(idSup) && idSup > 0) idsSet.add(idSup);
+    const nombreSup = `${px.supervisor?.nombre || ''} ${px.supervisor?.apellidos || ''}`.trim();
+    if (nombreSup) nombresSet.add(nombreSup);
+  }
+
+  normalizePersonalIds(px.id_supervisor).forEach((id) => idsSet.add(id));
+
+  if (nombresSet.size === 0 && idsSet.size > 0) {
+    Array.from(idsSet).forEach((id) => {
+      const encontrado = personalData.find((pe) => Number(pe.id) === Number(id));
+      if (!encontrado) return;
+      const nombre = `${encontrado.nombre || ''} ${encontrado.apellidos || ''}`.trim();
+      if (nombre) nombresSet.add(nombre);
+    });
+  }
+
+  return {
+    ids: Array.from(idsSet).sort((a, b) => a - b),
+    nombres: Array.from(nombresSet).sort((a, b) => a.localeCompare(b)),
+  };
+}
+
+function obtenerClavePersonalAdministrativo(p: Programacion): string {
+  const info = getPersonalAdministrativoInfo(p);
+  if (info.ids.length > 0) return `ids:${info.ids.join(',')}`;
+  if (info.nombres.length > 0) {
+    const nombresNormalizados = info.nombres
+      .map((n) => n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+    return `nom:${nombresNormalizados.join('|')}`;
+  }
+  return '__sin_personal__';
 }
 
 function getClientesUnicos(): { id: number; nombre: string }[] {

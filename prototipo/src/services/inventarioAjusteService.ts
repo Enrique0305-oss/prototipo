@@ -4,6 +4,8 @@ export interface InventarioAjuste {
   id: number;
   id_producto: number;
   producto: string;
+  id_lote: number | null;
+  numero_lote: string | null;
   tipo_ajuste: 'Entrada' | 'Salida';
   stock_anterior: number;
   stock_nuevo: number;
@@ -29,6 +31,7 @@ export const inventarioAjusteService = {
 
   crear: async (data: {
     id_producto: number;
+    id_lote: number;
     stock_nuevo: number;
     motivo: string;
     observacion?: string;

@@ -15,7 +15,7 @@ class KardexController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Kardex::with(['producto', 'usuario']);
+        $query = Kardex::with(['producto', 'lote', 'usuario']);
 
         // Filtro por producto
         if ($request->has('id_producto') && $request->id_producto) {
@@ -25,6 +25,11 @@ class KardexController extends Controller
         // Filtro por tipo de movimiento
         if ($request->has('tipo_movimiento') && $request->tipo_movimiento) {
             $query->where('tipo_movimiento', $request->tipo_movimiento);
+        }
+
+        // Filtro por lote
+        if ($request->has('id_lote') && $request->id_lote) {
+            $query->where('id_lote', $request->id_lote);
         }
 
         // Filtro por fecha desde
@@ -51,6 +56,8 @@ class KardexController extends Controller
                 'id' => $mov->id,
                 'id_producto' => $mov->id_producto,
                 'producto' => $mov->producto ? $mov->producto->descripcion : 'N/A',
+                'id_lote' => $mov->id_lote,
+                'numero_lote' => $mov->lote?->numero_lote,
                 'tipo_movimiento' => $mov->tipo_movimiento,
                 'cantidad' => $mov->cantidad,
                 'stock_anterior' => $mov->stock_anterior,
@@ -75,7 +82,7 @@ class KardexController extends Controller
      */
     public function porProducto($idProducto): JsonResponse
     {
-        $movimientos = Kardex::with(['usuario'])
+        $movimientos = Kardex::with(['lote', 'usuario'])
             ->where('id_producto', $idProducto)
             ->orderBy('fecha_movimiento', 'desc')
             ->orderBy('id', 'desc')
@@ -84,6 +91,8 @@ class KardexController extends Controller
         $data = $movimientos->map(function ($mov) {
             return [
                 'id' => $mov->id,
+                'id_lote' => $mov->id_lote,
+                'numero_lote' => $mov->lote?->numero_lote,
                 'tipo_movimiento' => $mov->tipo_movimiento,
                 'cantidad' => $mov->cantidad,
                 'stock_anterior' => $mov->stock_anterior,
@@ -109,6 +118,7 @@ class KardexController extends Controller
     {
         $validated = $request->validate([
             'id_producto' => 'required|integer|exists:productos,id',
+            'id_lote' => 'nullable|integer|exists:lotes,id',
             'tipo_movimiento' => 'required|in:Entrada,Salida',
             'cantidad' => 'required|numeric|min:0.01',
             'motivo' => 'required|string|max:255',
@@ -130,6 +140,7 @@ class KardexController extends Controller
 
         $movimiento = Kardex::registrarMovimiento([
             'id_producto' => $validated['id_producto'],
+            'id_lote' => $validated['id_lote'] ?? null,
             'tipo_movimiento' => $validated['tipo_movimiento'],
             'cantidad' => $validated['cantidad'],
             'motivo' => $validated['motivo'],

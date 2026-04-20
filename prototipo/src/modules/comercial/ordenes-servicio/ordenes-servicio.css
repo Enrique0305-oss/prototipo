@@ -46,6 +46,13 @@
   padding-bottom: 0;
 }
 
+.os-section-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 /* Grid del formulario */
 .os-grid {
   display: grid;
@@ -112,6 +119,15 @@
   background: white;
 }
 
+.ods-productos-table {
+  table-layout: fixed;
+}
+
+.ods-productos-table .os-input {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
 .os-table thead {
   background: linear-gradient(135deg, #2c4a7c 0%, #1e3a5f 100%);
   color: white;
@@ -149,6 +165,55 @@
 .os-table select.os-input-sm {
   width: 100%;
   min-width: 100px;
+}
+
+.ods-productos-table th:last-child,
+.ods-productos-table td:last-child {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ods-productos-table .ods-acciones-head {
+  padding: 12px 6px;
+}
+
+.ods-productos-table .ods-prod-obs-cell {
+  padding-right: 8px;
+}
+
+.ods-productos-table .ods-prod-action-cell {
+  text-align: center;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.ods-equipo-header-label {
+  background: #eef2ff;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4338ca;
+  border-bottom: 2px solid #c7d2fe;
+}
+
+.ods-equipo-header-actions {
+  background: #eef2ff;
+  padding: 6px 10px;
+  border-bottom: 2px solid #c7d2fe;
+  text-align: center;
+}
+
+.ods-equipo-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ods-equipo-header-title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
 /* Contenedor de totales */
@@ -249,6 +314,16 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+  }
+
+  .os-section-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .ods-equipo-header-main {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 }
 

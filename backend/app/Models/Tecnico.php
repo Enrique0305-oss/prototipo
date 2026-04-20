@@ -21,6 +21,7 @@ class Tecnico extends Model
         'autorizado_conducir',
         'carga_maxima_semanal',
         'estado',
+        'id_personal',
         'id_exponente_vinculado',
     ];
 
@@ -55,5 +56,10 @@ class Tecnico extends Model
     public function exponenteVinculado(): BelongsTo
     {
         return $this->belongsTo(Exponente::class, 'id_exponente_vinculado');
+    }
+
+    public function personal(): BelongsTo
+    {
+        return $this->belongsTo(Personal::class, 'id_personal');
     }
 }

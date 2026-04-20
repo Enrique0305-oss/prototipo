@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -25,7 +27,7 @@ class ServicesPage extends StatefulWidget {
   State<ServicesPage> createState() => _ServicesPageState();
 }
 
-class _ServicesPageState extends State<ServicesPage> {
+class _ServicesPageState extends State<ServicesPage> with WidgetsBindingObserver {
   static const Color _navy = Color(0xFF1F3C68);
   static const Color _surface = Color(0xFFF2F5FA);
   static const Color _card = Color(0xFFFFFFFF);
@@ -35,10 +37,12 @@ class _ServicesPageState extends State<ServicesPage> {
   late DateTime _fromDate;
   late DateTime _toDate;
   final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final today = DateTime.now();
     _fromDate = DateTime(today.year, today.month, today.day);
     _toDate = DateTime(today.year, today.month, today.day);
@@ -46,6 +50,24 @@ class _ServicesPageState extends State<ServicesPage> {
       from: _fromDate,
       to: _toDate,
     );
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted) return;
+      _reload();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _reload();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _reload() async {
@@ -106,16 +128,75 @@ class _ServicesPageState extends State<ServicesPage> {
     widget.onLogout();
   }
 
-  Future<void> _openService(ServiceTask service) async {
+  Future<void> _openService(ServiceTask service, {List<ServiceTask>? groupedServices}) async {
     final updated = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => ServiceDetailPage(service: service, repository: widget.servicesRepository),
+        builder: (_) => ServiceDetailPage(
+          service: service,
+          repository: widget.servicesRepository,
+          groupedServices: groupedServices,
+        ),
       ),
     );
 
     if (updated == true) {
       await _reload();
     }
+  }
+
+  List<_ServiceVisualItem> _buildVisualItems(List<ServiceTask> services) {
+    final grouped = <String, List<ServiceTask>>{};
+    final singles = <ServiceTask>[];
+
+    for (final service in services) {
+      final gid = service.groupId;
+      if (gid == null || gid <= 0) {
+        singles.add(service);
+        continue;
+      }
+      final key = '${service.date}|$gid';
+      grouped.putIfAbsent(key, () => <ServiceTask>[]).add(service);
+    }
+
+    final items = <_ServiceVisualItem>[];
+
+    for (final service in singles) {
+      items.add(_ServiceVisualItem.single(service));
+    }
+
+    for (final servicesInGroup in grouped.values) {
+      if (servicesInGroup.length < 2) {
+        items.add(_ServiceVisualItem.single(servicesInGroup.first));
+        continue;
+      }
+      items.add(_ServiceVisualItem.group(servicesInGroup));
+    }
+
+    items.sort((a, b) {
+      final dateCompare = a.date.compareTo(b.date);
+      if (dateCompare != 0) return dateCompare;
+      return _timeToMinutes(a.startTime).compareTo(_timeToMinutes(b.startTime));
+    });
+
+    return items;
+  }
+
+  Future<void> _openGroupDetail(_ServiceVisualItem groupItem) async {
+    // Para grupos se abre directamente el detalle/mapa del servicio representativo.
+    // En campo todos se ejecutan en la misma trampa/ubicación.
+    await _openService(groupItem.representative, groupedServices: groupItem.services);
+  }
+
+  int _timeToMinutes(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return 0;
+    final normalized = value.contains('T') ? value.split('T').last : value;
+    final hhmm = normalized.length >= 5 ? normalized.substring(0, 5) : normalized;
+    final parts = hhmm.split(':');
+    if (parts.length < 2) return 0;
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    return (h * 60) + m;
   }
 
   Widget _dateFilterButton({
@@ -302,19 +383,22 @@ class _ServicesPageState extends State<ServicesPage> {
                     );
                   }
 
+                  final visualItems = _buildVisualItems(services);
+
                   return RefreshIndicator(
                     onRefresh: _reload,
                     child: ListView.builder(
                       padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-                      itemCount: services.length,
+                      itemCount: visualItems.length,
                       itemBuilder: (context, index) {
-                        final s = services[index];
-                        final palette = _paletteForStatus(s.status);
+                        final item = visualItems[index];
+                        final representative = item.representative;
+                        final palette = _paletteForStatus(item.status);
                         final hasSchedule =
-                            (s.startTime != null && s.startTime!.trim().isNotEmpty) ||
-                            (s.endTime != null && s.endTime!.trim().isNotEmpty);
+                            (item.startTime != null && item.startTime!.trim().isNotEmpty) ||
+                            (item.endTime != null && item.endTime!.trim().isNotEmpty);
                         final schedule = hasSchedule
-                            ? '${(s.startTime ?? '').trim()} - ${(s.endTime ?? '').trim()}'
+                            ? '${(item.startTime ?? '').trim()} - ${(item.endTime ?? '').trim()}'
                             : null;
 
                         return Container(
@@ -337,7 +421,13 @@ class _ServicesPageState extends State<ServicesPage> {
                           ),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(16),
-                            onTap: () => _openService(s),
+                            onTap: () async {
+                              if (item.isGroup) {
+                                await _openGroupDetail(item);
+                                return;
+                              }
+                              await _openService(representative);
+                            },
                             child: Padding(
                               padding: const EdgeInsets.all(12),
                               child: Row(
@@ -351,7 +441,7 @@ class _ServicesPageState extends State<ServicesPage> {
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                     child: Icon(
-                                      s.isCompleted ? Icons.check : Icons.work_outline,
+                                      item.isGroup ? Icons.layers_outlined : (representative.isCompleted ? Icons.check : Icons.work_outline),
                                       color: Colors.white,
                                     ),
                                   ),
@@ -361,7 +451,7 @@ class _ServicesPageState extends State<ServicesPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          s.title,
+                                          item.title,
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w700,
                                             fontSize: 20,
@@ -370,7 +460,7 @@ class _ServicesPageState extends State<ServicesPage> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          s.client,
+                                          item.client,
                                           style: const TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
@@ -379,14 +469,25 @@ class _ServicesPageState extends State<ServicesPage> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          (s.address == null || s.address!.trim().isEmpty)
+                                          (representative.address == null || representative.address!.trim().isEmpty)
                                               ? 'Direccion por confirmar'
-                                              : s.address!,
+                                              : representative.address!,
                                           style: const TextStyle(
                                             color: Color(0xE6FFFFFF),
                                             height: 1.3,
                                           ),
                                         ),
+                                        if (item.isGroup) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${item.services.length} servicios agrupados',
+                                            style: const TextStyle(
+                                              color: Color(0xE6FFFFFF),
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
                                         if (schedule != null) ...[
                                           const SizedBox(height: 4),
                                           Text(
@@ -408,7 +509,7 @@ class _ServicesPageState extends State<ServicesPage> {
                                       borderRadius: BorderRadius.circular(999),
                                     ),
                                     child: Text(
-                                      s.status,
+                                      item.status,
                                       style: TextStyle(
                                         color: palette.textColor,
                                         fontWeight: FontWeight.w700,
@@ -431,6 +532,72 @@ class _ServicesPageState extends State<ServicesPage> {
         ),
       ),
     );
+  }
+}
+
+class _ServiceVisualItem {
+  const _ServiceVisualItem._({
+    required this.isGroup,
+    required this.services,
+  });
+
+  factory _ServiceVisualItem.single(ServiceTask service) {
+    return _ServiceVisualItem._(isGroup: false, services: <ServiceTask>[service]);
+  }
+
+  factory _ServiceVisualItem.group(List<ServiceTask> services) {
+    final sorted = [...services]
+      ..sort((a, b) {
+        final am = _parseTimeToMinutes(a.startTime);
+        final bm = _parseTimeToMinutes(b.startTime);
+        return am.compareTo(bm);
+      });
+    return _ServiceVisualItem._(isGroup: true, services: sorted);
+  }
+
+  final bool isGroup;
+  final List<ServiceTask> services;
+
+  ServiceTask get representative => services.first;
+  ServiceTask? get single => isGroup ? null : services.first;
+
+  String get title {
+    if (!isGroup) return representative.title;
+    final unique = services.map((e) => e.title.trim()).where((e) => e.isNotEmpty).toSet().toList(growable: false);
+    if (unique.isEmpty) return 'Servicios agrupados';
+    return unique.join(' + ');
+  }
+
+  String get client => representative.client;
+  String get date => representative.date;
+  String get status {
+    final lower = services.map((e) => e.status.toLowerCase()).toList(growable: false);
+    if (lower.any((s) => s.contains('en ejec'))) return 'En Ejecucion';
+    if (lower.any((s) => s.contains('en camino'))) return 'En Camino';
+    if (lower.any((s) => s.contains('program'))) return 'Programado';
+    return representative.status;
+  }
+
+  String? get startTime => services.map((e) => e.startTime).whereType<String>().where((e) => e.trim().isNotEmpty).fold<String?>(null, (prev, cur) {
+    if (prev == null) return cur;
+    return _parseTimeToMinutes(cur) < _parseTimeToMinutes(prev) ? cur : prev;
+  });
+
+  String? get endTime => services.map((e) => e.endTime).whereType<String>().where((e) => e.trim().isNotEmpty).fold<String?>(null, (prev, cur) {
+    if (prev == null) return cur;
+    return _parseTimeToMinutes(cur) > _parseTimeToMinutes(prev) ? cur : prev;
+  });
+
+  static int _parseTimeToMinutes(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return 0;
+    final normalized = value.contains('T') ? value.split('T').last : value;
+    final hhmm = normalized.length >= 5 ? normalized.substring(0, 5) : normalized;
+    final parts = hhmm.split(':');
+    if (parts.length < 2) return 0;
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    return (h * 60) + m;
   }
 }
 

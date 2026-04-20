@@ -11,6 +11,7 @@ use App\Models\Multicim;
 use App\Models\Inventario;
 use App\Models\Kardex;
 use App\Models\Producto;
+use App\Models\Lote;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -468,6 +469,7 @@ class OrdenProductoController extends Controller
             'cliente',
             'emisor',
             'detalles.producto.inventario',
+            'detalles.lote',
         ])
         ->whereDoesntHave('salidasKardex')
         ->orderBy('fecha_envio', 'desc');
@@ -494,6 +496,7 @@ class OrdenProductoController extends Controller
             'cliente',
             'emisor',
             'detalles.producto',
+            'detalles.lote',
             'salidasKardex',
         ])
         ->whereHas('salidasKardex')
@@ -521,6 +524,7 @@ class OrdenProductoController extends Controller
             'cliente',
             'emisor',
             'detalles.producto.inventario',
+            'detalles.lote',
             'salidasKardex',
         ])->find($id);
 
@@ -547,6 +551,7 @@ class OrdenProductoController extends Controller
             'id_orden_producto' => 'required|integer|exists:orden_producto,id',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_producto' => 'required|integer|exists:productos,id',
+            'detalles.*.id_lote' => 'required|integer|exists:lotes,id',
             'detalles.*.cantidad_entregada' => 'required|integer|min:1',
             'observacion' => 'nullable|string|max:500',
         ]);
@@ -577,6 +582,7 @@ class OrdenProductoController extends Controller
 
             foreach ($detallesSalida as $item) {
                 $idProducto = (int) $item['id_producto'];
+                $idLote = (int) $item['id_lote'];
                 $cantidadEntregada = (int) $item['cantidad_entregada'];
 
                 $detalleOrden = $detallesOrden->get($idProducto);
@@ -594,6 +600,25 @@ class OrdenProductoController extends Controller
                     ], 422);
                 }
 
+                $lote = Lote::where('id', $idLote)
+                    ->where('id_producto', $idProducto)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$lote) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "El lote seleccionado no es válido para el producto #{$idProducto}",
+                    ], 422);
+                }
+
+                if ((int) $lote->cantidad_disponible < $cantidadEntregada) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Stock insuficiente en lote {$lote->numero_lote} para producto #{$idProducto}",
+                    ], 422);
+                }
+
                 $inventario = Inventario::where('id_productos', $idProducto)->first();
                 $disponible = $inventario ? (int) $inventario->cantidad_disponible : 0;
                 if ($disponible < $cantidadEntregada) {
@@ -608,10 +633,29 @@ class OrdenProductoController extends Controller
 
             foreach ($detallesSalida as $item) {
                 $idProducto = (int) $item['id_producto'];
+                $idLote = (int) $item['id_lote'];
                 $cantidadEntregada = (int) $item['cantidad_entregada'];
+
+                $lote = Lote::where('id', $idLote)
+                    ->where('id_producto', $idProducto)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($lote) {
+                    $lote->cantidad_disponible = max(0, (int) $lote->cantidad_disponible - $cantidadEntregada);
+                    $lote->cantidad = max(0, (int) $lote->cantidad - $cantidadEntregada);
+                    $lote->save();
+                }
+
+                $detalleOrden = $detallesOrden->get($idProducto);
+                if ($detalleOrden) {
+                    $detalleOrden->id_lote = $idLote;
+                    $detalleOrden->save();
+                }
 
                 Kardex::registrarMovimiento([
                     'id_producto' => $idProducto,
+                    'id_lote' => $idLote,
                     'tipo_movimiento' => 'Salida',
                     'cantidad' => $cantidadEntregada,
                     'motivo' => 'Orden Producto',

@@ -19,6 +19,7 @@ class ProgramacionServicio extends Model
         'id_tecnico_asignado',
         'id_supervisor',
         'id_vehiculo',
+        'id_grupo_programacion',
         'fecha_programada',
         'dias_semana',
         'hora_inicio',
@@ -56,6 +57,7 @@ class ProgramacionServicio extends Model
         'fecha_creacion' => 'datetime',
         'fecha_modificacion' => 'datetime',
         'id_supervisor' => 'array',
+        'fotos_evidencia' => 'array',
         'latitud' => 'float',
         'longitud' => 'float',
     ];
@@ -115,6 +117,11 @@ class ProgramacionServicio extends Model
     public function vehiculo()
     {
         return $this->belongsTo(Vehiculo::class, 'id_vehiculo');
+    }
+
+    public function grupoProgramacion()
+    {
+        return $this->belongsTo(ProgramacionServicioGrupo::class, 'id_grupo_programacion');
     }
 
     public function creador()

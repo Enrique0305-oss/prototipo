@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProgramacionServicio;
+use App\Models\ProgramacionServicioGrupo;
 use App\Models\ProgramacionInsumo;
 use App\Models\ProgramacionTecnico;
 use App\Models\OrdenServicio;
@@ -22,6 +23,7 @@ use App\Services\ScheduleConflictService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 
@@ -65,6 +67,8 @@ class ProgramacionServicioController extends Controller
             'insumos.producto',
             'planta',
             'area',
+            'grupoProgramacion.cliente',
+            'grupoProgramacion.planta',
         ]);
 
         // Filtro por fecha exacta
@@ -135,6 +139,8 @@ class ProgramacionServicioController extends Controller
             'creador',
             'planta',
             'area',
+            'grupoProgramacion.cliente',
+            'grupoProgramacion.planta',
         ])->findOrFail($id);
 
         return response()->json([
@@ -474,6 +480,27 @@ class ProgramacionServicioController extends Controller
             'observaciones'       => 'nullable|string',
         ]);
 
+        $camposAgrupacion = [
+            'id_tecnico_asignado',
+            'tecnicos_ids',
+            'fecha_programada',
+            'hora_inicio',
+            'hora_fin',
+            'id_cliente_planta',
+            'id_cliente_planta_area',
+            'id_vehiculo',
+            'id_supervisor',
+            'id_servicio',
+            'id_orden_servicio',
+        ];
+
+        if (!empty($prog->id_grupo_programacion) && !empty(array_intersect(array_keys($validated), $camposAgrupacion))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Desagrupe primero para modificar horario, técnicos o ubicación de un servicio agrupado.',
+            ], 422);
+        }
+
         // Extraer tecnicos_ids antes del update masivo
         $tecnicosIds = $validated['tecnicos_ids'] ?? null;
         unset($validated['tecnicos_ids']);
@@ -610,6 +637,77 @@ class ProgramacionServicioController extends Controller
     }
 
     /**
+     * Marcar inicio de ejecución por técnico (contador de horas trabajadas)
+     */
+    public function iniciar(Request $request, $id)
+    {
+        $prog = ProgramacionServicio::with(['tecnicos'])->findOrFail($id);
+
+        $idUsuario = (int) ($request->user()?->id ?? 0);
+        if ($idUsuario <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo identificar al usuario autenticado.',
+            ], 401);
+        }
+
+        DB::beginTransaction();
+        try {
+            $now = now();
+            $idTecnico = (int) (Tecnico::query()->where('id_personal', $idUsuario)->value('id') ?? 0);
+            $idTecnico = $idTecnico > 0 ? $idTecnico : null;
+
+            $inicioActivo = DB::table('programacion_servicio_inicios')
+                ->where('id_programacion', $prog->id)
+                ->where('id_usuario', $idUsuario)
+                ->whereNull('fecha_fin')
+                ->orderByDesc('id')
+                ->first();
+
+            if (!$inicioActivo) {
+                DB::table('programacion_servicio_inicios')->insert([
+                    'id_programacion' => $prog->id,
+                    'id_usuario' => $idUsuario,
+                    'id_tecnico' => $idTecnico,
+                    'fecha_inicio' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            } else {
+                $now = Carbon::parse($inicioActivo->fecha_inicio);
+            }
+
+            if (in_array($prog->estado_ejecucion, ['Programado', 'Confirmado', 'En Camino'], true)) {
+                $prog->update([
+                    'estado_ejecucion' => 'En Ejecución',
+                    'modificado_por' => $idUsuario,
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Inicio registrado correctamente.',
+                'data' => [
+                    'id_programacion' => (int) $prog->id,
+                    'id_usuario' => $idUsuario,
+                    'id_tecnico' => $idTecnico,
+                    'started_at' => Carbon::parse($now)->toDateTimeString(),
+                    'already_started' => (bool) $inicioActivo,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al iniciar servicio: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Marcar una programación como "Realizado" y sugerir siguiente
      */
     public function completar(Request $request, $id)
@@ -617,14 +715,53 @@ class ProgramacionServicioController extends Controller
         $prog = ProgramacionServicio::with(['ordenServicio.detalles', 'insumos', 'tecnicos'])
             ->findOrFail($id);
 
+        $idUsuario = (int) ($request->user()?->id ?? 0);
+
         DB::beginTransaction();
         try {
+            $duracionMinutosRequest = $request->input('duracion_real');
+            $fotosEvidencia = $this->normalizarFotosEvidencia($prog->fotos_evidencia ?? null);
+            $metadatosFotos = $this->normalizarMetaFotosEvidencia($request->input('fotos_evidencia_meta'));
+            $fotosSubidas = $this->guardarFotosEvidencia($request, $prog, $metadatosFotos);
+            if (!empty($fotosSubidas)) {
+                $fotosEvidencia = array_values(array_merge($fotosEvidencia, $fotosSubidas));
+            }
+
+            $inicioActivo = null;
+            if ($idUsuario > 0 && Schema::hasTable('programacion_servicio_inicios')) {
+                $inicioActivo = DB::table('programacion_servicio_inicios')
+                    ->where('id_programacion', $prog->id)
+                    ->where('id_usuario', $idUsuario)
+                    ->whereNull('fecha_fin')
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($inicioActivo) {
+                    $fechaInicio = Carbon::parse($inicioActivo->fecha_inicio);
+                    $fechaFin = now();
+                    $duracionSegundos = max(0, $fechaInicio->diffInSeconds($fechaFin));
+
+                    DB::table('programacion_servicio_inicios')
+                        ->where('id', $inicioActivo->id)
+                        ->update([
+                            'fecha_fin' => $fechaFin,
+                            'duracion_segundos' => $duracionSegundos,
+                            'updated_at' => $fechaFin,
+                        ]);
+
+                    if ($duracionMinutosRequest === null && $duracionSegundos > 0) {
+                        $duracionMinutosRequest = (int) ceil($duracionSegundos / 60);
+                    }
+                }
+            }
+
             $prog->update([
                 'estado_ejecucion' => 'Realizado',
                 'fecha_ejecucion_real' => now(),
-                'duracion_real' => $request->input('duracion_real'),
+                'duracion_real' => $duracionMinutosRequest,
+                'fotos_evidencia' => $fotosEvidencia,
                 'observaciones' => $request->input('observaciones', $prog->observaciones),
-                'modificado_por' => $request->user()?->id,
+                'modificado_por' => $idUsuario > 0 ? $idUsuario : $request->user()?->id,
             ]);
 
             // Actualizar insumos a "Utilizado"
@@ -692,6 +829,115 @@ class ProgramacionServicioController extends Controller
         }
     }
 
+    private function guardarFotosEvidencia(Request $request, ProgramacionServicio $prog, array $metadatos = []): array
+    {
+        if (!$request->hasFile('fotos_evidencia')) {
+            return [];
+        }
+
+        $archivos = $request->file('fotos_evidencia');
+        if (!is_array($archivos)) {
+            $archivos = [$archivos];
+        }
+
+        $rutaBase = "programacion-servicio/evidencias/{$prog->id}";
+        $rutas = [];
+
+        foreach ($archivos as $indice => $archivo) {
+            if (!$archivo || !$archivo->isValid()) {
+                continue;
+            }
+
+            $extension = strtolower($archivo->getClientOriginalExtension() ?: 'jpg');
+            $nombre = now()->format('Ymd_His') . '_' . Str::uuid()->toString() . '.' . $extension;
+            $ruta = $archivo->storeAs($rutaBase, $nombre, 'public');
+            $metadato = $metadatos[$indice] ?? [];
+            $rutas[] = [
+                'path' => $ruta,
+                'service_id' => isset($metadato['service_id']) ? (int) $metadato['service_id'] : null,
+                'service_title' => isset($metadato['service_title']) ? trim((string) $metadato['service_title']) : null,
+            ];
+        }
+
+        return $rutas;
+    }
+
+    private function normalizarMetaFotosEvidencia(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $value = $decoded;
+            }
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($value as $entry) {
+            if (is_string($entry)) {
+                $decoded = json_decode($entry, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $entry = $decoded;
+                }
+            }
+
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $items[] = [
+                'service_id' => isset($entry['service_id']) ? (int) $entry['service_id'] : null,
+                'service_title' => isset($entry['service_title']) ? trim((string) $entry['service_title']) : null,
+            ];
+        }
+
+        return $items;
+    }
+
+    private function normalizarFotosEvidencia(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $value = $decoded;
+            }
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($value as $item) {
+            if (is_array($item)) {
+                $items[] = [
+                    'path' => isset($item['path']) ? trim((string) $item['path']) : '',
+                    'service_id' => isset($item['service_id']) ? (int) $item['service_id'] : null,
+                    'service_title' => isset($item['service_title']) ? trim((string) $item['service_title']) : null,
+                ];
+                continue;
+            }
+
+            $text = trim((string) $item);
+            if ($text !== '') {
+                $items[] = $text;
+            }
+        }
+
+        return $items;
+    }
+
     /**
      * Eliminar programación (y devolver insumos al inventario)
      */
@@ -732,6 +978,15 @@ class ProgramacionServicioController extends Controller
                 if ($restantes === 0) {
                     OrdenServicio::where('id', $prog->id_orden_servicio)
                         ->update(['estado' => 'Aprobado']);
+                }
+            }
+
+            if (!empty($prog->id_grupo_programacion)) {
+                $grupoId = (int) $prog->id_grupo_programacion;
+                $restantesGrupo = ProgramacionServicio::where('id_grupo_programacion', $grupoId)->count();
+                if ($restantesGrupo < 2) {
+                    ProgramacionServicio::where('id_grupo_programacion', $grupoId)->update(['id_grupo_programacion' => null]);
+                    ProgramacionServicioGrupo::where('id', $grupoId)->delete();
                 }
             }
 

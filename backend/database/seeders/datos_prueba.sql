@@ -21,12 +21,12 @@ INSERT INTO categoria (nombre, descripcion, estado) VALUES
 ('EPP', 'Equipos de protección personal', 'Activo');
 
 -- 4. Productos de prueba
-INSERT INTO productos (descripcion, id_categoria, fecha_vencim, ubicacion, n_lote, estado) VALUES
-('Cipermetrina 25% EC - 1L', 1, '2026-12-31', 'Almacén A1', 'LOT2025001', 'Activo'),
-('Deltametrina 2.5% WP - 1kg', 1, '2026-12-31', 'Almacén A1', 'LOT2025002', 'Activo'),
-('Bromadiolona 0.005% - 200g', 2, '2027-06-30', 'Almacén A2', 'LOT2025003', 'Activo'),
-('Fumigadora manual 10L', 3, NULL, 'Almacén B1', 'EQ001', 'Activo'),
-('Mascarilla respiratoria 3M', 4, '2026-03-15', 'Almacén C1', 'EPP001', 'Activo');
+INSERT INTO productos (descripcion, id_categoria, ubicacion, estado) VALUES
+('Cipermetrina 25% EC - 1L', 1, 'Almacén A1', 'Activo'),
+('Deltametrina 2.5% WP - 1kg', 1, 'Almacén A1', 'Activo'),
+('Bromadiolona 0.005% - 200g', 2, 'Almacén A2', 'Activo'),
+('Fumigadora manual 10L', 3, 'Almacén B1', 'Activo'),
+('Mascarilla respiratoria 3M', 4, 'Almacén C1', 'Activo');
 
 -- 5. Inventario inicial
 INSERT INTO inventario (id_productos, cantidad_disponible, stock_seguridad, Tipo, Cantidad_total) VALUES

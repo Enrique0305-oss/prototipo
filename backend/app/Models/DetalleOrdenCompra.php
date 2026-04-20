@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Lote;
 
 class DetalleOrdenCompra extends Model
 {
@@ -11,6 +12,7 @@ class DetalleOrdenCompra extends Model
     protected $fillable = [
         'id_orden_compra',
         'id_producto',
+        'id_lote',
         'cantidad',
         'precio_unitario',
         'subtotal',
@@ -31,5 +33,10 @@ class DetalleOrdenCompra extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function lote()
+    {
+        return $this->belongsTo(Lote::class, 'id_lote');
     }
 }

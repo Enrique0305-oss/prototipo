@@ -15,10 +15,12 @@ class ServiceDetailPage extends StatefulWidget {
     super.key,
     required this.service,
     required this.repository,
+    this.groupedServices,
   });
 
   final ServiceTask service;
   final ServicesRepository repository;
+  final List<ServiceTask>? groupedServices;
 
   @override
   State<ServiceDetailPage> createState() => _ServiceDetailPageState();
@@ -31,16 +33,340 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   String? _locationError;
   bool _loading = true;
 
+  List<ServiceTask> get _effectiveServices {
+    final grouped = widget.groupedServices;
+    if (grouped != null && grouped.isNotEmpty) {
+      return grouped;
+    }
+    return <ServiceTask>[widget.service];
+  }
+
+  bool get _isGrouped => _effectiveServices.length > 1;
+
+  ServiceTask get _representativeService => _effectiveServices.first;
+
+  bool get _isCompleted => _representativeService.isCompleted;
+
+  String get _mergedTitle {
+    final uniqueTitles = _effectiveServices
+        .map((s) => s.title.trim())
+        .where((t) => t.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (uniqueTitles.isEmpty) {
+      return 'Servicios agrupados';
+    }
+    return uniqueTitles.join(' + ');
+  }
+
+  String? get _mergedSchedule {
+    int? minStart;
+    int? maxEnd;
+
+    for (final s in _effectiveServices) {
+      final start = _timeToMinutes(s.startTime);
+      if (start != null) {
+        minStart = (minStart == null || start < minStart) ? start : minStart;
+      }
+
+      final end = _timeToMinutes(s.endTime);
+      if (end != null) {
+        maxEnd = (maxEnd == null || end > maxEnd) ? end : maxEnd;
+      }
+    }
+
+    if (minStart == null && maxEnd == null) {
+      return null;
+    }
+
+    final startLabel = _minutesToHhmm(minStart ?? 0);
+    final endLabel = _minutesToHhmm(maxEnd ?? minStart ?? 0);
+    return '$startLabel - $endLabel';
+  }
+
+  String? get _totalTimeLabel {
+    final minutes = _representativeService.durationMinutes;
+    if (minutes == null || minutes <= 0) {
+      return null;
+    }
+
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    if (hours > 0 && mins > 0) {
+      return '$hours h $mins min';
+    }
+    if (hours > 0) {
+      return '$hours h';
+    }
+    return '$mins min';
+  }
+
+  String _resolvePhotoUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) {
+      return value;
+    }
+
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+
+    final base = AppConfig.apiBaseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+    final normalized = value.startsWith('/') ? value.substring(1) : value;
+
+    // Compatibilidad:
+    // - nuevo formato: /storage/...
+    // - rutas de disco public: programacion-servicio/...
+    // - formato legado con "public/..."
+    if (normalized.startsWith('storage/')) {
+      return '$base/$normalized';
+    }
+
+    if (normalized.startsWith('public/')) {
+      return '$base/storage/${normalized.substring('public/'.length)}';
+    }
+
+    return '$base/storage/$normalized';
+  }
+
+  Map<String, List<ServiceEvidence>> _groupEvidenceItems() {
+    final items = _effectiveServices
+        .expand((service) => service.evidenceItems)
+        .toList(growable: false);
+    if (items.isNotEmpty) {
+      final grouped = <String, List<ServiceEvidence>>{};
+      for (final item in items) {
+        final key = (item.serviceTitle ?? '').trim().isNotEmpty
+            ? item.serviceTitle!.trim()
+            : (item.serviceId != null ? _serviceTitleById(item.serviceId!) : 'Servicio');
+        grouped.putIfAbsent(key, () => <ServiceEvidence>[]).add(item);
+      }
+      return grouped;
+    }
+
+    final fallback = _representativeService.evidencePhotos;
+    if (fallback.isEmpty) {
+      return const <String, List<ServiceEvidence>>{};
+    }
+
+    return {
+      _representativeService.title: fallback
+          .map((path) => ServiceEvidence(path: path, serviceTitle: _representativeService.title, serviceId: _representativeService.id))
+          .toList(growable: false),
+    };
+  }
+
+  String _serviceTitleById(int serviceId) {
+    for (final service in _effectiveServices) {
+      if (service.id == serviceId) {
+        return service.title;
+      }
+    }
+    return 'Servicio #$serviceId';
+  }
+
+  String _formatCompletedAt(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return 'No registrado';
+    }
+
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) {
+      return value.replaceFirst('T', ' ');
+    }
+
+    final local = parsed.toLocal();
+    final dd = local.day.toString().padLeft(2, '0');
+    final mm = local.month.toString().padLeft(2, '0');
+    final yyyy = local.year.toString();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$dd/$mm/$yyyy $hh:$min';
+  }
+
+  Future<void> _openCompletedDetails() async {
+    final groupedEvidence = _groupEvidenceItems();
+    final totalEvidences = groupedEvidence.values.fold<int>(0, (sum, list) => sum + list.length);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.82,
+          minChildSize: 0.55,
+          maxChildSize: 0.95,
+          builder: (context, controller) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Detalle de cierre',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  _detailRow('Servicio', _mergedTitle),
+                  _detailRow('Cliente', _representativeService.client),
+                  _detailRow('Estado', _representativeService.status),
+                  _detailRow('Tiempo total', _totalTimeLabel ?? (_representativeService.durationMinutes != null ? '${_representativeService.durationMinutes} min' : 'No registrado')),
+                  if (_mergedSchedule != null) _detailRow('Horario programado', _mergedSchedule!),
+                  if ((_representativeService.completedAt ?? '').trim().isNotEmpty)
+                    _detailRow('Fecha de cierre', _formatCompletedAt(_representativeService.completedAt)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Observaciones',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    (_representativeService.observations ?? '').trim().isEmpty
+                        ? 'Sin observaciones registradas.'
+                        : _representativeService.observations!,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Evidencias ($totalEvidences)',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  if (groupedEvidence.isEmpty)
+                    const Text('No hay imágenes registradas para este servicio.')
+                  else
+                    Column(
+                      children: groupedEvidence.entries.map((entry) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                entry.key,
+                                style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1F3C68)),
+                              ),
+                              const SizedBox(height: 8),
+                              GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: entry.value.length,
+                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 8,
+                                  mainAxisSpacing: 8,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final evidence = entry.value[index];
+                                  final url = _resolvePhotoUrl(evidence.path);
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      url,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: const Color(0xFFF1F5F9),
+                                        alignment: Alignment.center,
+                                        child: const Icon(Icons.broken_image_outlined, color: Color(0xFF94A3B8)),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(growable: false),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155)),
+            ),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(color: Color(0xFF334155))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double? get _targetLatitude {
+    for (final s in _effectiveServices) {
+      if (s.latitude != null) return s.latitude;
+    }
+    return null;
+  }
+
+  double? get _targetLongitude {
+    for (final s in _effectiveServices) {
+      if (s.longitude != null) return s.longitude;
+    }
+    return null;
+  }
+
+  int? _timeToMinutes(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) return null;
+    final normalized = value.contains('T') ? value.split('T').last : value;
+    if (normalized.length < 5) return null;
+    final hhmm = normalized.substring(0, 5);
+    final parts = hhmm.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return (h * 60) + m;
+  }
+
+  String _minutesToHhmm(int totalMinutes) {
+    final h = (totalMinutes ~/ 60).toString().padLeft(2, '0');
+    final m = (totalMinutes % 60).toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
   double? get _distanceMeters {
-    if (_position == null || widget.service.latitude == null || widget.service.longitude == null) {
+    if (_position == null || _targetLatitude == null || _targetLongitude == null) {
       return null;
     }
 
     return DistanceUtils.distanceMeters(
       fromLat: _position!.latitude,
       fromLng: _position!.longitude,
-      toLat: widget.service.latitude!,
-      toLng: widget.service.longitude!,
+      toLat: _targetLatitude!,
+      toLng: _targetLongitude!,
     );
   }
 
@@ -112,9 +438,18 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   }
 
   Future<void> _startService() async {
+    if (_isCompleted) {
+      await _openCompletedDetails();
+      return;
+    }
+
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => ServiceExecutionPage(service: widget.service, repository: widget.repository),
+        builder: (_) => ServiceExecutionPage(
+          service: _representativeService,
+          repository: widget.repository,
+          groupedServices: _isGrouped ? _effectiveServices : null,
+        ),
       ),
     );
 
@@ -125,21 +460,16 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = _paletteForStatus(widget.service.status);
-    final hasSchedule =
-      (widget.service.startTime != null && widget.service.startTime!.trim().isNotEmpty) ||
-      (widget.service.endTime != null && widget.service.endTime!.trim().isNotEmpty);
-    final schedule = hasSchedule
-      ? '${(widget.service.startTime ?? '').trim()} - ${(widget.service.endTime ?? '').trim()}'
-      : null;
+    final palette = _paletteForStatus(_representativeService.status);
+    final schedule = _mergedSchedule;
 
-    final servicePoint = widget.service.latitude != null && widget.service.longitude != null
-      ? LatLng(widget.service.latitude!, widget.service.longitude!)
-      : null;
+    final servicePoint = _targetLatitude != null && _targetLongitude != null
+        ? LatLng(_targetLatitude!, _targetLongitude!)
+        : null;
 
     final techPoint = _position != null
-      ? LatLng(_position!.latitude, _position!.longitude)
-      : null;
+        ? LatLng(_position!.latitude, _position!.longitude)
+        : null;
 
     final mapCenter = techPoint ?? servicePoint;
 
@@ -169,7 +499,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   children: [
                     Expanded(
                       child: Text(
-                        widget.service.title,
+                        _mergedTitle,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
@@ -184,7 +514,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        widget.service.status,
+                        _representativeService.status,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -196,12 +526,19 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  widget.service.client,
+                  _representativeService.client,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                 ),
+                if (_isGrouped) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_effectiveServices.length} servicios agrupados',
+                    style: const TextStyle(color: Color(0xE6FFFFFF), fontWeight: FontWeight.w700),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
-                  widget.service.address ?? 'Sin direccion',
+                  _representativeService.address ?? 'Sin direccion',
                   style: const TextStyle(color: Color(0xE6FFFFFF)),
                 ),
                 if (schedule != null) ...[
@@ -223,8 +560,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
           if (servicePoint == null)
             Text(
               'Este servicio no tiene coordenadas de destino en backend. '
-              'Lat: ${widget.service.latitude?.toStringAsFixed(6) ?? '-'} | '
-              'Lng: ${widget.service.longitude?.toStringAsFixed(6) ?? '-'}',
+              'Lat: ${_targetLatitude?.toStringAsFixed(6) ?? '-'} | '
+              'Lng: ${_targetLongitude?.toStringAsFixed(6) ?? '-'}',
               style: const TextStyle(color: Colors.orange),
             )
           else
@@ -334,13 +671,45 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _canStart ? _startService : null,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Empezar servicio'),
+                  onPressed: _isCompleted ? _openCompletedDetails : (_canStart ? _startService : null),
+                  icon: Icon(_isCompleted ? Icons.visibility_outlined : Icons.play_arrow),
+                  label: Text(_isCompleted ? 'Ver detalles' : 'Empezar servicio'),
                 ),
               ),
             ],
           ),
+          if (_isCompleted) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Servicio completado',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF166534)),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Tiempo total: ${_totalTimeLabel ?? 'No registrado'}',
+                    style: const TextStyle(color: Color(0xFF166534)),
+                  ),
+                  if ((_representativeService.observations ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Observaciones: ${_representativeService.observations}',
+                      style: const TextStyle(color: Color(0xFF166534)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

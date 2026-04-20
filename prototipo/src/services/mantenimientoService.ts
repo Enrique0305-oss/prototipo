@@ -99,6 +99,22 @@ export const mantenimientoService = {
     );
   },
 
+  actualizarProgramacion: async (id: number, data: {
+    id_equipo: number;
+    motivo: string;
+    tipo_mantenimiento?: 'Preventivo' | 'Correctivo';
+    anio: number;
+    frecuencia_meses: number;
+    fecha_inicio: string;
+    modo_programacion?: 'Anual' | 'Unica';
+    observaciones?: string;
+  }) => {
+    return apiClient.put<ApiResponse<ProgramacionMantenimiento>>(
+      `/programacion-mantenimiento/${id}`,
+      data
+    );
+  },
+
   eliminarProgramacion: async (id: number) => {
     return apiClient.delete<ApiResponse<null>>(`/programacion-mantenimiento/${id}`);
   },

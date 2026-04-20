@@ -12,6 +12,7 @@ class DetalleEntradaDevolucionFabricacion extends Model
         'id_entrada_devolucion_fabricacion',
         'tipo',
         'id_producto',
+        'id_lote',
         'cantidad',
         'observacion',
     ];
@@ -32,5 +33,10 @@ class DetalleEntradaDevolucionFabricacion extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function lote()
+    {
+        return $this->belongsTo(Lote::class, 'id_lote');
     }
 }

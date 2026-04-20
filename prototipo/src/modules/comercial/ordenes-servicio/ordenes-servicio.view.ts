@@ -513,7 +513,7 @@ export function renderComercialOrdenesServicio() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                 Productos / Materiales
               </h3>
-              <div style="display:flex;gap:8px;">
+              <div class="os-section-header-actions">
                 <button type="button" class="btn-secondary" id="btn-agregar-equipo-ods" style="font-size:12px;padding:4px 10px;" title="Agregar equipo por servicio/planta/área">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   Agregar Equipo
@@ -525,13 +525,13 @@ export function renderComercialOrdenesServicio() {
               </div>
             </div>
             <div class="os-table-wrapper">
-              <table class="os-table">
+              <table class="os-table ods-productos-table">
                 <thead>
                   <tr>
-                    <th style="width:40%;">Producto</th>
-                    <th style="width:15%;text-align:center;">Cantidad</th>
+                    <th style="width:42%;">Producto</th>
+                    <th style="width:14%;text-align:center;">Cantidad</th>
                     <th style="width:30%;">Observación</th>
-                    <th style="width:8%;"></th>
+                    <th style="width:14%;" class="ods-acciones-head">&nbsp;</th>
                   </tr>
                 </thead>
                 <tbody id="ods-productos-body"></tbody>
@@ -1447,14 +1447,16 @@ function renderProductosODS() {
 
     // Header azul con botón de eliminar grupo
     html += `<tr class="ods-equipo-header">
-      <td colspan="3" style="background:#eef2ff;padding:6px 10px;font-size:12px;font-weight:600;color:#4338ca;border-bottom:2px solid #c7d2fe;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-        ${groupLabel}
+      <td colspan="3" class="ods-equipo-header-label">
+        <div class="ods-equipo-header-main">
+          <span class="ods-equipo-header-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+            ${groupLabel}
+          </span>
+          <button type="button" class="btn-secondary btn-agregar-producto-grupo" data-group-key="${groupKey}" style="font-size:11px;padding:2px 8px;line-height:1.3;">+ Añadir producto</button>
+        </div>
       </td>
-      <td style="background:#eef2ff;text-align:right;padding:6px 10px;border-bottom:2px solid #c7d2fe;">
-        <button type="button" class="btn-secondary btn-agregar-producto-grupo" data-group-key="${groupKey}" style="font-size:11px;padding:2px 8px;line-height:1.3;">+ Añadir producto</button>
-      </td>
-      <td style="background:#eef2ff;text-align:right;padding:6px 10px;border-bottom:2px solid #c7d2fe;">
+      <td class="ods-equipo-header-actions">
         <button type="button" class="btn-eliminar-ods-grupo" data-group-key="${groupKey}" style="background:none;border:none;cursor:pointer;color:#ef4444;padding:4px;" title="Eliminar equipo y sus productos">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
         </button>
@@ -1462,7 +1464,7 @@ function renderProductosODS() {
     </tr>`;
 
     if (rows.length === 0) {
-      html += `<tr><td colspan="5" style="text-align:center;color:#94a3b8;font-size:12px;padding:8px;">Sin productos para este equipo. Use "Añadir producto".</td></tr>`;
+      html += `<tr><td colspan="4" style="text-align:center;color:#94a3b8;font-size:12px;padding:8px;">Sin productos para este equipo. Use "Añadir producto".</td></tr>`;
       return;
     }
 
@@ -1472,8 +1474,8 @@ function renderProductosODS() {
       html += `<tr data-prod-idx="${idx}">
         <td><select class="os-input os-input-sm ods-prod-select" data-idx="${idx}">${buildProductoSelectOpts(r.id_producto)}</select></td>
         <td style="text-align:center;"><input type="number" class="os-input os-input-sm ods-prod-cant" data-idx="${idx}" value="${r.cantidad}" min="0.01" step="0.01" style="width:80px;text-align:center;"></td>
-        <td><input type="text" class="os-input os-input-sm ods-prod-obs" data-idx="${idx}" value="${r.observacion || ''}" placeholder="Opcional" maxlength="200"></td>
-        <td style="text-align:center;"><button type="button" class="btn-icon ods-prod-remove" data-idx="${idx}" style="color:#ef4444;" title="Eliminar producto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
+        <td class="ods-prod-obs-cell"><input type="text" class="os-input os-input-sm ods-prod-obs" data-idx="${idx}" value="${r.observacion || ''}" placeholder="Opcional" maxlength="200"></td>
+        <td class="ods-prod-action-cell"><button type="button" class="btn-icon ods-prod-remove" data-idx="${idx}" style="color:#ef4444;" title="Eliminar producto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
       </tr>`;
     });
   });

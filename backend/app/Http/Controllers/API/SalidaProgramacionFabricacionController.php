@@ -5,8 +5,11 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Inventario;
 use App\Models\Kardex;
+use App\Models\Lote;
+use App\Models\Producto;
 use App\Models\EntradaDevolucionFabricacion;
 use App\Models\ProgramacionFabricacion;
+use App\Models\SalidaProgramacionFabricacionDetalle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -110,9 +113,10 @@ class SalidaProgramacionFabricacionController extends Controller
     {
         $validated = $request->validate([
             'id_programacion' => 'required|integer|exists:programacion_fabricacion,id',
-            'insumos' => 'nullable|array|min:1',
-            'insumos.*.id_producto' => 'required_with:insumos|integer|exists:productos,id',
-            'insumos.*.cantidad_entregada' => 'required_with:insumos|integer|min:1',
+            'insumos' => 'required|array|min:1',
+            'insumos.*.id_producto' => 'required|integer|exists:productos,id',
+            'insumos.*.id_lote' => 'required|integer|exists:lotes,id',
+            'insumos.*.cantidad_entregada' => 'required|integer|min:1',
             'observacion' => 'nullable|string|max:500',
         ]);
 
@@ -146,20 +150,19 @@ class SalidaProgramacionFabricacionController extends Controller
             ], 422);
         }
 
-        $insumosSalida = collect($validated['insumos'] ?? [])->map(function (array $item) {
+        $insumosSalida = collect($validated['insumos'])->map(function (array $item) {
             return [
                 'id_producto' => (int) $item['id_producto'],
+                'id_lote' => (int) $item['id_lote'],
                 'cantidad_entregada' => (int) $item['cantidad_entregada'],
             ];
         });
 
         if ($insumosSalida->isEmpty()) {
-            $insumosSalida = $insumosDisponibles->map(function (array $item) {
-                return [
-                    'id_producto' => (int) $item['id_producto'],
-                    'cantidad_entregada' => (int) $item['cantidad_sugerida_salida'],
-                ];
-            })->values();
+            return response()->json([
+                'success' => false,
+                'message' => 'Debe proporcionar al menos un insumo con lote seleccionado.',
+            ], 422);
         }
 
         $idUsuario = $request->user()?->id;
@@ -169,13 +172,35 @@ class SalidaProgramacionFabricacionController extends Controller
         try {
             foreach ($insumosSalida as $insumo) {
                 $idProducto = (int) $insumo['id_producto'];
+                $idLote = (int) $insumo['id_lote'];
                 $cantidadEntregada = (int) $insumo['cantidad_entregada'];
+
+                if ($cantidadEntregada <= 0) continue;
 
                 $insumoBase = $insumosDisponibles->get($idProducto);
                 if (!$insumoBase) {
                     return response()->json([
                         'success' => false,
                         'message' => "El producto #{$idProducto} no pertenece a los insumos requeridos de la programación.",
+                    ], 422);
+                }
+
+                $lote = Lote::where('id', $idLote)
+                    ->where('id_producto', $idProducto)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$lote) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "El lote seleccionado no es válido para el producto #{$idProducto}",
+                    ], 422);
+                }
+
+                if ((int) $lote->cantidad_disponible < (int) $cantidadEntregada) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Stock insuficiente en lote {$lote->numero_lote} para producto #{$idProducto}",
                     ], 422);
                 }
 
@@ -188,8 +213,14 @@ class SalidaProgramacionFabricacionController extends Controller
                     ], 422);
                 }
 
+                // Descontar del lote seleccionado
+                $lote->cantidad_disponible = max(0, (int) $lote->cantidad_disponible - (int) $cantidadEntregada);
+                $lote->cantidad = max(0, (int) $lote->cantidad - (int) $cantidadEntregada);
+                $lote->save();
+
                 Kardex::registrarMovimiento([
                     'id_producto' => $idProducto,
+                    'id_lote' => $idLote,
                     'tipo_movimiento' => 'Salida',
                     'cantidad' => $cantidadEntregada,
                     'motivo' => 'Salida Programación Fabricación',
@@ -199,6 +230,14 @@ class SalidaProgramacionFabricacionController extends Controller
                     'observacion' => $observacion !== ''
                         ? "Salida confirmada por almacén. {$observacion}"
                         : 'Salida confirmada por almacén.',
+                ]);
+
+                // Guardar en tabla de detalles
+                SalidaProgramacionFabricacionDetalle::create([
+                    'id_programacion_fabricacion' => $programacion->id,
+                    'id_producto' => $idProducto,
+                    'cantidad_entregada' => $cantidadEntregada,
+                    'id_lote' => $idLote,
                 ]);
             }
 

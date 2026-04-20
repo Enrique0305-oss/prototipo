@@ -12,6 +12,7 @@ class Kardex extends Model
     
     protected $fillable = [
         'id_producto',
+        'id_lote',
         'tipo_movimiento',
         'cantidad',
         'stock_anterior',
@@ -35,6 +36,11 @@ class Kardex extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function lote()
+    {
+        return $this->belongsTo(Lote::class, 'id_lote');
     }
 
     public function usuario()
@@ -75,6 +81,7 @@ class Kardex extends Model
         // Crear registro de kardex
         $kardex = self::create([
             'id_producto' => $data['id_producto'],
+            'id_lote' => $data['id_lote'] ?? null,
             'tipo_movimiento' => $data['tipo_movimiento'],
             'cantidad' => $data['cantidad'],
             'stock_anterior' => $stockAnterior,

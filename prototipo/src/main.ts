@@ -41,7 +41,18 @@ import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, rende
 // Facturación
 import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab, renderEstadoCobranzaTab, initFacturacionEvents } from './modules/facturacion/facturacion.view'
 // Operaciones
-import { renderOperaciones, renderServiciosDiaTab, renderInformesClienteTab, renderReportesGeneralesTab } from './modules/operaciones/operaciones.view'
+import {
+  renderOperaciones,
+  renderServiciosDiaTab,
+  renderInformesClienteTab,
+  renderReportesGeneralesTab,
+  mapServiciosRealizadosCards,
+  renderServiciosRealizadosCards,
+  renderServicioImagenesModal,
+  type ServicioRealizadoCardViewModel,
+} from './modules/operaciones/operaciones.view'
+import { programacionServicioService } from './modules/programaciones/programacion-servicio/programacion-servicio.service'
+import type { Programacion } from './modules/programaciones/programaciones.types'
 // Reportes
 import { renderReportes } from './modules/reportes/reportes.view'
 // Usuarios
@@ -58,6 +69,7 @@ let activeRecursosTab = 'asistencia'; // Estado para el tab de recursos humanos
 let activeOperacionesTab = 'servicios'; // Estado para el tab de operaciones
 let misProyecciones: any[] = []; // Lista de proyecciones para facturación
 let sidebarForceCollapsed = false;
+let operacionesRealizadosCardsCache = new Map<string, ServicioRealizadoCardViewModel>();
 
 declare global {
   interface Window {
@@ -588,6 +600,13 @@ if (activeMenu === 'Facturación') {
     }
   }
 
+  // Cargar servicios realizados al entrar a Operaciones en la pestaña principal.
+  if (activeMenu === 'Operaciones' && activeOperacionesTab === 'servicios') {
+    setTimeout(() => {
+      void cargarServiciosRealizadosOperaciones();
+    }, 0);
+  }
+
   // Inicializar eventos del módulo de Inventario - Productos
   if (activeMenu === 'Almacén' && activeSubMenu === 'Inventario' && activeInventoryTab === 'productos') {
     setTimeout(() => initProductosEvents(), 0);
@@ -848,7 +867,75 @@ function updateOperacionesTabContent() {
       break;
     default:
       tabContent.innerHTML = renderServiciosDiaTab();
+      void cargarServiciosRealizadosOperaciones();
   }
+}
+
+async function cargarServiciosRealizadosOperaciones() {
+  const container = document.querySelector('#operaciones-servicios-realizados-list') as HTMLElement | null;
+  if (!container) return;
+
+  try {
+    const response = await programacionServicioService.getAll();
+    const lista = Array.isArray(response?.data) ? response.data : [];
+
+    const realizados = lista
+      .filter((item): item is Programacion => Boolean(item))
+      .filter((item) => item.estado_ejecucion === 'Realizado');
+    const cards = mapServiciosRealizadosCards(realizados);
+
+    operacionesRealizadosCardsCache = new Map(cards.map((card) => [card.key, card]));
+    container.innerHTML = renderServiciosRealizadosCards(cards);
+    initOperacionesImagenesHandlers(container);
+  } catch (error) {
+    console.error('No se pudieron cargar servicios realizados en Operaciones:', error);
+    container.innerHTML = '<p style="color:#b91c1c; margin:0;">No se pudieron cargar los servicios realizados.</p>';
+  }
+}
+
+function initOperacionesImagenesHandlers(container: HTMLElement) {
+  container.querySelectorAll('.js-open-imagenes-completas').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      const target = event.currentTarget as HTMLButtonElement;
+      const key = target.dataset.cardKey || '';
+      if (!key) return;
+
+      const card = operacionesRealizadosCardsCache.get(key);
+      if (!card) return;
+      abrirModalImagenesOperaciones(card);
+    });
+  });
+}
+
+function abrirModalImagenesOperaciones(card: ServicioRealizadoCardViewModel) {
+  const existing = document.getElementById('operaciones-imagenes-modal-host');
+  if (existing) {
+    existing.remove();
+  }
+
+  const host = document.createElement('div');
+  host.id = 'operaciones-imagenes-modal-host';
+  host.innerHTML = renderServicioImagenesModal(card);
+  document.body.appendChild(host);
+
+  const close = () => {
+    host.remove();
+  };
+
+  host.querySelectorAll('.js-close-imagenes-modal').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      const clicked = event.target as HTMLElement;
+      if (clicked.classList.contains('js-close-imagenes-modal')) {
+        close();
+      }
+    });
+  });
+
+  document.addEventListener('keydown', function onEsc(event) {
+    if (event.key !== 'Escape') return;
+    close();
+    document.removeEventListener('keydown', onEsc);
+  });
 }
 
 function logout() {

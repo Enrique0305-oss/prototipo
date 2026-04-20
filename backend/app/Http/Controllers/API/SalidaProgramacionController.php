@@ -9,6 +9,7 @@ use App\Models\OrdenServicioProducto;
 use App\Models\ServicioProducto;
 use App\Models\Kardex;
 use App\Models\Inventario;
+use App\Models\Lote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -28,6 +29,7 @@ class SalidaProgramacionController extends Controller
             'servicio',
             'tecnico',
             'insumos.producto.inventario',
+            'insumos.lote',
         ])
         ->whereHas('insumos', function ($q) {
             $q->where('estado', 'Asignado');
@@ -137,6 +139,7 @@ class SalidaProgramacionController extends Controller
                 $q->where('estado', 'Asignado');
             },
             'insumos.producto.inventario',
+            'insumos.lote',
         ])->find($id);
 
         if (!$prog) {
@@ -162,6 +165,7 @@ class SalidaProgramacionController extends Controller
             'id_programacion' => 'required|integer|exists:programacion_servicio,id',
             'insumos' => 'required|array|min:1',
             'insumos.*.id_producto' => 'required|integer|exists:productos,id',
+            'insumos.*.id_lote' => 'required|integer|exists:lotes,id',
             'insumos.*.cantidad_entregada' => 'required|integer|min:1',
             'observacion' => 'nullable|string|max:500',
         ]);
@@ -191,6 +195,7 @@ class SalidaProgramacionController extends Controller
             // Procesar cada insumo
             foreach ($insumosEntregados as $item) {
                 $idProducto = $item['id_producto'];
+                $idLote = (int) $item['id_lote'];
                 $cantidadEntregada = $item['cantidad_entregada'];
 
                 if ($cantidadEntregada <= 0) continue;
@@ -203,6 +208,25 @@ class SalidaProgramacionController extends Controller
                     ], 422);
                 }
 
+                $lote = Lote::where('id', $idLote)
+                    ->where('id_producto', $idProducto)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$lote) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "El lote seleccionado no es válido para producto #{$idProducto}",
+                    ], 422);
+                }
+
+                if ((int) $lote->cantidad_disponible < (int) $cantidadEntregada) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Stock insuficiente en lote {$lote->numero_lote} para producto #{$idProducto}",
+                    ], 422);
+                }
+
                 // Verificar stock disponible
                 $inventario = Inventario::where('id_productos', $idProducto)->first();
                 if (!$inventario || $inventario->cantidad_disponible < $cantidadEntregada) {
@@ -212,9 +236,15 @@ class SalidaProgramacionController extends Controller
                     ], 422);
                 }
 
+                // Descontar del lote seleccionado
+                $lote->cantidad_disponible = max(0, (int) $lote->cantidad_disponible - (int) $cantidadEntregada);
+                $lote->cantidad = max(0, (int) $lote->cantidad - (int) $cantidadEntregada);
+                $lote->save();
+
                 // Registrar en Kardex (esto descuenta el stock automáticamente)
                 Kardex::registrarMovimiento([
                     'id_producto' => $idProducto,
+                    'id_lote' => $idLote,
                     'tipo_movimiento' => 'Salida',
                     'cantidad' => $cantidadEntregada,
                     'motivo' => 'Salida Programación',
@@ -226,6 +256,7 @@ class SalidaProgramacionController extends Controller
 
                 // Actualizar estado del insumo
                 $insumo->update([
+                    'id_lote' => $idLote,
                     'estado' => 'Entregado',
                     'cantidad_utilizada' => $cantidadEntregada,
                 ]);
@@ -264,6 +295,7 @@ class SalidaProgramacionController extends Controller
                 $q->whereIn('estado', ['Entregado', 'Devuelto']);
             },
             'insumos.producto',
+            'insumos.lote',
         ])
         ->whereHas('insumos', function ($q) {
             $q->whereIn('estado', ['Entregado', 'Devuelto']);
@@ -300,6 +332,7 @@ class SalidaProgramacionController extends Controller
                 $q->whereIn('estado', ['Entregado', 'Devuelto']);
             },
             'insumos.producto',
+            'insumos.lote',
         ])->find($id);
 
         if (!$prog) {
@@ -388,6 +421,7 @@ class SalidaProgramacionController extends Controller
 
                 Kardex::registrarMovimiento([
                     'id_producto' => $idProducto,
+                    'id_lote' => $insumo->id_lote,
                     'tipo_movimiento' => 'Entrada',
                     'cantidad' => $cantidadDevuelta,
                     'motivo' => 'Devolución Programación',
@@ -396,6 +430,19 @@ class SalidaProgramacionController extends Controller
                     'id_usuario' => $idUsuario,
                     'observacion' => "Devolución registrada por almacén. {$observacion}",
                 ]);
+
+                if (!empty($insumo->id_lote)) {
+                    $lote = Lote::where('id', $insumo->id_lote)
+                        ->where('id_producto', $idProducto)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($lote) {
+                        $lote->cantidad_disponible = ((int) $lote->cantidad_disponible) + $cantidadDevuelta;
+                        $lote->cantidad = ((int) $lote->cantidad) + $cantidadDevuelta;
+                        $lote->save();
+                    }
+                }
 
                 $saldo = $cantidadPendienteDevolver - $cantidadDevuelta;
                 $insumo->cantidad_utilizada = $saldo;
@@ -433,6 +480,7 @@ class SalidaProgramacionController extends Controller
                 $q->whereIn('estado', ['Entregado', 'Utilizado', 'Devuelto']);
             },
             'insumos.producto',
+            'insumos.lote',
         ])->findOrFail($id);
 
         $insumos = $prog->insumos->filter(function ($ins) {

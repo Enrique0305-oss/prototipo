@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class ServiceTask {
   ServiceTask({
     required this.id,
@@ -9,8 +11,13 @@ class ServiceTask {
     this.observations,
     this.startTime,
     this.endTime,
+    this.durationMinutes,
+    this.groupId,
     this.latitude,
     this.longitude,
+    this.evidencePhotos = const <String>[],
+    this.evidenceItems = const <ServiceEvidence>[],
+    this.completedAt,
   });
 
   final int id;
@@ -22,10 +29,18 @@ class ServiceTask {
   final String? observations;
   final String? startTime;
   final String? endTime;
+  final int? durationMinutes;
+  final int? groupId;
   final double? latitude;
   final double? longitude;
+  final List<String> evidencePhotos;
+  final List<ServiceEvidence> evidenceItems;
+  final String? completedAt;
 
-  bool get isCompleted => status.toLowerCase().contains('realizado');
+  bool get isCompleted {
+    final normalized = status.toLowerCase();
+    return normalized.contains('realizado') || normalized.contains('complet');
+  }
 
   ServiceTask copyWith({
     String? status,
@@ -41,8 +56,13 @@ class ServiceTask {
       observations: observations ?? this.observations,
       startTime: startTime,
       endTime: endTime,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      groupId: groupId,
       latitude: latitude,
       longitude: longitude,
+      evidencePhotos: evidencePhotos,
+      evidenceItems: evidenceItems,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 
@@ -63,9 +83,25 @@ class ServiceTask {
       observations: (json['observaciones'] ?? '').toString(),
       startTime: (json['hora_inicio'] ?? '').toString(),
       endTime: (json['hora_fin'] ?? '').toString(),
+      durationMinutes: _parseIntOrNull(json['duracion_real']),
+      groupId: _parseIntOrNull(json['id_grupo_programacion']),
       latitude: coords.$1,
       longitude: coords.$2,
+      evidencePhotos: _parseEvidencePhotos(json['fotos_evidencia']),
+      evidenceItems: _parseEvidenceItems(json['fotos_evidencia']),
+      completedAt: (json['fecha_ejecucion_real'] ?? '').toString(),
     );
+  }
+
+  static int? _parseIntOrNull(dynamic raw) {
+    if (raw == null) {
+      return null;
+    }
+    final value = int.tryParse(raw.toString());
+    if (value == null || value <= 0) {
+      return null;
+    }
+    return value;
   }
 
   static (double?, double?) _resolveCoordinates(
@@ -117,6 +153,78 @@ class ServiceTask {
     return double.tryParse(normalized);
   }
 
+  static List<String> _parseEvidencePhotos(dynamic raw) {
+    if (raw == null) {
+      return const <String>[];
+    }
+
+    if (raw is List) {
+      return raw
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+
+    final text = raw.toString().trim();
+    if (text.isEmpty) {
+      return const <String>[];
+    }
+
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is List) {
+        return decoded
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false);
+      }
+    } catch (_) {
+      // Fallback: soporta valores separados por coma o un solo string.
+    }
+
+    return text
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  static List<ServiceEvidence> _parseEvidenceItems(dynamic raw) {
+    if (raw == null) {
+      return const <ServiceEvidence>[];
+    }
+
+    final List<dynamic> items;
+    if (raw is List) {
+      items = raw;
+    } else {
+      final text = raw.toString().trim();
+      if (text.isEmpty) {
+        return const <ServiceEvidence>[];
+      }
+      try {
+        final decoded = jsonDecode(text);
+        if (decoded is List) {
+          items = decoded;
+        } else {
+          return const <ServiceEvidence>[];
+        }
+      } catch (_) {
+        return const <ServiceEvidence>[];
+      }
+    }
+
+    return items.map((item) {
+      if (item is Map<String, dynamic>) {
+        return ServiceEvidence.fromJson(item);
+      }
+      if (item is Map) {
+        return ServiceEvidence.fromJson(Map<String, dynamic>.from(item));
+      }
+      return ServiceEvidence(path: item.toString().trim());
+    }).where((item) => item.path.isNotEmpty).toList(growable: false);
+  }
+
   static (double?, double?) _parseCoordinates(String raw) {
     if (raw.trim().isEmpty) {
       return (null, null);
@@ -150,4 +258,40 @@ class ServiceTask {
 
     return (lat, lng);
   }
+}
+
+class ServiceEvidence {
+  const ServiceEvidence({
+    required this.path,
+    this.serviceId,
+    this.serviceTitle,
+  });
+
+  final String path;
+  final int? serviceId;
+  final String? serviceTitle;
+
+  factory ServiceEvidence.fromJson(Map<String, dynamic> json) {
+    return ServiceEvidence(
+      path: (json['path'] ?? json['ruta'] ?? '').toString(),
+      serviceId: ServiceTask._parseIntOrNull(json['service_id'] ?? json['id_servicio']),
+      serviceTitle: (json['service_title'] ?? json['servicio'] ?? json['title'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['service_title'] ?? json['servicio'] ?? json['title']).toString(),
+    );
+  }
+}
+
+class ServiceEvidenceUpload {
+  const ServiceEvidenceUpload({
+    required this.path,
+    required this.name,
+    required this.serviceId,
+    required this.serviceTitle,
+  });
+
+  final String path;
+  final String name;
+  final int serviceId;
+  final String serviceTitle;
 }

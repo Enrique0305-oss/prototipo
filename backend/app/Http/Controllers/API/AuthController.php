@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Personal;
+use App\Models\Tecnico;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -45,6 +46,16 @@ class AuthController extends Controller
         return self::PERMISOS_POR_AREA[$personal->id_area] ?? ['dashboard', 'marcar-asistencia'];
     }
 
+    private function resolverTecnicoId(Personal $personal): ?int
+    {
+        $id = Tecnico::query()
+            ->where('id_personal', $personal->id)
+            ->value('id');
+
+        $idInt = (int) ($id ?? 0);
+        return $idInt > 0 ? $idInt : null;
+    }
+
     /**
      * POST /auth/login
      */
@@ -81,6 +92,7 @@ class AuthController extends Controller
         $token = $personal->createToken('auth-token')->plainTextToken;
 
         $personal->loadMissing(['area', 'cargo']);
+        $tecnicoId = $this->resolverTecnicoId($personal);
 
         // Obtener permisos según área/cargo
         $permisos = $this->resolverPermisos($personal);
@@ -104,6 +116,7 @@ class AuthController extends Controller
                 'fechaCreacion' => now()->toISOString(),
                 'ultimoAcceso' => now()->toISOString(),
                 'id_area' => $personal->id_area,
+                'tecnico_id' => $tecnicoId,
             ],
         ]);
     }
@@ -137,6 +150,7 @@ class AuthController extends Controller
         }
 
         $personal->loadMissing(['area', 'cargo']);
+        $tecnicoId = $this->resolverTecnicoId($personal);
         $permisos = $this->resolverPermisos($personal);
         $areaNombre = $personal->area ? $personal->area->nombre : 'Sin área';
 
@@ -155,6 +169,7 @@ class AuthController extends Controller
                 'fechaCreacion' => now()->toISOString(),
                 'ultimoAcceso' => now()->toISOString(),
                 'id_area' => $personal->id_area,
+                'tecnico_id' => $tecnicoId,
             ],
         ]);
     }

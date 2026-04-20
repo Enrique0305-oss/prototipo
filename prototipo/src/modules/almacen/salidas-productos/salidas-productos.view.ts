@@ -4,6 +4,8 @@ import {
   type OrdenProductoSalida,
   type OrdenProductoSalidaDetalle,
 } from './salidas-productos.service';
+import { loteService } from '../../../services/loteService';
+import type { Lote } from '../../../core/api/types';
 import './salidas-productos.css';
 
 let pendientes: OrdenProductoSalida[] = [];
@@ -276,11 +278,12 @@ async function abrirModalConfirmacion(idOrdenProducto: number) {
               <th>Producto</th>
               <th>Cantidad orden</th>
               <th>Disponible</th>
+              <th>Lote</th>
               <th>Cantidad salida</th>
             </tr>
           </thead>
           <tbody>
-            ${(orden.detalles || []).map((det: OrdenProductoSalidaDetalle) => {
+            ${(orden.detalles || []).map((det: OrdenProductoSalidaDetalle, idx: number) => {
               const disponible = det.producto?.inventario?.cantidad_disponible || 0;
               const ok = disponible >= det.cantidad;
               return `
@@ -289,13 +292,26 @@ async function abrirModalConfirmacion(idOrdenProducto: number) {
                   <td>${det.cantidad}</td>
                   <td style="color:${ok ? '#16a34a' : '#ef4444'};font-weight:600;">${disponible}</td>
                   <td>
+                    <select
+                      class="prov-input-sm sp-prod-lote"
+                      data-idx="${idx}"
+                      data-id-producto="${det.id_producto}"
+                      data-cantidad-orden="${det.cantidad}"
+                      style="min-width:150px;"
+                    >
+                      <option value="">Cargando lotes...</option>
+                    </select>
+                  </td>
+                  <td>
                     <input
                       type="number"
                       class="prov-input-sm sp-prod-cantidad"
+                      data-idx="${idx}"
                       data-id-producto="${det.id_producto}"
-                      value="${det.cantidad}"
-                      min="1"
-                      max="${det.cantidad}"
+                      value="0"
+                      min="0"
+                      max="0"
+                      disabled
                       style="width:90px;"
                     >
                   </td>
@@ -322,10 +338,66 @@ async function abrirModalConfirmacion(idOrdenProducto: number) {
     enlazarEventosCerrarModal();
     document.getElementById('sp-prod-btn-cancelar')?.addEventListener('click', cerrarModal);
     document.getElementById('sp-prod-btn-confirmar')?.addEventListener('click', confirmarSalidaOrden);
+    await inicializarSelectoresLoteSalidaProducto(orden.detalles || []);
   } catch (error: any) {
     console.error('Error cargando detalle de orden de producto:', error);
     body.innerHTML = '<div class="sp-error">No se pudo cargar el detalle de la orden</div>';
     enlazarEventosCerrarModal();
+  }
+}
+
+async function inicializarSelectoresLoteSalidaProducto(detalles: OrdenProductoSalidaDetalle[]) {
+  for (let idx = 0; idx < detalles.length; idx++) {
+    const det = detalles[idx];
+    const selectLote = document.querySelector<HTMLSelectElement>(`.sp-prod-lote[data-idx="${idx}"]`);
+    const inputCantidad = document.querySelector<HTMLInputElement>(`.sp-prod-cantidad[data-idx="${idx}"]`);
+    if (!selectLote || !inputCantidad) continue;
+
+    try {
+      const res = await loteService.getByProducto(det.id_producto);
+      const lotes = (res.data || []).filter((l: Lote) => l.estado === 'Activo' && Number(l.cantidad_disponible ?? 0) > 0);
+
+      if (!lotes.length) {
+        selectLote.innerHTML = '<option value="">Sin lotes disponibles</option>';
+        selectLote.disabled = true;
+        inputCantidad.disabled = true;
+        inputCantidad.value = '0';
+        inputCantidad.max = '0';
+        continue;
+      }
+
+      selectLote.innerHTML = '<option value="">Seleccionar lote...</option>' +
+        lotes.map((l) => `<option value="${l.id}">${l.numero_lote}</option>`).join('');
+      selectLote.disabled = false;
+
+      const aplicarSeleccion = () => {
+        const idLote = Number(selectLote.value || '0');
+        const lote = lotes.find((l) => l.id === idLote);
+        if (!lote) {
+          inputCantidad.disabled = true;
+          inputCantidad.value = '0';
+          inputCantidad.max = '0';
+          return;
+        }
+
+        const cantOrden = Number(selectLote.dataset.cantidadOrden || '0');
+        const disponibleLote = Number(lote.cantidad_disponible ?? 0);
+        const maxSalida = Math.max(0, Math.min(cantOrden, disponibleLote));
+        inputCantidad.disabled = false;
+        inputCantidad.max = String(maxSalida);
+        inputCantidad.value = String(maxSalida);
+      };
+
+      selectLote.addEventListener('change', aplicarSeleccion);
+      selectLote.value = String(lotes[0].id);
+      aplicarSeleccion();
+    } catch (error) {
+      selectLote.innerHTML = '<option value="">Error cargando lotes</option>';
+      selectLote.disabled = true;
+      inputCantidad.disabled = true;
+      inputCantidad.value = '0';
+      inputCantidad.max = '0';
+    }
   }
 }
 
@@ -344,13 +416,23 @@ async function confirmarSalidaOrden(e: Event) {
   const idOrden = parseInt(btn.dataset.idOrden || '0', 10);
   if (!idOrden) return;
 
-  const detalles = Array.from(document.querySelectorAll('.sp-prod-cantidad') as NodeListOf<HTMLInputElement>).map((input) => ({
-    id_producto: parseInt(input.dataset.idProducto || '0', 10),
-    cantidad_entregada: parseInt(input.value || '0', 10),
-  }));
+  const detalles = Array.from(document.querySelectorAll('.sp-prod-cantidad') as NodeListOf<HTMLInputElement>).map((input) => {
+    const idx = input.dataset.idx || '0';
+    const selectLote = document.querySelector<HTMLSelectElement>(`.sp-prod-lote[data-idx="${idx}"]`);
+    return {
+      id_producto: parseInt(input.dataset.idProducto || '0', 10),
+      id_lote: parseInt(selectLote?.value || '0', 10),
+      cantidad_entregada: parseInt(input.value || '0', 10),
+    };
+  });
 
   if (detalles.some((d) => !d.id_producto || d.cantidad_entregada <= 0)) {
     mostrarToast('warning', 'Validacion', 'Las cantidades de salida deben ser mayores a 0');
+    return;
+  }
+
+  if (detalles.some((d) => !d.id_lote)) {
+    mostrarToast('warning', 'Lote requerido', 'Seleccione el lote de cada producto');
     return;
   }
 

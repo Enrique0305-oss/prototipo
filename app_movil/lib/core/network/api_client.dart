@@ -93,6 +93,54 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> multipart(
+    String method,
+    String path, {
+    String? token,
+    Map<String, String>? fields,
+    List<MultipartFilePayload> files = const <MultipartFilePayload>[],
+  }) async {
+    final uri = _uri(path);
+    final request = http.MultipartRequest(method, uri);
+
+    if (token != null && token.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    if (fields != null) {
+      request.fields.addAll(fields);
+    }
+
+    for (final file in files) {
+      final multipart = await http.MultipartFile.fromPath(
+        file.field,
+        file.path,
+        filename: file.filename,
+      );
+      request.files.add(multipart);
+    }
+
+    _logRequest(
+      method: method,
+      uri: uri,
+      token: token,
+      body: fields == null ? null : Map<String, dynamic>.from(fields),
+    );
+
+    try {
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      _logResponse(method: method, uri: uri, response: response);
+      return _decodeResponse(response);
+    } on SocketException catch (e) {
+      _logException(method: method, uri: uri, error: e);
+      throw ApiException(_connectionHint(), 0, const {});
+    } on http.ClientException catch (e) {
+      _logException(method: method, uri: uri, error: e);
+      throw ApiException(_connectionHint(), 0, const {});
+    }
+  }
+
   void _logRequest({
     required String method,
     required Uri uri,
@@ -171,6 +219,18 @@ class ApiClient {
     final message = (jsonBody['message'] ?? 'Error HTTP ${response.statusCode}').toString();
     throw ApiException(message, response.statusCode, jsonBody);
   }
+}
+
+class MultipartFilePayload {
+  const MultipartFilePayload({
+    required this.field,
+    required this.path,
+    required this.filename,
+  });
+
+  final String field;
+  final String path;
+  final String filename;
 }
 
 class ApiException implements Exception {

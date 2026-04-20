@@ -14,9 +14,7 @@ class Producto extends Model
         'sku',
         'descripcion',
         'id_categoria',
-        'fecha_vencim',
         'ubicacion',
-        'n_lote',
         'unidad',
         'precio_unitario',
         'estado',
@@ -28,7 +26,6 @@ class Producto extends Model
     ];
 
     protected $casts = [
-        'fecha_vencim' => 'date',
         'precio_unitario' => 'decimal:2',
         'es_fabricable' => 'boolean',
     ];
@@ -47,6 +44,19 @@ class Producto extends Model
     public function recetaDetalles()
     {
         return $this->hasMany(ProductoRecetaDetalle::class, 'id_producto_final');
+    }
+
+    public function lotes()
+    {
+        return $this->hasMany(Lote::class, 'id_producto');
+    }
+
+    // Métodos
+    public function getStockTotalAttribute()
+    {
+        return $this->lotes()
+            ->where('estado', 'Activo')
+            ->sum('cantidad_disponible');
     }
 
     // Scopes

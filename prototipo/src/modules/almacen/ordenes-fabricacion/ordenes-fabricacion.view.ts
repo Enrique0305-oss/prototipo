@@ -1,5 +1,6 @@
 import { mostrarToast, confirmarAccion } from '../../../shared/toast';
 import { productoService } from '../../../services/productoService';
+import { loteService } from '../../../services/loteService';
 import type { Producto } from '../../../core/api/types';
 import {
   ordenesFabricacionService,
@@ -903,15 +904,21 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
             <h4 class="of-section-title">Devolución de materia prima</h4>
           </div>
           <div class="of-detalles-container">
-            ${(esPendiente ? prog.insumos_sugeridos : (prog.detalles || []).filter((d) => d.tipo === 'DevolucionInsumo').map((d) => ({ id_producto: d.id_producto, descripcion: d.producto?.descripcion || 'Insumo', cantidad_requerida: d.cantidad, unidad: d.producto?.unidad || null, cantidad_devuelta: d.cantidad }))).map((insumo: any) => `
+            ${(esPendiente ? prog.insumos_sugeridos : (prog.detalles || []).filter((d) => d.tipo === 'DevolucionInsumo').map((d) => ({ id_producto: d.id_producto, id_lote: d.id_lote ?? null, numero_lote: d.lote?.numero_lote || '', descripcion: d.producto?.descripcion || 'Insumo', cantidad_requerida: d.cantidad, unidad: d.producto?.unidad || null, cantidad_devuelta: d.cantidad }))).map((insumo: any, idx: number) => `
               <div class="of-detalle-row">
                 <div>
                   <label class="prov-label">Insumo</label>
                   <input class="prov-input" value="${insumo.descripcion}" disabled>
                 </div>
                 <div>
+                  <label class="prov-label">Lote</label>
+                  ${esPendiente
+                    ? `<select class="prov-input cierre-lote-devolucion" data-idx="${idx}" data-id-producto="${insumo.id_producto}"><option value="">Cargando lotes...</option></select>`
+                    : `<input class="prov-input" value="${insumo.numero_lote || 'Sin lote'}" disabled>`}
+                </div>
+                <div>
                   <label class="prov-label">Cantidad devuelta</label>
-                  <input type="number" class="prov-input cierre-devolucion-cantidad" data-id-producto="${insumo.id_producto}" min="0" step="0.001" value="${Number(insumo.cantidad_devuelta ?? 0)}" ${esPendiente ? '' : 'disabled'}>
+                  <input type="number" class="prov-input cierre-devolucion-cantidad" data-idx="${idx}" data-id-producto="${insumo.id_producto}" min="0" step="0.001" value="${Number(insumo.cantidad_devuelta ?? 0)}" ${esPendiente ? '' : 'disabled'}>
                 </div>
                 <div>
                   <label class="prov-label">Sugerida</label>
@@ -933,18 +940,26 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
                   .filter((d) => d.tipo === 'ConsumoDiferenciaInsumo')
                   .map((d) => ({
                     id_producto: d.id_producto,
+                    id_lote: d.id_lote ?? null,
+                    numero_lote: d.lote?.numero_lote || '',
                     descripcion: d.producto?.descripcion || 'Insumo',
                     cantidad_adicional: d.cantidad,
                   }))
-            ).map((insumo: any) => `
+            ).map((insumo: any, idx: number) => `
               <div class="of-detalle-row">
                 <div>
                   <label class="prov-label">Insumo</label>
                   <input class="prov-input" value="${insumo.descripcion}" disabled>
                 </div>
                 <div>
+                  <label class="prov-label">Lote</label>
+                  ${esPendiente
+                    ? `<select class="prov-input cierre-lote-diferencia" data-idx="${idx}" data-id-producto="${insumo.id_producto}"><option value="">Cargando lotes...</option></select>`
+                    : `<input class="prov-input" value="${insumo.numero_lote || 'Sin lote'}" disabled>`}
+                </div>
+                <div>
                   <label class="prov-label">Cantidad adicional usada</label>
-                  <input type="number" class="prov-input cierre-diferencia-cantidad" data-id-producto="${insumo.id_producto}" min="0" step="0.001" value="${Number(insumo.cantidad_adicional ?? 0)}" ${esPendiente ? '' : 'disabled'}>
+                  <input type="number" class="prov-input cierre-diferencia-cantidad" data-idx="${idx}" data-id-producto="${insumo.id_producto}" min="0" step="0.001" value="${Number(insumo.cantidad_adicional ?? 0)}" ${esPendiente ? '' : 'disabled'}>
                 </div>
               </div>
             `).join('')}
@@ -965,12 +980,20 @@ async function abrirModalCierreFabricacion(idProgramacion: number) {
 
     document.getElementById('btnCancelarCierreFab')?.addEventListener('click', cerrarModalCierre);
     if (esPendiente) {
-      document.getElementById('cierreTieneSobranteMP')?.addEventListener('change', toggleDevolucionesSection);
-      document.getElementById('cierreTieneDiferenciaMP')?.addEventListener('change', toggleDiferenciasSection);
+      document.getElementById('cierreTieneSobranteMP')?.addEventListener('change', async () => {
+        toggleDevolucionesSection();
+        await inicializarLotesCierre('devolucion');
+      });
+      document.getElementById('cierreTieneDiferenciaMP')?.addEventListener('change', async () => {
+        toggleDiferenciasSection();
+        await inicializarLotesCierre('diferencia');
+      });
       document.querySelectorAll('.cierre-producto-cantidad').forEach((input) => {
         input.addEventListener('input', () => actualizarCondicionesCierre(prog));
       });
       toggleDevolucionesSection();
+      await inicializarLotesCierre('devolucion');
+      await inicializarLotesCierre('diferencia');
       actualizarCondicionesCierre(prog);
       document.getElementById('formCierreFabricacion')?.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -996,6 +1019,25 @@ function toggleDiferenciasSection() {
   const checkbox = document.getElementById('cierreTieneDiferenciaMP') as HTMLInputElement | null;
   if (!section || !checkbox) return;
   section.style.display = checkbox.checked ? '' : 'none';
+}
+
+async function inicializarLotesCierre(tipo: 'devolucion' | 'diferencia') {
+  const selector = tipo === 'devolucion' ? '.cierre-lote-devolucion' : '.cierre-lote-diferencia';
+  const selects = document.querySelectorAll(selector) as NodeListOf<HTMLSelectElement>;
+  for (const select of Array.from(selects)) {
+    const idProducto = Number(select.dataset.idProducto || 0);
+    if (!idProducto) continue;
+    try {
+      const res = await loteService.getByProducto(idProducto);
+      const lotes = (res.data || []).filter((l: any) => l.estado === 'Activo' && Number(l.cantidad_disponible || 0) > 0);
+      select.innerHTML = `<option value="">Seleccionar lote...</option>${lotes
+        .map((lote: any) => `<option value="${lote.id}">${lote.numero_lote} (Disp: ${lote.cantidad_disponible})</option>`)
+        .join('')}`;
+    } catch (error) {
+      select.innerHTML = '<option value="">Error al cargar lotes</option>';
+      console.error('Error cargando lotes de cierre:', error);
+    }
+  }
 }
 
 function actualizarCondicionesCierre(programacion: ProgramacionFabricacionEntradaDevolucion) {
@@ -1061,24 +1103,28 @@ async function registrarCierreFabricacion(idProgramacion: number) {
     ? Array.from(document.querySelectorAll('.cierre-devolucion-cantidad'))
         .map((input) => {
           const element = input as HTMLInputElement;
+          const selectLote = document.querySelector<HTMLSelectElement>(`.cierre-lote-devolucion[data-idx="${element.dataset.idx}"]`);
           return {
             id_producto: Number(element.dataset.idProducto || 0),
+            id_lote: Number(selectLote?.value || 0),
             cantidad_devuelta: Number(element.value || 0),
           };
         })
-        .filter((item) => item.id_producto > 0 && item.cantidad_devuelta > 0)
+        .filter((item) => item.id_producto > 0 && item.id_lote > 0 && item.cantidad_devuelta > 0)
     : [];
 
   const diferenciasMateriaPrima = tieneDiferenciaMateriaPrima
     ? Array.from(document.querySelectorAll('.cierre-diferencia-cantidad'))
         .map((input) => {
           const element = input as HTMLInputElement;
+          const selectLote = document.querySelector<HTMLSelectElement>(`.cierre-lote-diferencia[data-idx="${element.dataset.idx}"]`);
           return {
             id_producto: Number(element.dataset.idProducto || 0),
+            id_lote: Number(selectLote?.value || 0),
             cantidad_adicional: Number(element.value || 0),
           };
         })
-        .filter((item) => item.id_producto > 0 && item.cantidad_adicional > 0)
+        .filter((item) => item.id_producto > 0 && item.id_lote > 0 && item.cantidad_adicional > 0)
     : [];
 
   const motivoDiferencia = ((document.getElementById('cierreMotivoDiferencia') as HTMLTextAreaElement | null)?.value || '').trim();
@@ -1108,6 +1154,38 @@ async function registrarCierreFabricacion(idProgramacion: number) {
   if (produccionMayorEsperada && !diferenciasMateriaPrima.length) {
     mostrarToast('warning', 'Validacion', 'Debe registrar al menos un insumo con cantidad adicional usada');
     return;
+  }
+
+  if (tieneSobrante) {
+    const devolucionesConCantidad = Array.from(document.querySelectorAll('.cierre-devolucion-cantidad')).filter((input) => {
+      const element = input as HTMLInputElement;
+      return Number(element.value || 0) > 0;
+    });
+    const devolucionesSinLote = devolucionesConCantidad.some((input) => {
+      const element = input as HTMLInputElement;
+      const selectLote = document.querySelector<HTMLSelectElement>(`.cierre-lote-devolucion[data-idx="${element.dataset.idx}"]`);
+      return !selectLote?.value;
+    });
+    if (devolucionesSinLote) {
+      mostrarToast('warning', 'Validacion', 'Debe seleccionar un lote para cada devolución con cantidad');
+      return;
+    }
+  }
+
+  if (tieneDiferenciaMateriaPrima) {
+    const diferenciasConCantidad = Array.from(document.querySelectorAll('.cierre-diferencia-cantidad')).filter((input) => {
+      const element = input as HTMLInputElement;
+      return Number(element.value || 0) > 0;
+    });
+    const diferenciasSinLote = diferenciasConCantidad.some((input) => {
+      const element = input as HTMLInputElement;
+      const selectLote = document.querySelector<HTMLSelectElement>(`.cierre-lote-diferencia[data-idx="${element.dataset.idx}"]`);
+      return !selectLote?.value;
+    });
+    if (diferenciasSinLote) {
+      mostrarToast('warning', 'Validacion', 'Debe seleccionar un lote para cada diferencia con cantidad');
+      return;
+    }
   }
 
   const ok = await confirmarAccion({
@@ -1199,17 +1277,41 @@ async function abrirModalSalidaProgramacion(idProgramacion: number) {
                 <th>Insumo</th>
                 <th>Requerido</th>
                 <th>Stock</th>
+                <th>Lote</th>
+                <th>Disponible en lote</th>
                 <th>Salida</th>
               </tr>
             </thead>
             <tbody>
-              ${prog.insumos.map((i) => `
+              ${prog.insumos.map((i, idx) => `
                 <tr>
                   <td>${i.descripcion}</td>
                   <td>${i.cantidad_sugerida_salida} ${i.unidad || ''}</td>
                   <td>${i.stock_disponible}</td>
                   <td>
-                    <input type="number" class="prov-input of-salida-cantidad" data-id-producto="${i.id_producto}" min="1" step="1" value="${i.cantidad_sugerida_salida}" style="width:110px;">
+                    <select 
+                      class="prov-input of-salida-lote" 
+                      data-idx="${idx}"
+                      data-id-producto="${i.id_producto}"
+                      data-cantidad-sugerida="${i.cantidad_sugerida_salida}"
+                      style="width:140px;"
+                    >
+                      <option value="">Seleccionar lote...</option>
+                    </select>
+                  </td>
+                  <td class="of-lote-disponible" data-idx="${idx}">—</td>
+                  <td>
+                    <input 
+                      type="number" 
+                      class="prov-input of-salida-cantidad" 
+                      data-idx="${idx}"
+                      data-id-producto="${i.id_producto}" 
+                      min="1" 
+                      step="1" 
+                      value="${i.cantidad_sugerida_salida}" 
+                      disabled
+                      style="width:80px;"
+                    >
                   </td>
                 </tr>
               `).join('')}
@@ -1233,12 +1335,76 @@ async function abrirModalSalidaProgramacion(idProgramacion: number) {
 
     document.getElementById('btnCancelarSalidaFab')?.addEventListener('click', cerrarModalSalida);
     document.getElementById('btnConfirmarSalidaFab')?.addEventListener('click', confirmarSalidaProgramacionFabricacion);
+
+    await inicializarSelectoresLoteFabricacion(prog.insumos || []);
   } catch (error: any) {
     console.error('Error abriendo salida de programación de fabricación:', error);
     const msg = error?.data?.message || error?.response?.data?.message || 'No se pudo cargar la programación';
     body.innerHTML = `<div class="sp-error">${msg}</div>`;
   }
 }
+
+async function inicializarSelectoresLoteFabricacion(insumos: any[]) {
+  for (let idx = 0; idx < insumos.length; idx++) {
+    const ins = insumos[idx];
+    const selectLote = document.querySelector<HTMLSelectElement>(`.of-salida-lote[data-idx="${idx}"]`);
+    const inputCantidad = document.querySelector<HTMLInputElement>(`.of-salida-cantidad[data-idx="${idx}"]`);
+    const displayDisponible = document.querySelector<HTMLElement>(`.of-lote-disponible[data-idx="${idx}"]`);
+
+    if (!selectLote || !inputCantidad || !displayDisponible) continue;
+
+    try {
+      const res = await loteService.getByProducto(ins.id_producto);
+      const lotesActivos = (res.data || []).filter((l: any) => l.estado === 'Activo' && Number(l.cantidad_disponible ?? 0) > 0);
+
+      if (!lotesActivos.length) {
+        selectLote.innerHTML = '<option value="">Sin lotes disponibles</option>';
+        selectLote.disabled = true;
+        inputCantidad.disabled = true;
+        inputCantidad.value = '0';
+        inputCantidad.max = '0';
+        displayDisponible.textContent = '0';
+        continue;
+      }
+
+      selectLote.disabled = false;
+      selectLote.innerHTML = '<option value="">Seleccionar lote...</option>' +
+        lotesActivos.map((l) => `<option value="${l.id}">${l.numero_lote}</option>`).join('');
+
+      const aplicarLoteSeleccionado = () => {
+        const idLote = Number(selectLote.value || '0');
+        const lote = lotesActivos.find((l) => l.id === idLote);
+        if (!lote) {
+          inputCantidad.value = '0';
+          inputCantidad.max = '0';
+          inputCantidad.disabled = true;
+          displayDisponible.textContent = '—';
+          return;
+        }
+
+        const sugerida = Number(selectLote.dataset.cantidadSugerida || '0');
+        const disponibleLote = Number(lote.cantidad_disponible ?? 0);
+        const maxEntregar = Math.max(0, Math.min(sugerida, disponibleLote));
+        inputCantidad.max = String(maxEntregar);
+        inputCantidad.value = String(maxEntregar);
+        inputCantidad.disabled = false;
+        displayDisponible.textContent = String(disponibleLote);
+      };
+
+      selectLote.addEventListener('change', aplicarLoteSeleccionado);
+      selectLote.value = String(lotesActivos[0].id);
+      aplicarLoteSeleccionado();
+    } catch (err) {
+      selectLote.innerHTML = '<option value="">Error al cargar lotes</option>';
+      selectLote.disabled = true;
+      inputCantidad.disabled = true;
+      inputCantidad.value = '0';
+      inputCantidad.max = '0';
+      displayDisponible.textContent = 'Error';
+    }
+  }
+}
+
 
 async function confirmarSalidaProgramacionFabricacion(e: Event) {
   const btn = e.currentTarget as HTMLButtonElement;
@@ -1248,12 +1414,15 @@ async function confirmarSalidaProgramacionFabricacion(e: Event) {
   const prog = salidasProgramacionData.find((p) => p.id === idProgramacion);
   if (!prog) return;
 
-  const insumos = prog.insumos.map((insumo) => {
-    const input = document.querySelector(`.of-salida-cantidad[data-id-producto="${insumo.id_producto}"]`) as HTMLInputElement | null;
+  const insumos = prog.insumos.map((insumo, idx) => {
+    const selectLote = document.querySelector<HTMLSelectElement>(`.of-salida-lote[data-idx="${idx}"]`);
+    const input = document.querySelector<HTMLInputElement>(`.of-salida-cantidad[data-idx="${idx}"]`);
     const cantidad = Number(input?.value || insumo.cantidad_sugerida_salida);
     return {
       id_producto: insumo.id_producto,
+      id_lote: Number(selectLote?.value || 0),
       cantidad_entregada: cantidad,
+      max_permitido: Number(input?.max || 0),
     };
   });
 
@@ -1262,12 +1431,13 @@ async function confirmarSalidaProgramacionFabricacion(e: Event) {
     return;
   }
 
-  const tieneStockInsuficiente = insumos.some((item) => {
-    const insumo = prog.insumos.find((i) => i.id_producto === item.id_producto);
-    return !!insumo && item.cantidad_entregada > insumo.stock_disponible;
-  });
+  const insumoSinLote = insumos.find((i) => i.cantidad_entregada > 0 && !i.id_lote);
+  if (insumoSinLote) {
+    mostrarToast('warning', 'Lote requerido', 'Seleccione el lote para cada insumo a entregar');
+    return;
+  }
 
-  if (tieneStockInsuficiente) {
+  if (insumos.some((i) => i.max_permitido > 0 && i.cantidad_entregada > i.max_permitido)) {
     mostrarToast('warning', 'Stock insuficiente', 'Uno o mas insumos no tienen stock suficiente.');
     return;
   }
@@ -1296,3 +1466,4 @@ async function confirmarSalidaProgramacionFabricacion(e: Event) {
     mostrarToast('error', 'Error', msg);
   }
 }
+

@@ -193,6 +193,7 @@ export interface Producto {
   presentacion?: string;
   es_fabricable?: boolean;
   receta?: ProductoRecetaDetalle[];
+  lotes?: Lote[];
   estado: 'Activo' | 'Inactivo';
   imagen?: string | null;
   imagen_url?: string | null;
@@ -218,6 +219,18 @@ export interface ProductoRecetaDetalle {
       cantidad_disponible: number;
     } | null;
   } | null;
+}
+
+export interface Lote {
+  id: number;
+  id_producto: number;
+  numero_lote: string;
+  fecha_vencimiento: string; // YYYY-MM-DD
+  cantidad: number;
+  cantidad_disponible: number;
+  estado: 'Activo' | 'Vencido' | 'Descartado';
+  observacion?: string | null;
+  fecha_ingreso: string;
 }
 
 export interface ProductoFilters extends FilterParams {
@@ -464,11 +477,13 @@ export interface Mantenimiento {
   id_actmanten: number;
   fecha: string;
   observaciones?: string;
+  observacion?: string;
   estado?: 'Pendiente' | 'Realizado' | 'Vencido';
   created_at?: string;
   updated_at?: string;
   equipo?: Equipo;
   actividad?: ActividadMantenimiento;
+  programacion?: ProgramacionMantenimiento;
 }
 
 export interface MantenimientoFilters extends FilterParams {
@@ -510,7 +525,7 @@ export interface HistorialEquipo {
 
 export interface ProgramacionMantenimiento {
   id: number;
-  equipo: { id: number; descripcion: string; marca: string; modelo: string } | null;
+  equipo: { id: number; descripcion: string; marca: string; modelo: string; serie?: string | null } | null;
   motivo?: string | null;
   actividad: {
     id: number;

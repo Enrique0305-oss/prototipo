@@ -14,7 +14,7 @@ class MantenimientoController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Mantenimiento::with(['equipo', 'actividad']);
+        $query = Mantenimiento::with(['equipo', 'actividad', 'programacion']);
 
         // Filtro por equipo
         if ($request->has('id_equipo')) {
@@ -96,7 +96,7 @@ class MantenimientoController extends Controller
 
     public function show($id): JsonResponse
     {
-        $mantenimiento = Mantenimiento::with(['equipo', 'actividad'])->find($id);
+        $mantenimiento = Mantenimiento::with(['equipo', 'actividad', 'programacion'])->find($id);
 
         if (!$mantenimiento) {
             return response()->json([

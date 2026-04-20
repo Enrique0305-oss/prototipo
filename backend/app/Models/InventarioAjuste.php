@@ -12,6 +12,7 @@ class InventarioAjuste extends Model
 
     protected $fillable = [
         'id_producto',
+        'id_lote',
         'stock_anterior',
         'stock_nuevo',
         'diferencia',
@@ -33,6 +34,11 @@ class InventarioAjuste extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function lote()
+    {
+        return $this->belongsTo(Lote::class, 'id_lote');
     }
 
     public function usuario()

@@ -1,6 +1,8 @@
 import { salidasProgramacionService, type ProgramacionPendiente, type InsumoProgamacion } from './salidas-programacion.service';
 import { mostrarToast, confirmarAccion } from '../../../shared/toast';
 import { ApiError } from '../../../core/api/api.client';
+import { loteService } from '../../../services/loteService';
+import type { Lote } from '../../../core/api/types';
 import './salidas-programacion.css';
 
 let programacionesPendientes: ProgramacionPendiente[] = [];
@@ -496,6 +498,7 @@ async function abrirModalConfirmar(idProgramacion: number) {
               <th>Producto</th>
               <th>Asignado</th>
               <th>Disponible</th>
+              <th>Lote</th>
               <th>Entregar</th>
             </tr>
           </thead>
@@ -514,14 +517,26 @@ async function abrirModalConfirmar(idProgramacion: number) {
                   <td>${asignado} ${ins.producto?.unidad_medida || ''}</td>
                   <td style="color:${suficiente ? '#16a34a' : '#ef4444'};font-weight:600;">${disponible}</td>
                   <td>
+                    <select
+                      class="prov-input-sm lote-entregar"
+                      data-idx="${idx}"
+                      data-id-producto="${ins.id_producto}"
+                      data-cantidad-asignada="${asignado}"
+                      style="min-width:150px;"
+                    >
+                      <option value="">Cargando lotes...</option>
+                    </select>
+                  </td>
+                  <td>
                     <input 
                       type="number" 
                       class="prov-input-sm cantidad-entregar" 
                       data-idx="${idx}"
                       data-id-producto="${ins.id_producto}"
-                      value="${Math.min(asignado, disponible)}" 
+                      value="0" 
                       min="0" 
-                      max="${disponible}"
+                      max="0"
+                      disabled
                       style="width:80px;"
                     >
                   </td>
@@ -553,9 +568,67 @@ async function abrirModalConfirmar(idProgramacion: number) {
     document.getElementById('spModalOverlay')?.addEventListener('click', cerrarModalConfirmar);
     document.getElementById('btnConfirmarEntrega')?.addEventListener('click', confirmarEntrega);
 
+    await inicializarSelectoresLoteEntrega(prog.insumos || []);
+
   } catch (error) {
     console.error('Error cargando detalle:', error);
     body.innerHTML = '<div class="sp-error">Error al cargar detalles</div>';
+  }
+}
+
+async function inicializarSelectoresLoteEntrega(insumos: InsumoProgamacion[]) {
+  for (let idx = 0; idx < insumos.length; idx++) {
+    const ins = insumos[idx];
+    const selectLote = document.querySelector<HTMLSelectElement>(`.lote-entregar[data-idx="${idx}"]`);
+    const inputCantidad = document.querySelector<HTMLInputElement>(`.cantidad-entregar[data-idx="${idx}"]`);
+
+    if (!selectLote || !inputCantidad) continue;
+
+    try {
+      const res = await loteService.getByProducto(ins.id_producto);
+      const lotesActivos = (res.data || []).filter((l: Lote) => l.estado === 'Activo' && Number(l.cantidad_disponible ?? 0) > 0);
+
+      if (!lotesActivos.length) {
+        selectLote.innerHTML = '<option value="">Sin lotes disponibles</option>';
+        selectLote.disabled = true;
+        inputCantidad.value = '0';
+        inputCantidad.max = '0';
+        inputCantidad.disabled = true;
+        continue;
+      }
+
+      selectLote.disabled = false;
+      selectLote.innerHTML = '<option value="">Seleccionar lote...</option>' +
+        lotesActivos.map((l) => `<option value="${l.id}">${l.numero_lote}</option>`).join('');
+
+      const aplicarLoteSeleccionado = () => {
+        const idLote = Number(selectLote.value || '0');
+        const lote = lotesActivos.find((l) => l.id === idLote);
+        if (!lote) {
+          inputCantidad.value = '0';
+          inputCantidad.max = '0';
+          inputCantidad.disabled = true;
+          return;
+        }
+
+        const asignado = Number(selectLote.dataset.cantidadAsignada || '0');
+        const disponibleLote = Number(lote.cantidad_disponible ?? 0);
+        const maxEntregar = Math.max(0, Math.min(asignado, disponibleLote));
+        inputCantidad.max = String(maxEntregar);
+        inputCantidad.value = String(maxEntregar);
+        inputCantidad.disabled = false;
+      };
+
+      selectLote.addEventListener('change', aplicarLoteSeleccionado);
+      selectLote.value = String(lotesActivos[0].id);
+      aplicarLoteSeleccionado();
+    } catch (err) {
+      selectLote.innerHTML = '<option value="">Error al cargar lotes</option>';
+      selectLote.disabled = true;
+      inputCantidad.value = '0';
+      inputCantidad.max = '0';
+      inputCantidad.disabled = true;
+    }
   }
 }
 
@@ -675,15 +748,26 @@ async function confirmarEntrega(e: Event) {
   if (!idProg) return;
 
   const inputsCantidad = document.querySelectorAll('.cantidad-entregar') as NodeListOf<HTMLInputElement>;
-  const insumos = Array.from(inputsCantidad).map(input => ({
-    id_producto: parseInt(input.dataset.idProducto || '0'),
-    cantidad_entregada: parseInt(input.value || '0'),
-  }));
+  const insumos = Array.from(inputsCantidad).map(input => {
+    const idx = input.dataset.idx || '0';
+    const selectLote = document.querySelector<HTMLSelectElement>(`.lote-entregar[data-idx="${idx}"]`);
+    return {
+      id_producto: parseInt(input.dataset.idProducto || '0'),
+      id_lote: parseInt(selectLote?.value || '0'),
+      cantidad_entregada: parseInt(input.value || '0'),
+    };
+  });
 
   const observacion = (document.getElementById('observacionSalida') as HTMLTextAreaElement)?.value || '';
 
   if (insumos.every(i => i.cantidad_entregada === 0)) {
     mostrarToast('warning', 'Advertencia', 'Debe entregar al menos un producto');
+    return;
+  }
+
+  const insumoSinLote = insumos.find(i => i.cantidad_entregada > 0 && !i.id_lote);
+  if (insumoSinLote) {
+    mostrarToast('warning', 'Lote requerido', 'Seleccione el lote para cada producto entregado');
     return;
   }
 

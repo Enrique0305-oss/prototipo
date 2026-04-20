@@ -32,6 +32,7 @@ use App\Http\Controllers\API\ClientePlantaController;
 use App\Http\Controllers\API\KardexController;
 use App\Http\Controllers\API\ServicioProductoController;
 use App\Http\Controllers\API\ProgramacionServicioController;
+use App\Http\Controllers\API\ProgramacionServicioGrupoController;
 use App\Http\Controllers\API\ProgramacionVisitaController;
 use App\Http\Controllers\API\ProgramacionFabricacionController;
 use App\Http\Controllers\API\ProgramacionOtroController;
@@ -46,6 +47,7 @@ use App\Http\Controllers\API\SalidaProgramacionFabricacionController;
 use App\Http\Controllers\API\OrdenCompraController;
 use App\Http\Controllers\API\PersonalController;
 use App\Http\Controllers\API\InventarioAjusteController;
+use App\Http\Controllers\API\LoteController;
 use App\Http\Middleware\CacheJsonGetResponses;
 
 // Rutas PÚBLICAS (sin autenticación)
@@ -191,6 +193,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/productos/{id}/imagen', [ProductoController::class, 'subirImagen']);
     Route::delete('/productos/{id}/imagen', [ProductoController::class, 'eliminarImagen']);
 
+    // para los lotes de productos :v
+    Route::get('/productos/{idProducto}/lotes', [LoteController::class, 'index']);
+    Route::post('/productos/{idProducto}/lotes', [LoteController::class, 'store']);
+    Route::get('/lotes/{id}', [LoteController::class, 'show']);
+    Route::put('/lotes/{id}', [LoteController::class, 'update']);
+    Route::delete('/lotes/{id}', [LoteController::class, 'destroy']);
+
     // para las categorías :v
     Route::get('/categorias/estadisticas/resumen', [CategoriaController::class, 'estadisticas']);
     Route::get('/categorias', [CategoriaController::class, 'index']);
@@ -248,6 +257,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/programacion-mantenimiento/alertas', [ProgramacionMantenimientoController::class, 'alertas']);
     Route::get('/programacion-mantenimiento/{id}', [ProgramacionMantenimientoController::class, 'show']);
     Route::post('/programacion-mantenimiento', [ProgramacionMantenimientoController::class, 'store']);
+    Route::put('/programacion-mantenimiento/{id}', [ProgramacionMantenimientoController::class, 'update']);
     Route::post('/programacion-mantenimiento/preview', [ProgramacionMantenimientoController::class, 'preview']);
     Route::delete('/programacion-mantenimiento/{id}', [ProgramacionMantenimientoController::class, 'destroy']);
     Route::patch('/mantenimientos/{id}/marcar-realizado', [ProgramacionMantenimientoController::class, 'marcarRealizado']);
@@ -344,10 +354,15 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/programacion-servicio/anual', [ProgramacionServicioController::class, 'storeAnual']);
     Route::post('/programacion-servicio/capacitacion', [ProgramacionServicioController::class, 'programarCapacitacion']);
     Route::get('/programacion-servicio/pdf', [ProgramacionServicioController::class, 'generarPDF']);
+    Route::get('/programacion-servicio/grupos', [ProgramacionServicioGrupoController::class, 'index']);
+    Route::get('/programacion-servicio/grupos/{id}', [ProgramacionServicioGrupoController::class, 'show']);
+    Route::post('/programacion-servicio/grupos', [ProgramacionServicioGrupoController::class, 'store']);
+    Route::delete('/programacion-servicio/grupos/{id}', [ProgramacionServicioGrupoController::class, 'destroy']);
     Route::get('/programacion-servicio', [ProgramacionServicioController::class, 'index']);
     Route::get('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'show']);
     Route::post('/programacion-servicio', [ProgramacionServicioController::class, 'store']);
     Route::put('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'update']);
+    Route::patch('/programacion-servicio/{id}/iniciar', [ProgramacionServicioController::class, 'iniciar']);
     Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
     Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
 

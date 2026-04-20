@@ -1,5 +1,6 @@
 import { personalService } from '../../services/personalService';
 import { cargoService } from '../../services/cargoService';
+import { tecnicoService } from '../../services/tecnicoService';
 import { mostrarToast } from '../../shared/toast';
 import { renderCargos, initCargosEvents } from './cargos.view';
 
@@ -8,6 +9,7 @@ let areasData: any[] = [];
 let filtroSearch = '';
 let filtroEstado = '';
 let filtroArea = '';
+let tecnicosData: any[] = [];
 
 function escHtml(str: string): string {
   const d = document.createElement('div');
@@ -198,6 +200,15 @@ async function cargarUsuarios() {
   renderTabla();
 }
 
+async function cargarTecnicos() {
+  try {
+    const resp = await tecnicoService.getAll({ estado: 'todos' } as any);
+    tecnicosData = resp.data || [];
+  } catch {
+    tecnicosData = [];
+  }
+}
+
 function renderTabla() {
   const tbody = document.getElementById('tabla-usuarios-body');
   if (!tbody) return;
@@ -320,6 +331,8 @@ function renderTabla() {
 
 function abrirFormUsuario(usuario?: any) {
   const esEditar = !!usuario;
+  const tecnico = usuario?.tecnico || null;
+  const esTecnicoInicial = !!tecnico;
   const areasOptions = areasData.map((a: any) =>
     `<option value="${a.id}" ${usuario?.id_area === a.id ? 'selected' : ''}>${escHtml(a.nombre)}</option>`
   ).join('');
@@ -375,6 +388,23 @@ function abrirFormUsuario(usuario?: any) {
             </select>
           </div>
         </div>
+
+        <div style="margin-top:16px;padding:12px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#334155;cursor:pointer;">
+            <input type="checkbox" id="fu-es-tecnico" ${esTecnicoInicial ? 'checked' : ''}>
+            Es técnico
+          </label>
+          <p style="margin:6px 0 0;font-size:12px;color:#64748b;">Si se activa, vincula este usuario con un técnico existente.</p>
+        </div>
+
+        <div id="fu-tecnico-fields" style="margin-top:12px;display:${esTecnicoInicial ? 'block' : 'none'};padding:12px;border:1px solid #cbd5e1;border-radius:8px;">
+          <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Técnico vinculado *</label>
+          <select id="fu-id-tecnico" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+            <option value="">Cargando técnicos...</option>
+          </select>
+          <p style="margin:6px 0 0;font-size:12px;color:#64748b;">Solo se listan técnicos disponibles o el actualmente vinculado.</p>
+        </div>
+
         ${!esEditar ? `
         <div style="margin-top:16px;">
           <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Contraseña *</label>
@@ -398,8 +428,59 @@ function abrirFormUsuario(usuario?: any) {
   document.getElementById('btn-cancelar-form-usuario')?.addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
+  const checkEsTecnico = document.getElementById('fu-es-tecnico') as HTMLInputElement | null;
+  const tecnicoFields = document.getElementById('fu-tecnico-fields') as HTMLDivElement | null;
+  const tecnicoSelect = document.getElementById('fu-id-tecnico') as HTMLSelectElement | null;
+
+  const renderTecnicosSelect = () => {
+    if (!tecnicoSelect) return;
+    const tecnicoActualId = Number(tecnico?.id || 0);
+    const disponibles = tecnicosData.filter((t: any) => {
+      const ligado = Number(t.id_personal || 0);
+      return !ligado || ligado === Number(usuario?.id || 0) || Number(t.id || 0) === tecnicoActualId;
+    });
+
+    if (disponibles.length === 0) {
+      tecnicoSelect.innerHTML = '<option value="">No hay técnicos disponibles</option>';
+      return;
+    }
+
+    tecnicoSelect.innerHTML = '<option value="">Seleccione técnico...</option>' +
+      disponibles.map((t: any) => {
+        const nombre = `${t.nombre || ''} ${t.apellidos || ''}`.trim();
+        const extra = t.dni ? ` - DNI ${t.dni}` : '';
+        const selected = Number(t.id || 0) === tecnicoActualId ? 'selected' : '';
+        return `<option value="${t.id}" ${selected}>${escHtml(nombre + extra)}</option>`;
+      }).join('');
+  };
+
+  const refrescarCamposTecnico = () => {
+    const activo = !!checkEsTecnico?.checked;
+    if (tecnicoFields) tecnicoFields.style.display = activo ? 'block' : 'none';
+    if (tecnicoSelect) {
+      tecnicoSelect.required = activo;
+      if (!activo) tecnicoSelect.value = '';
+    }
+  };
+
+  checkEsTecnico?.addEventListener('change', refrescarCamposTecnico);
+  refrescarCamposTecnico();
+
+  cargarTecnicos().then(() => {
+    renderTecnicosSelect();
+    refrescarCamposTecnico();
+  });
+
   document.getElementById('form-usuario')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const esTecnico = !!(document.getElementById('fu-es-tecnico') as HTMLInputElement | null)?.checked;
+    const tecnicoVinculadoId = parseInt((document.getElementById('fu-id-tecnico') as HTMLSelectElement | null)?.value || '0') || null;
+
+    if (esTecnico && !tecnicoVinculadoId) {
+      mostrarToast('warning', 'Campo requerido', 'Seleccione el técnico a vincular');
+      return;
+    }
+
     const data: any = {
       nombre: (document.getElementById('fu-nombre') as HTMLInputElement).value.trim(),
       apellidos: (document.getElementById('fu-apellidos') as HTMLInputElement).value.trim(),
@@ -408,6 +489,8 @@ function abrirFormUsuario(usuario?: any) {
       celular: (document.getElementById('fu-celular') as HTMLInputElement).value.trim(),
       id_area: parseInt((document.getElementById('fu-area') as HTMLSelectElement).value) || null,
       id_cargo: parseInt((document.getElementById('fu-cargo') as HTMLSelectElement).value) || null,
+      es_tecnico: esTecnico,
+      id_tecnico_vinculado: esTecnico ? tecnicoVinculadoId : null,
     };
 
     if (!esEditar) {

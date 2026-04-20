@@ -10,6 +10,7 @@ use App\Models\Equipo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ProgramacionMantenimientoController extends Controller
 {
@@ -61,6 +62,7 @@ class ProgramacionMantenimientoController extends Controller
                     'descripcion' => $prog->equipo->descripcion,
                     'marca' => $prog->equipo->marca,
                     'modelo' => $prog->equipo->modelo,
+                    'serie' => $prog->equipo->serie,
                 ] : null,
                 'motivo' => $prog->motivo,
                 'actividad' => $prog->actividad ? [
@@ -274,6 +276,161 @@ class ProgramacionMantenimientoController extends Controller
             'message' => "Programación creada con {$programacion->total_programados} mantenimientos ({$unidad}).",
             'data' => $programacion,
         ], 201);
+    }
+
+    /**
+     * Actualizar programación anual y regenerar mantenimientos (solo si no hay realizados)
+     */
+    public function update(Request $request, $id): JsonResponse
+    {
+        $programacion = ProgramacionMantenimiento::with('mantenimientos')->find($id);
+
+        if (!$programacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programación no encontrada'
+            ], 404);
+        }
+
+        $realizados = $programacion->mantenimientos->where('estado', 'Realizado')->count();
+        if ($realizados > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se puede editar la programación porque ya tiene mantenimientos realizados.'
+            ], 422);
+        }
+
+        $modoProgramacion = $request->input('modo_programacion', 'Anual');
+
+        $rules = [
+            'id_equipo' => 'required|integer|exists:equipo,id',
+            'motivo' => 'required|string|max:255',
+            'tipo_mantenimiento' => 'nullable|in:Preventivo,Correctivo',
+            'anio' => 'required|integer|min:2024|max:2050',
+            'modo_programacion' => 'nullable|in:Anual,Unica',
+            'fecha_inicio' => 'required|date',
+            'observaciones' => 'nullable|string|max:255',
+            'frecuencia_meses' => 'required|integer|in:0,1,2,3,4,6,12',
+        ];
+
+        $validated = $request->validate($rules, [
+            'id_equipo.required' => 'El equipo es obligatorio',
+            'id_equipo.exists' => 'El equipo seleccionado no existe',
+            'motivo.required' => 'El motivo es obligatorio',
+            'anio.required' => 'El año es obligatorio',
+            'frecuencia_meses.required' => 'La frecuencia es obligatoria',
+            'frecuencia_meses.in' => 'La frecuencia debe ser Unica (0), 1, 2, 3, 4, 6 o 12 meses',
+            'fecha_inicio.required' => 'La fecha de inicio es obligatoria',
+        ]);
+
+        $motivoTexto = trim((string) ($validated['motivo'] ?? ''));
+        $tipoMantenimiento = $validated['tipo_mantenimiento'] ?? 'Preventivo';
+
+        $actividad = ActividadMantenimiento::query()
+            ->whereRaw('LOWER(TRIM(motivo)) = ?', [strtolower($motivoTexto)])
+            ->where('tipo_mantenimiento', $tipoMantenimiento)
+            ->first();
+
+        if (!$actividad) {
+            $actividad = ActividadMantenimiento::create([
+                'categoria' => 'Programado',
+                'motivo' => $motivoTexto,
+                'tipo_mantenimiento' => $tipoMantenimiento,
+                'tipo_equipo' => 'GENERAL',
+                'frecuencia_sugerida' => null,
+                'estado' => 'Activo',
+            ]);
+        }
+
+        $validated['id_actmanten'] = $actividad->id;
+
+        if (($actividad->tipo_mantenimiento ?? null) === 'Correctivo') {
+            $modoProgramacion = 'Unica';
+            $validated['frecuencia_meses'] = 0;
+        }
+
+        if ((($validated['frecuencia_meses'] ?? null) === 0)) {
+            $modoProgramacion = 'Unica';
+        }
+
+        if ($modoProgramacion !== 'Unica') {
+            $existe = ProgramacionMantenimiento::where('id_equipo', $validated['id_equipo'])
+                ->whereRaw('LOWER(TRIM(motivo)) = ?', [strtolower($motivoTexto)])
+                ->where('anio', $validated['anio'])
+                ->where('id', '!=', $programacion->id)
+                ->exists();
+
+            if ($existe) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ya existe una programación para este equipo, motivo y año.'
+                ], 422);
+            }
+        }
+
+        $fechaInicio = Carbon::parse($validated['fecha_inicio']);
+        $frecuencia = $validated['frecuencia_meses'];
+
+        $fechas = [];
+        $currentDate = $fechaInicio->copy();
+
+        if ($modoProgramacion === 'Unica' || $frecuencia === 0) {
+            $fechas[] = $currentDate->format('Y-m-d H:i:s');
+        } else {
+            $finAnio = Carbon::create($validated['anio'], 12, 31, 23, 59, 59);
+            while ($currentDate->lte($finAnio)) {
+                $fechas[] = $currentDate->format('Y-m-d H:i:s');
+                $currentDate->addMonths($frecuencia);
+            }
+        }
+
+        if (empty($fechas)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se generaron fechas con los parámetros proporcionados.'
+            ], 422);
+        }
+
+        DB::transaction(function () use ($programacion, $validated, $motivoTexto, $modoProgramacion, $frecuencia, $fechas) {
+            $programacion->update([
+                'id_equipo' => $validated['id_equipo'],
+                'id_actmanten' => $validated['id_actmanten'],
+                'motivo' => $motivoTexto,
+                'anio' => $validated['anio'],
+                'modo_programacion' => $modoProgramacion,
+                'frecuencia_meses' => $frecuencia,
+                'fecha_inicio' => $validated['fecha_inicio'],
+                'total_programados' => count($fechas),
+                'observaciones' => $validated['observaciones'] ?? null,
+            ]);
+
+            Mantenimiento::where('id_programacion', $programacion->id)->delete();
+
+            $ahora = Carbon::now();
+            foreach ($fechas as $fecha) {
+                $fechaCarbon = Carbon::parse($fecha);
+                $fechaComparacion = $fechaCarbon->copy()->endOfDay();
+                $estado = $fechaComparacion->lt($ahora) ? 'Vencido' : 'Pendiente';
+
+                Mantenimiento::create([
+                    'id_programacion' => $programacion->id,
+                    'id_equipo' => $validated['id_equipo'],
+                    'id_actmanten' => $validated['id_actmanten'],
+                    'fecha' => $fecha,
+                    'observaciones' => '',
+                    'estado' => $estado,
+                ]);
+            }
+        });
+
+        $programacion->refresh();
+        $programacion->load(['equipo', 'actividad', 'mantenimientos']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Programación actualizada correctamente.',
+            'data' => $programacion,
+        ]);
     }
 
     /**

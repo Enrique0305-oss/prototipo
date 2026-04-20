@@ -5,12 +5,60 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Personal;
 use App\Models\Area;
+use App\Models\Tecnico;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PersonalController extends Controller
 {
+    private function parseBoolean(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_numeric($value)) {
+            return (int) $value === 1;
+        }
+
+        $normalized = mb_strtolower(trim((string) $value));
+        return in_array($normalized, ['1', 'true', 'si', 'sí', 'on'], true);
+    }
+
+    private function syncTecnicoDesdePersonal(Personal $personal, ?int $nuevoTecnicoId): void
+    {
+        $tecnicoActual = Tecnico::query()->where('id_personal', $personal->id)->first();
+        $actualTecnicoId = $tecnicoActual ? (int) $tecnicoActual->id : null;
+
+        if ($actualTecnicoId && $actualTecnicoId !== $nuevoTecnicoId) {
+            Tecnico::query()
+                ->where('id', $actualTecnicoId)
+                ->where('id_personal', $personal->id)
+                ->update(['id_personal' => null]);
+        }
+
+        if (!$nuevoTecnicoId) {
+            return;
+        }
+
+        $tecnico = Tecnico::findOrFail($nuevoTecnicoId);
+        $personalLigado = $tecnico->id_personal ? (int) $tecnico->id_personal : null;
+
+        if ($personalLigado && $personalLigado !== (int) $personal->id) {
+            throw ValidationException::withMessages([
+                'id_tecnico_vinculado' => 'El técnico seleccionado ya está vinculado a otro usuario.',
+            ]);
+        }
+
+        if ((int) ($tecnico->id_personal ?? 0) !== (int) $personal->id) {
+            $tecnico->id_personal = (int) $personal->id;
+            $tecnico->save();
+        }
+    }
+
     private function puedeVerIt(?Personal $usuario): bool
     {
         if (!$usuario) {
@@ -20,7 +68,7 @@ class PersonalController extends Controller
         $usuario->loadMissing('area');
         $areaNombre = mb_strtolower(trim((string) ($usuario->area?->nombre ?? '')));
 
-        return in_array($areaNombre, ['gerencia', 'it'], true);
+        return $areaNombre === 'it';
     }
 
     private function esAreaIt(?Area $area): bool
@@ -35,7 +83,7 @@ class PersonalController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Personal::with('area', 'cargo');
+        $query = Personal::with('area', 'cargo', 'tecnico');
         $usuarioAutenticado = $request->user();
         $puedeVerIt = $this->puedeVerIt($usuarioAutenticado);
 
@@ -76,7 +124,7 @@ class PersonalController extends Controller
      */
     public function show($id)
     {
-        $personal = Personal::with('area', 'cargo')->findOrFail($id);
+        $personal = Personal::with('area', 'cargo', 'tecnico')->findOrFail($id);
 
         if ($this->esAreaIt($personal->area) && !$this->puedeVerIt(request()->user())) {
             return response()->json([
@@ -96,7 +144,9 @@ class PersonalController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $esTecnico = $this->parseBoolean($request->input('es_tecnico'));
+
+        $rules = [
             'nombre'    => 'required|string|max:100',
             'apellidos' => 'required|string|max:100',
             'celular'   => 'required|string|max:13',
@@ -105,7 +155,15 @@ class PersonalController extends Controller
             'id_cargo'  => 'nullable|integer|exists:cargo,id',
             'usuario'   => 'required|string|max:100|unique:personal,usuario',
             'password'  => 'required|string|min:6',
-        ]);
+            'es_tecnico' => 'nullable|boolean',
+            'id_tecnico_vinculado' => 'nullable|integer|exists:tecnicos,id',
+        ];
+
+        if ($esTecnico) {
+            $rules['id_tecnico_vinculado'] = 'required|integer|exists:tecnicos,id';
+        }
+
+        $validated = $request->validate($rules);
 
         if (isset($validated['id_area'])) {
             $area = Area::find($validated['id_area']);
@@ -117,11 +175,27 @@ class PersonalController extends Controller
             }
         }
 
-        $validated['password'] = Hash::make($validated['password']);
-        $validated['estado'] = 'Activo';
+        $personal = DB::transaction(function () use ($validated, $esTecnico) {
+            $personalData = [
+                'nombre' => $validated['nombre'],
+                'apellidos' => $validated['apellidos'],
+                'celular' => $validated['celular'],
+                'correo' => $validated['correo'],
+                'id_area' => $validated['id_area'],
+                'id_cargo' => $validated['id_cargo'] ?? null,
+                'usuario' => $validated['usuario'],
+                'password' => Hash::make($validated['password']),
+                'estado' => 'Activo',
+            ];
 
-        $personal = Personal::create($validated);
-        $personal->load('area', 'cargo');
+            $personal = Personal::create($personalData);
+            $tecnicoId = $esTecnico ? (int) ($validated['id_tecnico_vinculado'] ?? 0) : null;
+            $this->syncTecnicoDesdePersonal($personal, $tecnicoId ?: null);
+
+            return $personal;
+        });
+
+        $personal->load('area', 'cargo', 'tecnico');
 
         return response()->json([
             'success' => true,
@@ -136,8 +210,9 @@ class PersonalController extends Controller
     public function update(Request $request, $id)
     {
         $personal = Personal::findOrFail($id);
+        $esTecnico = $this->parseBoolean($request->input('es_tecnico'));
 
-        $validated = $request->validate([
+        $rules = [
             'nombre'    => 'required|string|max:100',
             'apellidos' => 'required|string|max:100',
             'celular'   => 'required|string|max:13',
@@ -146,7 +221,15 @@ class PersonalController extends Controller
             'id_cargo'  => 'nullable|integer|exists:cargo,id',
             'usuario'   => ['required', 'string', 'max:100', Rule::unique('personal', 'usuario')->ignore($id)],
             'password'  => 'nullable|string|min:6',
-        ]);
+            'es_tecnico' => 'nullable|boolean',
+            'id_tecnico_vinculado' => 'nullable|integer|exists:tecnicos,id',
+        ];
+
+        if ($esTecnico) {
+            $rules['id_tecnico_vinculado'] = 'required|integer|exists:tecnicos,id';
+        }
+
+        $validated = $request->validate($rules);
 
         if ($this->esAreaIt($personal->area) && !$this->puedeVerIt($request->user())) {
             return response()->json([
@@ -155,14 +238,27 @@ class PersonalController extends Controller
             ], 403);
         }
 
-        if (!empty($validated['password'])) {
-            $validated['password'] = Hash::make($validated['password']);
-        } else {
-            unset($validated['password']);
-        }
+        DB::transaction(function () use ($personal, $validated, $esTecnico) {
+            $payloadPersonal = [
+                'nombre' => $validated['nombre'],
+                'apellidos' => $validated['apellidos'],
+                'celular' => $validated['celular'],
+                'correo' => $validated['correo'],
+                'id_area' => $validated['id_area'],
+                'id_cargo' => $validated['id_cargo'] ?? null,
+                'usuario' => $validated['usuario'],
+            ];
 
-        $personal->update($validated);
-        $personal->load('area', 'cargo');
+            if (!empty($validated['password'])) {
+                $payloadPersonal['password'] = Hash::make($validated['password']);
+            }
+
+            $personal->update($payloadPersonal);
+            $tecnicoId = $esTecnico ? (int) ($validated['id_tecnico_vinculado'] ?? 0) : null;
+            $this->syncTecnicoDesdePersonal($personal, $tecnicoId ?: null);
+        });
+
+        $personal->load('area', 'cargo', 'tecnico');
 
         return response()->json([
             'success' => true,

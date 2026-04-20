@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Inventario;
 use App\Models\InventarioAjuste;
 use App\Models\Kardex;
+use App\Models\Lote;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,7 @@ class InventarioAjusteController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = InventarioAjuste::with(['producto', 'usuario'])
+        $query = InventarioAjuste::with(['producto', 'lote', 'usuario'])
             ->orderBy('fecha_ajuste', 'desc')
             ->orderBy('id', 'desc');
 
@@ -60,6 +61,8 @@ class InventarioAjusteController extends Controller
                 'id' => $ajuste->id,
                 'id_producto' => $ajuste->id_producto,
                 'producto' => $ajuste->producto ? $ajuste->producto->descripcion : 'N/A',
+                'id_lote' => $ajuste->id_lote,
+                'numero_lote' => $ajuste->lote?->numero_lote,
                 'tipo_ajuste' => $ajuste->tipo_ajuste,
                 'stock_anterior' => $ajuste->stock_anterior,
                 'stock_nuevo' => $ajuste->stock_nuevo,
@@ -86,6 +89,7 @@ class InventarioAjusteController extends Controller
     {
         $validated = $request->validate([
             'id_producto' => 'required|integer|exists:productos,id',
+            'id_lote' => 'required|integer|exists:lotes,id',
             'stock_nuevo' => 'required|integer|min:0',
             'motivo' => 'required|string|max:120',
             'observacion' => 'nullable|string|max:1000',
@@ -95,6 +99,15 @@ class InventarioAjusteController extends Controller
 
         try {
             $resultado = DB::transaction(function () use ($validated, $userId) {
+            $lote = Lote::where('id', $validated['id_lote'])
+                ->where('id_producto', $validated['id_producto'])
+                ->lockForUpdate()
+                ->first();
+
+            if (!$lote) {
+                throw new \InvalidArgumentException('El lote seleccionado no pertenece al producto indicado.');
+            }
+
             $inventario = Inventario::where('id_productos', $validated['id_producto'])
                 ->lockForUpdate()
                 ->first();
@@ -109,7 +122,7 @@ class InventarioAjusteController extends Controller
                 ]);
             }
 
-            $stockAnterior = (int) $inventario->cantidad_disponible;
+            $stockAnterior = (int) $lote->cantidad_disponible;
             $stockNuevo = (int) $validated['stock_nuevo'];
             $diferencia = $stockNuevo - $stockAnterior;
 
@@ -120,13 +133,24 @@ class InventarioAjusteController extends Controller
             $tipoAjuste = $diferencia > 0 ? 'Entrada' : 'Salida';
             $cantidadMovimiento = abs($diferencia);
 
-            // Actualizar inventario
-            $inventario->cantidad_disponible = $stockNuevo;
+            // Actualizar stock del lote seleccionado.
+            $lote->cantidad_disponible = $stockNuevo;
+            $lote->cantidad = max(0, (int) $lote->cantidad + $diferencia);
+            $lote->save();
+
+            // Recalcular stock total del inventario por suma de lotes activos.
+            $stockTotalProducto = Lote::where('id_producto', $validated['id_producto'])
+                ->where('estado', 'Activo')
+                ->sum('cantidad_disponible');
+
+            $inventario->cantidad_disponible = (int) $stockTotalProducto;
+            $inventario->Cantidad_total = (int) $stockTotalProducto;
             $inventario->save();
 
             // Registrar en kardex como movimiento de ajuste
             $kardex = Kardex::create([
                 'id_producto' => $validated['id_producto'],
+                'id_lote' => $validated['id_lote'],
                 'tipo_movimiento' => $tipoAjuste,
                 'cantidad' => $cantidadMovimiento,
                 'stock_anterior' => $stockAnterior,
@@ -141,6 +165,7 @@ class InventarioAjusteController extends Controller
             // Registro detallado de auditoría de ajuste
             $ajuste = InventarioAjuste::create([
                 'id_producto' => $validated['id_producto'],
+                'id_lote' => $validated['id_lote'],
                 'stock_anterior' => $stockAnterior,
                 'stock_nuevo' => $stockNuevo,
                 'diferencia' => $diferencia,
@@ -151,7 +176,7 @@ class InventarioAjusteController extends Controller
                 'id_kardex' => $kardex->id,
             ]);
 
-            $ajuste->load(['producto', 'usuario']);
+            $ajuste->load(['producto', 'lote', 'usuario']);
 
                 return [$ajuste, $kardex];
             });
@@ -174,6 +199,8 @@ class InventarioAjusteController extends Controller
                 'id' => $ajuste->id,
                 'id_producto' => $ajuste->id_producto,
                 'producto' => $ajuste->producto ? $ajuste->producto->descripcion : 'N/A',
+                'id_lote' => $ajuste->id_lote,
+                'numero_lote' => $ajuste->lote?->numero_lote,
                 'tipo_ajuste' => $ajuste->tipo_ajuste,
                 'stock_anterior' => $ajuste->stock_anterior,
                 'stock_nuevo' => $ajuste->stock_nuevo,

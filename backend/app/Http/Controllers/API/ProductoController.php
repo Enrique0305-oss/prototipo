@@ -6,9 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Producto;
 use App\Models\Categoria;
 use App\Models\Inventario;
+use App\Models\Lote;
 use App\Models\ProductoRecetaDetalle;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
@@ -36,12 +37,11 @@ class ProductoController extends Controller
             $query->where('id_categoria', $request->id_categoria);
         }
 
-        // Búsqueda por descripción, lote o SKU
+        // Búsqueda por descripción o SKU
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('descripcion', 'like', "%{$search}%")
-                  ->orWhere('n_lote', 'like', "%{$search}%")
                   ->orWhere('sku', 'like', "%{$search}%");
             });
         }
@@ -53,10 +53,14 @@ class ProductoController extends Controller
             });
         }
 
-        // Filtro por productos próximos a vencer (30 días)
+        // Filtro por productos con lotes próximos a vencer (30 días)
         if ($request->has('proximos_vencer') && $request->proximos_vencer === 'true') {
-            $query->where('fecha_vencim', '<=', now()->addDays(30))
-                  ->where('fecha_vencim', '>=', now());
+            $query->whereHas('lotes', function($q) {
+                $q->where('estado', 'Activo')
+                  ->where('cantidad_disponible', '>', 0)
+                  ->whereDate('fecha_vencimiento', '<=', now()->addDays(30))
+                  ->whereDate('fecha_vencimiento', '>=', now());
+            });
         }
 
         $productos = $query->orderBy('descripcion', 'asc')->get();
@@ -68,8 +72,6 @@ class ProductoController extends Controller
                 'sku' => $producto->sku,
                 'descripcion' => $producto->descripcion,
                 'id_categoria' => $producto->id_categoria,
-                'n_lote' => $producto->n_lote,
-                'fecha_vencim' => $producto->fecha_vencim ? $producto->fecha_vencim->format('Y-m-d') : null,
                 'ubicacion' => $producto->ubicacion,
                 'unidad' => $producto->unidad,
                 'precio_unitario' => $producto->precio_unitario,
@@ -155,9 +157,7 @@ class ProductoController extends Controller
         $validator = Validator::make($request->all(), [
             'descripcion' => 'required|string|max:255',
             'id_categoria' => 'required|exists:categoria,id',
-            'fecha_vencim' => 'nullable|date',
             'ubicacion' => 'nullable|string|max:100',
-            'n_lote' => 'nullable|string|max:50',
             'unidad' => 'nullable|string|max:20',
             'precio_unitario' => 'nullable|numeric|min:0',
             'stock_seguridad' => 'required|integer|min:0',
@@ -171,6 +171,11 @@ class ProductoController extends Controller
             'receta.*.cantidad' => 'required_with:receta|numeric|min:0.001',
             'receta.*.unidad' => 'nullable|string|max:20',
             'receta.*.observacion' => 'nullable|string|max:255',
+            'lotes' => 'sometimes|array|min:1',
+            'lotes.*.numero_lote' => 'required_with:lotes|string|max:50',
+            'lotes.*.fecha_vencimiento' => 'required_with:lotes|date',
+            'lotes.*.cantidad' => 'required_with:lotes|integer|min:1',
+            'lotes.*.observacion' => 'nullable|string|max:500',
         ], [
             'descripcion.required' => 'La descripción del producto es requerida',
             'id_categoria.required' => 'La categoría es requerida',
@@ -178,6 +183,9 @@ class ProductoController extends Controller
             'precio_unitario.numeric' => 'El precio debe ser un número válido',
             'stock_seguridad.required' => 'El stock de seguridad es requerido',
             'stock_seguridad.integer' => 'El stock de seguridad debe ser un número entero',
+            'lotes.*.numero_lote.required_with' => 'El número de lote es requerido',
+            'lotes.*.fecha_vencimiento.required_with' => 'La fecha de vencimiento es requerida',
+            'lotes.*.cantidad.required_with' => 'La cantidad del lote es requerida',
         ]);
 
         if ($validator->fails()) {
@@ -195,7 +203,6 @@ class ProductoController extends Controller
         // Si vienen vacíos, Laravel los convierte a null. Forzamos string vacío
         // para compatibilidad con esquemas donde estas columnas siguen como NOT NULL.
         $ubicacion = $request->input('ubicacion') ?? '';
-        $nLote = $request->input('n_lote') ?? '';
 
         DB::beginTransaction();
         try {
@@ -203,9 +210,7 @@ class ProductoController extends Controller
                 'sku' => $sku,
                 'descripcion' => $request->descripcion,
                 'id_categoria' => $request->id_categoria,
-                'fecha_vencim' => $request->fecha_vencim,
                 'ubicacion' => $ubicacion,
-                'n_lote' => $nLote,
                 'unidad' => $request->unidad,
                 'precio_unitario' => $request->precio_unitario,
                 'estado' => $request->estado ?? 'Activo',
@@ -215,12 +220,31 @@ class ProductoController extends Controller
                 'es_fabricable' => (bool) $request->boolean('es_fabricable'),
             ]);
 
+            // Crear lotes si se proporcionan
+            $stockTotal = 0;
+            $lotes = $request->input('lotes', []);
+            
+            if (!empty($lotes)) {
+                foreach ($lotes as $loteData) {
+                    Lote::create([
+                        'id_producto' => $producto->id,
+                        'numero_lote' => $loteData['numero_lote'],
+                        'fecha_vencimiento' => $loteData['fecha_vencimiento'],
+                        'cantidad' => $loteData['cantidad'],
+                        'cantidad_disponible' => $loteData['cantidad'],
+                        'estado' => 'Activo',
+                        'observacion' => $loteData['observacion'] ?? null,
+                    ]);
+                    $stockTotal += $loteData['cantidad'];
+                }
+            }
+
             Inventario::create([
                 'id_productos' => $producto->id,
-                'cantidad_disponible' => 0,
+                'cantidad_disponible' => $stockTotal,
                 'stock_seguridad' => $request->stock_seguridad,
                 'Tipo' => 'Entrada',
-                'Cantidad_total' => 0,
+                'Cantidad_total' => $stockTotal,
             ]);
 
             if ($producto->es_fabricable) {
@@ -237,7 +261,7 @@ class ProductoController extends Controller
             ], 500);
         }
 
-        $producto->load(['categoria', 'inventario', 'recetaDetalles.insumo.inventario']);
+        $producto->load(['categoria', 'inventario', 'recetaDetalles.insumo.inventario', 'lotes']);
 
         return response()->json([
             'success' => true,
@@ -301,8 +325,6 @@ class ProductoController extends Controller
             'sku' => $producto->sku,
             'descripcion' => $producto->descripcion,
             'id_categoria' => $producto->id_categoria,
-            'n_lote' => $producto->n_lote,
-            'fecha_vencim' => $producto->fecha_vencim ? $producto->fecha_vencim->format('Y-m-d') : null,
             'ubicacion' => $producto->ubicacion,
             'unidad' => $producto->unidad,
             'precio_unitario' => $producto->precio_unitario,
@@ -366,9 +388,7 @@ class ProductoController extends Controller
         $validator = Validator::make($request->all(), [
             'descripcion' => 'sometimes|required|string|max:255',
             'id_categoria' => 'sometimes|required|exists:categoria,id',
-            'fecha_vencim' => 'nullable|date',
             'ubicacion' => 'nullable|string|max:100',
-            'n_lote' => 'sometimes|nullable|string|max:50',
             'unidad' => 'nullable|string|max:20',
             'precio_unitario' => 'nullable|numeric|min:0',
             'stock_seguridad' => 'nullable|integer|min:0',
@@ -411,9 +431,7 @@ class ProductoController extends Controller
         $payload = $request->only([
             'descripcion',
             'id_categoria',
-            'fecha_vencim',
             'ubicacion',
-            'n_lote',
             'unidad',
             'precio_unitario',
             'estado',
@@ -426,9 +444,6 @@ class ProductoController extends Controller
         // Compatibilidad con columnas NOT NULL cuando el valor llega vacío y se convierte a null.
         if (array_key_exists('ubicacion', $payload) && $payload['ubicacion'] === null) {
             $payload['ubicacion'] = '';
-        }
-        if (array_key_exists('n_lote', $payload) && $payload['n_lote'] === null) {
-            $payload['n_lote'] = '';
         }
 
         DB::beginTransaction();
@@ -682,12 +697,20 @@ class ProductoController extends Controller
             })->count();
 
         $proximosVencer = Producto::where('estado', 'Activo')
-            ->where('fecha_vencim', '<=', now()->addDays(30))
-            ->where('fecha_vencim', '>=', now())
+            ->whereHas('lotes', function($q) {
+                $q->where('estado', 'Activo')
+                  ->where('cantidad_disponible', '>', 0)
+                  ->whereDate('fecha_vencimiento', '<=', now()->addDays(30))
+                  ->whereDate('fecha_vencimiento', '>=', now());
+            })
             ->count();
 
         $vencidos = Producto::where('estado', 'Activo')
-            ->where('fecha_vencim', '<', now())
+            ->whereHas('lotes', function($q) {
+                $q->where('estado', 'Activo')
+                  ->where('cantidad_disponible', '>', 0)
+                  ->whereDate('fecha_vencimiento', '<', now());
+            })
             ->count();
 
         $porCategoria = Producto::with('categoria')

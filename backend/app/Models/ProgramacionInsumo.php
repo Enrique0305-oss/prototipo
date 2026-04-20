@@ -13,6 +13,7 @@ class ProgramacionInsumo extends Model
     protected $fillable = [
         'id_programacion',
         'id_producto',
+        'id_lote',
         'cantidad_asignada',
         'cantidad_utilizada',
         'estado',
@@ -32,5 +33,10 @@ class ProgramacionInsumo extends Model
     public function producto()
     {
         return $this->belongsTo(Producto::class, 'id_producto');
+    }
+
+    public function lote()
+    {
+        return $this->belongsTo(Lote::class, 'id_lote');
     }
 }
