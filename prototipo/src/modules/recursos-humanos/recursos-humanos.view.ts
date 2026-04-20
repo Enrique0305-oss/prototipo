@@ -296,45 +296,13 @@ function minutosAHorasTexto(minutos: number): string {
 function renderFilaAsistenciaAdmin(r: AsistenciaAdminRecord): string {
   const fechaDisplay = r.fecha ? (() => { const [y, mo, d] = r.fecha.split('-'); return `${d}/${mo}/${y}`; })() : '--';
   const horas = r.horas_trabajadas != null ? `${Number(r.horas_trabajadas).toFixed(2)} hrs` : '-- hrs';
+  const tardanza = r.tardanza_minutos > 0 ? minutosAHorasTexto(r.tardanza_minutos) : '0 min';
+  const almuerzo = r.tiempo_almuerzo_minutos != null
+    ? minutosAHorasTexto(r.tiempo_almuerzo_minutos)
+    : (r.hora_inicio_almuerzo && !r.hora_fin_almuerzo ? 'En curso' : '--');
   const extraBadge = r.tiempo_extra_minutos > 0
     ? `<br><small style="color:#16a34a; font-weight:600;">+${minutosAHorasTexto(r.tiempo_extra_minutos)} extra</small>`
     : '';
-
-  // El botón solo aparece en filas "En Curso" (con entrada, sin salida)
-  let btnAccion = '';
-  if (r.entrada && !r.salida) {
-    if (r.horas_extra_asignadas) {
-      // Ya tiene horas extra asignadas — mostrar badge + botón cancelar
-      btnAccion = `
-        <span style="display: inline-flex; align-items: center; gap: 4px; background: #dbeafe; color: #1d4ed8; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Extra desde ${r.hora_inicio_extra ?? ''}
-        </span>
-        <button class="op-btn-icon cancelar-extra-btn" title="Cancelar Horas Extra" style="color: #dc2626;"
-          data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>
-          </svg>
-        </button>`;
-    } else {
-      // Sin horas extra — botón para asignar
-      btnAccion = `
-        <button class="op-btn-icon asignar-extra-btn" title="Asignar Horas Extra"
-          data-id="${r.id}" data-nombre="${escapeHtml(r.nombre)}" data-fecha="${r.fecha}"
-          data-hora-salida="${r.salida ?? ''}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>
-          </svg>
-        </button>`;
-    }
-  } else if (r.salida && r.tiempo_extra_minutos > 0) {
-    // Ya salió y tiene tiempo extra registrado — mostrar badge informativo
-    btnAccion = `
-      <span style="display: inline-flex; align-items: center; gap: 4px; background: #f0fdf4; color: #15803d; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        ${minutosAHorasTexto(r.tiempo_extra_minutos)}
-      </span>`;
-  }
 
   return `
     <tr>
@@ -353,13 +321,10 @@ function renderFilaAsistenciaAdmin(r: AsistenciaAdminRecord): string {
       <td>${fechaDisplay}</td>
       <td>${r.entrada ?? '--:-- --'}</td>
       <td>${r.salida ?? '--:-- --'}</td>
+      <td>${tardanza}</td>
+      <td>${almuerzo}</td>
       <td>${horas}${extraBadge}</td>
       <td><span class="status-indicator ${estadoAsistenciaClase(r.estado)}">${r.estado}</span></td>
-      <td>
-        <div class="op-action-buttons">
-          ${btnAccion}
-        </div>
-      </td>
     </tr>`;
 }
 
@@ -448,15 +413,16 @@ export async function cargarAsistenciaAdmin(fecha?: string) {
               <th>FECHA</th>
               <th>ENTRADA</th>
               <th>SALIDA</th>
+              <th>TARDANZA</th>
+              <th>TIEMPO ALMUERZO</th>
               <th>HORAS</th>
               <th>ESTADO</th>
-              <th>ACCIONES</th>
             </tr>
           </thead>
           <tbody id="asistencia-admin-tbody">
             ${registros.length > 0
               ? registros.map(r => renderFilaAsistenciaAdmin(r)).join('')
-              : `<tr><td colspan="8" style="text-align:center; padding:40px; color:#64748b;">No hay registros para esta fecha.</td></tr>`
+              : `<tr><td colspan="9" style="text-align:center; padding:40px; color:#64748b;">No hay registros para esta fecha.</td></tr>`
             }
           </tbody>
         </table>
@@ -467,35 +433,6 @@ export async function cargarAsistenciaAdmin(fecha?: string) {
       const q = (e.target as HTMLInputElement).value.toLowerCase();
       document.querySelectorAll<HTMLTableRowElement>('#asistencia-admin-tbody tr').forEach(row => {
         row.style.display = (row.textContent?.toLowerCase() ?? '').includes(q) ? '' : 'none';
-      });
-    });
-
-    document.querySelectorAll<HTMLButtonElement>('.asignar-extra-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        abrirModalHorasExtra(
-          parseInt(btn.dataset.id ?? '0'),
-          btn.dataset.nombre ?? '',
-          btn.dataset.fecha ?? '',
-          null,
-          btn.dataset.horaSalida ?? null
-        );
-      });
-    });
-
-    document.querySelectorAll<HTMLButtonElement>('.cancelar-extra-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = parseInt(btn.dataset.id ?? '0');
-        const nombre = btn.dataset.nombre ?? '';
-        if (!confirm(`¿Cancelar horas extra asignadas a ${nombre}?`)) return;
-        try {
-          const resp = await rrhhService.asignarHorasExtra(id, false);
-          if (!resp.success) throw new Error(resp.message ?? 'Error');
-          mostrarNotificacionAsistencia('Horas extra canceladas', 'success');
-          const fi = document.getElementById('asistencia-admin-fecha') as HTMLInputElement | null;
-          cargarAsistenciaAdmin(fi?.value);
-        } catch (err: any) {
-          mostrarNotificacionAsistencia(err.data?.message ?? err.message ?? 'Error al cancelar', 'error');
-        }
       });
     });
 

@@ -388,6 +388,30 @@ class AsistenciaController extends Controller
 
         $registros = $asistencias
             ->map(function ($a) {
+                $tardanzaMinutos = (int) ($a->tardanza_minutos ?? 0);
+                if (
+                    $tardanzaMinutos <= 0
+                    && !empty($a->hora_entrada)
+                    && !empty($a->hora_esperada_entrada)
+                    && mb_strtolower((string) ($a->estado ?? '')) === 'tardanza'
+                ) {
+                    $horaEntrada = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_entrada);
+                    $horaEsperadaEntrada = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_esperada_entrada);
+                    if ($horaEntrada->gt($horaEsperadaEntrada)) {
+                        $tardanzaMinutos = (int) $horaEsperadaEntrada->diffInMinutes($horaEntrada);
+                    }
+                }
+
+                $tiempoAlmuerzoMinutos = null;
+                if (!empty($a->hora_inicio_almuerzo) && !empty($a->hora_fin_almuerzo)) {
+                    $inicioAlmuerzo = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_inicio_almuerzo);
+                    $finAlmuerzo = Carbon::parse($a->fecha->toDateString() . ' ' . $a->hora_fin_almuerzo);
+                    $tiempoAlmuerzoMinutos = $inicioAlmuerzo->diffInMinutes($finAlmuerzo);
+                } elseif ((int) ($a->exceso_almuerzo_minutos ?? 0) > 0) {
+                    // Respaldo para registros antiguos sin marcas completas de almuerzo.
+                    $tiempoAlmuerzoMinutos = 45 + (int) $a->exceso_almuerzo_minutos;
+                }
+
                 return [
                     'id' => $a->id,
                     'id_personal' => $a->id_personal,
@@ -397,7 +421,10 @@ class AsistenciaController extends Controller
                     'entrada' => $a->hora_entrada ? Carbon::parse($a->hora_entrada)->format('H:i') : null,
                     'salida' => $a->hora_salida ? Carbon::parse($a->hora_salida)->format('H:i') : null,
                     'horas_trabajadas' => $a->horas_trabajadas,
-                    'tardanza_minutos' => $a->tardanza_minutos,
+                    'tardanza_minutos' => $tardanzaMinutos,
+                    'hora_inicio_almuerzo' => $a->hora_inicio_almuerzo ? Carbon::parse($a->hora_inicio_almuerzo)->format('H:i') : null,
+                    'hora_fin_almuerzo' => $a->hora_fin_almuerzo ? Carbon::parse($a->hora_fin_almuerzo)->format('H:i') : null,
+                    'tiempo_almuerzo_minutos' => $tiempoAlmuerzoMinutos,
                     'tiempo_extra_minutos' => $a->tiempo_extra_minutos,
                     'horas_extra_asignadas' => (bool) $a->horas_extra_asignadas,
                     'hora_inicio_extra' => $a->hora_inicio_extra ? Carbon::parse($a->hora_inicio_extra)->format('H:i') : null,

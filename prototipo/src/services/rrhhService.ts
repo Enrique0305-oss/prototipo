@@ -74,6 +74,9 @@ export interface AsistenciaAdminRecord {
   salida: string | null;
   horas_trabajadas: number | null;
   tardanza_minutos: number;
+  hora_inicio_almuerzo: string | null;
+  hora_fin_almuerzo: string | null;
+  tiempo_almuerzo_minutos: number | null;
   tiempo_extra_minutos: number;
   horas_extra_asignadas: boolean;
   hora_inicio_extra: string | null;
