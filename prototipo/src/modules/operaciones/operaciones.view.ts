@@ -282,7 +282,6 @@ export function renderServiciosRealizadosCards(cards: ServicioRealizadoCardViewM
         <div class="report-content-split">
           <div class="report-evidence-column">
             ${photosBlock}
-            <button class="btn-secondary fullwidth js-open-imagenes-completas" data-card-key="${escapeHtml(card.key)}" ${card.secciones.length === 0 ? 'disabled' : ''}>Ver imágenes completas</button>
           </div>
           <div class="report-docs-column">
             <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver ficha operacional">
@@ -292,6 +291,9 @@ export function renderServiciosRealizadosCards(cards: ServicioRealizadoCardViewM
               <span class="report-doc-icon" aria-hidden="true">📄</span>
             </button>
           </div>
+        </div>
+        <div class="report-actions-row">
+          <button class="btn-secondary fullwidth js-open-imagenes-completas" data-card-key="${escapeHtml(card.key)}" ${card.secciones.length === 0 ? 'disabled' : ''}>Ver imágenes completas</button>
         </div>
       </div>
     `;
@@ -342,6 +344,9 @@ function renderValueList(items: string[]): string {
 }
 
 export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel, ficha: FichaOperacionalViewModel): string {
+  const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
+  const logoUrl = `${base}/images/logo-orden.png`;
+
   return `
     <div class="modal-overlay js-close-ficha-modal" style="position:fixed;inset:0;background:rgba(15,23,42,0.65);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px;">
       <div class="modal-content" style="background:#fff;border-radius:14px;max-width:980px;width:min(980px,100%);max-height:90vh;overflow:auto;padding:20px;">
@@ -353,33 +358,65 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
           <button class="btn-secondary js-close-ficha-modal" type="button">Cerrar</button>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:16px;">
-          <div><strong>Estado:</strong> ${escapeHtml(fallbackText(ficha.estado))}</div>
-          <div><strong>Fecha:</strong> ${escapeHtml(fallbackText(ficha.fecha))}</div>
-          <div><strong>Cliente:</strong> ${escapeHtml(fallbackText(ficha.cliente))}</div>
-          <div><strong>Dirección:</strong> ${escapeHtml(fallbackText(ficha.direccion))}</div>
-          <div><strong>Hora llegada:</strong> ${escapeHtml(fallbackText(ficha.horaLlegada))}</div>
-          <div><strong>Hora inicio:</strong> ${escapeHtml(fallbackText(ficha.horaInicio))}</div>
-          <div><strong>Hora final:</strong> ${escapeHtml(fallbackText(ficha.horaFinal))}</div>
-          <div><strong>Giro:</strong> ${escapeHtml(fallbackText(ficha.giro))}</div>
+        <div style="margin-top:14px;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 210px;min-height:110px;">
+            <div style="display:grid;grid-template-columns:110px minmax(0,1fr);">
+              <div style="border-right:1px solid #cbd5e1;display:flex;align-items:center;justify-content:center;padding:8px;">
+                <img src="${escapeHtml(logoUrl)}" alt="Logo" style="max-width:100%;max-height:78px;object-fit:contain;display:block;" />
+              </div>
+              <div style="padding:10px 12px;border-right:1px solid #cbd5e1;display:flex;flex-direction:column;justify-content:center;gap:4px;">
+                <div style="font-size:14px;font-weight:700;color:#0f172a;text-align:center;letter-spacing:0.3px;">FORMATO OPERACIONAL</div>
+                <div style="font-size:13px;font-weight:600;color:#1e293b;text-align:center;line-height:1.35;">FICHA TÉCNICA DE EVALUACIÓN Y DESCRIPCIÓN DE ACTIVIDADES DE SANEAMIENTO AMBIENTAL</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-rows:repeat(3,minmax(0,1fr));">
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr);border-bottom:1px solid #cbd5e1;">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Código</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;font-weight:600;">FO-OP-001</div>
+              </div>
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr);border-bottom:1px solid #cbd5e1;">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Fecha</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;">${escapeHtml(fallbackText(formatFecha(ficha.fecha), 'No registrado'))}</div>
+              </div>
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr);">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Versión</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;">02</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #cbd5e1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));">
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Cliente:</strong> ${escapeHtml(fallbackText(ficha.cliente))}</div>
+            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Dirección:</strong> ${escapeHtml(fallbackText(ficha.direccion))}</div>
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Fecha:</strong> ${escapeHtml(fallbackText(formatFecha(ficha.fecha), 'No registrado'))}</div>
+            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora llegada:</strong> ${escapeHtml(fallbackText(ficha.horaLlegada))}</div>
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora inicio:</strong> ${escapeHtml(fallbackText(ficha.horaInicio))}</div>
+            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora final:</strong> ${escapeHtml(fallbackText(ficha.horaFinal))}</div>
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:14px;"><strong>Estado:</strong> ${escapeHtml(fallbackText(ficha.estado))}</div>
+            <div style="padding:8px 10px;font-size:14px;"><strong>Giro:</strong> ${escapeHtml(fallbackText(ficha.giro))}</div>
+          </div>
         </div>
 
-        <div style="margin-top:14px;display:grid;gap:12px;">
-          <div>
-            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Diagnóstico</h4>
-            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.diagnostico, 'Sin diagnóstico registrado'))}</p>
+        <div style="margin-top:0;display:grid;gap:0;">
+          <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0;overflow:hidden;">
+            <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Diagnóstico</div>
+            <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">${escapeHtml(fallbackText(ficha.diagnostico, 'Sin diagnóstico registrado'))}</div>
           </div>
-          <div>
-            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Condición sanitaria</h4>
-            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.condicionSanitaria, 'Sin condición registrada'))}</p>
+          <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0;overflow:hidden;">
+            <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Condición sanitaria de la zona circundante</div>
+            <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">${escapeHtml(fallbackText(ficha.condicionSanitaria, 'Sin condición registrada'))}</div>
           </div>
+
+          <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0 0 8px 8px;overflow:hidden;">
+            <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Actividad realizada</div>
+            <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;">${renderValueList(ficha.actividadesRealizadas)}</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:grid;gap:12px;">
           <div>
             <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Áreas tratadas</h4>
             ${renderValueList(ficha.areasTratadas)}
-          </div>
-          <div>
-            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Actividades realizadas</h4>
-            ${renderValueList(ficha.actividadesRealizadas)}
           </div>
           <div>
             <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Equipos</h4>
