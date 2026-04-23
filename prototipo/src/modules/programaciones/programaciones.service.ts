@@ -131,6 +131,9 @@ export const programacionService = {
     id_orden_capacitacion: number;
     id_supervisor?: number;
     id_vehiculo?: number;
+    id_tecnico_conductor?: number;
+    motivo: 'Operativa' | 'Calidad' | 'Otros';
+    motivo_otro?: string;
     fecha_programada: string;
     hora_inicio: string;
     hora_fin?: string;

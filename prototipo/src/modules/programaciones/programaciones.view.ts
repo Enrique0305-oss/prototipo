@@ -583,7 +583,7 @@ export async function initProgramacionesEvents(): Promise<void> {
     abrirModalProgramarCapacitacion(tecnicosData, personalData, vehiculosData);
   });
   document.getElementById('btnProgramarAsesoria')?.addEventListener('click', () => {
-    abrirModalProgramarAsesoria(personalData, vehiculosData);
+    abrirModalProgramarAsesoria(personalData, tecnicosData);
   });
   document.getElementById('viewSelector')?.addEventListener('change', (e) => {
     vistaActual = (e.target as HTMLSelectElement).value as VistaProgramacion;

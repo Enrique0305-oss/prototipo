@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProgramacionCapacitacion extends Model
 {
@@ -12,11 +13,14 @@ class ProgramacionCapacitacion extends Model
         'id_orden_capacitacion',
         'id_supervisor',
         'id_vehiculo',
+        'id_tecnico_conductor',
         'id_cliente_planta',
         'id_cliente_planta_area',
         'fecha_programada',
         'hora_inicio',
         'hora_fin',
+        'motivo',
+        'motivo_otro',
         'local_sede',
         'direccion_completa',
         'estado_ejecucion',
@@ -43,6 +47,11 @@ class ProgramacionCapacitacion extends Model
     public function vehiculo()
     {
         return $this->belongsTo(Vehiculo::class, 'id_vehiculo');
+    }
+
+    public function tecnicoConductor(): BelongsTo
+    {
+        return $this->belongsTo(Tecnico::class, 'id_tecnico_conductor');
     }
 
     public function planta()

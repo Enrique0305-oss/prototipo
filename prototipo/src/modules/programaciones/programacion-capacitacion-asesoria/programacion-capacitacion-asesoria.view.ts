@@ -6,6 +6,12 @@ import { mostrarToast, confirmarAccion } from '../../../shared/toast';
 import { clienteService } from '../../../services/clienteService';
 import { renderModalProgramarCapacitacion, abrirModalProgramarCapacitacion } from '../programacion-capacitacion';
 import { renderModalProgramarAsesoria, abrirModalProgramarAsesoria } from '../programacion-asesoria';
+import {
+  renderModalProgramarAuditoria,
+  abrirModalProgramarAuditoria,
+  cargarProgramacionesAuditoriaLocales,
+  actualizarProgramacionAuditoriaLocal,
+} from '../programacion-auditoria';
 import type {
   Programacion,
   Tecnico,
@@ -20,6 +26,7 @@ import type {
 // ═══════════ Estado global ═══════════
 
 let programacionesData: Programacion[] = [];
+let programacionesAuditoriaLocales: ProgramacionExtendida[] = [];
 let tecnicosData: Tecnico[] = [];
 let vehiculosData: Vehiculo[] = [];
 let odsDisponibles: ODSDisponible[] = [];
@@ -47,9 +54,10 @@ function extractList<T = any>(response: any): T[] {
 }
 
 type ProgramacionExtendida = Programacion & {
-  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria';
+  tipo_programacion?: 'servicio' | 'capacitacion' | 'asesoria' | 'auditoria';
   orden_capacitacion?: any;
   orden_asesoria?: any;
+  orden_auditoria?: any;
   exponentes?: any[];
   modalidad?: string;
   modalidad_visita?: string;
@@ -118,6 +126,13 @@ function mapAsesoriaToProgramacion(ase: any): ProgramacionExtendida {
     frecuencia_visita: ase.frecuencia_visita ?? ase.ordenAsesoria?.frecuencia_visita ?? ase.orden_asesoria?.frecuencia_visita ?? null,
     tipo_programacion: 'asesoria',
   } as ProgramacionExtendida;
+}
+
+function refrescarProgramacionesAuditoriaLocales() {
+  programacionesAuditoriaLocales = (cargarProgramacionesAuditoriaLocales() as ProgramacionExtendida[]).map((item: any) => ({
+    ...item,
+    tipo_programacion: 'auditoria',
+  }));
 }
 
 async function cargarPlantasClienteProg(idCliente: number) {
@@ -479,6 +494,10 @@ export function renderProgramacionCapacitacionAsesoria(): string {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
           Programar Asesoría
         </button>` : ''}
+        ${mostrarBtnCapAse ? `<button class="prog-btn-secondary" id="btnProgramarAuditoria" title="Programar Auditoría">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          Programar Auditoría
+        </button>` : ''}
         ${mostrarBtnNuevaServicio ? `<button class="prog-btn-primary" id="btnNuevaProgramacion">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Nueva Programación
@@ -545,6 +564,9 @@ export function renderProgramacionCapacitacionAsesoria(): string {
 
       <!-- Modal Programar Asesoría -->
       ${renderModalProgramarAsesoria()}
+
+      <!-- Modal Programar Auditoría -->
+      ${renderModalProgramarAuditoria()}
     ` : ''}
   `;
 }
@@ -564,7 +586,10 @@ export async function initProgramacionCapacitacionAsesoriaEvents(): Promise<void
     abrirModalProgramarCapacitacion(tecnicosData, personalData, vehiculosData);
   });
   document.getElementById('btnProgramarAsesoria')?.addEventListener('click', () => {
-    abrirModalProgramarAsesoria(personalData, vehiculosData);
+    abrirModalProgramarAsesoria(personalData, tecnicosData);
+  });
+  document.getElementById('btnProgramarAuditoria')?.addEventListener('click', () => {
+    abrirModalProgramarAuditoria(personalData, tecnicosData);
   });
   document.getElementById('viewSelector')?.addEventListener('change', (e) => {
     vistaActual = (e.target as HTMLSelectElement).value as VistaProgramacion;
@@ -593,6 +618,10 @@ export async function initProgramacionCapacitacionAsesoriaEvents(): Promise<void
   window.addEventListener('asesoriaProgramada', async () => {
     await recargarProgramaciones();
   });
+
+  window.addEventListener('auditoriaProgramada', async () => {
+    await recargarProgramaciones();
+  });
 }
 
 async function cargarDatosIniciales() {
@@ -613,7 +642,8 @@ async function cargarDatosIniciales() {
 
     const capMapeado = (programacionesCapacitacion as any[]).map(mapCapacitacionToProgramacion);
     const aseMapeado = (programacionesAsesoria as any[]).map(mapAsesoriaToProgramacion);
-    programacionesData = [...capMapeado, ...aseMapeado] as Programacion[];
+    refrescarProgramacionesAuditoriaLocales();
+    programacionesData = [...capMapeado, ...aseMapeado, ...programacionesAuditoriaLocales] as Programacion[];
     const tecnicosRaw = extractList<Tecnico>(tecRes);
     const vehiculosRaw = extractList<Vehiculo>(vehRes);
 
@@ -653,7 +683,8 @@ async function recargarProgramaciones() {
 
     const capMapeado = (programacionesCapacitacion as any[]).map(mapCapacitacionToProgramacion);
     const aseMapeado = (programacionesAsesoria as any[]).map(mapAsesoriaToProgramacion);
-    programacionesData = [...capMapeado, ...aseMapeado] as Programacion[];
+    refrescarProgramacionesAuditoriaLocales();
+    programacionesData = [...capMapeado, ...aseMapeado, ...programacionesAuditoriaLocales] as Programacion[];
 
     estadisticas = construirEstadisticasDesdeLista(programacionesData);
   } catch (err) {
@@ -767,7 +798,8 @@ function getProgramacionesFiltradas(): Programacion[] {
       const px = p as ProgramacionExtendida;
       return p.orden_servicio?.cliente?.id === filtroCliente
         || px.orden_capacitacion?.cliente?.id === filtroCliente
-        || px.orden_asesoria?.cliente?.id === filtroCliente;
+        || px.orden_asesoria?.cliente?.id === filtroCliente
+        || px.orden_auditoria?.cliente?.id === filtroCliente;
     });
   }
   return lista;
@@ -793,6 +825,9 @@ function nombreActividad(p: Programacion): string {
   if (px.tipo_programacion === 'asesoria') {
     return px.orden_asesoria?.servicio?.nombre || p.servicio?.nombre || 'Asesoría';
   }
+  if (px.tipo_programacion === 'auditoria') {
+    return px.orden_auditoria?.servicio?.nombre || p.servicio?.nombre || 'Auditoría';
+  }
   return p.servicio?.nombre || 'Servicio';
 }
 
@@ -804,16 +839,25 @@ function badgeTipoProgramacion(p: Programacion): string {
   if (tipo === 'asesoria') {
     return '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Asesoría</span>';
   }
+  if (tipo === 'auditoria') {
+    return '<span style="background:#fce7f3;color:#9d174d;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:6px;">Auditoría</span>';
+  }
   return '';
+}
+
+function renderAccionesDetalleBotones(p: Programacion): string {
+  return `
+      <button type="button" class="prog-btn-danger" id="btnEliminarProg">Eliminar</button>
+      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-warning" id="btnCancelarProg">Cancelar Programación</button>` : ''}
+      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" id="btnEditarProg">Editar</button>` : ''}
+      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" style="background:#10b981;" id="btnCompletarProg">Marcar Realizado</button>` : ''}
+  `;
 }
 
 function renderAccionesDetalle(p: Programacion): string {
   return `
     <div class="prog-modal-footer">
-      <button type="button" class="prog-btn-danger" id="btnEliminarProg">Eliminar</button>
-      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-warning" id="btnCancelarProg">Cancelar Programación</button>` : ''}
-      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" id="btnEditarProg">Editar</button>` : ''}
-      ${!['Realizado', 'Cancelado'].includes(p.estado_ejecucion) ? `<button type="button" class="prog-btn-primary" style="background:#10b981;" id="btnCompletarProg">Marcar Realizado</button>` : ''}
+      ${renderAccionesDetalleBotones(p)}
     </div>`;
 }
 
@@ -1085,7 +1129,7 @@ function enlazarEventosCalendario() {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = parseInt((el as HTMLElement).dataset.progId || '0');
-      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria';
+      const tipo = ((el as HTMLElement).dataset.progTipo || 'servicio') as 'servicio' | 'capacitacion' | 'asesoria' | 'auditoria';
       if (id) abrirModalDetalle(id, tipo);
     });
   });
@@ -1093,7 +1137,7 @@ function enlazarEventosCalendario() {
 
 // ═══════════ Modal Detalle ═══════════
 
-async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' = 'servicio') {
+async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' | 'asesoria' | 'auditoria' = 'servicio') {
   const modal = document.getElementById('modalDetalleProgramacion');
   const body = document.getElementById('modalDetalleBody');
   if (!modal || !body) return;
@@ -1103,12 +1147,23 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
   document.body.style.overflow = 'hidden';
 
   try {
-    const res = tipo === 'capacitacion'
-      ? await programacionService.getProgramacionCapacitacionById(id)
-      : tipo === 'asesoria'
-      ? await programacionService.getProgramacionAsesoriaById(id)
-      : await programacionService.getById(id);
-    const p = res.data;
+    let p: any = null;
+
+    // Auditoría se maneja local-first; intentar resolverla localmente antes de llamar API.
+    if (tipo === 'auditoria') {
+      p = (programacionesData as ProgramacionExtendida[])
+        .find((item: any) => Number(item.id) === Number(id) && String(item.tipo_programacion || '') === 'auditoria') || null;
+    }
+
+    if (!p) {
+      const res = tipo === 'capacitacion'
+        ? await programacionService.getProgramacionCapacitacionById(id)
+        : tipo === 'asesoria'
+        ? await programacionService.getProgramacionAsesoriaById(id)
+        : await programacionService.getById(id);
+      p = res.data;
+    }
+
     if (!p) { body.innerHTML = '<p style="padding:24px;">No encontrado</p>'; return; }
 
     const clienteIdDetalle = Number(
@@ -1116,10 +1171,57 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
       || p?.orden_capacitacion?.cliente?.id
       || p?.ordenAsesoria?.cliente?.id
       || p?.orden_asesoria?.cliente?.id
+      || p?.orden_auditoria?.cliente?.id
       || 0,
     );
     if (clienteIdDetalle > 0) {
       await cargarPlantasClienteProg(clienteIdDetalle);
+    }
+
+    if (tipo === 'auditoria') {
+      const order = (p as ProgramacionExtendida).orden_auditoria || {};
+      const exps = (p.exponentes || []).map((e: any) => `${e.nombre} ${e.apellidos}`).join(', ');
+      body.innerHTML = `
+        <div class="prog-detalle-grid">
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Programación de Auditoría</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Tipo:</div><div class="prog-detalle-value"><span style="background:#fce7f3;color:#9d174d;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">Auditoría</span></div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Modalidad:</div><div class="prog-detalle-value">${order.modalidad || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Estado:</div><div class="prog-detalle-value"><span class="prog-status-badge ${p.estado_ejecucion}">${p.estado_ejecucion}</span></div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(p.fecha_programada)}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Horario:</div><div class="prog-detalle-value">${fmtH(normalizarHora(p.hora_inicio))} - ${fmtH(normalizarHora(p.hora_fin || ''))}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Duración:</div><div class="prog-detalle-value">${order.duracion_dias ?? '—'} día(s)</div></div>
+          </div>
+          <div class="prog-detalle-section">
+            <h3 class="prog-detalle-section-title">Orden y Cliente</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Orden:</div><div class="prog-detalle-value">${order.numero_orden || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Cotización:</div><div class="prog-detalle-value">${order.cotizacion?.numero_cotizacion || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${order.cliente?.nombre_empresa || order.cliente?.persona_contacto || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Auditoría:</div><div class="prog-detalle-value">${order.auditoria_nombre || order.nombre_auditoria || (p as any).auditoria_nombre || order.servicio?.nombre || p.servicio?.nombre || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Horas totales:</div><div class="prog-detalle-value">${Number(order.horas_totales || 0).toFixed(2)}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Costo:</div><div class="prog-detalle-value">S/ ${Number(order.costo || 0).toFixed(2)}</div></div>
+          </div>
+          <div class="prog-detalle-section prog-detalle-section-full">
+            <h3 class="prog-detalle-section-title">Recursos Asignados</h3>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Exponentes:</div><div class="prog-detalle-value">${exps || '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Asistente administrativo:</div><div class="prog-detalle-value">${p.supervisor ? p.supervisor.nombre + ' ' + p.supervisor.apellidos : '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Técnico que conduce:</div><div class="prog-detalle-value">${p.tecnico_conductor ? ((p.tecnico_conductor.nombre || '') + ' ' + (p.tecnico_conductor.apellidos || '')).trim() : '—'}</div></div>
+            <div class="prog-detalle-row"><div class="prog-detalle-label">Local:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
+          </div>
+          ${p.observaciones ? `<div class="prog-detalle-section prog-detalle-section-full"><h3 class="prog-detalle-section-title">Observaciones</h3><div class="prog-detalle-observaciones">${p.observaciones}</div></div>` : ''}
+          <div class="prog-modal-footer" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+            <button type="button" class="prog-btn-secondary" id="btnCerrarDetalleAud">Cerrar</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:1;">
+              ${renderAccionesDetalleBotones(p)}
+            </div>
+          </div>
+        </div>`;
+      body.querySelector('#btnCerrarDetalleAud')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
+      body.querySelector('#btnEliminarProg')?.addEventListener('click', () => eliminarProg(p.id));
+      body.querySelector('#btnCancelarProg')?.addEventListener('click', () => cancelarProg(p.id));
+      body.querySelector('#btnEditarProg')?.addEventListener('click', () => abrirEdicion({ ...(p as any), tipo_programacion: 'auditoria' } as Programacion));
+      body.querySelector('#btnCompletarProg')?.addEventListener('click', () => completarProg(p.id));
+      return;
     }
 
     if (tipo === 'capacitacion') {
@@ -1450,13 +1552,19 @@ async function abrirEdicion(p: Programacion) {
 
   const px = p as ProgramacionExtendida;
   const isAsesoria = px.tipo_programacion === 'asesoria' || !!px.orden_asesoria || !!(px as any).ordenAsesoria;
+  const isAuditoria = px.tipo_programacion === 'auditoria' || !!px.orden_auditoria;
   const ordenAsesoria = (px as any).ordenAsesoria || px.orden_asesoria || {};
 
   const fechaActual = normalizarFecha(p.fecha_programada || '');
   const [anioActual, mesActual, diaActual] = fechaActual.split('-').map((x) => parseInt(x || '0'));
 
   const expsAsignados = (px.exponentes || []).map((e: any) => Number(e.id)).filter((n) => !Number.isNaN(n));
-  const expsOrden = (((px as any).ordenAsesoria?.exponentes || px.orden_asesoria?.exponentes || []) as any[])
+  const expsOrden = ((
+    (px as any).ordenAsesoria?.exponentes
+    || px.orden_asesoria?.exponentes
+    || px.orden_auditoria?.exponentes
+    || []
+  ) as any[])
     .map((e: any) => ({ id: Number(e.id), nombre: e.nombre, apellidos: e.apellidos }))
     .filter((e: any) => !Number.isNaN(e.id));
   const expsActuales = (px.exponentes || [])
@@ -1464,7 +1572,7 @@ async function abrirEdicion(p: Programacion) {
     .filter((e: any) => !Number.isNaN(e.id));
   const expsMap = new Map<number, any>();
   [...expsOrden, ...expsActuales].forEach((e: any) => expsMap.set(Number(e.id), e));
-  if (isAsesoria) {
+  if (isAsesoria || isAuditoria) {
     try {
       const resExponentes = await programacionService.getAllExponentes();
       const catalogo = extractList<any>(resExponentes)
@@ -1494,6 +1602,7 @@ async function abrirEdicion(p: Programacion) {
   const areaIdsEdicion = normalizeAreaIds(idAreaEdicion);
   const modalidadVisitaEdicion = String((px as any).modalidad_visita || (px as any).modalidadVisita || px.modalidad || ordenAsesoria?.modalidad || '').trim().toLowerCase();
   const esVirtualEdicion = modalidadVisitaEdicion.startsWith('vir');
+  const idConductorEdicion = Number((px as any).id_tecnico_conductor || (px as any).tecnico_conductor?.id || 0);
 
   // Cargar plantas del cliente
   const idCliente = (p as any).orden_servicio?.id_cliente || ordenAsesoria?.id_cliente || (p as any).id_cliente;
@@ -1534,7 +1643,27 @@ async function abrirEdicion(p: Programacion) {
                   </select>
                 </div>
               </div>`
-            : `<div class="prog-form-group">
+            : isAuditoria
+              ? `<div class="prog-form-group">
+                  <label class="prog-form-label">Exponentes a Asignar <span class="prog-required">*</span></label>
+                  <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#fafafa;">
+                    <div id="editExponentesSeleccionados" style="display:flex;flex-wrap:wrap;gap:8px;min-height:34px;margin-bottom:10px;"></div>
+                    <select class="prog-form-control" id="editSelectAgregarExponente">
+                      <option value="">+ Agregar exponente...</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="prog-form-group">
+                  <label class="prog-form-label">Técnico que conduce</label>
+                  <select class="prog-form-control" name="id_tecnico_conductor">
+                    <option value="">Sin técnico conductor</option>
+                    ${tecnicosData
+                      .filter((t) => !!t.autorizado_conducir)
+                      .map((t) => `<option value="${t.id}" ${t.id === idConductorEdicion ? 'selected' : ''}>${t.nombre} ${t.apellidos}</option>`)
+                      .join('')}
+                  </select>
+                </div>`
+              : `<div class="prog-form-group">
                 <label class="prog-form-label">Técnicos Asignados <span style="font-weight:400;font-size:12px;color:#888;">(primero = principal)</span></label>
                 <div class="prog-tecnicos-list" id="editTecnicosCheckboxes" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
                   ${tecnicosData.map(t => {
@@ -1550,7 +1679,7 @@ async function abrirEdicion(p: Programacion) {
                   }).join('')}
                 </div>
               </div>`}
-          <div class="prog-form-group">
+          ${!isAuditoria ? `<div class="prog-form-group">
             <label class="prog-form-label">Asistente administrativo</label>
             <select class="prog-form-control" name="id_supervisor">
               <option value="">Sin asistente administrativo</option>
@@ -1563,11 +1692,16 @@ async function abrirEdicion(p: Programacion) {
               <option value="">Sin vehículo</option>
               ${vehiculosData.map(v => `<option value="${v.id}" ${v.id === p.id_vehiculo ? 'selected' : ''}>${v.placa} - ${v.marca} ${v.modelo}</option>`).join('')}
             </select>
-          </div>
+          </div>` : ''}
         </div>
         <div class="prog-form-section prog-form-section-full">
-          <h3 class="prog-form-section-title">${esVirtualEdicion ? 'Observación' : 'Ubicación'}</h3>
-          ${esVirtualEdicion ? `
+          <h3 class="prog-form-section-title">${isAuditoria || esVirtualEdicion ? 'Observación' : 'Ubicación'}</h3>
+          ${isAuditoria ? `
+            <div class="prog-form-group">
+              <label class="prog-form-label">Observaciones</label>
+              <textarea class="prog-form-control" name="observaciones" rows="4">${p.observaciones || ''}</textarea>
+            </div>
+          ` : esVirtualEdicion ? `
             <div class="prog-form-group">
               <label class="prog-form-label">Observaciones</label>
               <textarea class="prog-form-control" name="observaciones" rows="4">${p.observaciones || ''}</textarea>
@@ -1603,14 +1737,21 @@ async function abrirEdicion(p: Programacion) {
       </div>
     </form>`;
 
-  body.querySelector('#btnVolverDetalle')?.addEventListener('click', () => abrirModalDetalle(p.id, isAsesoria ? 'asesoria' : (px.tipo_programacion === 'capacitacion' ? 'capacitacion' : 'servicio')));
+  body.querySelector('#btnVolverDetalle')?.addEventListener('click', () => abrirModalDetalle(
+    p.id,
+    isAsesoria
+      ? 'asesoria'
+      : isAuditoria
+        ? 'auditoria'
+        : (px.tipo_programacion === 'capacitacion' ? 'capacitacion' : 'servicio'),
+  ));
 
   // Lógica de badge "Principal" para edición
-  if (!isAsesoria) {
+  if (!isAsesoria && !isAuditoria) {
     setupPrincipalBadge(body.querySelector('#editTecnicosCheckboxes') as HTMLElement);
   }
 
-  if (isAsesoria) {
+  if (isAsesoria || isAuditoria) {
     const contenedorExps = body.querySelector('#editExponentesSeleccionados') as HTMLElement | null;
     const selectAgregarExps = body.querySelector('#editSelectAgregarExponente') as HTMLSelectElement | null;
 
@@ -1663,7 +1804,7 @@ async function abrirEdicion(p: Programacion) {
   }
 
   // Cascada planta → área en edición (solo presencial)
-  if (!esVirtualEdicion) {
+  if (!isAuditoria && !esVirtualEdicion) {
     renderAreaPickerOptionsEdicion(body);
     actualizarResumenAreasEdicion(body);
     bindAreaMultiInteractionsEdicion(body);
@@ -1687,15 +1828,24 @@ async function abrirEdicion(p: Programacion) {
       if (k !== 'tecnicos_ids' && k !== 'exponentes_ids') data[k] = v || null;
     });
 
-    // Derivar local_sede y direccion_completa de planta si se seleccionó
-    const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || idPlantaEdicion || null;
-    const idAreaSel = normalizeAreaIds(fd.getAll('id_cliente_planta_area'));
-    data.id_cliente_planta = idPlantaSel;
-    data.id_cliente_planta_area = idAreaSel.length > 0 ? idAreaSel : null;
-    data.local_sede = getPlantaNombre(idPlantaSel) || '';
-    data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
-    data.latitud = getPlantaLatitud(idPlantaSel);
-    data.longitud = getPlantaLongitud(idPlantaSel);
+    if (isAuditoria) {
+      data.id_cliente_planta = p.id_cliente_planta ?? null;
+      data.id_cliente_planta_area = p.id_cliente_planta_area ?? null;
+      data.local_sede = p.local_sede || '';
+      data.direccion_completa = p.direccion_completa || '';
+      data.latitud = (p as any).latitud ?? null;
+      data.longitud = (p as any).longitud ?? null;
+    } else {
+      // Derivar local_sede y direccion_completa de planta si se seleccionó
+      const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || idPlantaEdicion || null;
+      const idAreaSel = normalizeAreaIds(fd.getAll('id_cliente_planta_area'));
+      data.id_cliente_planta = idPlantaSel;
+      data.id_cliente_planta_area = idAreaSel.length > 0 ? idAreaSel : null;
+      data.local_sede = getPlantaNombre(idPlantaSel) || '';
+      data.direccion_completa = getPlantaDireccion(idPlantaSel) || '';
+      data.latitud = getPlantaLatitud(idPlantaSel);
+      data.longitud = getPlantaLongitud(idPlantaSel);
+    }
 
     if (isAsesoria) {
       // En asesoría solo se edita el día, preservando mes y año actuales.
@@ -1706,6 +1856,27 @@ async function abrirEdicion(p: Programacion) {
       const fechaFinal = `${anioActual}-${String(mesActual).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
       data.fecha_programada = fechaFinal;
       data.exponentes = exponentesSeleccionadosEdicion;
+    } else if (isAuditoria) {
+      const idTecnicoConductor = parseInt((fd.get('id_tecnico_conductor') as string) || '0', 10);
+      if (!data.fecha_programada || !data.hora_inicio) {
+        mostrarToast('warning', 'Campos obligatorios', 'Debe completar fecha y hora de inicio');
+        return;
+      }
+      if (exponentesSeleccionadosEdicion.length === 0) {
+        mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un exponente');
+        return;
+      }
+
+      const exponentesSeleccionados = expsOpciones
+        .filter((e: any) => exponentesSeleccionadosEdicion.includes(Number(e.id)))
+        .map((e: any) => ({ id: Number(e.id), nombre: e.nombre, apellidos: e.apellidos }));
+
+      data.id_tecnico_conductor = Number.isFinite(idTecnicoConductor) && idTecnicoConductor > 0 ? idTecnicoConductor : null;
+      data.tecnico_conductor = data.id_tecnico_conductor
+        ? tecnicosData.find((t: any) => Number(t.id) === Number(data.id_tecnico_conductor)) || null
+        : null;
+      data.exponentes_ids = [...exponentesSeleccionadosEdicion];
+      data.exponentes = exponentesSeleccionados;
     } else {
       // Recoger técnicos para programación de servicios
       const checkedTecs = Array.from(body.querySelectorAll('#editTecnicosCheckboxes input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
@@ -1718,6 +1889,12 @@ async function abrirEdicion(p: Programacion) {
     try {
       if (isAsesoria) {
         await programacionService.updateProgramacionAsesoria(p.id, data);
+      } else if (isAuditoria) {
+        const actualizado = actualizarProgramacionAuditoriaLocal(p.id, data);
+        if (!actualizado) {
+          mostrarToast('error', 'Error', 'No se encontró la programación local de auditoría para actualizar');
+          return;
+        }
       } else {
         await programacionService.update(p.id, data);
       }
@@ -2317,7 +2494,7 @@ async function exportarPDF() {
 
 function clienteNombre(p: Programacion): string {
   const px = p as ProgramacionExtendida;
-  const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente;
+  const c = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente || px.orden_auditoria?.cliente;
   return c ? (c.nombre_empresa || c.persona_contacto || '—') : '—';
 }
 
@@ -2385,7 +2562,7 @@ function getClientesUnicos(): { id: number; nombre: string }[] {
   const clientesMap = new Map<number, string>();
   programacionesData.forEach(p => {
     const px = p as ProgramacionExtendida;
-    const cliente = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente;
+    const cliente = p.orden_servicio?.cliente || px.orden_capacitacion?.cliente || px.orden_asesoria?.cliente || px.orden_auditoria?.cliente;
     if (cliente && cliente.id) {
       const nombre = cliente.nombre_empresa || cliente.persona_contacto || '—';
       clientesMap.set(cliente.id, nombre);

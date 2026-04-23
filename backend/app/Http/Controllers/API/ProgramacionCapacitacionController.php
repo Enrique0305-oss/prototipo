@@ -19,6 +19,7 @@ class ProgramacionCapacitacionController extends Controller
             'exponentes',
             'supervisor',
             'vehiculo',
+            'tecnicoConductor',
             'planta',
             'area',
         ]);
@@ -54,6 +55,7 @@ class ProgramacionCapacitacionController extends Controller
             'exponentes',
             'supervisor',
             'vehiculo',
+            'tecnicoConductor',
             'planta',
             'area',
         ])->findOrFail($id);
@@ -150,6 +152,9 @@ class ProgramacionCapacitacionController extends Controller
             'id_orden_capacitacion' => 'required|integer|exists:orden_capacitacion_auditoria,id',
             'id_supervisor' => 'nullable|integer|exists:personal,id',
             'id_vehiculo' => 'nullable|integer|exists:vehiculos,id',
+            'id_tecnico_conductor' => 'nullable|integer|exists:tecnicos,id',
+            'motivo' => 'required|string|in:Operativa,Calidad,Otros',
+            'motivo_otro' => 'nullable|string|max:255|required_if:motivo,Otros',
             'id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
             'id_cliente_planta_area' => 'nullable|integer|exists:cliente_planta_area,id',
             'fecha_programada' => 'required|date',
@@ -182,14 +187,16 @@ class ProgramacionCapacitacionController extends Controller
 
             $ordenCap = OrdenCapacitacionAuditoria::with('cliente')->findOrFail($validated['id_orden_capacitacion']);
 
-            $yaProgramada = ProgramacionCapacitacion::where('id_orden_capacitacion', $ordenCap->id)
+            $jornadaDuplicada = ProgramacionCapacitacion::where('id_orden_capacitacion', $ordenCap->id)
+                ->whereDate('fecha_programada', $validated['fecha_programada'])
+                ->where('hora_inicio', $validated['hora_inicio'])
                 ->whereNotIn('estado_ejecucion', ['Cancelado'])
                 ->exists();
 
-            if ($yaProgramada) {
+            if ($jornadaDuplicada) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Esta orden de capacitación ya está programada',
+                    'message' => 'Ya existe una jornada registrada para esta orden en la misma fecha y hora de inicio',
                 ], 422);
             }
 
@@ -197,6 +204,9 @@ class ProgramacionCapacitacionController extends Controller
                 'id_orden_capacitacion' => $validated['id_orden_capacitacion'],
                 'id_supervisor' => $validated['id_supervisor'] ?? null,
                 'id_vehiculo' => $validated['id_vehiculo'] ?? null,
+                'id_tecnico_conductor' => $validated['id_tecnico_conductor'] ?? null,
+                'motivo' => $validated['motivo'],
+                'motivo_otro' => $validated['motivo'] === 'Otros' ? ($validated['motivo_otro'] ?? null) : null,
                 'id_cliente_planta' => $validated['id_cliente_planta'] ?? null,
                 'id_cliente_planta_area' => $validated['id_cliente_planta_area'] ?? null,
                 'fecha_programada' => $validated['fecha_programada'],
@@ -222,6 +232,7 @@ class ProgramacionCapacitacionController extends Controller
                 'exponentes',
                 'supervisor',
                 'vehiculo',
+                'tecnicoConductor',
                 'planta',
                 'area',
             ]);

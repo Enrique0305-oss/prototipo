@@ -2872,13 +2872,14 @@ async function abrirEdicion(p: Programacion) {
       data.exponentes = exponentesSeleccionadosEdicion;
     } else {
       // Recoger técnicos para programación de servicios
-      const checkedTecs = Array.from(body.querySelectorAll('#editTecnicosCheckboxes input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-      const tecnicosIds = checkedTecs.map(c => parseInt(c.value));
-      if (!isVisita && checkedTecs.length === 0) {
+      const { tecnicosIds, idTecnicoPrincipal } = getTecnicosSeleccionadosConPrincipal(
+        body.querySelector('#editTecnicosCheckboxes') as HTMLElement | null,
+      );
+      if (!isVisita && tecnicosIds.length === 0) {
         mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico');
         return;
       }
-      data.id_tecnico_asignado = tecnicosIds.length > 0 ? tecnicosIds[0] : null;
+      data.id_tecnico_asignado = idTecnicoPrincipal;
       data.tecnicos_ids = tecnicosIds.length > 0 ? tecnicosIds : null;
       const personalAdministrativoEdit = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
       data.id_supervisor = personalAdministrativoEdit && personalAdministrativoEdit.selectedOptions.length > 0
@@ -3032,8 +3033,9 @@ async function abrirEdicionOtros(p: Programacion) {
   body.querySelector('#formEditarOtros')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
-    const checkedTecs = Array.from(body.querySelectorAll('#editTecnicosCheckboxes input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-    const tecnicosIds = checkedTecs.map(c => parseInt(c.value, 10)).filter((id) => id > 0);
+    const { tecnicosIds, idTecnicoPrincipal } = getTecnicosSeleccionadosConPrincipal(
+      body.querySelector('#editTecnicosCheckboxes') as HTMLElement | null,
+    );
 
     const personalAdministrativoEdit = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
     const data: Record<string, any> = {
@@ -3045,7 +3047,7 @@ async function abrirEdicionOtros(p: Programacion) {
       ubicacion_manual: String(fd.get('ubicacion_manual') || '').trim(),
       id_vehiculo: fd.get('id_vehiculo') || null,
       observaciones: fd.get('observaciones') || null,
-      id_tecnico_asignado: tecnicosIds.length > 0 ? tecnicosIds[0] : null,
+      id_tecnico_asignado: idTecnicoPrincipal,
       tecnicos_ids: tecnicosIds.length > 0 ? tecnicosIds : null,
       id_supervisor: personalAdministrativoEdit && personalAdministrativoEdit.selectedOptions.length > 0
         ? Array.from(personalAdministrativoEdit.selectedOptions).map(o => parseInt(o.value)).filter((id) => id > 0)
@@ -3516,10 +3518,11 @@ async function submitIndividual(body: HTMLElement) {
   data.longitud = getPlantaLongitud(idPlantaSel);
 
   // Recoger técnicos seleccionados
-  const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-  if (checkedTecs.length === 0) { mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico'); return; }
-  const tecnicosIds = checkedTecs.map(c => parseInt(c.value));
-  data.id_tecnico_asignado = tecnicosIds[0]; // Primero = principal
+  const { tecnicosIds, idTecnicoPrincipal } = getTecnicosSeleccionadosConPrincipal(
+    body.querySelector('#tecnicosCheckboxes') as HTMLElement | null,
+  );
+  if (tecnicosIds.length === 0) { mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico'); return; }
+  data.id_tecnico_asignado = idTecnicoPrincipal;
   data.tecnicos_ids = tecnicosIds;
 
   const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
@@ -4073,9 +4076,10 @@ async function submitVisitaIndividual(body: HTMLElement) {
   }
 
   // Recoger técnicos seleccionados
-  const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-  const tecnicosIds = checkedTecs.map(c => parseInt(c.value));
-  data.id_tecnico_asignado = tecnicosIds.length > 0 ? tecnicosIds[0] : null; // Primero = principal
+  const { tecnicosIds, idTecnicoPrincipal } = getTecnicosSeleccionadosConPrincipal(
+    body.querySelector('#tecnicosCheckboxesVisita') as HTMLElement | null,
+  );
+  data.id_tecnico_asignado = idTecnicoPrincipal;
   data.tecnicos_ids = tecnicosIds.length > 0 ? tecnicosIds : null;
 
   // Recoger áreas seleccionadas
@@ -4135,8 +4139,9 @@ async function submitFabricacionIndividual(body: HTMLElement) {
     return;
   }
 
-  const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-  const tecnicosIds = checkedTecs.map(c => parseInt(c.value, 10)).filter((id) => id > 0);
+  const { tecnicosIds, idTecnicoPrincipal } = getTecnicosSeleccionadosConPrincipal(
+    body.querySelector('#tecnicosCheckboxesVisita') as HTMLElement | null,
+  );
   if (tecnicosIds.length === 0) {
     mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico');
     return;
@@ -4147,7 +4152,7 @@ async function submitFabricacionIndividual(body: HTMLElement) {
   const data: Record<string, any> = {
     tipo_programacion: 'fabricacion',
     id_orden_fabricacion: idOrdenFabricacion,
-    id_tecnico_asignado: tecnicosIds[0],
+    id_tecnico_asignado: idTecnicoPrincipal,
     tecnicos_ids: tecnicosIds,
     id_supervisor: personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0
       ? Array.from(personalAdministrativoSelect.selectedOptions).map((o) => parseInt(o.value, 10)).filter((id) => id > 0)
@@ -4201,15 +4206,16 @@ async function submitOtrosIndividual(body: HTMLElement) {
     return;
   }
 
-  const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-  const tecnicosIds = checkedTecs.map(c => parseInt(c.value, 10)).filter((id) => id > 0);
+  const { tecnicosIds, idTecnicoPrincipal } = getTecnicosSeleccionadosConPrincipal(
+    body.querySelector('#tecnicosCheckboxesVisita') as HTMLElement | null,
+  );
 
   const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectVisita') as HTMLSelectElement;
 
   const data: Record<string, any> = {
     tipo_programacion: 'otros',
     motivo,
-    id_tecnico_asignado: tecnicosIds.length > 0 ? tecnicosIds[0] : null,
+    id_tecnico_asignado: idTecnicoPrincipal,
     tecnicos_ids: tecnicosIds.length > 0 ? tecnicosIds : null,
     id_supervisor: personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0
       ? Array.from(personalAdministrativoSelect.selectedOptions).map((o) => parseInt(o.value, 10)).filter((id) => id > 0)
@@ -4265,9 +4271,10 @@ async function submitAnual(body: HTMLElement) {
   }
 
   // Recoger técnicos seleccionados
-  const checkedTecs = Array.from(body.querySelectorAll('input[name="tecnicos_ids"]:checked')) as HTMLInputElement[];
-  if (checkedTecs.length === 0) { mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico'); return; }
-  const tecnicosIds = checkedTecs.map(c => parseInt(c.value));
+  const { tecnicosIds, idTecnicoPrincipal } = getTecnicosSeleccionadosConPrincipal(
+    body.querySelector('#tecnicosCheckboxes') as HTMLElement | null,
+  );
+  if (tecnicosIds.length === 0) { mostrarToast('warning', 'Campo requerido', 'Debe seleccionar al menos un técnico'); return; }
 
   const ok = await confirmarAccion({ titulo: 'Programación Anual', mensaje: `Se crearán todas las programaciones del año para frecuencia <strong>"${frecuencia}"</strong>. ¿Desea continuar?`, tipo: 'warning', textoConfirmar: 'Sí, crear todas' });
   if (!ok) return;
@@ -4277,7 +4284,7 @@ async function submitAnual(body: HTMLElement) {
   const data: Record<string, any> = {
     id_orden_servicio: selectODS.value,
     id_servicio: selectServicio.value,
-    id_tecnico_asignado: tecnicosIds[0],
+    id_tecnico_asignado: idTecnicoPrincipal,
     tecnicos_ids: tecnicosIds,
     id_vehiculo: fd.get('id_vehiculo') || null,
     frecuencia: frecuenciaBackend,
@@ -4557,6 +4564,30 @@ function fmtDate(d: Date): string {
 
 function todayStr(): string { return fmtDate(new Date()); }
 
+function getTecnicosSeleccionadosConPrincipal(container: HTMLElement | null): { tecnicosIds: number[]; idTecnicoPrincipal: number | null } {
+  if (!container) return { tecnicosIds: [], idTecnicoPrincipal: null };
+
+  const checks = Array.from(container.querySelectorAll('input[name="tecnicos_ids"][type="checkbox"]')) as HTMLInputElement[];
+  const seleccionados = checks
+    .filter((cb) => cb.checked)
+    .map((cb) => parseInt(cb.value, 10))
+    .filter((id) => Number.isFinite(id) && id > 0);
+
+  if (seleccionados.length === 0) {
+    delete container.dataset.principalTecnicoId;
+    return { tecnicosIds: [], idTecnicoPrincipal: null };
+  }
+
+  const principalGuardado = parseInt(container.dataset.principalTecnicoId || '', 10);
+  const principalValido = Number.isFinite(principalGuardado) && seleccionados.includes(principalGuardado)
+    ? principalGuardado
+    : seleccionados[0];
+
+  container.dataset.principalTecnicoId = String(principalValido);
+  const tecnicosIds = [principalValido, ...seleccionados.filter((id) => id !== principalValido)];
+  return { tecnicosIds, idTecnicoPrincipal: principalValido };
+}
+
 /** Normaliza fecha ISO/datetime a "YYYY-MM-DD" */
 function normalizarFecha(f: string): string {
   if (!f) return f;
@@ -4585,21 +4616,44 @@ function getLunesDeSemana(d: Date): Date {
 function setupPrincipalBadge(container: HTMLElement | null) {
   if (!container) return;
 
-  const updateBadges = () => {
-    const checks = Array.from(container.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
-    let firstChecked = true;
+  const updateBadges = (preferredPrincipalId?: number | null) => {
+    const checks = Array.from(container.querySelectorAll('input[name="tecnicos_ids"][type="checkbox"]')) as HTMLInputElement[];
+    const checked = checks.filter((cb) => cb.checked);
+    const checkedIds = checked.map((cb) => parseInt(cb.value, 10)).filter((id) => Number.isFinite(id) && id > 0);
+
+    let principalId: number | null = null;
+    const principalGuardado = parseInt(container.dataset.principalTecnicoId || '', 10);
+
+    if (checkedIds.length === 0) {
+      delete container.dataset.principalTecnicoId;
+    } else if (Number.isFinite(principalGuardado) && checkedIds.includes(principalGuardado)) {
+      principalId = principalGuardado;
+    } else if (preferredPrincipalId && checkedIds.includes(preferredPrincipalId)) {
+      principalId = preferredPrincipalId;
+    } else {
+      principalId = checkedIds[0];
+    }
+
+    if (principalId) container.dataset.principalTecnicoId = String(principalId);
+
     checks.forEach(cb => {
       const badge = cb.closest('label')?.querySelector('.prog-principal-badge') as HTMLElement;
       if (!badge) return;
-      if (cb.checked && firstChecked) {
+      const id = parseInt(cb.value, 10);
+      if (cb.checked && principalId !== null && id === principalId) {
         badge.style.display = '';
-        firstChecked = false;
       } else {
         badge.style.display = 'none';
       }
     });
   };
 
-  container.addEventListener('change', updateBadges);
+  container.addEventListener('change', (event) => {
+    const target = event.target as HTMLInputElement | null;
+    const preferred = target && target.matches('input[name="tecnicos_ids"][type="checkbox"]') && target.checked
+      ? parseInt(target.value, 10)
+      : null;
+    updateBadges(Number.isFinite(preferred as number) ? preferred : null);
+  });
   updateBadges(); // estado inicial
 }

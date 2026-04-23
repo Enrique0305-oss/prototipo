@@ -131,6 +131,33 @@ body {
   padding: 34px 24px;
 }
 
+.mobile-attendance-notice {
+  display: none;
+}
+
+.mobile-attendance-card {
+  width: min(100%, 420px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(44, 74, 124, 0.16);
+  border-radius: 20px;
+  padding: 26px 22px;
+  box-shadow: 0 14px 34px rgba(26, 45, 77, 0.18);
+  text-align: center;
+}
+
+.mobile-attendance-card h2 {
+  color: #1a2d4d;
+  font-size: 24px;
+  line-height: 1.2;
+  margin-bottom: 10px;
+}
+
+.mobile-attendance-card p {
+  color: #3d5f94;
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .form-card {
   width: min(100%, 398px);
   background: rgba(255, 255, 255, 0.9);
@@ -417,7 +444,6 @@ body {
     padding: 24px 18px 18px;
     border-radius: 18px;
   }
-
   .form-card h2 {
     font-size: 28px;
   }
@@ -432,6 +458,47 @@ body {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-panel {
+    min-height: auto;
+    padding: 28px 18px;
+  }
+
+  .brand-content {
+    width: 100%;
+  }
+
+  .brand-subtitle,
+  .brand-points,
+  .brand-meta {
+    display: none;
+  }
+
+  .brand-logo-wrap {
+    margin-bottom: 14px;
+  }
+
+  .brand-content h1 {
+    margin-bottom: 0;
+  }
+
+  .form-panel {
+    display: none;
+  }
+
+  .mobile-attendance-notice {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+    background: #edf3fa;
   }
 }
 

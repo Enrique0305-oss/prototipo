@@ -7,10 +7,89 @@ import { mostrarToast } from '../../shared/toast';
 
 let capacitacionesDisponibles: any[] = [];
 let personalData: any[] = [];
-let vehiculosData: any[] = [];
+let tecnicosConductoresData: any[] = [];
 let exponentesDisponiblesActual: any[] = [];
 let exponentesSeleccionadosIds: number[] = [];
 let exponentesCatalogo: any[] = [];
+
+function toggleMotivoOtro() {
+  const motivo = document.getElementById('motivoCapacitacion') as HTMLSelectElement | null;
+  const wrap = document.getElementById('motivoOtroWrap') as HTMLElement | null;
+  const input = document.getElementById('motivoOtro') as HTMLInputElement | null;
+  if (!motivo || !wrap || !input) return;
+
+  const esOtros = motivo.value === 'Otros';
+  wrap.style.display = esOtros ? 'block' : 'none';
+  input.required = esOtros;
+  if (!esOtros) input.value = '';
+}
+
+function cerrarModalCapacitacion() {
+  const modal = document.getElementById('modalProgramarCapacitacion');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function sumarDias(fechaBase: string, dias: number): string {
+  if (!fechaBase) return '';
+  const d = new Date(`${fechaBase}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + dias);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function renderJornadasCapacitacion(totalDias: number, fechaBase: string, horaBase: string) {
+  const container = document.getElementById('capacitacionJornadasContainer');
+  if (!container) return;
+
+  const dias = Math.max(1, Number(totalDias || 1));
+  container.innerHTML = Array.from({ length: dias }, (_, idx) => {
+    const n = idx + 1;
+    const fecha = sumarDias(fechaBase, idx);
+    return `
+      <div class="cap-jornada-row" data-jornada="${n}" style="display:grid;grid-template-columns:90px 1fr 1fr 1fr;gap:10px;align-items:end;padding:10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+        <div style="font-size:13px;font-weight:700;color:#334155;">Día ${n}</div>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#334155;">
+          <span>Fecha</span>
+          <input type="date" class="prog-form-control cap-jornada-fecha" value="${fecha}" required>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#334155;">
+          <span>Hora inicio</span>
+          <input type="time" class="prog-form-control cap-jornada-hora-inicio" value="${horaBase}" required>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#334155;">
+          <span>Hora fin</span>
+          <input type="time" class="prog-form-control cap-jornada-hora-fin" value="">
+        </label>
+      </div>
+    `;
+  }).join('');
+}
+
+function bindCerrarModalCapacitacion() {
+  const modal = document.getElementById('modalProgramarCapacitacion');
+  if (!modal || modal.getAttribute('data-close-bound') === '1') return;
+
+  modal.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target) return;
+    if (target.id === 'closeModalCapacitacion' || target.classList.contains('prog-modal-overlay')) {
+      cerrarModalCapacitacion();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    const isOpen = modal.style.display === 'flex';
+    if (isOpen && event.key === 'Escape') {
+      cerrarModalCapacitacion();
+    }
+  });
+
+  modal.setAttribute('data-close-bound', '1');
+}
 
 function esConflictoAgendaMensaje(message: string): boolean {
   return (message || '').toLowerCase().includes('conflicto de agenda');
@@ -103,13 +182,17 @@ export function renderModalProgramarCapacitacion(): string {
   `;
 }
 
-export async function abrirModalProgramarCapacitacion(_tecnicos: any[], personal: any[], vehiculos: any[]) {
+export async function abrirModalProgramarCapacitacion(_tecnicos: any[], personal: any[], _vehiculos: any[]) {
   personalData = personal;
-  vehiculosData = vehiculos;
+  tecnicosConductoresData = Array.isArray(_tecnicos)
+    ? _tecnicos.filter((t: any) => !!t?.autorizado_conducir)
+    : [];
 
   const modal = document.getElementById('modalProgramarCapacitacion');
   const body = document.getElementById('modalCapacitacionBody');
   if (!modal || !body) return;
+
+  bindCerrarModalCapacitacion();
 
   body.innerHTML = '<p style="padding:24px;color:#999;">Cargando capacitaciones disponibles...</p>';
   modal.style.display = 'flex';
@@ -123,14 +206,10 @@ export async function abrirModalProgramarCapacitacion(_tecnicos: any[], personal
     capacitacionesDisponibles = resCaps.data || [];
     exponentesCatalogo = resExponentes.data || [];
     
-    if (capacitacionesDisponibles.length === 0) {
-      body.innerHTML = '<p style="padding:24px;color:#dc2626;text-align:center;">No hay órdenes de capacitación aprobadas disponibles para programar.</p>';
-      return;
-    }
   } catch (err) {
     console.error('Error cargando capacitaciones:', err);
     mostrarToast('error', 'Error', 'No se pudieron cargar las capacitaciones disponibles');
-    modal.style.display = 'none';
+    cerrarModalCapacitacion();
     return;
   }
 
@@ -157,6 +236,9 @@ function renderFormCapacitacion(body: HTMLElement) {
                 </option>
               `).join('')}
             </select>
+            ${capacitacionesDisponibles.length === 0
+              ? '<small style="display:block;margin-top:6px;color:#b45309;font-size:12px;">No hay órdenes aprobadas disponibles en este momento.</small>'
+              : ''}
           </div>
 
           <div id="detallesCapacitacion" style="display:none;margin-top:12px;padding:14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;font-size:13px;line-height:1.6;">
@@ -214,15 +296,30 @@ function renderFormCapacitacion(body: HTMLElement) {
           </div>
 
           <div class="prog-form-group">
-            <label class="prog-form-label">Vehículo (Transporte)</label>
-            <select class="prog-form-control" id="vehiculo">
-              <option value="">-- Seleccionar vehículo --</option>
-              ${vehiculosData.map(v => `
-                <option value="${v.id}">
-                  ${v.placa} — ${v.modelo}
+            <label class="prog-form-label">Técnico que Conduce</label>
+            <select class="prog-form-control" id="tecnicoConductor">
+              <option value="">-- Seleccionar técnico conductor --</option>
+              ${tecnicosConductoresData.map(t => `
+                <option value="${t.id}">
+                  ${t.nombre} ${t.apellidos || ''}
                 </option>
               `).join('')}
             </select>
+          </div>
+
+          <div class="prog-form-group">
+            <label class="prog-form-label">Motivo <span class="prog-required">*</span></label>
+            <select class="prog-form-control" id="motivoCapacitacion" required>
+              <option value="">-- Seleccionar motivo --</option>
+              <option value="Operativa">Operativa</option>
+              <option value="Calidad">Calidad</option>
+              <option value="Otros">Otros</option>
+            </select>
+          </div>
+
+          <div class="prog-form-group" id="motivoOtroWrap" style="display:none;">
+            <label class="prog-form-label">Detalle de motivo</label>
+            <input type="text" class="prog-form-control" id="motivoOtro" maxlength="255" placeholder="Especifique el motivo">
           </div>
         </div>
 
@@ -230,22 +327,25 @@ function renderFormCapacitacion(body: HTMLElement) {
         <div class="prog-form-section">
           <h3 class="prog-form-section-title">Fechas y Horarios</h3>
           
-          <div class="prog-form-group">
-            <label class="prog-form-label">Fecha de Programación <span class="prog-required">*</span></label>
-            <input type="date" class="prog-form-control" id="fechaProgramada" required>
-            <small style="color:#666;font-size:12px;margin-top:4px;">Se pre-llena con la fecha de la orden de capacitación</small>
-          </div>
-
           <div class="prog-form-row">
             <div class="prog-form-group">
-              <label class="prog-form-label">Hora Inicio <span class="prog-required">*</span></label>
+              <label class="prog-form-label">Fecha Base <span class="prog-required">*</span></label>
+              <input type="date" class="prog-form-control" id="fechaProgramada" required>
+              <small style="color:#666;font-size:12px;margin-top:4px;">Se pre-llena con la fecha de la orden</small>
+            </div>
+            <div class="prog-form-group">
+              <label class="prog-form-label">Hora Base Inicio <span class="prog-required">*</span></label>
               <input type="time" class="prog-form-control" id="horaInicio" required>
               <small style="color:#666;font-size:12px;margin-top:4px;">Se pre-llena con la hora de la orden</small>
             </div>
             <div class="prog-form-group">
-              <label class="prog-form-label">Hora Fin</label>
-              <input type="time" class="prog-form-control" id="horaFin">
+              <label class="prog-form-label">Días de Capacitación</label>
+              <input type="number" class="prog-form-control" id="duracionDias" min="1" step="1" value="1">
             </div>
+          </div>
+          <div style="margin-top:8px;">
+            <div style="font-size:13px;font-weight:700;color:#334155;margin-bottom:8px;">Detalle por día</div>
+            <div id="capacitacionJornadasContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
           </div>
         </div>
 
@@ -287,7 +387,25 @@ function bindEventosCapacitacion() {
   const detalles = document.getElementById('detallesCapacitacion');
   const form = document.getElementById('formCapacitacionProg') as HTMLFormElement;
   const btnCancel = document.getElementById('btnCancelarCapacitacion');
-  const modal = document.getElementById('modalProgramarCapacitacion');
+  const fechaInput = document.getElementById('fechaProgramada') as HTMLInputElement | null;
+  const horaInput = document.getElementById('horaInicio') as HTMLInputElement | null;
+  const diasInput = document.getElementById('duracionDias') as HTMLInputElement | null;
+  const motivoSelect = document.getElementById('motivoCapacitacion') as HTMLSelectElement | null;
+
+  const rerenderJornadas = () => {
+    renderJornadasCapacitacion(
+      Number(diasInput?.value || 1),
+      fechaInput?.value || '',
+      horaInput?.value || '',
+    );
+  };
+
+  diasInput?.addEventListener('input', rerenderJornadas);
+  fechaInput?.addEventListener('change', rerenderJornadas);
+  horaInput?.addEventListener('change', rerenderJornadas);
+  motivoSelect?.addEventListener('change', () => toggleMotivoOtro());
+  toggleMotivoOtro();
+  rerenderJornadas();
 
   // Cargar detalles de capacitación seleccionada
   if (selectCap) {
@@ -354,7 +472,6 @@ function bindEventosCapacitacion() {
         // ═══ PRE-LLENAR FECHAS Y HORAS ═══
         const fechaInput = document.getElementById('fechaProgramada') as HTMLInputElement;
         const horaInput = document.getElementById('horaInicio') as HTMLInputElement;
-        const horaFinInput = document.getElementById('horaFin') as HTMLInputElement;
         
         if (fechaInput && capacitacion.fecha_servicio) {
           fechaInput.value = formatearFechaParaInput(String(capacitacion.fecha_servicio));
@@ -369,9 +486,12 @@ function bindEventosCapacitacion() {
           }
         }
 
-        if (horaFinInput) {
-          horaFinInput.value = '';
+        if (diasInput) {
+          const horas = Number(capacitacion.horas_capacitacion || 0);
+          diasInput.value = horas > 4 ? '2' : '1';
         }
+
+        rerenderJornadas();
       }
     });
   }
@@ -379,8 +499,7 @@ function bindEventosCapacitacion() {
   // Cancelar
   if (btnCancel) {
     btnCancel.addEventListener('click', () => {
-      if (modal) modal.style.display = 'none';
-      document.body.style.overflow = 'auto';
+      cerrarModalCapacitacion();
     });
   }
 
@@ -392,23 +511,17 @@ function bindEventosCapacitacion() {
     });
   }
 
-  // Cerrar con X
-  const btnClose = document.getElementById('closeModalCapacitacion');
-  if (btnClose) {
-    btnClose.addEventListener('click', () => {
-      if (modal) modal.style.display = 'none';
-      document.body.style.overflow = 'auto';
-    });
-  }
+  // Cierre con X/overlay/ESC controlado por bindCerrarModalCapacitacion()
 }
 
 async function guardarCapacitacionProgramada(form: HTMLFormElement) {
   const selectCap = form.querySelector('#selectCapacitacion') as HTMLSelectElement;
   const fechaProgramada = form.querySelector('#fechaProgramada') as HTMLInputElement;
   const horaInicio = form.querySelector('#horaInicio') as HTMLInputElement;
-  const horaFin = form.querySelector('#horaFin') as HTMLInputElement;
+  const motivo = form.querySelector('#motivoCapacitacion') as HTMLSelectElement;
+  const motivoOtro = form.querySelector('#motivoOtro') as HTMLInputElement;
   const supervisor = form.querySelector('#supervisor') as HTMLSelectElement;
-  const vehiculo = form.querySelector('#vehiculo') as HTMLSelectElement;
+  const tecnicoConductor = form.querySelector('#tecnicoConductor') as HTMLSelectElement;
   const observaciones = form.querySelector('#observaciones') as HTMLTextAreaElement;
 
   // Validar campos obligatorios
@@ -416,6 +529,18 @@ async function guardarCapacitacionProgramada(form: HTMLFormElement) {
     mostrarToast('warning', 'Campos requeridos', 'Complete capacitación, fecha y hora de inicio');
     return;
   }
+
+  if (!motivo.value) {
+    mostrarToast('warning', 'Campos requeridos', 'Seleccione el motivo de la programación');
+    return;
+  }
+
+  if (motivo.value === 'Otros' && !motivoOtro.value.trim()) {
+    mostrarToast('warning', 'Campos requeridos', 'Ingrese el detalle del motivo cuando selecciona Otros');
+    return;
+  }
+
+  const motivoValue = motivo.value as 'Operativa' | 'Calidad' | 'Otros';
 
   if (exponentesSeleccionadosIds.length === 0) {
     mostrarToast('warning', 'Exponentes requeridos', 'Seleccione al menos un exponente');
@@ -428,17 +553,28 @@ async function guardarCapacitacionProgramada(form: HTMLFormElement) {
     return;
   }
 
-  // Preparar payload
-  const payload = {
-    id_orden_capacitacion: parseInt(selectCap.value),
-    fecha_programada: fechaProgramada.value,
-    hora_inicio: horaInicio.value,
-    hora_fin: horaFin?.value || undefined,
-    id_supervisor: supervisor?.value ? parseInt(supervisor.value) : undefined,
-    id_vehiculo: vehiculo?.value ? parseInt(vehiculo.value) : undefined,
-    observaciones: observaciones.value || '',
-    exponentes_ids: exponentesSeleccionadosIds,
-  };
+  const jornadasRows = Array.from(form.querySelectorAll('.cap-jornada-row')) as HTMLElement[];
+  if (jornadasRows.length === 0) {
+    mostrarToast('warning', 'Sin jornadas', 'Debe definir al menos una jornada de capacitación');
+    return;
+  }
+
+  const jornadas = jornadasRows.map((row, idx) => {
+    const fecha = (row.querySelector('.cap-jornada-fecha') as HTMLInputElement | null)?.value || '';
+    const hInicio = (row.querySelector('.cap-jornada-hora-inicio') as HTMLInputElement | null)?.value || '';
+    const hFin = (row.querySelector('.cap-jornada-hora-fin') as HTMLInputElement | null)?.value || '';
+    return {
+      numero: idx + 1,
+      fecha_programada: fecha,
+      hora_inicio: hInicio,
+      hora_fin: hFin || undefined,
+    };
+  });
+
+  if (jornadas.some((j) => !j.fecha_programada || !j.hora_inicio)) {
+    mostrarToast('warning', 'Campos requeridos', 'Complete fecha y hora de inicio en todas las jornadas');
+    return;
+  }
 
   try {
     // Mostrar indicador de carga
@@ -448,24 +584,48 @@ async function guardarCapacitacionProgramada(form: HTMLFormElement) {
       btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
     }
 
-    const result = await programacionService.programarCapacitacion(payload);
+    let exitos = 0;
+    const errores: string[] = [];
 
-    if (result.success) {
-      // Toast éxito
-      mostrarToast('success', 'Éxito', '✓ Capacitación programada correctamente');
-      
-      // Cerrar modal
-      const modal = document.getElementById('modalProgramarCapacitacion');
-      if (modal) modal.style.display = 'none';
-      document.body.style.overflow = 'auto';
+    for (const jornada of jornadas) {
+      try {
+        const payload = {
+          id_orden_capacitacion: parseInt(selectCap.value),
+          fecha_programada: jornada.fecha_programada,
+          hora_inicio: jornada.hora_inicio,
+          hora_fin: jornada.hora_fin,
+          id_supervisor: supervisor?.value ? parseInt(supervisor.value) : undefined,
+          id_tecnico_conductor: tecnicoConductor?.value ? parseInt(tecnicoConductor.value) : undefined,
+          motivo: motivoValue,
+          motivo_otro: motivoValue === 'Otros' ? motivoOtro.value.trim() : undefined,
+          observaciones: jornadas.length > 1
+            ? `${observaciones.value || ''}${observaciones.value ? ' | ' : ''}Jornada ${jornada.numero}/${jornadas.length}`
+            : (observaciones.value || ''),
+          exponentes_ids: exponentesSeleccionadosIds,
+        };
 
-      // Limpiar formulario
+        const result = await programacionService.programarCapacitacion(payload);
+        if (result.success) {
+          exitos += 1;
+        } else {
+          errores.push(`Día ${jornada.numero}: ${result.message || 'No se pudo guardar'}`);
+        }
+      } catch (err: any) {
+        const msg = err?.data?.message || err?.response?.data?.message || err?.message || 'Error al guardar jornada';
+        errores.push(`Día ${jornada.numero}: ${msg}`);
+      }
+    }
+
+    if (exitos === jornadas.length) {
+      mostrarToast('success', 'Éxito', `✓ Capacitación programada en ${exitos} día(s)`);
+      cerrarModalCapacitacion();
       form.reset();
-
-      // Emitir evento para recargar
+      window.dispatchEvent(new Event('capacitacionProgramada'));
+    } else if (exitos > 0) {
+      mostrarToast('warning', 'Registro parcial', `Se programaron ${exitos}/${jornadas.length} días. ${errores[0] || ''}`);
       window.dispatchEvent(new Event('capacitacionProgramada'));
     } else {
-      mostrarErrorCapacitacion(result.message || 'No se pudo guardar');
+      mostrarErrorCapacitacion(errores[0] || 'No se pudo guardar ninguna jornada');
     }
   } catch (error: any) {
     const mensaje = error?.data?.message || error?.response?.data?.message || error?.message || 'Error al guardar';

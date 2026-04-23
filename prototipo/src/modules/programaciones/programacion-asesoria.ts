@@ -4,14 +4,22 @@
  */
 import { programacionService } from './programaciones.service';
 import { mostrarToast } from '../../shared/toast';
+import { ApiError, getApiErrorDebugInfo } from '../../core/api/api.client';
 
 let asesoriasDisponibles: any[] = [];
 let personalData: { id: number; nombre: string; apellidos: string }[] = [];
-let vehiculosData: any[] = [];
+let tecnicosConductoresData: any[] = [];
 let exponentesDisponiblesActual: any[] = [];
 let exponentesSeleccionadosIds: number[] = [];
 let frecuenciaFilasActuales: Array<{ mes: string; presencial: string; virtual: string; frecuencia: string }> = [];
 let asesoriaSeleccionadaActual: any = null;
+const FRECUENCIA_VISITA_OPCIONES = [
+  { value: '', label: 'Seleccione...' },
+  { value: '1 vez al mes', label: '1 vez al mes' },
+  { value: 'semanal', label: 'semanal' },
+  { value: 'quincenal', label: 'quincenal' },
+  { value: 'A solicitud', label: 'A solicitud' },
+];
 
 function nombreExponente(e: any): string {
   return `${e?.nombre || ''} ${e?.apellidos || ''}`.trim() || 'Exponente';
@@ -116,6 +124,20 @@ function frecuenciaAMultiplicador(freq: string): number {
   return 1;
 }
 
+function normalizarFrecuenciaSeleccionada(freq: string): string {
+  const value = String(freq || '').trim().toLowerCase();
+  if (!value) return '';
+  if (value.includes('seman')) return 'semanal';
+  if (value.includes('quincen')) return 'quincenal';
+  if (value.includes('solicitud')) return 'A solicitud';
+  if (value.includes('1 vez') || value.includes('una vez') || value.includes('mensual') || value.includes('mes')) return '1 vez al mes';
+  return '';
+}
+
+function normalizarIdsEnteros(ids: number[]): number[] {
+  return Array.from(new Set(ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)));
+}
+
 function obtenerDiasSeleccionadosPorMes(tipo: 'presencial' | 'virtual', mes: number): number[] {
   return Array.from(document.querySelectorAll(`input.dia-${tipo}[data-mes="${mes}"]:checked`))
     .map((el) => Number((el as HTMLInputElement).value))
@@ -166,6 +188,66 @@ function renderSelectorDiasPorMes(totalMeses: number) {
   }).join('');
 }
 
+function normalizarFilasFrecuenciaEditable(totalMeses: number, fuente: Array<{ mes: string; presencial: string; virtual: string; frecuencia: string }>): Array<{ mes: string; presencial: string; virtual: string; frecuencia: string }> {
+  const filas = Array.from({ length: Math.max(totalMeses, 0) }, (_, index) => {
+    const base = fuente[index] || {} as any;
+    return {
+      mes: base.mes || `Mes ${index + 1}`,
+      presencial: base.presencial ?? '1',
+      virtual: base.virtual ?? '1',
+      frecuencia: normalizarFrecuenciaSeleccionada(base.frecuencia ?? ''),
+    };
+  });
+
+  return filas;
+}
+
+function renderTablaFrecuenciaEditable(totalMeses: number, fuente: Array<{ mes: string; presencial: string; virtual: string; frecuencia: string }> = []) {
+  const tbody = document.getElementById('tiempoFrecuenciaRows');
+  if (!tbody) return;
+
+  frecuenciaFilasActuales = normalizarFilasFrecuenciaEditable(totalMeses, fuente);
+
+  if (totalMeses <= 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="padding:12px;color:#64748b;font-size:13px;">Sin datos de frecuencia</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = frecuenciaFilasActuales.map((fila, index) => `
+    <tr style="font-size:13px;color:#334155;">
+      <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;white-space:nowrap;">Mes ${index + 1}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:center;">
+        <input type="number" min="0" step="1" class="freq-presencial" data-index="${index}" value="${fila.presencial}" style="width:72px;padding:6px 8px;border:1px solid #dbe3ea;border-radius:6px;text-align:center;">
+      </td>
+      <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:center;">
+        <input type="number" min="0" step="1" class="freq-virtual" data-index="${index}" value="${fila.virtual}" style="width:72px;padding:6px 8px;border:1px solid #dbe3ea;border-radius:6px;text-align:center;">
+      </td>
+      <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;">
+        <select class="freq-frecuencia" data-index="${index}" style="width:100%;padding:6px 8px;border:1px solid #dbe3ea;border-radius:6px;background:#fff;">
+          ${FRECUENCIA_VISITA_OPCIONES.map((opcion) => `<option value="${opcion.value}" ${opcion.value === fila.frecuencia ? 'selected' : ''}>${opcion.label}</option>`).join('')}
+        </select>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function sincronizarFrecuenciaDesdeFormulario() {
+  const tbody = document.getElementById('tiempoFrecuenciaRows');
+  if (!tbody) return;
+
+  frecuenciaFilasActuales = Array.from(tbody.querySelectorAll('tr')).map((tr, index) => {
+    const presencial = tr.querySelector('.freq-presencial') as HTMLInputElement | null;
+    const virtual = tr.querySelector('.freq-virtual') as HTMLInputElement | null;
+    const frecuencia = tr.querySelector('.freq-frecuencia') as HTMLSelectElement | null;
+    return {
+      mes: `Mes ${index + 1}`,
+      presencial: presencial?.value || '0',
+      virtual: virtual?.value || '0',
+      frecuencia: frecuencia?.value || '',
+    };
+  });
+}
+
 function obtenerDiasPorMesSeleccionados(): Record<string, { presencial: number[]; virtual: number[] }> {
   const resultado: Record<string, { presencial: number[]; virtual: number[] }> = {};
   const meses = new Set<number>();
@@ -212,33 +294,6 @@ function asignarFechasVisitas(candidatas: Date[], total: number): Date[] {
   return salida;
 }
 
-function actualizarTablaFrecuenciaPorVisita() {
-  const tiempoFrecuenciaRows = document.getElementById('tiempoFrecuenciaRows');
-  if (!tiempoFrecuenciaRows || frecuenciaFilasActuales.length === 0) return;
-
-  // Actualizar cada fila con los días seleccionados
-  frecuenciaFilasActuales.forEach((fila, index) => {
-    const mesN = extraerMesNumero(fila.mes, index);
-    const diasPresenciales = obtenerDiasSeleccionadosPorMes('presencial', mesN).length;
-    const diasVirtuales = obtenerDiasSeleccionadosPorMes('virtual', mesN).length;
-
-    fila.presencial = String(diasPresenciales);
-    fila.virtual = String(diasVirtuales);
-    
-    // Actualizar la fila en la tabla
-    const filas = tiempoFrecuenciaRows.querySelectorAll('tr');
-    if (index < filas.length) {
-      const celdas = filas[index].querySelectorAll('td');
-      if (celdas.length >= 4) {
-        celdas[1].textContent = String(diasPresenciales);
-        celdas[2].textContent = String(diasVirtuales);
-      }
-    }
-  });
-
-  renderAgendaAutomatica();
-}
-
 function renderAgendaAutomatica() {
   const fechaProgramada = document.getElementById('fechaProgramada') as HTMLInputElement | null;
   const fechaFinLabel = document.getElementById('fechaFinProgramacion');
@@ -247,8 +302,10 @@ function renderAgendaAutomatica() {
   if (!fechaProgramada || !fechaFinLabel || !resumenAgenda || !agendaPreviewBody) return;
 
   const fechaInicio = parseISODate(fechaProgramada.value);
-  const mesesRaw = document.getElementById('tiempoMesesLabel')?.textContent || '';
-  const meses = Number((mesesRaw.match(/\d+/) || [0])[0]);
+  const mesesInput = document.getElementById('tiempoMesesInput') as HTMLInputElement | null;
+  const meses = Number(mesesInput?.value || 0);
+
+  sincronizarFrecuenciaDesdeFormulario();
 
   if (!fechaInicio || meses <= 0 || frecuenciaFilasActuales.length === 0) {
     fechaFinLabel.textContent = '—';
@@ -326,9 +383,11 @@ export function renderModalProgramarAsesoria(): string {
   `;
 }
 
-export async function abrirModalProgramarAsesoria(_personal: any[], vehiculos: any[]) {
+export async function abrirModalProgramarAsesoria(_personal: any[], tecnicos: any[]) {
   personalData = _personal;
-  vehiculosData = vehiculos;
+  tecnicosConductoresData = Array.isArray(tecnicos)
+    ? tecnicos.filter((t: any) => !!t?.autorizado_conducir)
+    : [];
 
   const modal = document.getElementById('modalProgramarAsesoria');
   const body = document.getElementById('modalAsesoriaBody');
@@ -474,15 +533,16 @@ function renderFormAsesoria(body: HTMLElement) {
           </div>
 
           <div class="prog-form-group">
-            <label class="prog-form-label">Vehículo (Transporte)</label>
-            <select class="prog-form-control" id="vehiculo">
-              <option value="">-- Seleccionar vehículo --</option>
-              ${vehiculosData.map(v => `
-                <option value="${v.id}">
-                  ${v.placa} — ${v.modelo}
-                </option>
-              `).join('')}
+            <label class="prog-form-label">Técnico conductor</label>
+            <select class="prog-form-control" id="tecnicoConductor">
+              <option value="">-- Seleccionar técnico conductor --</option>
+              ${tecnicosConductoresData.length > 0
+                ? tecnicosConductoresData.map((t: any) => `
+                  <option value="${t.id}">${t.nombre} ${t.apellidos}</option>
+                `).join('')
+                : '<option value="">No hay técnicos con permiso de conducir</option>'}
             </select>
+            <small style="color:#666;font-size:11px;margin-top:6px;display:block;">Solo se muestran técnicos autorizados para conducir.</small>
           </div>
         </div>
 
@@ -538,9 +598,13 @@ function renderFormAsesoria(body: HTMLElement) {
           
           <div class="prog-form-group" style="margin-bottom:10px;">
             <div style="display:grid;grid-template-columns:minmax(220px, 320px) 1fr;gap:14px;padding:10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;align-items:stretch;">
-              <div style="border:1px solid #dbe3ea;border-radius:8px;background:#fff;padding:16px;display:flex;flex-direction:column;justify-content:center;">
-                <label class="prog-form-label" style="font-size:16px;color:#334155;margin-bottom:8px;font-weight:700;">Tiempo de implementación:</label>
-                <div id="tiempoMesesLabel" style="font-size:40px;line-height:1.1;color:#1f2937;">—</div>
+              <div style="border:1px solid #dbe3ea;border-radius:8px;background:#fff;padding:16px;display:flex;flex-direction:column;justify-content:center;gap:10px;">
+                <label class="prog-form-label" style="font-size:16px;color:#334155;margin-bottom:0;font-weight:700;">Tiempo de implementación:</label>
+                <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+                  <input type="number" min="1" step="1" class="prog-form-control" id="tiempoMesesInput" style="max-width:120px;font-size:28px;line-height:1.1;padding:10px 12px;" value="1">
+                  <span style="font-size:16px;color:#475569;font-weight:600;">meses</span>
+                </div>
+                <small style="color:#64748b;font-size:11px;">Al cambiar este valor se actualiza la tabla de frecuencia.</small>
               </div>
 
               <div>
@@ -617,8 +681,10 @@ function bindEventosAsesoria() {
   const form = document.getElementById('formAsesoriaProg') as HTMLFormElement;
   const btnCancel = document.getElementById('btnCancelarAsesoria');
   const modal = document.getElementById('modalProgramarAsesoria');
+  const mesesInput = document.getElementById('tiempoMesesInput') as HTMLInputElement | null;
 
   renderSelectorDiasPorMes(0);
+  renderTablaFrecuenciaEditable(0);
 
   // Cargar detalles de asesoría seleccionada
   if (selectAsesoria) {
@@ -632,18 +698,10 @@ function bindEventosAsesoria() {
         if (obsPlanta) obsPlanta.textContent = 'Sin selección';
         if (obsArea) obsArea.textContent = 'Sin selección';
         
-        const tiempoMesesLabel = document.getElementById('tiempoMesesLabel');
-        const tiempoFrecuenciaRows = document.getElementById('tiempoFrecuenciaRows');
-        if (tiempoMesesLabel) tiempoMesesLabel.textContent = '—';
+        if (mesesInput) mesesInput.value = '1';
         frecuenciaFilasActuales = [];
         renderSelectorDiasPorMes(0);
-        if (tiempoFrecuenciaRows) {
-          tiempoFrecuenciaRows.innerHTML = `
-            <tr>
-              <td colspan="4" style="padding:12px;color:#64748b;font-size:13px;">Sin datos de frecuencia</td>
-            </tr>
-          `;
-        }
+        renderTablaFrecuenciaEditable(0);
         renderAgendaAutomatica();
         
         exponentesSeleccionadosIds = [];
@@ -710,45 +768,28 @@ function bindEventosAsesoria() {
       renderExponentesSeleccionados();
 
       // Cargar tiempo de implementación y frecuencia de visitas
-      const tiempoMesesLabel = document.getElementById('tiempoMesesLabel');
-      const tiempoFrecuenciaRows = document.getElementById('tiempoFrecuenciaRows');
-      
-      if (tiempoMesesLabel) {
+      const tiempoMesesInput = document.getElementById('tiempoMesesInput') as HTMLInputElement | null;
+      if (tiempoMesesInput) {
         const meses = asesoria.meses_implementacion;
-        tiempoMesesLabel.textContent = meses ? `${meses} ${meses === 1 ? 'mes' : 'meses'}` : 'Sin especificar';
+        tiempoMesesInput.value = String(meses || 1);
       }
       
-      if (tiempoFrecuenciaRows) {
-        const filas = normalizarFilasFrecuencia(asesoria.frecuencia_visita);
-        frecuenciaFilasActuales = filas;
-        if (filas.length === 0) {
-          tiempoFrecuenciaRows.innerHTML = `
-            <tr>
-              <td colspan="4" style="padding:12px;color:#64748b;font-size:13px;">Sin datos de frecuencia</td>
-            </tr>
-          `;
-        } else {
-          tiempoFrecuenciaRows.innerHTML = filas
-            .map((f) => `
-              <tr style="font-size:13px;color:#334155;">
-                <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;">${f.mes}</td>
-                <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:center;">${f.presencial}</td>
-                <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:center;">${f.virtual}</td>
-                <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;">${f.frecuencia}</td>
-              </tr>
-            `)
-            .join('');
-        }
-      }
-
-      const mesesRaw = document.getElementById('tiempoMesesLabel')?.textContent || '';
-      const meses = Number((mesesRaw.match(/\d+/) || [0])[0]);
+      const filas = normalizarFilasFrecuencia(asesoria.frecuencia_visita);
+      const meses = Number(tiempoMesesInput?.value || asesoria.meses_implementacion || 1);
+      renderTablaFrecuenciaEditable(meses, filas);
       renderSelectorDiasPorMes(meses);
 
-      actualizarTablaFrecuenciaPorVisita();
       renderAgendaAutomatica();
     });
   }
+
+  mesesInput?.addEventListener('input', () => {
+    const meses = Math.max(1, Number(mesesInput.value || 1));
+    mesesInput.value = String(meses);
+    renderTablaFrecuenciaEditable(meses, frecuenciaFilasActuales);
+    renderSelectorDiasPorMes(meses);
+    renderAgendaAutomatica();
+  });
 
   const fechaProgramada = document.getElementById('fechaProgramada') as HTMLInputElement | null;
   if (fechaProgramada) {
@@ -757,8 +798,8 @@ function bindEventosAsesoria() {
 
   form?.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
-    if (target && (target.classList.contains('dia-presencial') || target.classList.contains('dia-virtual'))) {
-      actualizarTablaFrecuenciaPorVisita();
+    if (target && (target.classList.contains('dia-presencial') || target.classList.contains('dia-virtual') || target.classList.contains('freq-presencial') || target.classList.contains('freq-virtual') || target.classList.contains('freq-frecuencia'))) {
+      sincronizarFrecuenciaDesdeFormulario();
       renderAgendaAutomatica();
     }
   });
@@ -786,7 +827,7 @@ async function guardarAsesoriaProgramada(form: HTMLFormElement) {
   const horaInicio = form.querySelector('#horaInicio') as HTMLInputElement;
   const horaFin = form.querySelector('#horaFin') as HTMLInputElement;
   const supervisor = form.querySelector('#supervisor') as HTMLSelectElement;
-  const vehiculo = form.querySelector('#vehiculo') as HTMLSelectElement;
+  const tecnicoConductor = form.querySelector('#tecnicoConductor') as HTMLSelectElement;
   const observaciones = form.querySelector('#observaciones') as HTMLTextAreaElement;
 
   // Validar campos obligatorios
@@ -808,16 +849,19 @@ async function guardarAsesoriaProgramada(form: HTMLFormElement) {
     hora_inicio: horaInicio.value,
     hora_fin: horaFin?.value || undefined,
     id_supervisor: supervisor?.value ? parseInt(supervisor.value) : undefined,
-    id_vehiculo: vehiculo?.value ? parseInt(vehiculo.value) : undefined,
+    id_tecnico_conductor: tecnicoConductor?.value ? parseInt(tecnicoConductor.value) : undefined,
     observaciones: observaciones.value || '',
-    exponentes: exponentesSeleccionadosIds,
+    exponentes: normalizarIdsEnteros(exponentesSeleccionadosIds),
     dias_por_mes: obtenerDiasPorMesSeleccionados(),
+    meses_implementacion: Number((form.querySelector('#tiempoMesesInput') as HTMLInputElement | null)?.value || asesoria.meses_implementacion || 0),
+    frecuencia_visita: frecuenciaFilasActuales,
     id_cliente_planta: asesoriaSeleccionadaActual?.id_cliente_planta ? Number(asesoriaSeleccionadaActual.id_cliente_planta) : undefined,
     id_cliente_planta_area: asesoriaSeleccionadaActual?.id_cliente_planta_area ? Number(asesoriaSeleccionadaActual.id_cliente_planta_area) : undefined,
   };
 
+  const btnSubmit = form.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+
   try {
-    const btnSubmit = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     if (btnSubmit) {
       btnSubmit.disabled = true;
       btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
@@ -839,7 +883,36 @@ async function guardarAsesoriaProgramada(form: HTMLFormElement) {
       mostrarToast('error', 'Error', result.message || 'No se pudo programar la asesoría');
     }
   } catch (error) {
-    console.error('Error:', error);
-    mostrarToast('error', 'Error', 'No se pudo guardar la programación');
+    const debug = error instanceof ApiError ? getApiErrorDebugInfo(error) : null;
+    console.error('Error:', debug || error);
+
+    const validationMessage = (() => {
+      const body = debug?.parsedBody;
+      if (!body) return '';
+
+      if (Array.isArray(body?.errors)) {
+        return body.errors[0] || '';
+      }
+
+      if (body?.errors && typeof body.errors === 'object') {
+        const firstKey = Object.keys(body.errors)[0];
+        const firstValue = firstKey ? body.errors[firstKey] : null;
+        if (Array.isArray(firstValue)) return String(firstValue[0] || '');
+        if (typeof firstValue === 'string') return firstValue;
+      }
+
+      return body?.message || debug?.message || '';
+    })();
+
+    mostrarToast(
+      'error',
+      'Error',
+      validationMessage || 'No se pudo guardar la programación'
+    );
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="fas fa-save"></i> Guardar Programación';
+    }
   }
 }

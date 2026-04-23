@@ -39,6 +39,13 @@ export function renderLogin() {
         </div> 
       </section>
 
+      <section class="mobile-attendance-notice" role="status" aria-live="polite">
+        <div class="mobile-attendance-card">
+          <h2>Acceso no disponible en celular</h2>
+          <p>Marque su asistencia por la laptop</p>
+        </div>
+      </section>
+
       <section class="form-panel">
         <div class="form-card">
           <div class="form-logo-wrap">
