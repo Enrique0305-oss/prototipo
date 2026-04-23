@@ -2,7 +2,7 @@ import './style.css'
 import './additional-styles.css'
 import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
-const LOGO_URL = "http://backend.qsci-system.com/images/menu.png";
+const LOGO_URL = "http://127.0.0.1:8000/images/menu.png";
 
 // Inicializar guard de autenticación
 initAuthGuard();
@@ -50,6 +50,8 @@ import {
   mapServiciosRealizadosCards,
   renderServiciosRealizadosCards,
   renderServicioImagenesModal,
+  renderFichaOperacionalModal,
+  type FichaOperacionalViewModel,
   type ServicioRealizadoCardViewModel,
 } from './modules/operaciones/operaciones.view'
 import { programacionServicioService } from './modules/programaciones/programacion-servicio/programacion-servicio.service'
@@ -71,6 +73,25 @@ let activeOperacionesTab = 'servicios'; // Estado para el tab de operaciones
 let misProyecciones: any[] = []; // Lista de proyecciones para facturación
 let sidebarForceCollapsed = false;
 let operacionesRealizadosCardsCache = new Map<string, ServicioRealizadoCardViewModel>();
+
+type FichaOperacionalApiData = {
+  estado?: string | null;
+  cliente?: string | null;
+  direccion?: string | null;
+  fecha?: string | null;
+  hora_llegada?: string | null;
+  hora_inicio?: string | null;
+  hora_final?: string | null;
+  giro?: string | null;
+  diagnostico?: string | null;
+  condicion_sanitaria?: string | null;
+  areas_tratadas?: unknown;
+  actividades_realizadas?: unknown;
+  equipos?: unknown;
+  acciones_correctivas?: string | null;
+  recomendaciones?: string | null;
+  observaciones?: string | null;
+};
 
 declare global {
   interface Window {
@@ -497,7 +518,7 @@ if (activeMenu === 'Facturación') {
     if (menuName === 'Facturación') {
       try {
         const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
-        const respuesta = await fetch('http://backend.qsci-system.com/api/v1/proyecciones', {
+        const respuesta = await fetch('http://127.0.0.1:8000/api/v1/proyecciones', {
           headers: {
             'Accept': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -907,6 +928,127 @@ function initOperacionesImagenesHandlers(container: HTMLElement) {
       if (!card) return;
       abrirModalImagenesOperaciones(card);
     });
+  });
+
+  container.querySelectorAll('.js-open-ficha-operacional').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      const target = event.currentTarget as HTMLButtonElement;
+      const key = target.dataset.cardKey || '';
+      if (!key) return;
+
+      const card = operacionesRealizadosCardsCache.get(key);
+      if (!card) return;
+
+      const originalText = target.textContent;
+      target.disabled = true;
+      target.textContent = 'Cargando...';
+
+      try {
+        const ficha = await cargarFichaOperacional(card);
+        abrirModalFichaOperacional(card, ficha);
+      } catch (error) {
+        console.error('No se pudo abrir la ficha operacional:', error);
+        alert('No se pudo cargar la ficha operacional para este servicio.');
+      } finally {
+        target.disabled = false;
+        target.textContent = originalText;
+      }
+    });
+  });
+}
+
+function normalizeList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item ?? '').trim())
+      .filter((item) => item.length > 0);
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => String(item ?? '').trim())
+          .filter((item) => item.length > 0);
+      }
+    } catch {
+      // Si no es JSON válido, se toma como texto simple separado por comas.
+    }
+
+    return text
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+  }
+
+  return [];
+}
+
+function normalizeFicha(data: FichaOperacionalApiData): FichaOperacionalViewModel {
+  return {
+    estado: String(data.estado ?? '').trim(),
+    cliente: String(data.cliente ?? '').trim(),
+    direccion: String(data.direccion ?? '').trim(),
+    fecha: String(data.fecha ?? '').trim(),
+    horaLlegada: String(data.hora_llegada ?? '').trim(),
+    horaInicio: String(data.hora_inicio ?? '').trim(),
+    horaFinal: String(data.hora_final ?? '').trim(),
+    giro: String(data.giro ?? '').trim(),
+    diagnostico: String(data.diagnostico ?? '').trim(),
+    condicionSanitaria: String(data.condicion_sanitaria ?? '').trim(),
+    areasTratadas: normalizeList(data.areas_tratadas),
+    actividadesRealizadas: normalizeList(data.actividades_realizadas),
+    equipos: normalizeList(data.equipos),
+    accionesCorrectivas: String(data.acciones_correctivas ?? '').trim(),
+    recomendaciones: String(data.recomendaciones ?? '').trim(),
+    observaciones: String(data.observaciones ?? '').trim(),
+  };
+}
+
+async function cargarFichaOperacional(card: ServicioRealizadoCardViewModel): Promise<FichaOperacionalViewModel> {
+  const response = card.groupId && card.groupId > 0
+    ? await programacionServicioService.getFichaByGrupoId(card.groupId)
+    : await programacionServicioService.getFichaByServiceId(card.serviceId);
+
+  const data = (response?.data ?? null) as FichaOperacionalApiData | null;
+  if (!data) {
+    throw new Error('No se encontró ficha operacional');
+  }
+
+  return normalizeFicha(data);
+}
+
+function abrirModalFichaOperacional(card: ServicioRealizadoCardViewModel, ficha: FichaOperacionalViewModel) {
+  const existing = document.getElementById('operaciones-ficha-modal-host');
+  if (existing) {
+    existing.remove();
+  }
+
+  const host = document.createElement('div');
+  host.id = 'operaciones-ficha-modal-host';
+  host.innerHTML = renderFichaOperacionalModal(card, ficha);
+  document.body.appendChild(host);
+
+  const close = () => {
+    host.remove();
+  };
+
+  host.querySelectorAll('.js-close-ficha-modal').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      const clicked = event.target as HTMLElement;
+      if (clicked.classList.contains('js-close-ficha-modal')) {
+        close();
+      }
+    });
+  });
+
+  document.addEventListener('keydown', function onEsc(event) {
+    if (event.key !== 'Escape') return;
+    close();
+    document.removeEventListener('keydown', onEsc);
   });
 }
 

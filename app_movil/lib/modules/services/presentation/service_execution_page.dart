@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../data/services_repository.dart';
 import '../domain/service_task.dart';
+import 'service_operational_sheet_page.dart';
+import 'service_formato_operacional_page.dart';
 
 class ServiceExecutionPage extends StatefulWidget {
   const ServiceExecutionPage({
@@ -272,7 +274,7 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
     );
   }
 
-  Future<void> _finalizeService() async {
+  Future<void> _completeServiceOnServer() async {
     setState(() => _saving = true);
     try {
       await widget.repository.completeServices(
@@ -306,6 +308,39 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _openOperationalSheetAndFinalize() async {
+    final confirmed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ServiceOperationalSheetPage(
+          representativeService: _representativeService,
+          groupedServices: _effectiveServices,
+          servicesRepository: widget.repository,
+          initialObservations: _observationController.text.trim(),
+        ),
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final formatoConfirmado = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ServiceFormatoOperacionalPage(
+          representativeService: _representativeService,
+          groupedServices: _effectiveServices,
+          servicesRepository: widget.repository,
+        ),
+      ),
+    );
+
+    if (formatoConfirmado != true) {
+      return;
+    }
+
+    await _completeServiceOnServer();
   }
 
   @override
@@ -445,7 +480,7 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
           _buildElapsedCard(),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: (_saving || _starting) ? null : _finalizeService,
+            onPressed: (_saving || _starting) ? null : _openOperationalSheetAndFinalize,
             icon: const Icon(Icons.check_circle_outline),
             label: _saving
                 ? const SizedBox(

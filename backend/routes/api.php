@@ -48,6 +48,7 @@ use App\Http\Controllers\API\SalidaProgramacionFabricacionController;
 use App\Http\Controllers\API\OrdenCompraController;
 use App\Http\Controllers\API\PersonalController;
 use App\Http\Controllers\API\InventarioAjusteController;
+use App\Http\Controllers\API\FichaOperacionalController;
 use App\Http\Controllers\API\LoteController;
 use App\Http\Middleware\CacheJsonGetResponses;
 
@@ -377,6 +378,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::patch('/programacion-servicio/{id}/iniciar', [ProgramacionServicioController::class, 'iniciar']);
     Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
     Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
+
+    // Fichas Operacionales (Operational Sheets)
+    Route::get('/fichas-operacionales', [FichaOperacionalController::class, 'index']);
+    Route::get('/programacion-servicio/{id}/ficha', [FichaOperacionalController::class, 'show']);
+    Route::post('/programacion-servicio/{id}/ficha', [FichaOperacionalController::class, 'store']);
+    Route::put('/fichas-operacionales/{id}', [FichaOperacionalController::class, 'update']);
+    Route::post('/fichas-operacionales/{id}/finalizar', [FichaOperacionalController::class, 'finalize']);
+    Route::get('/programacion-servicio/grupos/{idGrupo}/ficha', [FichaOperacionalController::class, 'showByGrupo']);
 
     // Programación de Visitas (independiente)
     Route::get('/programacion-visita', [ProgramacionVisitaController::class, 'index']);

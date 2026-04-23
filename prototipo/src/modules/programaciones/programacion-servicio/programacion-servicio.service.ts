@@ -47,6 +47,14 @@ export const programacionServicioService = {
 		return apiClient.get<ApiResponse<Programacion>>(`/programacion-servicio/${id}`);
 	},
 
+	getFichaByServiceId: async (id: number) => {
+		return apiClient.get<ApiResponse<any>>(`/programacion-servicio/${id}/ficha`);
+	},
+
+	getFichaByGrupoId: async (idGrupo: number) => {
+		return apiClient.get<ApiResponse<any>>(`/programacion-servicio/grupos/${idGrupo}/ficha`);
+	},
+
 	create: async (data: Record<string, any>) => {
 		return apiClient.post<ApiResponse<Programacion>>('/programacion-servicio', data);
 	},

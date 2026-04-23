@@ -16,6 +16,8 @@ type ServiceEvidenceEntry = {
 
 type ServicioRealizadoEnProgreso = {
   key: string;
+  serviceId: number;
+  groupId: number | null;
   servicios: Set<string>;
   cliente: string;
   fechaRaw: string;
@@ -25,12 +27,33 @@ type ServicioRealizadoEnProgreso = {
 
 export type ServicioRealizadoCardViewModel = {
   key: string;
+  serviceId: number;
+  groupId: number | null;
   titulo: string;
   fechaLabel: string;
   tecnicosLabel: string;
   previewImages: string[];
   extraCount: number;
   secciones: Array<{ servicio: string; imagenes: string[] }>;
+}
+
+export type FichaOperacionalViewModel = {
+  estado: string;
+  cliente: string;
+  direccion: string;
+  fecha: string;
+  horaLlegada: string;
+  horaInicio: string;
+  horaFinal: string;
+  giro: string;
+  diagnostico: string;
+  condicionSanitaria: string;
+  areasTratadas: string[];
+  actividadesRealizadas: string[];
+  equipos: string[];
+  accionesCorrectivas: string;
+  recomendaciones: string;
+  observaciones: string;
 }
 
 function escapeHtml(value: string): string {
@@ -154,6 +177,8 @@ export function mapServiciosRealizadosCards(items: Programacion[]): ServicioReal
     if (!agrupados.has(key)) {
       agrupados.set(key, {
         key,
+        serviceId: item.id,
+        groupId,
         servicios: new Set<string>(),
         cliente,
         fechaRaw,
@@ -214,6 +239,8 @@ export function mapServiciosRealizadosCards(items: Programacion[]): ServicioReal
 
     return {
       key: card.key,
+      serviceId: card.serviceId,
+      groupId: card.groupId,
       titulo: `${Array.from(card.servicios).join(' + ') || 'Servicio'} - ${card.cliente || 'Cliente sin nombre'}`,
       fechaLabel: formatFecha(card.fechaRaw),
       tecnicosLabel: Array.from(card.tecnicos).join(', ') || 'Sin técnico asignado',
@@ -252,8 +279,20 @@ export function renderServiciosRealizadosCards(cards: ServicioRealizadoCardViewM
         <div class="report-details">
           <p><strong>Técnico(s):</strong> ${escapeHtml(card.tecnicosLabel)}</p>
         </div>
-        ${photosBlock}
-        <button class="btn-secondary fullwidth js-open-imagenes-completas" data-card-key="${escapeHtml(card.key)}" ${card.secciones.length === 0 ? 'disabled' : ''}>Ver imágenes completas</button>
+        <div class="report-content-split">
+          <div class="report-evidence-column">
+            ${photosBlock}
+            <button class="btn-secondary fullwidth js-open-imagenes-completas" data-card-key="${escapeHtml(card.key)}" ${card.secciones.length === 0 ? 'disabled' : ''}>Ver imágenes completas</button>
+          </div>
+          <div class="report-docs-column">
+            <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver ficha operacional">
+              <span class="report-doc-icon" aria-hidden="true">📄</span>
+            </button>
+            <button class="report-doc report-doc-placeholder" type="button" disabled title="Disponible próximamente">
+              <span class="report-doc-icon" aria-hidden="true">📄</span>
+            </button>
+          </div>
+        </div>
       </div>
     `;
   }).join('');
@@ -282,6 +321,83 @@ export function renderServicioImagenesModal(card: ServicioRealizadoCardViewModel
             </div>
           </div>
         `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function fallbackText(value: string | null | undefined, emptyLabel = 'No registrado'): string {
+  const normalized = String(value ?? '').trim();
+  return normalized.length > 0 ? normalized : emptyLabel;
+}
+
+function renderValueList(items: string[]): string {
+  if (items.length === 0) {
+    return '<span style="color:#64748b;">Sin registros</span>';
+  }
+
+  return `<ul style="margin:0;padding-left:18px;display:grid;gap:4px;">${items
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join('')}</ul>`;
+}
+
+export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel, ficha: FichaOperacionalViewModel): string {
+  return `
+    <div class="modal-overlay js-close-ficha-modal" style="position:fixed;inset:0;background:rgba(15,23,42,0.65);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px;">
+      <div class="modal-content" style="background:#fff;border-radius:14px;max-width:980px;width:min(980px,100%);max-height:90vh;overflow:auto;padding:20px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">
+          <div>
+            <h3 style="margin:0 0 6px 0;font-size:20px;color:#0f172a;">Ficha operacional</h3>
+            <p style="margin:0;color:#475569;">${escapeHtml(card.titulo)}</p>
+          </div>
+          <button class="btn-secondary js-close-ficha-modal" type="button">Cerrar</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:16px;">
+          <div><strong>Estado:</strong> ${escapeHtml(fallbackText(ficha.estado))}</div>
+          <div><strong>Fecha:</strong> ${escapeHtml(fallbackText(ficha.fecha))}</div>
+          <div><strong>Cliente:</strong> ${escapeHtml(fallbackText(ficha.cliente))}</div>
+          <div><strong>Dirección:</strong> ${escapeHtml(fallbackText(ficha.direccion))}</div>
+          <div><strong>Hora llegada:</strong> ${escapeHtml(fallbackText(ficha.horaLlegada))}</div>
+          <div><strong>Hora inicio:</strong> ${escapeHtml(fallbackText(ficha.horaInicio))}</div>
+          <div><strong>Hora final:</strong> ${escapeHtml(fallbackText(ficha.horaFinal))}</div>
+          <div><strong>Giro:</strong> ${escapeHtml(fallbackText(ficha.giro))}</div>
+        </div>
+
+        <div style="margin-top:14px;display:grid;gap:12px;">
+          <div>
+            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Diagnóstico</h4>
+            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.diagnostico, 'Sin diagnóstico registrado'))}</p>
+          </div>
+          <div>
+            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Condición sanitaria</h4>
+            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.condicionSanitaria, 'Sin condición registrada'))}</p>
+          </div>
+          <div>
+            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Áreas tratadas</h4>
+            ${renderValueList(ficha.areasTratadas)}
+          </div>
+          <div>
+            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Actividades realizadas</h4>
+            ${renderValueList(ficha.actividadesRealizadas)}
+          </div>
+          <div>
+            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Equipos</h4>
+            ${renderValueList(ficha.equipos)}
+          </div>
+          <div>
+            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Acciones correctivas</h4>
+            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.accionesCorrectivas, 'Sin acciones registradas'))}</p>
+          </div>
+          <div>
+            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Recomendaciones</h4>
+            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.recomendaciones, 'Sin recomendaciones registradas'))}</p>
+          </div>
+          <div>
+            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Observaciones</h4>
+            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.observaciones, 'Sin observaciones registradas'))}</p>
+          </div>
+        </div>
       </div>
     </div>
   `;

@@ -6,7 +6,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/utils/distance_utils.dart';
+import '../domain/ficha_operacional.dart';
 import '../domain/service_task.dart';
+import 'service_operational_sheet_page.dart';
 import 'service_execution_page.dart';
 import '../data/services_repository.dart';
 
@@ -32,6 +34,9 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   Position? _position;
   String? _locationError;
   bool _loading = true;
+  bool _loadingFicha = true;
+  FichaOperacional? _fichaOperacional;
+  String? _fichaError;
 
   List<ServiceTask> get _effectiveServices {
     final grouped = widget.groupedServices;
@@ -46,6 +51,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   ServiceTask get _representativeService => _effectiveServices.first;
 
   bool get _isCompleted => _representativeService.isCompleted;
+
+  bool get _hasFicha => _fichaOperacional != null;
+
+  bool get _isFichaBorrador => _fichaOperacional?.isBorrador ?? false;
 
   String get _mergedTitle {
     final uniqueTitles = _effectiveServices
@@ -405,6 +414,305 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   void initState() {
     super.initState();
     _loadPosition();
+    _loadFichaOperacional();
+  }
+
+  Future<void> _loadFichaOperacional() async {
+    setState(() {
+      _loadingFicha = true;
+      _fichaError = null;
+    });
+
+    try {
+      final ficha = _isGrouped && _representativeService.groupId != null
+          ? await widget.repository.getFichaByGrupoId(_representativeService.groupId!)
+          : await widget.repository.getFichaByServiceId(_representativeService.id);
+
+      if (!mounted) return;
+      setState(() {
+        _fichaOperacional = ficha;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _fichaError = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingFicha = false;
+        });
+      }
+    }
+  }
+
+  String _formatFichaDate(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return 'No registrada';
+    }
+
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) {
+      return value.replaceFirst('T', ' ');
+    }
+
+    final local = parsed.toLocal();
+    final dd = local.day.toString().padLeft(2, '0');
+    final mm = local.month.toString().padLeft(2, '0');
+    final yyyy = local.year.toString();
+    return '$dd/$mm/$yyyy';
+  }
+
+  List<String> _splitValues(String? raw) {
+    final value = (raw ?? '').trim();
+    if (value.isEmpty) {
+      return const <String>[];
+    }
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<void> _openFichaEditor() async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ServiceOperationalSheetPage(
+          representativeService: _representativeService,
+          groupedServices: _effectiveServices,
+          servicesRepository: widget.repository,
+          initialObservations: _representativeService.observations,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      await _loadFichaOperacional();
+    }
+  }
+
+  Future<void> _openFichaViewer() async {
+    final ficha = _fichaOperacional;
+    if (ficha == null) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.82,
+          minChildSize: 0.55,
+          maxChildSize: 0.95,
+          builder: (context, controller) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Ficha operacional',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
+                  _detailRow('Estado', ficha.estado),
+                  _detailRow('Cliente', ficha.cliente ?? _representativeService.client),
+                  _detailRow('Dirección', ficha.direccion ?? (_representativeService.address ?? 'No registrada')),
+                  _detailRow('Fecha', _formatFichaDate(ficha.fecha)),
+                  _detailRow('Hora llegada', ficha.horaLlegada ?? 'No registrada'),
+                  _detailRow('Hora inicio', ficha.horaInicio ?? 'No registrada'),
+                  _detailRow('Hora final', ficha.horaFinal ?? 'No registrada'),
+                  _detailRow('Giro', ficha.giro ?? 'No registrado'),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Diagnóstico',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(ficha.diagnostico?.trim().isNotEmpty == true ? ficha.diagnostico! : 'Sin diagnóstico registrado.'),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Áreas tratadas',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    ficha.areasTratadas == null || ficha.areasTratadas!.isEmpty
+                        ? 'Sin áreas registradas.'
+                        : ficha.areasTratadas!.join(', '),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Insumos utilizados',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    ficha.insumosUtilizados == null || ficha.insumosUtilizados!.isEmpty
+                        ? 'Sin insumos registrados.'
+                        : '${ficha.insumosUtilizados!.length} insumo(s) cargado(s).',
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Observaciones',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(ficha.observaciones?.trim().isNotEmpty == true ? ficha.observaciones! : 'Sin observaciones.'),
+                  const SizedBox(height: 16),
+                  if (_isFichaBorrador)
+                    FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _openFichaEditor();
+                      },
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar borrador'),
+                    )
+                  else
+                    const Text(
+                      'La ficha ya fue completada. Solo se muestra en modo lectura.',
+                      style: TextStyle(color: Color(0xFF475569)),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildFichaCard() {
+    final ficha = _fichaOperacional;
+
+    if (_loadingFicha) {
+      return Container(
+        margin: const EdgeInsets.only(top: 14),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 12),
+            Expanded(child: Text('Buscando ficha operacional...')),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.description_outlined, color: _navy),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Ficha operacional',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (ficha != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _isFichaBorrador ? const Color(0xFFE0F2FE) : const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    ficha.estado,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _isFichaBorrador ? const Color(0xFF0369A1) : const Color(0xFF166534),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_fichaError != null)
+            Text(
+              'No se pudo cargar la ficha: $_fichaError',
+              style: const TextStyle(color: Colors.red),
+            )
+          else if (ficha == null)
+            const Text('Todavía no hay una ficha guardada para este servicio.')
+          else ...[
+            _detailRow('Cliente', ficha.cliente ?? _representativeService.client),
+            _detailRow('Fecha', _formatFichaDate(ficha.fecha)),
+            _detailRow('Áreas', ficha.areasTratadas != null && ficha.areasTratadas!.isNotEmpty ? ficha.areasTratadas!.join(', ') : 'Sin áreas registradas'),
+            _detailRow('Insumos', ficha.insumosUtilizados != null && ficha.insumosUtilizados!.isNotEmpty ? '${ficha.insumosUtilizados!.length} registro(s)' : 'Sin insumos registrados'),
+            const SizedBox(height: 6),
+            Text(
+              ficha.observaciones?.trim().isNotEmpty == true
+                  ? ficha.observaciones!
+                  : 'Sin observaciones registradas.',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF475569)),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: ficha == null ? null : _openFichaViewer,
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('Ver ficha'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: ficha != null && _isFichaBorrador ? _openFichaEditor : (ficha == null ? _startService : null),
+                  icon: Icon(ficha != null && _isFichaBorrador ? Icons.edit_outlined : Icons.play_arrow),
+                  label: Text(
+                    ficha == null
+                        ? 'Crear ficha'
+                        : (_isFichaBorrador ? 'Editar borrador' : 'Solo lectura'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadPosition() async {
@@ -554,6 +862,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               ],
             ),
           ),
+          _buildFichaCard(),
           const SizedBox(height: 12),
           Text('Validacion por ubicacion', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),

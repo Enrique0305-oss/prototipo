@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../auth/data/auth_repository.dart';
+import '../domain/formato_operacional_dispositivo.dart';
 import '../domain/service_task.dart';
+import '../domain/ficha_operacional.dart';
 
 class ServicesRepository {
   ServicesRepository({
@@ -266,5 +268,212 @@ class ServicesRepository {
         evidencePhotos: groupedEvidence[id] ?? const <ServiceEvidenceUpload>[],
       );
     }
+  }
+
+  Future<List<FormatoOperacionalDispositivo>> getFormatoOperacionalDispositivos(int programacionId) async {
+    if (AppConfig.useMockData) {
+      return const <FormatoOperacionalDispositivo>[
+        FormatoOperacionalDispositivo(
+          idProducto: 1,
+          descripcion: 'Jaula de captura',
+          cantidadAsignada: 1,
+          unidadMedida: 'und',
+          numeroLote: 'MOCK-001',
+        ),
+        FormatoOperacionalDispositivo(
+          idProducto: 2,
+          descripcion: 'Trampa adhesiva',
+          cantidadAsignada: 4,
+          unidadMedida: 'und',
+          numeroLote: 'MOCK-002',
+        ),
+      ];
+    }
+
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    final response = await _apiClient.get(
+      '/v1/almacen/salidas-programacion/$programacionId',
+      token: token,
+    );
+
+    final data = response['data'];
+    if (data is! Map<String, dynamic>) {
+      return <FormatoOperacionalDispositivo>[];
+    }
+
+    final insumos = data['insumos'];
+    if (insumos is! List) {
+      return <FormatoOperacionalDispositivo>[];
+    }
+
+    return insumos
+        .whereType<Map<String, dynamic>>()
+        .map(FormatoOperacionalDispositivo.fromJson)
+        .toList(growable: false);
+  }
+
+  // Fichas Operacionales (Operational Sheets) Methods
+
+  /// Obtener ficha operacional por ID de programación de servicio
+  Future<FichaOperacional?> getFichaByServiceId(int programacionId) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    try {
+      final response = await _apiClient.get(
+        '/v1/programacion-servicio/$programacionId/ficha',
+        token: token,
+      );
+
+      final data = response['data'] as Map<String, dynamic>?;
+      if (data == null) {
+        return null;
+      }
+
+      return FichaOperacional.fromJson(data);
+    } catch (e) {
+      // Si retorna 404, significa que no hay ficha aún
+      if (e is ApiException && e.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// Guardar o actualizar ficha operacional como borrador
+  Future<FichaOperacional> saveFichaDraft({
+    required int programacionId,
+    required Map<String, dynamic> formData,
+  }) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    final response = await _apiClient.post(
+      '/v1/programacion-servicio/$programacionId/ficha',
+      token: token,
+      body: formData,
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw ApiException('Error al guardar ficha', 500, response);
+    }
+
+    return FichaOperacional.fromJson(data);
+  }
+
+  /// Actualizar ficha operacional existente
+  Future<FichaOperacional> updateFicha({
+    required int fichaId,
+    required Map<String, dynamic> formData,
+  }) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    final response = await _apiClient.patch(
+      '/v1/fichas-operacionales/$fichaId',
+      token: token,
+      body: formData,
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw ApiException('Error al actualizar ficha', 500, response);
+    }
+
+    return FichaOperacional.fromJson(data);
+  }
+
+  /// Finalizar ficha operacional y marcar como completada
+  Future<void> finalizeFicha({
+    required int fichaId,
+  }) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    final response = await _apiClient.post(
+      '/v1/fichas-operacionales/$fichaId/finalizar',
+      token: token,
+      body: const <String, dynamic>{},
+    );
+
+    if (response['success'] != true) {
+      throw ApiException(
+        response['message'] ?? 'Error al finalizar ficha',
+        500,
+        response,
+      );
+    }
+  }
+
+  /// Obtener ficha operacional por ID de grupo de programación
+  Future<FichaOperacional?> getFichaByGrupoId(int grupoId) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    try {
+      final response = await _apiClient.get(
+        '/v1/programacion-servicio/grupos/$grupoId/ficha',
+        token: token,
+      );
+
+      final data = response['data'] as Map<String, dynamic>?;
+      if (data == null) {
+        return null;
+      }
+
+      return FichaOperacional.fromJson(data);
+    } catch (e) {
+      // Si retorna 404, significa que no hay ficha aún
+      if (e is ApiException && e.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// Listar fichas operacionales con filtros
+  Future<Map<String, dynamic>> listFichas({
+    String? estado,
+    int? programacionId,
+    int? grupoId,
+    String? fechaInicio,
+    String? fechaFin,
+    int perPage = 15,
+  }) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    final query = <String, String>{};
+    if (estado != null) query['estado'] = estado;
+    if (programacionId != null) query['id_programacion_servicio'] = programacionId.toString();
+    if (grupoId != null) query['id_grupo_programacion'] = grupoId.toString();
+    if (fechaInicio != null) query['fecha_inicio'] = fechaInicio;
+    if (fechaFin != null) query['fecha_fin'] = fechaFin;
+    query['per_page'] = perPage.toString();
+
+    final response = await _apiClient.get(
+      '/v1/fichas-operacionales',
+      token: token,
+      query: query,
+    );
+
+    return response;
   }
 }
