@@ -90,6 +90,7 @@ type FichaOperacionalApiData = {
   equipos?: unknown;
   acciones_correctivas?: string | null;
   recomendaciones?: string | null;
+  firmas?: unknown;
   observaciones?: string | null;
 };
 
@@ -988,6 +989,10 @@ function normalizeList(value: unknown): string[] {
 }
 
 function normalizeFicha(data: FichaOperacionalApiData): FichaOperacionalViewModel {
+  const firmas = data.firmas && typeof data.firmas === 'object' && !Array.isArray(data.firmas)
+    ? data.firmas as Record<string, unknown>
+    : null;
+
   return {
     estado: String(data.estado ?? '').trim(),
     cliente: String(data.cliente ?? '').trim(),
@@ -1004,6 +1009,7 @@ function normalizeFicha(data: FichaOperacionalApiData): FichaOperacionalViewMode
     equipos: normalizeList(data.equipos),
     accionesCorrectivas: String(data.acciones_correctivas ?? '').trim(),
     recomendaciones: String(data.recomendaciones ?? '').trim(),
+    firmas,
     observaciones: String(data.observaciones ?? '').trim(),
   };
 }

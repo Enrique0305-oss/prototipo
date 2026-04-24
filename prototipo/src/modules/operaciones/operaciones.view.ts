@@ -53,6 +53,7 @@ export type FichaOperacionalViewModel = {
   equipos: string[];
   accionesCorrectivas: string;
   recomendaciones: string;
+  firmas: Record<string, unknown> | null;
   observaciones: string;
 }
 
@@ -343,9 +344,57 @@ function renderValueList(items: string[]): string {
     .join('')}</ul>`;
 }
 
+function pickFirstNonEmptyValue(
+  source: Record<string, unknown> | null,
+  candidates: string[],
+): string {
+  if (!source) return '';
+
+  for (const key of candidates) {
+    const raw = source[key];
+    if (typeof raw !== 'string') continue;
+    const value = raw.trim();
+    if (value.length > 0) return value;
+  }
+
+  return '';
+}
+
+function normalizeSignatureText(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('data:image/') || lower.startsWith('http://') || lower.startsWith('https://')) {
+    return 'Firma registrada';
+  }
+
+  return trimmed;
+}
+
 export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel, ficha: FichaOperacionalViewModel): string {
   const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
   const logoUrl = `${base}/images/logo-orden.png`;
+  const tecnicoNombre = fallbackText(
+    pickFirstNonEmptyValue(ficha.firmas, ['tecnico_nombre', 'nombre_tecnico', 'tecnico', 'responsable_tecnico']),
+    card.tecnicosLabel,
+  );
+  const clienteNombre = fallbackText(
+    pickFirstNonEmptyValue(ficha.firmas, ['cliente_nombre', 'nombre_cliente', 'representante_cliente', 'cliente']),
+    ficha.cliente,
+  );
+  const firmaTecnico = fallbackText(
+    normalizeSignatureText(
+      pickFirstNonEmptyValue(ficha.firmas, ['tecnico_firma', 'firma_tecnico', 'firma_responsable_tecnico']),
+    ),
+    'Sin firma',
+  );
+  const firmaCliente = fallbackText(
+    normalizeSignatureText(
+      pickFirstNonEmptyValue(ficha.firmas, ['cliente_firma', 'firma_cliente', 'firma_representante_cliente']),
+    ),
+    'Sin firma',
+  );
 
   return `
     <div class="modal-overlay js-close-ficha-modal" style="position:fixed;inset:0;background:rgba(15,23,42,0.65);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px;">
@@ -413,22 +462,61 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
           </div>
         </div>
 
-        <div style="margin-top:12px;display:grid;gap:12px;">
-          <div>
-            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Áreas tratadas</h4>
-            ${renderValueList(ficha.areasTratadas)}
+        <div style="margin-top:12px;display:grid;gap:10px;">
+          <div style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;">
+            <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Áreas tratadas</div>
+            <div style="min-height:72px;padding:10px 12px;line-height:1.45;color:#0f172a;">${renderValueList(ficha.areasTratadas)}</div>
           </div>
+
+          <div style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));">
+            <div style="border-right:1px solid #cbd5e1;">
+              <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Acciones correctivas</div>
+              <div style="min-height:82px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">${escapeHtml(fallbackText(ficha.accionesCorrectivas, 'Sin acciones registradas'))}</div>
+            </div>
+            <div>
+              <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Recomendaciones</div>
+              <div style="min-height:82px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">${escapeHtml(fallbackText(ficha.recomendaciones, 'Sin recomendaciones registradas'))}</div>
+            </div>
+          </div>
+
+          <div style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));">
+            <div style="grid-column:1 / -1;padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Personal técnico</div>
+
+            <div style="border-right:1px solid #cbd5e1;">
+              <div style="display:grid;grid-template-columns:86px minmax(0,1fr);border-bottom:1px solid #cbd5e1;">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Nombre:</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;">${escapeHtml(tecnicoNombre)}</div>
+              </div>
+              <div style="display:grid;grid-template-columns:86px minmax(0,1fr);min-height:52px;">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Firma:</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;display:flex;align-items:center;">${escapeHtml(firmaTecnico)}</div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:grid;grid-template-columns:86px minmax(0,1fr);border-bottom:1px solid #cbd5e1;">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Nombre:</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;">${escapeHtml(clienteNombre)}</div>
+              </div>
+              <div style="display:grid;grid-template-columns:86px minmax(0,1fr);min-height:52px;">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Firma:</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;display:flex;align-items:center;">${escapeHtml(firmaCliente)}</div>
+              </div>
+            </div>
+
+            <div style="padding:8px 10px;border-top:1px solid #cbd5e1;border-right:1px solid #cbd5e1;font-size:12px;text-align:center;color:#475569;font-weight:600;">Responsable de QSCI Pest Control</div>
+            <div style="padding:8px 10px;border-top:1px solid #cbd5e1;font-size:12px;text-align:center;color:#475569;font-weight:600;">Representante del cliente</div>
+          </div>
+
+          <div style="border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;text-align:center;line-height:1.35;color:#334155;font-size:12px;">
+            <div style="font-weight:700;color:#1e293b;">Multitasking Servicios Generales S.A.C</div>
+            <div>Telf. fijo: 01-6055976 &nbsp; Celular: 947702279 - 941300937</div>
+            <div>Dirección: Av. 13 de enero Mz. H-V Lt.02 APV Inca Manco Cápac - SJL &nbsp; Correo: contacto@qsciconsulting.com</div>
+          </div>
+
           <div>
             <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Equipos</h4>
             ${renderValueList(ficha.equipos)}
-          </div>
-          <div>
-            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Acciones correctivas</h4>
-            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.accionesCorrectivas, 'Sin acciones registradas'))}</p>
-          </div>
-          <div>
-            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Recomendaciones</h4>
-            <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.recomendaciones, 'Sin recomendaciones registradas'))}</p>
           </div>
           <div>
             <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Observaciones</h4>
