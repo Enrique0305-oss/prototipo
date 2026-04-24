@@ -381,11 +381,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // Fichas Operacionales (Operational Sheets)
     Route::get('/fichas-operacionales', [FichaOperacionalController::class, 'index']);
+    Route::get('/fichas-operacionales/{id}/pdf', [FichaOperacionalController::class, 'generarPDF']);
     Route::get('/programacion-servicio/{id}/ficha', [FichaOperacionalController::class, 'show']);
+    Route::get('/programacion-servicio/{id}/ficha/pdf', [FichaOperacionalController::class, 'generarPDFByProgramacion']);
     Route::post('/programacion-servicio/{id}/ficha', [FichaOperacionalController::class, 'store']);
     Route::put('/fichas-operacionales/{id}', [FichaOperacionalController::class, 'update']);
     Route::post('/fichas-operacionales/{id}/finalizar', [FichaOperacionalController::class, 'finalize']);
     Route::get('/programacion-servicio/grupos/{idGrupo}/ficha', [FichaOperacionalController::class, 'showByGrupo']);
+    Route::get('/programacion-servicio/grupos/{idGrupo}/ficha/pdf', [FichaOperacionalController::class, 'generarPDFByGrupo']);
 
     // Programación de Visitas (independiente)
     Route::get('/programacion-visita', [ProgramacionVisitaController::class, 'index']);
@@ -442,6 +445,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/almacen/salidas-programacion/{id}/pdf-entrega', [SalidaProgramacionController::class, 'generarPdfEntrega']);
     Route::post('/almacen/salidas-programacion/confirmar', [SalidaProgramacionController::class, 'confirmarSalida']);
     Route::post('/almacen/salidas-programacion/devolver', [SalidaProgramacionController::class, 'registrarDevolucion']);
+    Route::get('/almacen/salidas-programacion/{id}/quimicos-entregados', [SalidaProgramacionController::class, 'getInsumosQuimicosEntregados']);
 
     // Almacén - Salidas por Orden de Producto (solo salida)
     Route::get('/almacen/salidas-orden-producto/pendientes', [OrdenProductoController::class, 'salidasPendientes']);

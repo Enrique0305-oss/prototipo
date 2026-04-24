@@ -55,8 +55,72 @@ class SalidaProgramacionController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $programaciones,
+            'data' => $this->agruparProgramaciones($programaciones),
         ]);
+    }
+
+    /**
+     * Agrupa programaciones que comparten el mismo id_grupo_programacion
+     */
+    private function agruparProgramaciones($programaciones)
+    {
+        $resultado = [];
+        $grupos = [];
+
+        foreach ($programaciones as $prog) {
+            if (empty($prog->id_grupo_programacion)) {
+                $progArray = $prog->toArray();
+                $progArray['es_grupo'] = false;
+                $progArray['ids_programacion'] = [$prog->id];
+                $resultado[] = $progArray;
+                continue;
+            }
+
+            $grupoId = $prog->id_grupo_programacion;
+            if (!isset($grupos[$grupoId])) {
+                $base = clone $prog;
+                $base->id = $grupoId; // ID virtual del grupo
+                $baseArray = $base->toArray();
+                $baseArray['es_grupo'] = true;
+                $baseArray['grupo_id'] = $grupoId;
+                $baseArray['ids_programacion'] = [];
+                $baseArray['servicios'] = [];
+                $baseArray['insumos'] = [];
+                $baseArray['_insumos_map'] = [];
+                $grupos[$grupoId] = $baseArray;
+            }
+
+            $grupos[$grupoId]['ids_programacion'][] = $prog->id;
+            
+            if ($prog->servicio) {
+                $grupos[$grupoId]['servicios'][] = $prog->servicio->nombre;
+            }
+
+            if ($prog->insumos) {
+                foreach ($prog->insumos as $insumo) {
+                    $pid = $insumo->id_producto;
+                    if (!isset($grupos[$grupoId]['_insumos_map'][$pid])) {
+                        $grupos[$grupoId]['_insumos_map'][$pid] = $insumo->toArray();
+                    } else {
+                        $grupos[$grupoId]['_insumos_map'][$pid]['cantidad_asignada'] += $insumo->cantidad_asignada;
+                        if (isset($insumo->cantidad_utilizada)) {
+                            $grupos[$grupoId]['_insumos_map'][$pid]['cantidad_utilizada'] += $insumo->cantidad_utilizada;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Combinar nombres de servicios e insumos
+        foreach ($grupos as &$grupo) {
+            if ($grupo['servicio']) {
+                $grupo['servicio']['nombre'] = implode(' + ', array_unique($grupo['servicios']));
+            }
+            $grupo['insumos'] = array_values($grupo['_insumos_map']);
+            unset($grupo['_insumos_map']);
+        }
+
+        return array_values(array_merge($resultado, $grupos));
     }
 
     /**
@@ -129,9 +193,11 @@ class SalidaProgramacionController extends Controller
     /**
      * Ver detalle de una programación con sus insumos pendientes
      */
-    public function getDetalle($id)
+    public function getDetalle(Request $request, $id)
     {
-        $prog = ProgramacionServicio::with([
+        $esGrupo = $request->query('es_grupo') === '1';
+
+        $query = ProgramacionServicio::with([
             'ordenServicio.cliente',
             'servicio',
             'tecnico',
@@ -140,18 +206,26 @@ class SalidaProgramacionController extends Controller
             },
             'insumos.producto.inventario',
             'insumos.lote',
-        ])->find($id);
+        ]);
 
-        if (!$prog) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Programación no encontrada',
-            ], 404);
+        if ($esGrupo) {
+            $programaciones = $query->where('id_grupo_programacion', $id)->get();
+            if ($programaciones->isEmpty()) {
+                return response()->json(['success' => false, 'message' => 'Grupo de programación no encontrado'], 404);
+            }
+            $resultado = $this->agruparProgramaciones($programaciones);
+            $data = $resultado[0];
+        } else {
+            $prog = $query->find($id);
+            if (!$prog) {
+                return response()->json(['success' => false, 'message' => 'Programación no encontrada'], 404);
+            }
+            $data = $prog;
         }
 
         return response()->json([
             'success' => true,
-            'data' => $prog,
+            'data' => $data,
         ]);
     }
 
@@ -162,7 +236,8 @@ class SalidaProgramacionController extends Controller
     public function confirmarSalida(Request $request)
     {
         $validated = $request->validate([
-            'id_programacion' => 'required|integer|exists:programacion_servicio,id',
+            'ids_programacion' => 'required|array|min:1',
+            'ids_programacion.*' => 'integer|exists:programacion_servicio,id',
             'insumos' => 'required|array|min:1',
             'insumos.*.id_producto' => 'required|integer|exists:productos,id',
             'insumos.*.id_lote' => 'required|integer|exists:lotes,id',
@@ -170,29 +245,27 @@ class SalidaProgramacionController extends Controller
             'observacion' => 'nullable|string|max:500',
         ]);
 
-        $idProgramacion = $validated['id_programacion'];
-        $insumosEntregados = $validated['insumos'];
+        $idsProgramacion = $validated['ids_programacion'];
+        $insumosEntregados = collect($validated['insumos']);
         $observacion = $validated['observacion'] ?? '';
         $idUsuario = $request->user()?->id;
 
         DB::beginTransaction();
         try {
-            $prog = ProgramacionServicio::findOrFail($idProgramacion);
-
-            // Validar que los insumos estén asignados y pendientes
-            $insumosProg = ProgramacionInsumo::where('id_programacion', $idProgramacion)
+            // Validar que los insumos estén asignados y pendientes en TODAS las programaciones seleccionadas
+            $insumosProg = ProgramacionInsumo::whereIn('id_programacion', $idsProgramacion)
                 ->where('estado', 'Asignado')
                 ->get()
-                ->keyBy('id_producto');
+                ->groupBy('id_producto');
 
             if ($insumosProg->isEmpty()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Esta programación no tiene insumos pendientes de entrega',
+                    'message' => 'No hay insumos pendientes de entrega',
                 ], 422);
             }
 
-            // Procesar cada insumo
+            // Procesar cada insumo entregado
             foreach ($insumosEntregados as $item) {
                 $idProducto = $item['id_producto'];
                 $idLote = (int) $item['id_lote'];
@@ -200,11 +273,10 @@ class SalidaProgramacionController extends Controller
 
                 if ($cantidadEntregada <= 0) continue;
 
-                $insumo = $insumosProg->get($idProducto);
-                if (!$insumo) {
+                if (!isset($insumosProg[$idProducto])) {
                     return response()->json([
                         'success' => false,
-                        'message' => "El producto #{$idProducto} no está asignado a esta programación",
+                        'message' => "El producto #{$idProducto} no está asignado",
                     ], 422);
                 }
 
@@ -227,7 +299,7 @@ class SalidaProgramacionController extends Controller
                     ], 422);
                 }
 
-                // Verificar stock disponible
+                // Verificar stock disponible en inventario
                 $inventario = Inventario::where('id_productos', $idProducto)->first();
                 if (!$inventario || $inventario->cantidad_disponible < $cantidadEntregada) {
                     return response()->json([
@@ -241,25 +313,32 @@ class SalidaProgramacionController extends Controller
                 $lote->cantidad = max(0, (int) $lote->cantidad - (int) $cantidadEntregada);
                 $lote->save();
 
-                // Registrar en Kardex (esto descuenta el stock automáticamente)
+                // Registrar en Kardex (una sola vez por producto/lote para todo el grupo)
+                $refIds = implode(',', $idsProgramacion);
                 Kardex::registrarMovimiento([
                     'id_producto' => $idProducto,
                     'id_lote' => $idLote,
                     'tipo_movimiento' => 'Salida',
                     'cantidad' => $cantidadEntregada,
                     'motivo' => 'Salida Programación',
-                    'referencia' => "PROG-{$idProgramacion}",
-                    'id_referencia' => $idProgramacion,
+                    'referencia' => count($idsProgramacion) > 1 ? "GRUPO-PROGS" : "PROG-{$idsProgramacion[0]}",
+                    'id_referencia' => $idsProgramacion[0],
                     'id_usuario' => $idUsuario,
-                    'observacion' => "Salida confirmada por almacén. {$observacion}",
+                    'observacion' => "Salida confirmada por almacén. Progs: [{$refIds}]. {$observacion}",
                 ]);
 
-                // Actualizar estado del insumo
-                $insumo->update([
-                    'id_lote' => $idLote,
-                    'estado' => 'Entregado',
-                    'cantidad_utilizada' => $cantidadEntregada,
-                ]);
+                // Distribuir la cantidad entregada entre los insumosProg correspondientes
+                $restante = $cantidadEntregada;
+                foreach ($insumosProg[$idProducto] as $insumo) {
+                    if ($restante <= 0) break;
+                    $deducir = min($restante, $insumo->cantidad_asignada);
+                    $insumo->update([
+                        'id_lote' => $idLote,
+                        'estado' => 'Entregado',
+                        'cantidad_utilizada' => $deducir,
+                    ]);
+                    $restante -= $deducir;
+                }
             }
 
             DB::commit();
@@ -268,8 +347,7 @@ class SalidaProgramacionController extends Controller
                 'success' => true,
                 'message' => 'Salida confirmada exitosamente. Materiales entregados y registrados en Kardex.',
                 'data' => [
-                    'id_programacion' => $idProgramacion,
-                    'pdf_entrega_url' => url("/api/v1/almacen/salidas-programacion/{$idProgramacion}/pdf-entrega"),
+                    'ids_programacion' => $idsProgramacion,
                 ],
             ]);
 
@@ -314,7 +392,7 @@ class SalidaProgramacionController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $programaciones,
+            'data' => $this->agruparProgramaciones($programaciones),
         ]);
     }
 
@@ -322,29 +400,39 @@ class SalidaProgramacionController extends Controller
      * Ver detalle de una programación para registrar devoluciones
      * Trae insumos entregados o parcialmente devueltos
      */
-    public function getDetalleDevolucion($id)
+    public function getDetalleDevolucion(Request $request, $id)
     {
-        $prog = ProgramacionServicio::with([
+        $esGrupo = $request->query('es_grupo') === '1';
+
+        $query = ProgramacionServicio::with([
             'ordenServicio.cliente',
             'servicio',
             'tecnico',
             'insumos' => function ($q) {
-                $q->whereIn('estado', ['Entregado', 'Devuelto']);
+                $q->whereIn('estado', ['Entregado', 'Devuelto', 'Utilizado']);
             },
             'insumos.producto',
             'insumos.lote',
-        ])->find($id);
+        ]);
 
-        if (!$prog) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Programación no encontrada',
-            ], 404);
+        if ($esGrupo) {
+            $programaciones = $query->where('id_grupo_programacion', $id)->get();
+            if ($programaciones->isEmpty()) {
+                return response()->json(['success' => false, 'message' => 'Grupo de programación no encontrado'], 404);
+            }
+            $resultado = $this->agruparProgramaciones($programaciones);
+            $data = $resultado[0];
+        } else {
+            $prog = $query->find($id);
+            if (!$prog) {
+                return response()->json(['success' => false, 'message' => 'Programación no encontrada'], 404);
+            }
+            $data = $prog;
         }
 
         return response()->json([
             'success' => true,
-            'data' => $prog,
+            'data' => $data,
         ]);
     }
 
@@ -355,14 +443,15 @@ class SalidaProgramacionController extends Controller
     public function registrarDevolucion(Request $request)
     {
         $validated = $request->validate([
-            'id_programacion' => 'required|integer|exists:programacion_servicio,id',
+            'ids_programacion' => 'required|array|min:1',
+            'ids_programacion.*' => 'integer|exists:programacion_servicio,id',
             'insumos' => 'required|array|min:1',
             'insumos.*.id_producto' => 'required|integer|exists:productos,id',
             'insumos.*.cantidad_devuelta' => 'required|integer|min:0',
             'observacion' => 'nullable|string|max:500',
         ]);
 
-        $idProgramacion = $validated['id_programacion'];
+        $idsProgramacion = $validated['ids_programacion'];
         $insumosDevueltos = $validated['insumos'];
         $observacion = $validated['observacion'] ?? '';
         $idUsuario = $request->user()?->id;
@@ -376,15 +465,15 @@ class SalidaProgramacionController extends Controller
 
         DB::beginTransaction();
         try {
-            $insumosProg = ProgramacionInsumo::where('id_programacion', $idProgramacion)
+            $insumosProg = ProgramacionInsumo::whereIn('id_programacion', $idsProgramacion)
                 ->whereIn('estado', ['Entregado', 'Devuelto'])
                 ->get()
-                ->keyBy('id_producto');
+                ->groupBy('id_producto');
 
             if ($insumosProg->isEmpty()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Esta programación no tiene insumos entregados para devolver',
+                    'message' => 'No hay insumos entregados para devolver en estas programaciones',
                 ], 422);
             }
 
@@ -396,43 +485,47 @@ class SalidaProgramacionController extends Controller
                     continue;
                 }
 
-                $insumo = $insumosProg->get($idProducto);
-                if (!$insumo) {
+                if (!isset($insumosProg[$idProducto])) {
                     return response()->json([
                         'success' => false,
-                        'message' => "El producto #{$idProducto} no está entregado en esta programación",
+                        'message' => "El producto #{$idProducto} no está entregado",
                     ], 422);
                 }
 
-                $cantidadPendienteDevolver = (int) ($insumo->cantidad_utilizada ?? 0);
-                if ($cantidadPendienteDevolver <= 0) {
+                $totalPendiente = $insumosProg[$idProducto]->sum('cantidad_utilizada');
+                if ($totalPendiente <= 0) {
                     return response()->json([
                         'success' => false,
                         'message' => "El producto #{$idProducto} ya no tiene saldo para devolución",
                     ], 422);
                 }
 
-                if ($cantidadDevuelta > $cantidadPendienteDevolver) {
+                if ($cantidadDevuelta > $totalPendiente) {
                     return response()->json([
                         'success' => false,
                         'message' => "La devolución del producto #{$idProducto} excede lo entregado",
                     ], 422);
                 }
 
+                // Tomamos el primer insumo para saber el lote (todos deberían tener el mismo lote en una entrega normal)
+                $primerInsumo = $insumosProg[$idProducto]->first();
+                $idLote = $primerInsumo->id_lote;
+
+                $refIds = implode(',', $idsProgramacion);
                 Kardex::registrarMovimiento([
                     'id_producto' => $idProducto,
-                    'id_lote' => $insumo->id_lote,
+                    'id_lote' => $idLote,
                     'tipo_movimiento' => 'Entrada',
                     'cantidad' => $cantidadDevuelta,
                     'motivo' => 'Devolución Programación',
-                    'referencia' => "PROG-{$idProgramacion}",
-                    'id_referencia' => $idProgramacion,
+                    'referencia' => count($idsProgramacion) > 1 ? "GRUPO-PROGS" : "PROG-{$idsProgramacion[0]}",
+                    'id_referencia' => $idsProgramacion[0],
                     'id_usuario' => $idUsuario,
-                    'observacion' => "Devolución registrada por almacén. {$observacion}",
+                    'observacion' => "Devolución registrada por almacén. Progs: [{$refIds}]. {$observacion}",
                 ]);
 
-                if (!empty($insumo->id_lote)) {
-                    $lote = Lote::where('id', $insumo->id_lote)
+                if (!empty($idLote)) {
+                    $lote = Lote::where('id', $idLote)
                         ->where('id_producto', $idProducto)
                         ->lockForUpdate()
                         ->first();
@@ -444,10 +537,23 @@ class SalidaProgramacionController extends Controller
                     }
                 }
 
-                $saldo = $cantidadPendienteDevolver - $cantidadDevuelta;
-                $insumo->cantidad_utilizada = $saldo;
-                $insumo->estado = $saldo === 0 ? 'Devuelto' : 'Entregado';
-                $insumo->save();
+                // Distribuir devolución entre los insumos
+                $restante = $cantidadDevuelta;
+                foreach ($insumosProg[$idProducto] as $insumo) {
+                    if ($restante <= 0) break;
+                    
+                    $cantidadPendienteInsumo = (int) ($insumo->cantidad_utilizada ?? 0);
+                    if ($cantidadPendienteInsumo <= 0) continue;
+
+                    $deducir = min($restante, $cantidadPendienteInsumo);
+                    $saldo = $cantidadPendienteInsumo - $deducir;
+                    
+                    $insumo->cantidad_utilizada = $saldo;
+                    $insumo->estado = $saldo === 0 ? 'Devuelto' : 'Entregado';
+                    $insumo->save();
+                    
+                    $restante -= $deducir;
+                }
             }
 
             DB::commit();
@@ -468,9 +574,11 @@ class SalidaProgramacionController extends Controller
     /**
      * Generar PDF de acta de entrega de materiales por programación
      */
-    public function generarPdfEntrega($id)
+    public function generarPdfEntrega(Request $request, $id)
     {
-        $prog = ProgramacionServicio::with([
+        $esGrupo = $request->query('es_grupo') === '1';
+
+        $query = ProgramacionServicio::with([
             'ordenServicio.cliente',
             'servicio',
             'tecnico',
@@ -481,7 +589,27 @@ class SalidaProgramacionController extends Controller
             },
             'insumos.producto',
             'insumos.lote',
-        ])->findOrFail($id);
+        ]);
+
+        if ($esGrupo) {
+            $programaciones = $query->where('id_grupo_programacion', $id)->get();
+            if ($programaciones->isEmpty()) {
+                abort(404, 'Grupo de programación no encontrado');
+            }
+            $resultado = $this->agruparProgramaciones($programaciones);
+            $data = $resultado[0];
+            // Para el PDF necesitamos una instancia con propiedades, no un array.
+            // Podemos pasar el primer ProgramacionServicio pero sobreescribir sus insumos
+            $prog = clone $programaciones->first();
+            $prog->servicio = (object) ['nombre' => $data['servicio']['nombre'] ?? 'Múltiples Servicios'];
+            $prog->insumos = collect($data['insumos'])->map(function($insumoArray) {
+                // Convert arrays back to objects for the view
+                return json_decode(json_encode($insumoArray), false);
+            });
+            $prog->id = "GRUPO-" . $id; // Virtual ID for filename
+        } else {
+            $prog = $query->findOrFail($id);
+        }
 
         $insumos = $prog->insumos->filter(function ($ins) {
             return (int)($ins->cantidad_utilizada ?? 0) > 0 || in_array($ins->estado, ['Entregado', 'Utilizado']);
@@ -494,6 +622,75 @@ class SalidaProgramacionController extends Controller
 
         $pdf->setPaper('a4', 'portrait');
 
-        return $pdf->stream('Acta_Entrega_Programacion_' . $prog->id . '.pdf');
+        return $pdf->stream('Acta_Entrega_' . ($esGrupo ? 'Grupo_' : 'Programacion_') . $id . '.pdf');
+    }
+
+    /**
+     * Obtener insumos químicos entregados para una programación.
+     * Filtra productos cuya categoría contenga "quimico" (case-insensitive)
+     * y cuyo estado sea "Entregado".
+     */
+    public function getInsumosQuimicosEntregados($id)
+    {
+        $prog = ProgramacionServicio::find($id);
+
+        if (!$prog) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Programación no encontrada',
+            ], 404);
+        }
+
+        if (!empty($prog->id_grupo_programacion)) {
+            $ids = ProgramacionServicio::where('id_grupo_programacion', $prog->id_grupo_programacion)
+                                        ->pluck('id')
+                                        ->toArray();
+        } else {
+            $ids = [$id];
+        }
+
+        $insumos = ProgramacionInsumo::whereIn('id_programacion', $ids)
+            ->where('estado', 'Entregado')
+            ->with(['producto.categoria', 'lote'])
+            ->get();
+
+        $quimicos = $insumos->filter(function ($insumo) {
+            $producto = $insumo->producto;
+            if (!$producto || !$producto->categoria) {
+                return false;
+            }
+            return stripos($producto->categoria->nombre, 'quimico') !== false;
+        })->values();
+
+        // Agrupar por producto y lote para sumar las cantidades de los servicios del grupo
+        $groupedQuimicos = $quimicos->groupBy(function($item) {
+            return $item->id_producto . '-' . ($item->id_lote ?? 'nolote');
+        });
+
+        $data = $groupedQuimicos->map(function ($items) {
+            $first = $items->first();
+            $producto = $first->producto;
+            $lote = $first->lote;
+            
+            $cantidadEntregada = $items->sum(function($item) {
+                return (int) ($item->cantidad_utilizada ?? $item->cantidad_asignada ?? 0);
+            });
+
+            return [
+                'id_producto' => $first->id_producto,
+                'producto' => $producto->descripcion ?? 'Producto',
+                'lote' => $lote->numero_lote ?? '',
+                'fecha_vencimiento' => $lote && $lote->fecha_vencimiento
+                    ? $lote->fecha_vencimiento->format('Y-m-d')
+                    : '',
+                'unidad' => $producto->unidad ?? '',
+                'cantidad_entregada' => $cantidadEntregada,
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+        ]);
     }
 }

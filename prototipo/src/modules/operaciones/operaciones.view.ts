@@ -51,6 +51,7 @@ export type FichaOperacionalViewModel = {
   areasTratadas: string[];
   actividadesRealizadas: string[];
   equipos: string[];
+  insumosUtilizados: any[];
   accionesCorrectivas: string;
   recomendaciones: string;
   firmas: Record<string, unknown> | null;
@@ -372,6 +373,50 @@ function normalizeSignatureText(value: string): string {
   return trimmed;
 }
 
+function renderInsumosTable(insumos: any[]): string {
+  if (!insumos || insumos.length === 0) {
+    return '<div style="padding:10px;text-align:center;color:#64748b;font-size:13px;">Sin insumos registrados</div>';
+  }
+
+  const rows = insumos.map(insumo => {
+    if (typeof insumo !== 'object' || insumo === null) {
+      return `<tr><td colspan="7" style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(String(insumo))}</td></tr>`;
+    }
+    return `
+      <tr>
+        <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;color:#0f172a;">${escapeHtml(fallbackText(insumo.producto))}</td>
+        <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;color:#0f172a;">${escapeHtml(fallbackText(insumo.metodo))}</td>
+        <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;color:#0f172a;">${escapeHtml(fallbackText(insumo.lote))}</td>
+        <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;color:#0f172a;">${escapeHtml(fallbackText(insumo.fecha_vencimiento || insumo.fechaVencimiento || insumo.vencimiento || insumo.fechaVencim))}</td>
+        <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;color:#0f172a;">${escapeHtml(fallbackText(insumo.unidad_medida || insumo.unidad))}</td>
+        <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;color:#0f172a;">${escapeHtml(fallbackText(insumo.concentracion))}</td>
+        <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;color:#0f172a;">${escapeHtml(fallbackText(insumo.cantidad_usada || insumo.cantidad))}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;margin:0;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;font-weight:600;color:#334155;text-align:left;">Producto</th>
+            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;font-weight:600;color:#334155;text-align:left;">Método</th>
+            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;font-weight:600;color:#334155;text-align:left;">Lote</th>
+            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;font-weight:600;color:#334155;text-align:left;">Fecha de Vencimiento</th>
+            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;font-weight:600;color:#334155;text-align:left;">Unidad de medida</th>
+            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;font-weight:600;color:#334155;text-align:left;">Concentración</th>
+            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;font-weight:600;color:#334155;text-align:left;">Cantidad usada</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel, ficha: FichaOperacionalViewModel): string {
   const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
   const logoUrl = `${base}/images/logo-orden.png`;
@@ -404,7 +449,13 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
             <h3 style="margin:0 0 6px 0;font-size:20px;color:#0f172a;">Ficha operacional</h3>
             <p style="margin:0;color:#475569;">${escapeHtml(card.titulo)}</p>
           </div>
-          <button class="btn-secondary js-close-ficha-modal" type="button">Cerrar</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-primary js-download-ficha-pdf" type="button" data-service-id="${card.serviceId}" data-group-id="${card.groupId || ''}" style="display:flex;align-items:center;gap:6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Descargar PDF
+            </button>
+            <button class="btn-secondary js-close-ficha-modal" type="button">Cerrar</button>
+          </div>
         </div>
 
         <div style="margin-top:14px;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
@@ -456,9 +507,17 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
             <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">${escapeHtml(fallbackText(ficha.condicionSanitaria, 'Sin condición registrada'))}</div>
           </div>
 
-          <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0 0 8px 8px;overflow:hidden;">
+          <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0;overflow:hidden;">
             <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Actividad realizada</div>
             <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;">${renderValueList(ficha.actividadesRealizadas)}</div>
+          </div>
+          <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0;overflow:hidden;">
+            <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Tratamiento realizado</div>
+            <div style="padding:10px 12px;line-height:1.45;color:#0f172a;">${renderValueList(ficha.equipos)}</div>
+          </div>
+          <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0 0 8px 8px;overflow:hidden;">
+            <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;text-transform:uppercase;">Información de Insumos Utilizados</div>
+            <div style="padding:0;">${renderInsumosTable(ficha.insumosUtilizados)}</div>
           </div>
         </div>
 
@@ -514,10 +573,6 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
             <div>Dirección: Av. 13 de enero Mz. H-V Lt.02 APV Inca Manco Cápac - SJL &nbsp; Correo: contacto@qsciconsulting.com</div>
           </div>
 
-          <div>
-            <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Equipos</h4>
-            ${renderValueList(ficha.equipos)}
-          </div>
           <div>
             <h4 style="margin:0 0 6px 0;color:#1e3a8a;">Observaciones</h4>
             <p style="margin:0;line-height:1.45;">${escapeHtml(fallbackText(ficha.observaciones, 'Sin observaciones registradas'))}</p>

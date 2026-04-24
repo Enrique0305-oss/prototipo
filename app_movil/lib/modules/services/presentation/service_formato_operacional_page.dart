@@ -36,8 +36,17 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
   }
 
   Future<List<_DispositivoDraft>> _loadDispositivos() async {
-    final dispositivos = await widget.servicesRepository.getFormatoOperacionalDispositivos(widget.representativeService.id);
-    return dispositivos.map(_DispositivoDraft.fromDomain).toList(growable: false);
+    final byKey = <String, FormatoOperacionalDispositivo>{};
+
+    for (final service in _effectiveServices) {
+      final dispositivos = await widget.servicesRepository.getFormatoOperacionalDispositivos(service.id);
+      for (final item in dispositivos) {
+        final key = '${item.idProducto}|${item.descripcion.toLowerCase()}|${item.numeroLote ?? ''}';
+        byKey.putIfAbsent(key, () => item);
+      }
+    }
+
+    return byKey.values.map(_DispositivoDraft.fromDomain).toList(growable: false);
   }
 
   List<ServiceTask> get _effectiveServices {

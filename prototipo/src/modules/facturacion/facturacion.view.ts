@@ -433,7 +433,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
       else if (tipo === 'capacitacion') {
         endpoint = 'ordenes-capacitacion-auditoria';
       }
-      const resp = await fetch(`http://127.0.0.1:8000/api/v1/${endpoint}`, { headers: getAuthHeaders() });
+      const resp = await fetch(`http://backend.qsci-system.com/api/v1/${endpoint}`, { headers: getAuthHeaders() });
       const result = await resp.json();
 
       selectOrden.disabled = false;
@@ -457,7 +457,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
 
     try {
       // LLAMAMOS A LA RUTA QUE PROBASTE EN THUNDER CLIENT
-      const resp = await fetch(`http://127.0.0.1:8000/api/v1/proyecciones/buscar-orden/${tipo}/${id}`, { headers: getAuthHeaders() });
+      const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/buscar-orden/${tipo}/${id}`, { headers: getAuthHeaders() });
       const result = await resp.json();
 
       if (result.success) {
@@ -549,7 +549,7 @@ form?.addEventListener('submit', async (e) => {
     console.log("Enviando al controlador:", payload);
 
     try {
-        const resp = await fetch('http://127.0.0.1:8000/api/v1/proyecciones', {
+        const resp = await fetch('http://backend.qsci-system.com/api/v1/proyecciones', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 

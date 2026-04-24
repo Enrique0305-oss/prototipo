@@ -258,4 +258,112 @@ class FichaOperacionalController extends Controller
             'data' => $fichas,
         ]);
     }
+
+    /**
+     * Generar PDF de una ficha operacional
+     */
+    public function generarPDF($id)
+    {
+        $ficha = FichaOperacional::with([
+            'programacionServicio.tecnico',
+            'programacionServicio.tecnicos',
+        ])->findOrFail($id);
+
+        $tecnicoPrincipalNombre = $this->resolverTecnicoPrincipalNombre($ficha);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('FichaOperacionalPDF', compact('ficha', 'tecnicoPrincipalNombre'));
+        $pdf->setPaper('a4', 'portrait');
+
+        $clienteSafe = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $ficha->cliente ?? 'sin_cliente');
+        $fechaSafe = $ficha->fecha ? \Carbon\Carbon::parse($ficha->fecha)->format('Ymd') : 'sin_fecha';
+
+        return $pdf->stream("Ficha_Operacional_{$clienteSafe}_{$fechaSafe}.pdf");
+    }
+
+    /**
+     * Generar PDF de ficha operacional por id de programación de servicio
+     */
+    public function generarPDFByProgramacion($id)
+    {
+        $ficha = FichaOperacional::with([
+                'programacionServicio.tecnico',
+                'programacionServicio.tecnicos',
+            ])
+            ->where('id_programacion_servicio', $id)
+            ->latest()
+            ->first();
+
+        if (!$ficha) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ficha no encontrada para esta programación',
+            ], 404);
+        }
+
+        $tecnicoPrincipalNombre = $this->resolverTecnicoPrincipalNombre($ficha);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('FichaOperacionalPDF', compact('ficha', 'tecnicoPrincipalNombre'));
+        $pdf->setPaper('a4', 'portrait');
+
+        $clienteSafe = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $ficha->cliente ?? 'sin_cliente');
+        $fechaSafe = $ficha->fecha ? \Carbon\Carbon::parse($ficha->fecha)->format('Ymd') : 'sin_fecha';
+
+        return $pdf->stream("Ficha_Operacional_{$clienteSafe}_{$fechaSafe}.pdf");
+    }
+
+    /**
+     * Generar PDF de ficha operacional por id de grupo de programación
+     */
+    public function generarPDFByGrupo($idGrupo)
+    {
+        $ficha = FichaOperacional::with([
+                'programacionServicio.tecnico',
+                'programacionServicio.tecnicos',
+            ])
+            ->where('id_grupo_programacion', $idGrupo)
+            ->latest()
+            ->first();
+
+        if (!$ficha) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ficha del grupo no encontrada',
+            ], 404);
+        }
+
+        $tecnicoPrincipalNombre = $this->resolverTecnicoPrincipalNombre($ficha);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('FichaOperacionalPDF', compact('ficha', 'tecnicoPrincipalNombre'));
+        $pdf->setPaper('a4', 'portrait');
+
+        $clienteSafe = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $ficha->cliente ?? 'sin_cliente');
+        $fechaSafe = $ficha->fecha ? \Carbon\Carbon::parse($ficha->fecha)->format('Ymd') : 'sin_fecha';
+
+        return $pdf->stream("Ficha_Operacional_{$clienteSafe}_{$fechaSafe}.pdf");
+    }
+
+    private function resolverTecnicoPrincipalNombre(FichaOperacional $ficha): string
+    {
+        $programacion = $ficha->programacionServicio;
+        if (!$programacion) {
+            return '---';
+        }
+
+        $tecnicoPivotPrincipal = $programacion->tecnicos
+            ->first(function ($tecnico) {
+                $rol = strtolower(trim((string) ($tecnico->pivot->rol ?? '')));
+                return in_array($rol, ['principal', 'tecnico principal', 'titular'], true);
+            });
+
+        $tecnico = $tecnicoPivotPrincipal ?? $programacion->tecnico ?? $programacion->tecnicos->first();
+        if (!$tecnico) {
+            return '---';
+        }
+
+        $nombre = trim((string) ($tecnico->nombre ?? ''));
+        $apellidos = trim((string) ($tecnico->apellidos ?? ''));
+        $fullName = trim($nombre . ' ' . $apellidos);
+
+        return $fullName !== '' ? $fullName : '---';
+    }
 }

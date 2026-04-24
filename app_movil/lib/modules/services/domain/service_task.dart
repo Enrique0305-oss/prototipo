@@ -18,6 +18,7 @@ class ServiceTask {
     this.evidencePhotos = const <String>[],
     this.evidenceItems = const <ServiceEvidence>[],
     this.completedAt,
+    this.areaNames = const <String>[],
   });
 
   final int id;
@@ -36,6 +37,7 @@ class ServiceTask {
   final List<String> evidencePhotos;
   final List<ServiceEvidence> evidenceItems;
   final String? completedAt;
+  final List<String> areaNames;
 
   bool get isCompleted {
     final normalized = status.toLowerCase();
@@ -63,6 +65,7 @@ class ServiceTask {
       evidencePhotos: evidencePhotos,
       evidenceItems: evidenceItems,
       completedAt: completedAt ?? this.completedAt,
+      areaNames: areaNames ?? this.areaNames,
     );
   }
 
@@ -71,6 +74,16 @@ class ServiceTask {
     final order = json['orden_servicio'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final clientMap = order['cliente'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final planta = json['planta'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    final areasList = json['areas'] as List<dynamic>? ?? [];
+    final parsedAreaNames = areasList
+        .map((a) {
+          if (a is Map<String, dynamic>) {
+            return a['nombre']?.toString().trim() ?? '';
+          }
+          return '';
+        })
+        .where((n) => n.isNotEmpty)
+        .toList();
     final coords = _resolveCoordinates(json, planta);
 
     return ServiceTask(
@@ -90,6 +103,7 @@ class ServiceTask {
       evidencePhotos: _parseEvidencePhotos(json['fotos_evidencia']),
       evidenceItems: _parseEvidenceItems(json['fotos_evidencia']),
       completedAt: (json['fecha_ejecucion_real'] ?? '').toString(),
+      areaNames: parsedAreaNames,
     );
   }
 

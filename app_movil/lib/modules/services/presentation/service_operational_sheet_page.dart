@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/services_repository.dart';
+import '../domain/insumo_quimico_entregado.dart';
 import '../domain/service_task.dart';
 import '../domain/ficha_operacional.dart';
 
@@ -34,7 +35,6 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
   late final TextEditingController _giroLugarController;
   late final TextEditingController _diagnosticoController;
   late final TextEditingController _condicionController;
-  late final TextEditingController _areasTratadasController;
   late final TextEditingController _accionesController;
   late final TextEditingController _recomendacionesController;
   late final TextEditingController _firmaTecnicoController;
@@ -53,6 +53,13 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
 
   final Set<String> _equiposSeleccionados = <String>{};
   final List<_ChemicalRowDraft> _quimicos = <_ChemicalRowDraft>[];
+
+  List<InsumoQuimicoEntregado> _quimicosDisponibles = <InsumoQuimicoEntregado>[];
+  final Set<int> _quimicosSeleccionados = <int>{};
+  bool _loadingQuimicos = true;
+
+  List<String> _areasDisponibles = [];
+  final Set<String> _areasSeleccionadas = <String>{};
 
   FichaOperacional? _fichaActual;
   bool _isSaving = false;
@@ -82,18 +89,19 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
     _firmaTecnicoController = TextEditingController();
     _firmaClienteController = TextEditingController();
 
-    final areas = _effectiveServices
-        .map((s) => s.title.trim())
+    _areasDisponibles = _effectiveServices
+        .expand((s) => s.areaNames)
+        .map((a) => a.trim())
         .where((value) => value.isNotEmpty)
         .toSet()
-        .join(', ');
-    _areasTratadasController = TextEditingController(text: areas);
+        .toList();
+    _areasSeleccionadas.addAll(_areasDisponibles);
 
     if ((widget.initialObservations ?? '').trim().isNotEmpty) {
       _diagnosticoController.text = widget.initialObservations!.trim();
     }
 
-    _quimicos.add(_ChemicalRowDraft());
+    _loadQuimicosEntregados();
     _loadExistingFicha();
   }
 
@@ -108,7 +116,6 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
     _giroLugarController.dispose();
     _diagnosticoController.dispose();
     _condicionController.dispose();
-    _areasTratadasController.dispose();
     _accionesController.dispose();
     _recomendacionesController.dispose();
     _firmaTecnicoController.dispose();
@@ -117,6 +124,25 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
       quimico.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _loadQuimicosEntregados() async {
+    try {
+      final quimicos = await widget.servicesRepository.getInsumosQuimicosEntregados(
+        widget.representativeService.id,
+      );
+      if (mounted) {
+        setState(() {
+          _quimicosDisponibles = quimicos;
+          _loadingQuimicos = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading quimicos: $e');
+      if (mounted) {
+        setState(() => _loadingQuimicos = false);
+      }
+    }
   }
 
   Future<void> _loadExistingFicha() async {
@@ -149,7 +175,16 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
     if (ficha.accionesCorrectivas != null) _accionesController.text = ficha.accionesCorrectivas!;
     if (ficha.recomendaciones != null) _recomendacionesController.text = ficha.recomendaciones!;
     if (ficha.areasTratadas != null && ficha.areasTratadas!.isNotEmpty) {
-      _areasTratadasController.text = ficha.areasTratadas!.join(', ');
+      final savedAreas = ficha.areasTratadas!.cast<String>();
+      if (savedAreas.contains('Areas en General') || savedAreas.contains('Áreas en General') || savedAreas.contains('Areas en general') || savedAreas.contains('Áreas en general')) {
+        _areasSeleccionadas.addAll(_areasDisponibles);
+      } else {
+        for (final area in savedAreas) {
+          if (_areasDisponibles.contains(area)) {
+            _areasSeleccionadas.add(area);
+          }
+        }
+      }
     }
     if (ficha.equipos != null && ficha.equipos!.isNotEmpty) {
       _equiposSeleccionados.clear();
@@ -252,7 +287,8 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
       'equipos': _equiposSeleccionados.toList(),
       'insumos_utilizados': _quimicos
           .where((q) => q.productoController.text.isNotEmpty)
-          .map((q) => {
+          .map((q) => <String, dynamic>{
+                'id_producto': q.idProducto,
                 'producto': q.productoController.text,
                 'metodo': q.metodoController.text,
                 'lote': q.loteController.text,
@@ -262,11 +298,9 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
                 'cantidad': q.cantidadController.text,
               })
           .toList(),
-      'areas_tratadas': _areasTratadasController.text
-          .split(',')
-          .map((a) => a.trim())
-          .where((a) => a.isNotEmpty)
-          .toList(),
+      'areas_tratadas': (_areasDisponibles.isNotEmpty && _areasSeleccionadas.length == _areasDisponibles.length)
+          ? ['Areas en General']
+          : _areasSeleccionadas.toList(),
       'acciones_correctivas': _accionesController.text.trim().isNotEmpty ? _accionesController.text.trim() : null,
       'recomendaciones': _recomendacionesController.text.trim().isNotEmpty ? _recomendacionesController.text.trim() : null,
     };
@@ -279,18 +313,105 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
     return '$dd/$mm/$yyyy';
   }
 
-  void _addChemicalRow() {
+  void _toggleQuimico(InsumoQuimicoEntregado insumo, bool selected) {
     setState(() {
-      _quimicos.add(_ChemicalRowDraft());
+      if (selected) {
+        _quimicosSeleccionados.add(insumo.idProducto);
+        _quimicos.add(_ChemicalRowDraft.fromInsumo(insumo));
+      } else {
+        _quimicosSeleccionados.remove(insumo.idProducto);
+        final idx = _quimicos.indexWhere((q) => q.idProducto == insumo.idProducto);
+        if (idx >= 0) {
+          final item = _quimicos.removeAt(idx);
+          item.dispose();
+        }
+      }
     });
   }
 
-  void _removeChemicalRow(int index) {
-    if (_quimicos.length <= 1) return;
-    setState(() {
-      final item = _quimicos.removeAt(index);
-      item.dispose();
-    });
+  Widget _buildInsumosSection() {
+    if (_loadingQuimicos) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_quimicosDisponibles.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(8),
+        child: Text(
+          'No hay productos químicos entregados por almacén para esta programación.',
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Seleccione los productos químicos que se utilizarán:',
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        ..._quimicosDisponibles.map((insumo) {
+          final isSelected = _quimicosSeleccionados.contains(insumo.idProducto);
+          return CheckboxListTile(
+            value: isSelected,
+            onChanged: (val) => _toggleQuimico(insumo, val == true),
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(insumo.producto),
+            subtitle: Text('Lote: ${insumo.lote} · Entregado: ${insumo.cantidadEntregada}'),
+          );
+        }),
+        if (_quimicos.isNotEmpty) ...[
+          const Divider(height: 24),
+          const Text(
+            'Detalle de insumos seleccionados:',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          ..._quimicos.map((row) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFFF8FAFC),
+              ),
+              child: Column(
+                children: [
+                  _buildManualField('Producto químico', row.productoController, readOnly: true),
+                  const SizedBox(height: 8),
+                  _buildDropdownField('Método (equipo usado)', row.metodoController, _equiposSeleccionados.toList()),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: _buildManualField('Lote', row.loteController, readOnly: true)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildManualField('F. vencimiento', row.vencimientoController, readOnly: true)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: _buildManualField('Unidad', row.unidadController, readOnly: true)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildManualField('Concentración', row.concentracionController)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildManualField('Cantidad', row.cantidadController),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
+    );
   }
 
   Widget _buildSectionCard({required String title, required Widget child}) {
@@ -313,16 +434,44 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
     );
   }
 
-  Widget _buildManualField(String label, TextEditingController controller, {int maxLines = 1}) {
+  Widget _buildManualField(String label, TextEditingController controller, {int maxLines = 1, bool readOnly = false}) {
     return TextFormField(
       controller: controller,
+      readOnly: readOnly,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        filled: readOnly,
+        fillColor: readOnly ? const Color(0xFFEEEEEE) : null,
+      ),
+      maxLines: maxLines,
+      validator: (value) => null,
+    );
+  }
+
+  Widget _buildDropdownField(String label, TextEditingController controller, List<String> options) {
+    final currentVal = controller.text.isNotEmpty ? controller.text : null;
+    final validOptions = options.toList();
+    if (currentVal != null && !validOptions.contains(currentVal)) {
+      validOptions.add(currentVal);
+    }
+
+    return DropdownButtonFormField<String>(
+      value: currentVal,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
-      maxLines: maxLines,
-      validator: (value) => null,
+      items: validOptions.isEmpty 
+          ? [const DropdownMenuItem(value: null, child: Text('Seleccione equipo arriba'))]
+          : validOptions.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
+      onChanged: (val) {
+        if (val != null) {
+          controller.text = val;
+        }
+      },
     );
   }
 
@@ -421,71 +570,32 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
             ),
             _buildSectionCard(
               title: 'Información de insumos utilizados',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Vista preliminar: por ahora esta sección es visual. Luego se cargará automático desde salidas aprobadas de almacén.',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                  ),
-                  const SizedBox(height: 10),
-                  ..._quimicos.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final row = entry.value;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(child: _buildManualField('Producto químico', row.productoController)),
-                              IconButton(
-                                onPressed: () => _removeChemicalRow(i),
-                                icon: const Icon(Icons.delete_outline),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _buildManualField('Método (equipo usado)', row.metodoController),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(child: _buildManualField('Lote', row.loteController)),
-                              const SizedBox(width: 8),
-                              Expanded(child: _buildManualField('F. vencimiento', row.vencimientoController)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(child: _buildManualField('Unidad', row.unidadController)),
-                              const SizedBox(width: 8),
-                              Expanded(child: _buildManualField('Concentración', row.concentracionController)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _buildManualField('Cantidad', row.cantidadController),
-                        ],
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 10),
-                  TextButton.icon(
-                    onPressed: _addChemicalRow,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Agregar insumo'),
-                  ),
-                ],
-              ),
+              child: _buildInsumosSection(),
             ),
             _buildSectionCard(
               title: 'Áreas tratadas',
-              child: _buildManualField('Listado de áreas (separadas por coma)', _areasTratadasController, maxLines: 3),
+              child: _areasDisponibles.isEmpty 
+                  ? const Text('No hay áreas registradas para este servicio.')
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _areasDisponibles.map(
+                        (area) => CheckboxListTile(
+                          value: _areasSeleccionadas.contains(area),
+                          onChanged: (selected) {
+                            setState(() {
+                              if (selected == true) {
+                                _areasSeleccionadas.add(area);
+                              } else {
+                                _areasSeleccionadas.remove(area);
+                              }
+                            });
+                          },
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(area),
+                        ),
+                      ).toList(),
+                    ),
             ),
             _buildSectionCard(
               title: 'Acciones y Recomendaciones',
@@ -565,8 +675,17 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
 }
 
 class _ChemicalRowDraft {
-  _ChemicalRowDraft();
+  _ChemicalRowDraft({this.idProducto});
 
+  factory _ChemicalRowDraft.fromInsumo(InsumoQuimicoEntregado insumo) {
+    return _ChemicalRowDraft(idProducto: insumo.idProducto)
+      ..productoController.text = insumo.producto
+      ..loteController.text = insumo.lote
+      ..vencimientoController.text = insumo.fechaVencimiento
+      ..unidadController.text = insumo.unidad;
+  }
+
+  final int? idProducto;
   final TextEditingController productoController = TextEditingController();
   final TextEditingController metodoController = TextEditingController();
   final TextEditingController loteController = TextEditingController();

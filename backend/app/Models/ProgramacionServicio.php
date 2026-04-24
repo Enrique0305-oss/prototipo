@@ -10,6 +10,7 @@ class ProgramacionServicio extends Model
 
     protected $appends = [
         'personal_administrativo',
+        'areas',
     ];
     
     protected $fillable = [
@@ -145,6 +146,19 @@ class ProgramacionServicio extends Model
                 'nombre' => $personal->nombre,
                 'apellidos' => $personal->apellidos,
             ])
+            ->all();
+    }
+
+    public function getAreasAttribute(): array
+    {
+        $ids = $this->normalizePersonalIds($this->attributes['id_cliente_planta_area'] ?? null);
+        if (empty($ids)) {
+            return [];
+        }
+
+        return ClientePlantaArea::query()
+            ->whereIn('id', $ids)
+            ->get(['id', 'nombre'])
             ->all();
     }
 

@@ -23,6 +23,12 @@ export interface ProgramacionPendiente {
     apellidos: string;
   };
   insumos?: InsumoProgamacion[];
+  
+  // Agrupación
+  es_grupo?: boolean;
+  grupo_id?: number;
+  ids_programacion?: number[];
+  servicios?: string[];
 }
 
 export interface InsumoProgamacion {
@@ -48,7 +54,7 @@ export interface InsumoProgamacion {
 }
 
 export interface RegistrarDevolucionPayload {
-  id_programacion: number;
+  ids_programacion: number[];
   insumos: {
     id_producto: number;
     cantidad_devuelta: number;
@@ -57,7 +63,7 @@ export interface RegistrarDevolucionPayload {
 }
 
 export interface ConfirmarSalidaPayload {
-  id_programacion: number;
+  ids_programacion: number[];
   insumos: {
     id_producto: number;
     id_lote: number;
@@ -77,8 +83,8 @@ export const salidasProgramacionService = {
   },
 
   // Ver detalle de una programación con sus insumos
-  getDetalle: async (id: number) => {
-    return apiClient.get<{ success: boolean; data: ProgramacionPendiente }>(`/almacen/salidas-programacion/${id}`);
+  getDetalle: async (id: number, esGrupo: boolean = false) => {
+    return apiClient.get<{ success: boolean; data: ProgramacionPendiente }>(`/almacen/salidas-programacion/${id}`, { es_grupo: esGrupo ? '1' : '0' });
   },
 
   // Confirmar salida de materiales para una programación
@@ -95,8 +101,8 @@ export const salidasProgramacionService = {
   },
 
   // Ver detalle para devolución de materiales entregados
-  getDetalleDevolucion: async (id: number) => {
-    return apiClient.get<{ success: boolean; data: ProgramacionPendiente }>(`/almacen/salidas-programacion/${id}/devolucion`);
+  getDetalleDevolucion: async (id: number, esGrupo: boolean = false) => {
+    return apiClient.get<{ success: boolean; data: ProgramacionPendiente }>(`/almacen/salidas-programacion/${id}/devolucion`, { es_grupo: esGrupo ? '1' : '0' });
   },
 
   // Registrar devolución al almacén
@@ -105,8 +111,8 @@ export const salidasProgramacionService = {
   },
 
   // Descargar acta PDF de entrega de materiales
-  downloadActaEntrega: async (idProgramacion: number) => {
-    const filename = `Acta_Entrega_Programacion_${idProgramacion}.pdf`;
-    return apiClient.downloadFile(`/almacen/salidas-programacion/${idProgramacion}/pdf-entrega`, filename);
+  downloadActaEntrega: async (idProgramacion: number, esGrupo: boolean = false) => {
+    const filename = `Acta_Entrega_${esGrupo ? 'Grupo' : 'Programacion'}_${idProgramacion}.pdf`;
+    return apiClient.downloadFile(`/almacen/salidas-programacion/${idProgramacion}/pdf-entrega?es_grupo=${esGrupo ? '1' : '0'}`, filename);
   },
 };

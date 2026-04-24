@@ -239,8 +239,8 @@
                         El equipo de QSCI Consulting brindará capacitaciones actualizadas al público asistente.
                         <br><br>Esta capacitación está diseñada para ser cubierta de la siguiente manera. <br> <br>
                         
-                        <p style="margin:3px 0;"><strong>Fecha Tentativa de Servicio:</strong> {{ $detalleCap?->fecha_servicio ? \Carbon\Carbon::parse($detalleCap->fecha_servicio)->format('d/m/Y') : 'N/A' }}</p>
-                        <p style="margin:3px 0;"><strong>Horas de Capacitación:</strong> {{ $detalleCap?->horas_capacitacion ? $detalleCap->horas_capacitacion . ' hrs' : 'N/A' }}</p>
+                        <p style="margin:3px 0;"><strong>Fecha Tentativa de Servicio:</strong> {{ $detalleCap?->fecha_servicio ? \Carbon\Carbon::parse($detalleCap->fecha_servicio)->format('d/m/Y') : 'A coordinar' }}</p>
+                        <p style="margin:3px 0;"><strong>Horas de Capacitación:</strong> {{ $detalleCap?->horas_capacitacion ? $detalleCap->horas_capacitacion . ' hrs' . ($detalleCap?->frecuencia_sugerida ? ' por ' . trim(preg_replace('/\s*\([^)]*\)/', '', $detalleCap->frecuencia_sugerida)) : '') : 'N/A' }}</p>
                         <p style="margin:3px 0;"><strong>Número de Participantes:</strong> {{ $detalleCap?->num_participantes ?? 'N/A' }}</p>
                         <p style="margin:3px 0;"><strong>Modalidad:</strong> {{ $detalleCap?->modalidad_sugerida ?? 'N/A' }}</p>
                     @endif
@@ -302,7 +302,7 @@
                                 <br><small style="color: #6CB52D;"><em>Modalidad: {{ $detalle->modalidad_sugerida }}</em></small>
                             @endif
                             @if($detalle->frecuencia_sugerida)
-                                <br><small style="color: #6CB52D;"><em>Frecuencia: {{ $detalle->frecuencia_sugerida }}</em></small>
+                                <br><small style="color: #6CB52D;"><em>Frecuencia: {{ trim(preg_replace('/\s*\([^)]*\)/', '', $detalle->frecuencia_sugerida)) }}</em></small>
                             @endif
                         </td>
                         <td class="text-center">{{ $detalle->horas_capacitacion }}</td>

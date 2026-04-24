@@ -2,7 +2,7 @@ import './style.css'
 import './additional-styles.css'
 import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
-const LOGO_URL = "http://127.0.0.1:8000/images/menu.png";
+const LOGO_URL = "http://backend.qsci-system.com/images/menu.png";
 
 // Inicializar guard de autenticación
 initAuthGuard();
@@ -92,6 +92,7 @@ type FichaOperacionalApiData = {
   recomendaciones?: string | null;
   firmas?: unknown;
   observaciones?: string | null;
+  insumos_utilizados?: unknown;
 };
 
 declare global {
@@ -519,7 +520,7 @@ if (activeMenu === 'Facturación') {
     if (menuName === 'Facturación') {
       try {
         const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
-        const respuesta = await fetch('http://127.0.0.1:8000/api/v1/proyecciones', {
+        const respuesta = await fetch('http://backend.qsci-system.com/api/v1/proyecciones', {
           headers: {
             'Accept': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -1007,6 +1008,7 @@ function normalizeFicha(data: FichaOperacionalApiData): FichaOperacionalViewMode
     areasTratadas: normalizeList(data.areas_tratadas),
     actividadesRealizadas: normalizeList(data.actividades_realizadas),
     equipos: normalizeList(data.equipos),
+    insumosUtilizados: Array.isArray(data.insumos_utilizados) ? data.insumos_utilizados : [],
     accionesCorrectivas: String(data.acciones_correctivas ?? '').trim(),
     recomendaciones: String(data.recomendaciones ?? '').trim(),
     firmas,
@@ -1047,6 +1049,37 @@ function abrirModalFichaOperacional(card: ServicioRealizadoCardViewModel, ficha:
       const clicked = event.target as HTMLElement;
       if (clicked.classList.contains('js-close-ficha-modal')) {
         close();
+      }
+    });
+  });
+
+  // Botón Descargar PDF
+  host.querySelectorAll('.js-download-ficha-pdf').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const btn = button as HTMLButtonElement;
+      const groupId = btn.dataset.groupId ? parseInt(btn.dataset.groupId, 10) : null;
+      const serviceId = parseInt(btn.dataset.serviceId || '0', 10);
+
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>Generando PDF...</span>';
+
+      try {
+        const { apiClient } = await import('./core/api/api.client');
+        const clienteSafe = (ficha.cliente || 'ficha').replace(/[^a-zA-Z0-9_\- ]/g, '_').substring(0, 30);
+        const filename = `Ficha_Operacional_${clienteSafe}.pdf`;
+
+        if (groupId && groupId > 0) {
+          await apiClient.downloadFile(`/programacion-servicio/grupos/${groupId}/ficha/pdf`, filename);
+        } else {
+          await apiClient.downloadFile(`/programacion-servicio/${serviceId}/ficha/pdf`, filename);
+        }
+      } catch (error) {
+        console.error('Error descargando PDF de ficha operacional:', error);
+        alert('No se pudo descargar el PDF. Verifique que la ficha esté guardada.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
       }
     });
   });

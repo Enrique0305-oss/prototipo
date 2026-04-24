@@ -6,6 +6,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../auth/data/auth_repository.dart';
 import '../domain/formato_operacional_dispositivo.dart';
+import '../domain/insumo_quimico_entregado.dart';
 import '../domain/service_task.dart';
 import '../domain/ficha_operacional.dart';
 
@@ -295,25 +296,163 @@ class ServicesRepository {
       throw ApiException('No hay sesión activa', 401, const {});
     }
 
-    final response = await _apiClient.get(
-      '/v1/almacen/salidas-programacion/$programacionId',
-      token: token,
-    );
+    List<Map<String, dynamic>> insumosMaps = <Map<String, dynamic>>[];
 
-    final data = response['data'];
-    if (data is! Map<String, dynamic>) {
-      return <FormatoOperacionalDispositivo>[];
+    try {
+      final response = await _apiClient.get(
+        '/v1/almacen/salidas-programacion/$programacionId/devolucion',
+        token: token,
+      );
+
+      final data = response['data'];
+      if (data is Map<String, dynamic>) {
+        final insumos = data['insumos'];
+        if (insumos is List) {
+          insumosMaps = insumos.whereType<Map<String, dynamic>>().toList(growable: false);
+        }
+      }
+    } catch (_) {
+      // Fallback abajo
     }
 
-    final insumos = data['insumos'];
-    if (insumos is! List) {
-      return <FormatoOperacionalDispositivo>[];
+    if (insumosMaps.isEmpty) {
+      try {
+        final response = await _apiClient.get(
+          '/v1/almacen/salidas-programacion/$programacionId',
+          token: token,
+        );
+
+        final data = response['data'];
+        if (data is Map<String, dynamic>) {
+          final insumos = data['insumos'];
+          if (insumos is List) {
+            insumosMaps = insumos.whereType<Map<String, dynamic>>().toList(growable: false);
+          }
+        }
+      } catch (_) {
+        // Fallback final abajo
+      }
     }
 
-    return insumos
-        .whereType<Map<String, dynamic>>()
+    if (insumosMaps.isEmpty) {
+      final response = await _apiClient.get(
+        '/v1/programacion-servicio/$programacionId',
+        token: token,
+      );
+
+      final data = response['data'];
+      if (data is Map<String, dynamic>) {
+        final insumos = data['insumos'];
+        if (insumos is List) {
+          insumosMaps = insumos.whereType<Map<String, dynamic>>().toList(growable: false);
+        }
+      }
+    }
+
+    return insumosMaps
         .map(FormatoOperacionalDispositivo.fromJson)
+        .where((item) => item.idProducto > 0)
         .toList(growable: false);
+  }
+
+  Future<List<InsumoQuimicoEntregado>> getInsumosQuimicosEntregados(int programacionId) async {
+    if (AppConfig.useMockData) {
+      return const <InsumoQuimicoEntregado>[
+        InsumoQuimicoEntregado(
+          idProducto: 1,
+          producto: 'BETAFOX',
+          lote: 'LT-2026-01',
+          fechaVencimiento: '2027-01-15',
+          unidad: 'Mililitros',
+          cantidadEntregada: 15,
+        ),
+      ];
+    }
+
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    List<Map<String, dynamic>> insumosMaps = <Map<String, dynamic>>[];
+
+    try {
+      final response = await _apiClient.get(
+        '/v1/almacen/salidas-programacion/$programacionId/devolucion',
+        token: token,
+      );
+
+      final data = response['data'];
+      if (data is Map<String, dynamic>) {
+        final insumos = data['insumos'];
+        if (insumos is List) {
+          insumosMaps = insumos.whereType<Map<String, dynamic>>().toList(growable: false);
+        }
+      }
+    } catch (_) {
+      // fallback
+    }
+
+    if (insumosMaps.isEmpty) {
+      try {
+        final response = await _apiClient.get(
+          '/v1/almacen/salidas-programacion/$programacionId',
+          token: token,
+        );
+
+        final data = response['data'];
+        if (data is Map<String, dynamic>) {
+          final insumos = data['insumos'];
+          if (insumos is List) {
+            insumosMaps = insumos.whereType<Map<String, dynamic>>().toList(growable: false);
+          }
+        }
+      } catch (_) {
+        // fallback final
+      }
+    }
+
+    if (insumosMaps.isEmpty) {
+      final response = await _apiClient.get(
+        '/v1/programacion-servicio/$programacionId',
+        token: token,
+      );
+
+      final data = response['data'];
+      if (data is Map<String, dynamic>) {
+        final insumos = data['insumos'];
+        if (insumos is List) {
+          insumosMaps = insumos.whereType<Map<String, dynamic>>().toList(growable: false);
+        }
+      }
+    }
+
+    final result = <InsumoQuimicoEntregado>[];
+    for (final insumo in insumosMaps) {
+      final producto = (insumo['producto'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+      final lote = (insumo['lote'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+
+      final idProducto = (insumo['id_producto'] as num?)?.toInt() ?? 0;
+      if (idProducto <= 0) continue;
+
+      final cantidad = (insumo['cantidad_utilizada'] as num?)?.toInt()
+          ?? (insumo['cantidad_asignada'] as num?)?.toInt()
+          ?? (insumo['cantidad_entregada'] as num?)?.toInt()
+          ?? 0;
+
+      result.add(
+        InsumoQuimicoEntregado(
+          idProducto: idProducto,
+          producto: (producto['descripcion'] ?? insumo['producto'] ?? 'Producto').toString(),
+          lote: (lote['numero_lote'] ?? insumo['lote'] ?? '').toString(),
+          fechaVencimiento: (lote['fecha_vencimiento'] ?? insumo['fecha_vencimiento'] ?? insumo['vencimiento'] ?? '').toString(),
+          unidad: (producto['unidad_medida'] ?? insumo['unidad'] ?? '').toString(),
+          cantidadEntregada: cantidad,
+        ),
+      );
+    }
+
+    return result;
   }
 
   // Fichas Operacionales (Operational Sheets) Methods

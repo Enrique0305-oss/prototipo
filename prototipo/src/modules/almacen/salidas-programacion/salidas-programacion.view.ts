@@ -261,7 +261,7 @@ function renderTablaPendientes(): string {
                 </td>
                 <td>
                   <div class="sp-actions-cell">
-                    <button class="prov-btn-icon-sm" data-prog-id="${p.id}" title="Confirmar Entrega" style="color:#16a34a;border-color:#bbf7d0;">
+                    <button class="prov-btn-icon-sm" data-prog-id="${p.id}" data-prog-es-grupo="${p.es_grupo ? 'true' : 'false'}" title="Confirmar Entrega" style="color:#16a34a;border-color:#bbf7d0;">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                       </svg>
@@ -316,11 +316,11 @@ function renderTablaHistorial(): string {
                 <td><span class="prov-badge ${claseEstado}">${estadoTexto}</span></td>
                 <td>
                   <div class="sp-actions-cell">
-                    <button class="prov-btn-icon-sm sp-btn-pdf-entrega" data-prog-id-pdf="${p.id}" title="Descargar Acta de Entrega" style="color:#7c3aed;border-color:#ddd6fe;">
+                    <button class="prov-btn-icon-sm sp-btn-pdf-entrega" data-prog-id-pdf="${p.id}" data-prog-es-grupo="${p.es_grupo ? 'true' : 'false'}" title="Descargar Acta de Entrega" style="color:#7c3aed;border-color:#ddd6fe;">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
                     </button>
                     ${todoDevuelto ? '' : `
-                    <button class="prov-btn-icon-sm sp-btn-devolucion" data-prog-id-devol="${p.id}" title="Registrar Devolución" style="color:#0ea5e9;border-color:#bae6fd;">
+                    <button class="prov-btn-icon-sm sp-btn-devolucion" data-prog-id-devol="${p.id}" data-prog-es-grupo="${p.es_grupo ? 'true' : 'false'}" title="Registrar Devolución" style="color:#0ea5e9;border-color:#bae6fd;">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="9 14 4 9 9 4"></polyline>
                         <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
@@ -431,8 +431,10 @@ function ocultarPaginacion() {
 function enlazarEventosPendientes() {
   document.querySelectorAll('[data-prog-id]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      const id = parseInt((e.currentTarget as HTMLElement).dataset.progId || '0');
-      if (id) await abrirModalConfirmar(id);
+      const target = e.currentTarget as HTMLElement;
+      const id = parseInt(target.dataset.progId || '0');
+      const esGrupo = target.dataset.progEsGrupo === 'true';
+      if (id) await abrirModalConfirmar(id, esGrupo);
     });
   });
 }
@@ -440,10 +442,12 @@ function enlazarEventosPendientes() {
 function enlazarEventosHistorial() {
   document.querySelectorAll('[data-prog-id-pdf]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      const id = parseInt((e.currentTarget as HTMLElement).dataset.progIdPdf || '0');
+      const target = e.currentTarget as HTMLElement;
+      const id = parseInt(target.dataset.progIdPdf || '0');
+      const esGrupo = target.dataset.progEsGrupo === 'true';
       if (!id) return;
       try {
-        await salidasProgramacionService.downloadActaEntrega(id);
+        await salidasProgramacionService.downloadActaEntrega(id, esGrupo);
       } catch (err) {
         console.error('Error descargando acta:', err);
         mostrarToast('error', 'Error', 'No se pudo descargar el acta de entrega');
@@ -453,25 +457,27 @@ function enlazarEventosHistorial() {
 
   document.querySelectorAll('[data-prog-id-devol]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      const id = parseInt((e.currentTarget as HTMLElement).dataset.progIdDevol || '0');
-      if (id) await abrirModalDevolucion(id);
+      const target = e.currentTarget as HTMLElement;
+      const id = parseInt(target.dataset.progIdDevol || '0');
+      const esGrupo = target.dataset.progEsGrupo === 'true';
+      if (id) await abrirModalDevolucion(id, esGrupo);
     });
   });
 }
 
-async function abrirModalConfirmar(idProgramacion: number) {
+async function abrirModalConfirmar(idProgramacion: number, esGrupo: boolean = false) {
   const modal = document.getElementById('modalConfirmarSalida');
   const body = document.getElementById('modalConfirmarSalidaBody');
   const title = document.querySelector('#modalConfirmarSalida .prov-modal-header h2') as HTMLElement;
   if (!modal || !body) return;
 
-  if (title) title.textContent = 'Confirmar Salida de Materiales';
+  if (title) title.textContent = esGrupo ? 'Confirmar Salida de Materiales (Grupo)' : 'Confirmar Salida de Materiales';
 
   body.innerHTML = '<div class="sp-loading">Cargando detalles...</div>';
   modal.style.display = 'flex';
 
   try {
-    const res = await salidasProgramacionService.getDetalle(idProgramacion);
+    const res = await salidasProgramacionService.getDetalle(idProgramacion, esGrupo);
     const prog = res.data;
     if (!prog) {
       body.innerHTML = '<div class="sp-error">No se encontró la programación</div>';
@@ -554,7 +560,7 @@ async function abrirModalConfirmar(idProgramacion: number) {
 
       <div class="prov-modal-footer">
         <button class="prov-btn-secondary" id="btnCancelarConfirmacion">Cancelar</button>
-        <button class="prov-btn-success" id="btnConfirmarEntrega" data-prog-id="${prog.id}">
+        <button class="prov-btn-success" id="btnConfirmarEntrega" data-prog-id="${idProgramacion}" data-prog-ids='${JSON.stringify(prog.ids_programacion || [prog.id])}' data-es-grupo="${esGrupo}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
@@ -632,18 +638,18 @@ async function inicializarSelectoresLoteEntrega(insumos: InsumoProgamacion[]) {
   }
 }
 
-async function abrirModalDevolucion(idProgramacion: number) {
+async function abrirModalDevolucion(idProgramacion: number, esGrupo: boolean = false) {
   const modal = document.getElementById('modalConfirmarSalida');
   const body = document.getElementById('modalConfirmarSalidaBody');
   const title = document.querySelector('#modalConfirmarSalida .prov-modal-header h2') as HTMLElement;
   if (!modal || !body) return;
 
-  if (title) title.textContent = 'Registrar Devolución de Materiales';
+  if (title) title.textContent = esGrupo ? 'Registrar Devolución de Materiales (Grupo)' : 'Registrar Devolución de Materiales';
   body.innerHTML = '<div class="sp-loading">Cargando detalle de entrega...</div>';
   modal.style.display = 'flex';
 
   try {
-    const res = await salidasProgramacionService.getDetalleDevolucion(idProgramacion);
+    const res = await salidasProgramacionService.getDetalleDevolucion(idProgramacion, esGrupo);
     const prog = res.data;
     if (!prog) {
       body.innerHTML = '<div class="sp-error">No se encontró la programación</div>';
@@ -717,7 +723,7 @@ async function abrirModalDevolucion(idProgramacion: number) {
 
       <div class="prov-modal-footer">
         <button class="prov-btn-secondary" id="btnCancelarConfirmacion">Cancelar</button>
-        <button class="prov-btn-success" id="btnRegistrarDevolucion" data-prog-id="${prog.id}">
+        <button class="prov-btn-success" id="btnRegistrarDevolucion" data-prog-ids='${JSON.stringify(prog.ids_programacion || [prog.id])}'>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 14 4 9 9 4"></polyline>
             <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
@@ -744,8 +750,11 @@ function cerrarModalConfirmar() {
 
 async function confirmarEntrega(e: Event) {
   const btn = e.currentTarget as HTMLButtonElement;
-  const idProg = parseInt(btn.dataset.progId || '0');
-  if (!idProg) return;
+  const idsProgStr = btn.dataset.progIds || '[]';
+  const idsProg: number[] = JSON.parse(idsProgStr);
+  const esGrupo = btn.dataset.esGrupo === 'true';
+
+  if (!idsProg.length) return;
 
   const inputsCantidad = document.querySelectorAll('.cantidad-entregar') as NodeListOf<HTMLInputElement>;
   const insumos = Array.from(inputsCantidad).map(input => {
@@ -783,17 +792,20 @@ async function confirmarEntrega(e: Event) {
   btn.disabled = true;
   btn.textContent = 'Procesando...';
 
+  const idOriginal = parseInt(btn.dataset.progId || '0');
+
   try {
     const res = await salidasProgramacionService.confirmarSalida({
-      id_programacion: idProg,
+      ids_programacion: idsProg,
       insumos,
       observacion,
     });
 
     mostrarToast('success', 'Entrega Confirmada', 'Los materiales se han entregado y registrado en Kardex');
     try {
-      const idPdf = (res as any)?.data?.id_programacion || idProg;
-      await salidasProgramacionService.downloadActaEntrega(idPdf);
+      if (idOriginal) {
+        await salidasProgramacionService.downloadActaEntrega(idOriginal, esGrupo);
+      }
     } catch (pdfErr) {
       console.error('No se pudo descargar el PDF de entrega:', pdfErr);
       mostrarToast('warning', 'PDF', 'La entrega se confirmó, pero no se pudo descargar el acta');
@@ -810,8 +822,10 @@ async function confirmarEntrega(e: Event) {
 
 async function registrarDevolucion(e: Event) {
   const btn = e.currentTarget as HTMLButtonElement;
-  const idProg = parseInt(btn.dataset.progId || '0');
-  if (!idProg) return;
+  const idsProgStr = btn.dataset.progIds || '[]';
+  const idsProg: number[] = JSON.parse(idsProgStr);
+
+  if (!idsProg.length) return;
 
   const inputsCantidad = document.querySelectorAll('.cantidad-devolver') as NodeListOf<HTMLInputElement>;
   const insumos = Array.from(inputsCantidad).map(input => ({
@@ -840,7 +854,7 @@ async function registrarDevolucion(e: Event) {
 
   try {
     await salidasProgramacionService.registrarDevolucion({
-      id_programacion: idProg,
+      ids_programacion: idsProg,
       insumos,
       observacion,
     });
