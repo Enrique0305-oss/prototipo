@@ -40,7 +40,7 @@ let loteEditandoIndex: number | null = null; // Rastrear cual lote está siendo 
 let loteNuevoEditandoIndex: number | null = null; // Rastrear cual lote está siendo editado (nuevo)
 
 function getBackendOrigin(): string {
-  const fallback = 'https://pruebabackend.qsci-system.com';
+  const fallback = 'https://backend.qsci-system.com';
   const apiBase = (import.meta.env.VITE_API_URL || `${fallback}/api/v1`).trim();
 
   try {

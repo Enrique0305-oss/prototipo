@@ -124,18 +124,18 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     final normalized = value.startsWith('/') ? value.substring(1) : value;
 
     // Compatibilidad:
-    // - nuevo formato: /storage/...
+    // - nuevo formato: /media/...
     // - rutas de disco public: programacion-servicio/...
     // - formato legado con "public/..."
-    if (normalized.startsWith('storage/')) {
+    if (normalized.startsWith('media/')) {
       return '$base/$normalized';
     }
 
     if (normalized.startsWith('public/')) {
-      return '$base/storage/${normalized.substring('public/'.length)}';
+      return '$base/media/${normalized.substring('public/'.length)}';
     }
 
-    return '$base/storage/$normalized';
+    return '$base/media/$normalized';
   }
 
   Map<String, List<ServiceEvidence>> _groupEvidenceItems() {

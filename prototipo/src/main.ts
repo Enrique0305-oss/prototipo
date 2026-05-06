@@ -2,7 +2,7 @@ import './style.css'
 import './additional-styles.css'
 import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
-const LOGO_URL = "http://pruebabackend.qsci-system.com/images/menu.png";
+const LOGO_URL = "http://backend.qsci-system.com/images/menu.png";
 
 // Inicializar guard de autenticación
 initAuthGuard();
@@ -561,7 +561,7 @@ if (activeMenu === 'Facturación') {
     if (menuName === 'Facturación') {
       try {
         const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
-        const respuesta = await fetch('http://pruebabackend.qsci-system.com/api/v1/proyecciones', {
+        const respuesta = await fetch('http://backend.qsci-system.com/api/v1/proyecciones', {
           headers: {
             'Accept': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

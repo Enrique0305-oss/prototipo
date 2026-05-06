@@ -431,15 +431,15 @@ function resolvePhotoUrl(raw: string): string {
   const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
   const normalized = value.startsWith('/') ? value.substring(1) : value;
 
-  if (normalized.startsWith('storage/')) {
+  if (normalized.startsWith('media/')) {
     return `${base}/${normalized}`;
   }
 
   if (normalized.startsWith('public/')) {
-    return `${base}/storage/${normalized.substring('public/'.length)}`;
+    return `${base}/media/${normalized.substring('public/'.length)}`;
   }
 
-  return `${base}/storage/${normalized}`;
+  return `${base}/media/${normalized}`;
 }
 
 function parseEvidenceEntries(value: unknown): ServiceEvidenceEntry[] {

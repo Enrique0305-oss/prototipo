@@ -2,7 +2,7 @@ class AppConfig {
   // Sobrescribe este valor con --dart-define=API_BASE_URL=...
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.0.194:8000/api',
+    defaultValue: 'https://backend.qsci-system.com/api',
   );
 
   // Activa modo demo sin backend:

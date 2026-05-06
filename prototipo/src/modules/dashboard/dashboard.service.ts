@@ -1,7 +1,7 @@
 import type { DashboardData } from './dashboard.types';
 
 export class DashboardService {
-  private baseURL = 'http://pruebabackend.qsci-system.com/api'; // Cambiar según tu backend
+  private baseURL = 'http://backend.qsci-system.com/api'; // Cambiar según tu backend
 
   async getDashboardData(): Promise<DashboardData> {
     // TODO: Implementar cuando el backend esté listo
