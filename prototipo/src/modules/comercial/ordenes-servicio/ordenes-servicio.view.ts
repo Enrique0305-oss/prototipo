@@ -956,8 +956,11 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
   const frecuenciaBase = frecuenciaBaseParaSelectODS(frecuencia);
   const frecSelect = frecOpts.map(f => {
     const label = f || 'A SOLICITUD DEL CLIENTE';
-    const sel = (f && frecuenciaBase && f.toLowerCase() === frecuenciaBase.toLowerCase()) ? 'selected' : (!f && !frecuenciaBase ? 'selected' : '');
-    return '<option value="' + f + '" ' + sel + '>' + label + '</option>';
+    const optionValue = f || 'A SOLICITUD DEL CLIENTE'; // Usar el mismo valor que se guardará
+    const normalizedBase = frecuenciaBase ? frecuenciaBase.toLowerCase() : '';
+    const normalizedOpt = optionValue.toLowerCase();
+    const sel = (normalizedBase === normalizedOpt) ? 'selected' : '';
+    return '<option value="' + optionValue + '" ' + sel + '>' + label + '</option>';
   }).join('');
 
   // Si el servicio viene de cotizacion y no esta en la lista, agregarlo temporalmente

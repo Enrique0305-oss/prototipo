@@ -9,6 +9,7 @@ use App\Models\OrdenServicioProducto;
 use App\Models\OrdenServicioEquipo;
 use App\Models\Cotizacion;
 use App\Models\CotizacionDetalle;
+use App\Models\Proyeccion;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -415,6 +416,9 @@ class OrdenServicioController extends Controller
             // Cargar relaciones para respuesta
             $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
 
+            // Crear automáticamente proyección para orden de servicio
+            ProyeccionesController::crearProyeccionAutomaticaServicio($orden);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Orden de servicio creada exitosamente',
@@ -535,6 +539,9 @@ class OrdenServicioController extends Controller
             if (isset($validated['version'])) {
                 $orden->version = $validated['version'];
             }
+            if (isset($validated['observaciones'])) {
+                $orden->observaciones = $validated['observaciones'];
+            }
 
             // Si se actualizan detalles
             if (isset($validated['detalles'])) {
@@ -611,6 +618,14 @@ class OrdenServicioController extends Controller
             DB::commit();
 
             $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
+
+            // Actualizar automáticamente proyección para orden de servicio
+            ProyeccionesController::actualizarProyeccionServicio(
+                Proyeccion::where('tipo_orden', 'servicio')
+                    ->where('id_referencia', $orden->id)
+                    ->first(),
+                $orden
+            );
 
             return response()->json([
                 'success' => true,
