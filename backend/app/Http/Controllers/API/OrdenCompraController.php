@@ -98,10 +98,13 @@ class OrdenCompraController extends Controller
             'tipo_moneda'                  => 'required|in:PEN,USD',
             'tipo_cambio'                  => 'nullable|numeric|min:0',
             'tiene_igv'                    => 'boolean',
+            'costo_envio'                  => 'nullable|numeric|min:0',
             'observaciones'                => 'nullable|string',
             'detalles'                     => 'required|array|min:1',
             'detalles.*.id_producto'       => 'required|integer|exists:productos,id',
             'detalles.*.id_lote'           => 'nullable|integer|exists:lotes,id',
+            'detalles.*.numero_lote'       => 'nullable|string|max:60',
+            'detalles.*.fecha_vencimiento' => 'nullable|date',
             'detalles.*.cantidad'          => 'required|integer|min:1',
             'detalles.*.precio_unitario'   => 'required|numeric|min:0',
             'detalles.*.observacion'       => 'nullable|string|max:300',
@@ -114,8 +117,9 @@ class OrdenCompraController extends Controller
                 $subtotal += $det['cantidad'] * $det['precio_unitario'];
             }
             $tieneIgv = $validated['tiene_igv'] ?? true;
+            $costoEnvio = $validated['costo_envio'] ?? 0;
             $igv      = $tieneIgv ? round($subtotal * 0.18, 4) : 0;
-            $total    = round($subtotal + $igv, 4);
+            $total    = round($subtotal + $igv + $costoEnvio, 4);
 
             $orden = OrdenCompra::create([
                 'numero_orden_compra'           => $this->generarNumero(),
@@ -127,6 +131,7 @@ class OrdenCompraController extends Controller
                 'tipo_cambio'                   => $validated['tipo_cambio'] ?? null,
                 'tiene_igv'                     => $tieneIgv,
                 'subtotal'                      => round($subtotal, 4),
+                'costo_envio'                   => round($costoEnvio, 4),
                 'igv'                           => $igv,
                 'total'                         => $total,
                 'estado'                        => 'Pendiente',
@@ -135,10 +140,40 @@ class OrdenCompraController extends Controller
             ]);
 
             foreach ($validated['detalles'] as $det) {
+                $idLote = $det['id_lote'] ?? null;
+                
+                // Si viene numero_lote y fecha_vencimiento, crear nuevo lote
+                if (empty($idLote) && !empty($det['numero_lote']) && !empty($det['fecha_vencimiento'])) {
+                    $idProducto = $det['id_producto'];
+                    $numeroLote = $det['numero_lote'];
+                    $fechaVencimiento = $det['fecha_vencimiento'];
+                    
+                    // Verificar si el lote ya existe (mismo número_lote + id_producto)
+                    $loteExistente = Lote::where('id_producto', $idProducto)
+                        ->where('numero_lote', $numeroLote)
+                        ->first();
+                    
+                    if ($loteExistente) {
+                        $idLote = $loteExistente->id;
+                    } else {
+                        // Crear nuevo lote
+                        $nuevoLote = Lote::create([
+                            'id_producto' => $idProducto,
+                            'numero_lote' => $numeroLote,
+                            'fecha_vencimiento' => $fechaVencimiento,
+                            'cantidad' => 0,
+                            'cantidad_disponible' => 0,
+                            'estado' => 'Activo',
+                            'fecha_ingreso' => now(),
+                        ]);
+                        $idLote = $nuevoLote->id;
+                    }
+                }
+                
                 DetalleOrdenCompra::create([
                     'id_orden_compra'  => $orden->id,
                     'id_producto'      => $det['id_producto'],
-                    'id_lote'          => $det['id_lote'] ?? null,
+                    'id_lote'          => $idLote,
                     'cantidad'         => $det['cantidad'],
                     'precio_unitario'  => $det['precio_unitario'],
                     'subtotal'         => round($det['cantidad'] * $det['precio_unitario'], 4),
@@ -185,10 +220,13 @@ class OrdenCompraController extends Controller
             'tipo_moneda'                  => 'sometimes|required|in:PEN,USD',
             'tipo_cambio'                  => 'nullable|numeric|min:0',
             'tiene_igv'                    => 'boolean',
+            'costo_envio'                  => 'nullable|numeric|min:0',
             'observaciones'                => 'nullable|string',
             'detalles'                     => 'sometimes|required|array|min:1',
             'detalles.*.id_producto'       => 'required|integer|exists:productos,id',
             'detalles.*.id_lote'           => 'nullable|integer|exists:lotes,id',
+            'detalles.*.numero_lote'       => 'nullable|string|max:60',
+            'detalles.*.fecha_vencimiento' => 'nullable|date',
             'detalles.*.cantidad'          => 'required|integer|min:1',
             'detalles.*.precio_unitario'   => 'required|numeric|min:0',
             'detalles.*.observacion'       => 'nullable|string|max:300',
@@ -202,20 +240,52 @@ class OrdenCompraController extends Controller
                     $subtotal += $det['cantidad'] * $det['precio_unitario'];
                 }
                 $tieneIgv = $validated['tiene_igv'] ?? $orden->tiene_igv;
+                $costoEnvio = $validated['costo_envio'] ?? $orden->costo_envio ?? 0;
                 $igv      = $tieneIgv ? round($subtotal * 0.18, 4) : 0;
-                $total    = round($subtotal + $igv, 4);
+                $total    = round($subtotal + $igv + $costoEnvio, 4);
 
                 $validated['subtotal'] = round($subtotal, 4);
+                $validated['costo_envio'] = round($costoEnvio, 4);
                 $validated['igv']      = $igv;
                 $validated['total']    = $total;
 
                 // Reemplazar detalles
                 $orden->detalles()->delete();
                 foreach ($validated['detalles'] as $det) {
+                    $idLote = $det['id_lote'] ?? null;
+                    
+                    // Si viene numero_lote y fecha_vencimiento, crear nuevo lote
+                    if (empty($idLote) && !empty($det['numero_lote']) && !empty($det['fecha_vencimiento'])) {
+                        $idProducto = $det['id_producto'];
+                        $numeroLote = $det['numero_lote'];
+                        $fechaVencimiento = $det['fecha_vencimiento'];
+                        
+                        // Verificar si el lote ya existe (mismo número_lote + id_producto)
+                        $loteExistente = Lote::where('id_producto', $idProducto)
+                            ->where('numero_lote', $numeroLote)
+                            ->first();
+                        
+                        if ($loteExistente) {
+                            $idLote = $loteExistente->id;
+                        } else {
+                            // Crear nuevo lote
+                            $nuevoLote = Lote::create([
+                                'id_producto' => $idProducto,
+                                'numero_lote' => $numeroLote,
+                                'fecha_vencimiento' => $fechaVencimiento,
+                                'cantidad' => 0,
+                                'cantidad_disponible' => 0,
+                                'estado' => 'Activo',
+                                'fecha_ingreso' => now(),
+                            ]);
+                            $idLote = $nuevoLote->id;
+                        }
+                    }
+                    
                     DetalleOrdenCompra::create([
                         'id_orden_compra'  => $orden->id,
                         'id_producto'      => $det['id_producto'],
-                        'id_lote'          => $det['id_lote'] ?? null,
+                        'id_lote'          => $idLote,
                         'cantidad'         => $det['cantidad'],
                         'precio_unitario'  => $det['precio_unitario'],
                         'subtotal'         => round($det['cantidad'] * $det['precio_unitario'], 4),

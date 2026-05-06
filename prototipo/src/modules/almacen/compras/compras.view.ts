@@ -162,6 +162,10 @@ export function renderAlmacenCompras(): string {
         <label>Observaciones</label>
         <textarea class="prov-input" id="oc-form-obs" rows="2" placeholder="Notas internas..."></textarea>
       </div>
+      <div class="prov-form-group" style="margin-bottom:12px">
+        <label>Costo de Envío</label>
+        <input type="number" id="oc-form-costo-envio" class="prov-input" min="0" step="0.01" value="0" placeholder="0.00" style="width:200px">
+      </div>
 
       <!-- Sección: Detalle de productos -->
       <div class="prov-form-section-title" style="margin-top:12px">Detalle de Productos</div>
@@ -195,6 +199,10 @@ export function renderAlmacenCompras(): string {
           <tr id="oc-igv-row">
             <td style="padding:4px 12px;color:#64748b">IGV (18%):</td>
             <td style="padding:4px 12px;text-align:right;font-weight:600" id="oc-form-igv-val">S/ 0.00</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 12px;color:#64748b">Costo Envío:</td>
+            <td style="padding:4px 12px;text-align:right;font-weight:600" id="oc-form-costo-envio-val">S/ 0.00</td>
           </tr>
           <tr style="border-top:2px solid #e2e8f0">
             <td style="padding:6px 12px;font-weight:700">TOTAL:</td>
@@ -284,6 +292,9 @@ export async function initComprasEvents(): Promise<void> {
 
   // IGV toggle
   document.getElementById('oc-form-igv')?.addEventListener('change', actualizarTotales);
+
+  // Costo de envío
+  document.getElementById('oc-form-costo-envio')?.addEventListener('input', actualizarTotales);
 
   // Agregar fila
   document.getElementById('oc-btn-add-row')?.addEventListener('click', () => agregarFila());
@@ -485,6 +496,7 @@ function abrirModalForm(oc?: OrdenCompra) {
   (document.getElementById('oc-form-tipo-cambio') as HTMLInputElement).value = oc?.tipo_cambio ? String(oc.tipo_cambio) : '3.75';
   (document.getElementById('oc-form-igv') as HTMLInputElement).checked = oc ? oc.tiene_igv : true;
   (document.getElementById('oc-form-obs') as HTMLTextAreaElement).value = oc?.observaciones || '';
+  (document.getElementById('oc-form-costo-envio') as HTMLInputElement).value = oc?.costo_envio ? String(oc.costo_envio) : '0';
 
   const tipoCambioWrap = document.getElementById('oc-tipo-cambio-wrap')!;
   tipoCambioWrap.style.display = (!oc || oc.tipo_moneda === 'USD') ? '' : 'none';
@@ -537,9 +549,28 @@ function agregarFila(idProducto?: number, cantidad?: number, precio?: number, id
       </select>
     </td>
     <td>
-      <select class="prov-input-sm oc-det-lote" data-row="${idx}" ${idProducto ? '' : 'disabled'}>
-        <option value="">Seleccionar lote...</option>
-      </select>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <!-- Toggle entre Seleccionar/Crear -->
+        <div style="display:flex;gap:8px;font-size:12px">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;flex:1">
+            <input type="radio" name="oc-lote-tipo-${idx}" class="oc-lote-tipo-radio" value="existente" ${!idLote ? 'checked' : ''} data-row="${idx}" style="cursor:pointer">
+            <span style="color:#475569">Existente</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;flex:1">
+            <input type="radio" name="oc-lote-tipo-${idx}" class="oc-lote-tipo-radio" value="nuevo" ${idLote ? 'checked' : ''} data-row="${idx}" style="cursor:pointer">
+            <span style="color:#475569">Nuevo</span>
+          </label>
+        </div>
+        <!-- Select Lote Existente -->
+        <select class="prov-input-sm oc-det-lote oc-det-lote-existente" data-row="${idx}" ${idProducto ? '' : 'disabled'} style="display:${idLote ? 'none' : 'block'}">
+          <option value="">Seleccionar lote...</option>
+        </select>
+        <!-- Inputs Nuevo Lote (ocultos por defecto) -->
+        <div class="oc-det-lote-nuevo-wrap" data-row="${idx}" style="display:${idLote ? 'flex' : 'none'};gap:6px;flex-direction:column">
+          <input type="text" class="prov-input-sm oc-det-lote-numero" data-row="${idx}" placeholder="Nº Lote" maxlength="60" style="font-size:12px">
+          <input type="date" class="prov-input-sm oc-det-lote-fecha" data-row="${idx}" style="font-size:12px">
+        </div>
+      </div>
     </td>
     <td>
       <input type="number" class="prov-input-sm oc-det-cantidad" data-row="${idx}" min="1" value="${cantidad ?? 1}" step="1">
@@ -575,14 +606,32 @@ function bindFilaEvents(tr: HTMLTableRowElement, idx: number) {
     if (idProd) {
       // Habilitar select de lotes y cargar
       await cargarLotesEnFila(idx, idProd);
+      // Resetear tipo de lote a "existente" cuando cambia producto
+      const radioExistente = tr.querySelector<HTMLInputElement>(`input[name="oc-lote-tipo-${idx}"][value="existente"]`);
+      if (radioExistente) {
+        radioExistente.checked = true;
+        mostrarLoteExistente(idx);
+      }
     } else {
       // Deshabilitar select de lotes
-      const selectLote = tr.querySelector<HTMLSelectElement>('.oc-det-lote');
+      const selectLote = tr.querySelector<HTMLSelectElement>('.oc-det-lote-existente');
       if (selectLote) {
         selectLote.disabled = true;
         selectLote.innerHTML = '<option value="">Seleccionar lote...</option>';
       }
     }
+  });
+
+  // Manejar cambio de tipo de lote (existente vs nuevo)
+  const radiosLoteTipo = tr.querySelectorAll<HTMLInputElement>(`input[name="oc-lote-tipo-${idx}"]`);
+  radiosLoteTipo.forEach(radio => {
+    radio.addEventListener('change', () => {
+      if (radio.value === 'existente') {
+        mostrarLoteExistente(idx);
+      } else {
+        mostrarLoteNuevo(idx);
+      }
+    });
   });
 
   tr.querySelector<HTMLInputElement>('.oc-det-cantidad')?.addEventListener('input', () => {
@@ -599,8 +648,22 @@ function bindFilaEvents(tr: HTMLTableRowElement, idx: number) {
   });
 }
 
+function mostrarLoteExistente(idx: number) {
+  const selectLote = document.querySelector<HTMLSelectElement>(`.oc-det-lote-existente[data-row="${idx}"]`);
+  const wrapNuevo = document.querySelector<HTMLDivElement>(`.oc-det-lote-nuevo-wrap[data-row="${idx}"]`);
+  if (selectLote) selectLote.style.display = 'block';
+  if (wrapNuevo) wrapNuevo.style.display = 'none';
+}
+
+function mostrarLoteNuevo(idx: number) {
+  const selectLote = document.querySelector<HTMLSelectElement>(`.oc-det-lote-existente[data-row="${idx}"]`);
+  const wrapNuevo = document.querySelector<HTMLDivElement>(`.oc-det-lote-nuevo-wrap[data-row="${idx}"]`);
+  if (selectLote) selectLote.style.display = 'none';
+  if (wrapNuevo) wrapNuevo.style.display = 'flex';
+}
+
 async function cargarLotesEnFila(rowIdx: number, idProducto: number, idLoteSeleccionado?: number) {
-  const selectLote = document.querySelector<HTMLSelectElement>(`.oc-det-lote[data-row="${rowIdx}"]`);
+  const selectLote = document.querySelector<HTMLSelectElement>(`.oc-det-lote-existente[data-row="${rowIdx}"]`);
   if (!selectLote) return;
 
   try {
@@ -643,12 +706,14 @@ function actualizarTotales() {
 
   const tieneIgv = (document.getElementById('oc-form-igv') as HTMLInputElement)?.checked;
   const moneda = (document.getElementById('oc-form-moneda') as HTMLSelectElement)?.value || 'PEN';
+  const costoEnvio = parseFloat((document.getElementById('oc-form-costo-envio') as HTMLInputElement)?.value || '0');
   const sym = moneda === 'USD' ? '$' : 'S/';
   const igv = tieneIgv ? subtotal * 0.18 : 0;
-  const total = subtotal + igv;
+  const total = subtotal + igv + costoEnvio;
 
   setText('oc-form-subtotal', `${sym} ${num(subtotal)}`);
   setText('oc-form-igv-val', `${sym} ${num(igv)}`);
+  setText('oc-form-costo-envio-val', `${sym} ${num(costoEnvio)}`);
   setText('oc-form-total', `${sym} ${num(total)}`);
 
   const igvRow = document.getElementById('oc-igv-row');
@@ -664,17 +729,37 @@ async function guardarOrden() {
 
   // Recopilar detalles
   const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('#oc-detalle-tbody tr'));
-  const detalles: Array<{id_producto: number; id_lote?: number | null; cantidad: number; precio_unitario: number}> = [];
+  const detalles: Array<{id_producto: number; id_lote?: number | null; numero_lote?: string; fecha_vencimiento?: string; cantidad: number; precio_unitario: number}> = [];
   for (const row of rows) {
     const idx = row.dataset.rowIdx!;
     const idProd = parseInt((document.querySelector<HTMLSelectElement>(`.oc-det-producto[data-row="${idx}"]`)?.value) || '0');
-    const idLote = parseInt((document.querySelector<HTMLSelectElement>(`.oc-det-lote[data-row="${idx}"]`)?.value) || '0');
     const cant = parseFloat((document.querySelector<HTMLInputElement>(`.oc-det-cantidad[data-row="${idx}"]`)?.value) || '0');
     const precio = parseFloat((document.querySelector<HTMLInputElement>(`.oc-det-precio[data-row="${idx}"]`)?.value) || '0');
+    
+    // Determinar tipo de lote
+    const radioSeleccionado = row.querySelector<HTMLInputElement>(`input[name="oc-lote-tipo-${idx}"]:checked`);
+    const tipoLote = radioSeleccionado?.value || 'existente';
+    
+    let detalle: any = { id_producto: idProd, cantidad: cant, precio_unitario: precio };
+    
+    if (tipoLote === 'existente') {
+      // Lote existente
+      const idLote = parseInt((document.querySelector<HTMLSelectElement>(`.oc-det-lote-existente[data-row="${idx}"]`)?.value) || '0');
+      detalle.id_lote = idLote || null;
+    } else {
+      // Nuevo lote
+      const numeroLote = (document.querySelector<HTMLInputElement>(`.oc-det-lote-numero[data-row="${idx}"]`)?.value || '').trim();
+      const fechaVencimiento = (document.querySelector<HTMLInputElement>(`.oc-det-lote-fecha[data-row="${idx}"]`)?.value || '').trim();
+      if (!numeroLote) { mostrarToast('warning', 'Detalle incompleto', 'Ingrese el número de lote'); return; }
+      if (!fechaVencimiento) { mostrarToast('warning', 'Detalle incompleto', 'Ingrese la fecha de vencimiento del lote'); return; }
+      detalle.numero_lote = numeroLote;
+      detalle.fecha_vencimiento = fechaVencimiento;
+    }
+    
     if (!idProd) { mostrarToast('warning', 'Detalle incompleto', 'Seleccione un producto en cada fila'); return; }
     if (cant <= 0) { mostrarToast('warning', 'Cantidad inválida', 'La cantidad debe ser mayor a 0'); return; }
     if (precio <= 0) { mostrarToast('warning', 'Precio inválido', 'El precio debe ser mayor a 0'); return; }
-    detalles.push({ id_producto: idProd, id_lote: idLote || null, cantidad: cant, precio_unitario: precio });
+    detalles.push(detalle);
   }
   if (!detalles.length) { mostrarToast('warning', 'Sin productos', 'Agregue al menos un producto'); return; }
 
@@ -687,6 +772,7 @@ async function guardarOrden() {
     tipo_moneda: moneda,
     tipo_cambio: moneda === 'USD' ? parseFloat((document.getElementById('oc-form-tipo-cambio') as HTMLInputElement).value) : null,
     tiene_igv: (document.getElementById('oc-form-igv') as HTMLInputElement).checked,
+    costo_envio: parseFloat((document.getElementById('oc-form-costo-envio') as HTMLInputElement).value || '0'),
     observaciones: (document.getElementById('oc-form-obs') as HTMLTextAreaElement).value || null,
     detalles,
   };
@@ -821,6 +907,7 @@ async function abrirDetalle(id: number) {
                 <td>${sym} ${num(o.subtotal)}</td>
               </tr>
               ${o.tiene_igv ? `<tr><td colspan="4" style="text-align:right">IGV (18%):</td><td>${sym} ${num(o.igv)}</td></tr>` : ''}
+              ${o.costo_envio && o.costo_envio > 0 ? `<tr><td colspan="4" style="text-align:right">Costo Envío:</td><td>${sym} ${num(o.costo_envio)}</td></tr>` : ''}
               <tr>
                 <td colspan="4" style="text-align:right;font-size:15px">TOTAL:</td>
                 <td style="font-size:15px;color:#1e3a5f">${sym} ${num(o.total)}</td>

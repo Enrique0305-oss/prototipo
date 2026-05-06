@@ -34,6 +34,7 @@ export interface OrdenCompra {
   tipo_cambio?: number | null;
   tiene_igv: boolean;
   subtotal: number;
+  costo_envio?: number;
   igv: number;
   total: number;
   estado: 'Pendiente' | 'Recibido' | 'Anulado';

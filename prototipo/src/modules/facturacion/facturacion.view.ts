@@ -6,6 +6,54 @@ function getAuthHeaders(): Record<string, string> {
   };
 }
 
+// --- ALERTA DE ÓRDENES PENDIENTES ---
+function renderAlertaOrdenesPendientes(ordenesPendientes: any = {}) {
+  const total = ordenesPendientes.total || 0;
+  
+  if (total === 0) {
+    return '';
+  }
+
+  const cantidadProducto = (ordenesPendientes.productos || []).length;
+  const cantidadCapacitacion = (ordenesPendientes.capacitaciones || []).length;
+
+  let textoDetalle = [];
+  if (cantidadProducto > 0) textoDetalle.push(`${cantidadProducto} Orden(es) de Producto`);
+  if (cantidadCapacitacion > 0) textoDetalle.push(`${cantidadCapacitacion} Orden(es) de Capacitación`);
+
+  return `
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; 
+                padding: 16px 20px; 
+                border-radius: 8px; 
+                margin-bottom: 24px; 
+                border-left: 5px solid #f093fb;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <div style="font-size: 32px;">📋</div>
+        <div>
+          <div style="font-weight: 700; font-size: 15px; margin-bottom: 4px;">Órdenes Pendientes de Registrar</div>
+          <div style="font-size: 13px; opacity: 0.95;">${textoDetalle.join(' • ')}</div>
+        </div>
+      </div>
+      <button id="btn-ver-pendientes" style="background: rgba(255,255,255,0.2); 
+                                              color: white; 
+                                              border: 1px solid rgba(255,255,255,0.5); 
+                                              padding: 10px 20px; 
+                                              border-radius: 6px; 
+                                              cursor: pointer; 
+                                              font-weight: 600;
+                                              font-size: 13px;
+                                              transition: all 0.3s ease;">
+        Ver Pendientes →
+      </button>
+    </div>
+  `;
+}
+
 // --- MODAL DE NUEVA FACTURA ---
 function renderModalFactura() {
   return `
@@ -23,7 +71,6 @@ function renderModalFactura() {
                       <label style="display:block; font-size:13px; font-weight:600; color:#475569; margin-bottom:8px;">1. Tipo de Orden</label>
                       <select id="modal-tipo-orden" style="width:100%; padding:10px; border-radius:6px; border:1px solid #cbd5e1; outline:none; focus:border-blue-500;">
                           <option value="">-- Seleccione Tipo --</option>
-                          <option value="servicio">Orden de Servicio</option>
                           <option value="producto">Orden de Producto</option>
                           <option value="capacitacion">Orden de Capacitación</option>
                       </select>
@@ -39,7 +86,7 @@ function renderModalFactura() {
               <form id="form-nueva-factura" style="display:none;">
                   <h4 style="margin:0 0 15px 0; color: #334155; font-size: 15px; border-bottom: 2px solid #3b82f6; display: inline-block; padding-bottom: 4px;">Información General</h4>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:25px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px;">
                 <div>
                     <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Actividad</label>
                     <input type="text" id="in-actividad" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; outline-color:#3b82f6;">
@@ -47,8 +94,8 @@ function renderModalFactura() {
                 <div>
                     <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Empresa (Emisor)</label>
                     <select id="res-alias" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-weight:bold; color:#1e293b;">
-                        <option value="1">MULTI</option>
-                        <option value="2">CIM</option>
+                        <option value="2">MULTI</option>
+                        <option value="1">CIM</option>
                     </select>
                 </div>
 
@@ -56,13 +103,23 @@ function renderModalFactura() {
                     <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Cliente</label>
                     <input type="text" id="res-cliente" readonly style="width:100%; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; color:#64748b;">
                 </div>
-                <div>
-                    <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Servicio/Producto</label>
-                    <input type="text" id="res-servicio" readonly style="width:100%; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; color:#64748b;">
-                </div>
-                <div>
-                    <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Frecuencia</label>
-                    <input type="text" id="res-frecuencia" readonly style="width:100%; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; color:#64748b;">
+                <div style="grid-column: 1 / -1;">
+                    <label style="display:block; font-size:12px; font-weight:600; margin-bottom:8px;">Servicios/Productos y Frecuencias</label>
+                    <div style="border:1px solid #bae6fd; border-radius:8px; overflow:hidden; background:#ffffff;">
+                        <table style="width:100%; border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f0f9ff; border-bottom:2px solid #bae6fd;">
+                                    <th style="padding:10px 12px; text-align:left; font-size:12px; font-weight:600; color:#0c4a6e;">Servicio/Producto</th>
+                                    <th style="padding:10px 12px; text-align:center; font-size:12px; font-weight:600; color:#0c4a6e; width:200px;">Frecuencia</th>
+                                </tr>
+                            </thead>
+                            <tbody id="res-servicios-tabla">
+                                <tr>
+                                    <td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Cargando...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -70,15 +127,15 @@ function renderModalFactura() {
                   
                   <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px; padding:15px; border: 1px solid #10b981; border-radius:8px;">
                       <div>
-                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Ejecución *</label>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Ejecución</label>
                           <input type="date" id="in-fecha-ejecucion"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                       <div>
-                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">N° de Factura *</label>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">N° de Factura</label>
                           <input type="text" id="in-num-factura" placeholder="F001-000000"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px; outline-color:#10b981;">
                       </div>
                       <div>
-                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Factura   *</label>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Factura</label>
                           <input type="date" id="in-fecha-factura"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                       <div>
@@ -86,7 +143,7 @@ function renderModalFactura() {
                           <input type="number" id="in-dias-credito" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                       <div>
-                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Vcto Factura *</label>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Vcto Factura</label>
                           <input type="date" id="in-fecha-vcto"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                       <div>
@@ -94,7 +151,7 @@ function renderModalFactura() {
                           <input type="number" id="in-dias-vencer" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                       <div>
-                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Pago *</label>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Pago</label>
                           <input type="date" id="in-fecha-pago"  style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
                       </div>
                   </div>
@@ -139,13 +196,250 @@ function renderModalFactura() {
       </div>
   </div>`;
 }
+
+// --- MODAL DE VISTA PREVIA ---
+function renderModalVista() {
+  return `
+  <div id="modal-vista" class="modal" style="display:none; position:fixed; z-index:1001; left:0; top:0; width:100%; height:100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); overflow-y: auto;">
+      <div class="modal-content" style="background:#fff; margin:3% auto; width:900px; border-radius:12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid #e2e8f0; overflow: hidden;">
+          <div style="display:flex; justify-content:space-between; align-items:center; background: #f8fafc; padding:15px 25px; border-bottom:1px solid #e2e8f0;">
+              <h3 style="margin:0; color: #1e293b; font-size: 1.25rem; font-weight: 700;">Detalles de la Proyección</h3>
+              <button id="btn-cerrar-vista" style="background:none; border:none; font-size:28px; cursor:pointer; color: #94a3b8; line-height:1;">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:25px;">
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px; margin-bottom:20px;">
+                  <div>
+                      <label style="display:block; font-size:11px; font-weight:600; color:#64748b; margin-bottom:5px;">ACTIVIDAD</label>
+                      <p id="vista-actividad" style="margin:0; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">-</p>
+                  </div>
+                  <div>
+                      <label style="display:block; font-size:11px; font-weight:600; color:#64748b; margin-bottom:5px;">EMPRESA</label>
+                      <p id="vista-empresa" style="margin:0; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">-</p>
+                  </div>
+                  <div>
+                      <label style="display:block; font-size:11px; font-weight:600; color:#64748b; margin-bottom:5px;">CLIENTE</label>
+                      <p id="vista-cliente" style="margin:0; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">-</p>
+                  </div>
+                  <div style="grid-column: 1 / -1;">
+                      <label style="display:block; font-size:11px; font-weight:600; color:#64748b; margin-bottom:8px;">SERVICIOS/PRODUCTOS Y FRECUENCIAS</label>
+                      <div style="border:1px solid #bae6fd; border-radius:8px; overflow:hidden; background:#ffffff;">
+                          <table style="width:100%; border-collapse:collapse;">
+                              <thead>
+                                  <tr style="background:#f0f9ff; border-bottom:2px solid #bae6fd;">
+                                      <th style="padding:10px 12px; text-align:left; font-size:11px; font-weight:600; color:#0c4a6e;">Servicio/Producto</th>
+                                      <th style="padding:10px 12px; text-align:center; font-size:11px; font-weight:600; color:#0c4a6e; width:180px;">Frecuencia</th>
+                                  </tr>
+                              </thead>
+                              <tbody id="vista-servicios-tabla">
+                                  <tr>
+                                      <td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">-</td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+              </div>
+
+              <div style="background:#faf5ff; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #e9d5ff;">
+                  <h4 style="margin:0 0 15px 0; color:#6b21a8; font-size:13px; font-weight:700;">IMPORTES Y TOTALES</h4>
+                  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap:15px;">
+                      <div style="text-align:center;">
+                          <span style="display:block; font-size:10px; font-weight:600; color:#6b21a8;">Subtotal</span>
+                          <p id="vista-subtotal" style="margin:0; font-size:13px; font-weight:bold; color:#6b21a8;">-</p>
+                      </div>
+                      <div style="text-align:center;">
+                          <span style="display:block; font-size:10px; font-weight:600; color:#6b21a8;">IGV (18%)</span>
+                          <p id="vista-igv" style="margin:0; font-size:13px; font-weight:bold; color:#6b21a8;">-</p>
+                      </div>
+                      <div style="text-align:center;">
+                          <span style="display:block; font-size:10px; font-weight:600; color:#6b21a8;">Total Orden</span>
+                          <p id="vista-total-os" style="margin:0; font-size:13px; font-weight:bold; color:#6b21a8;">-</p>
+                      </div>
+                      <div style="text-align:center;">
+                          <span style="display:block; font-size:10px; font-weight:600; color:#dc2626;">Detracción (12%)</span>
+                          <p id="vista-detrax" style="margin:0; font-size:13px; font-weight:bold; color:#dc2626;">-</p>
+                      </div>
+                      <div style="text-align:center; background:white; padding:8px 12px; border-radius:6px; border:2px solid #10b981;">
+                          <span style="display:block; font-size:10px; font-weight:600; color:#10b981;">Neto</span>
+                          <p id="vista-neto" style="margin:0; font-size:14px; font-weight:900; color:#10b981;">-</p>
+                      </div>
+                  </div>
+              </div>
+
+              <div style="background:#f0f4f8; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #bfdbfe;">
+                  <h4 style="margin:0 0 15px 0; color:#1e3a8a; font-size:13px; font-weight:700;">DATOS DE FACTURACIÓN</h4>
+                  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px;">
+                      <div>
+                          <span style="display:block; font-size:10px; font-weight:600; color:#475569;">Fecha Ejecución</span>
+                          <p id="vista-fecha-ejecucion" style="margin:0; font-weight:600; color:#1e293b;">-</p>
+                      </div>
+                      <div>
+                          <span style="display:block; font-size:10px; font-weight:600; color:#475569;">N° Factura</span>
+                          <p id="vista-num-factura" style="margin:0; font-weight:600; color:#1e293b; font-family:monospace;">-</p>
+                      </div>
+                      <div>
+                          <span style="display:block; font-size:10px; font-weight:600; color:#475569;">Fecha Factura</span>
+                          <p id="vista-fecha-factura" style="margin:0; font-weight:600; color:#1e293b;">-</p>
+                      </div>
+                      <div>
+                          <span style="display:block; font-size:10px; font-weight:600; color:#475569;">Días Crédito</span>
+                          <p id="vista-dias-credito" style="margin:0; font-weight:600; color:#1e293b;">-</p>
+                      </div>
+                      <div>
+                          <span style="display:block; font-size:10px; font-weight:600; color:#475569;">Fecha Vcto</span>
+                          <p id="vista-fecha-vcto" style="margin:0; font-weight:600; color:#1e293b;">-</p>
+                      </div>
+                      <div>
+                          <span style="display:block; font-size:10px; font-weight:600; color:#475569;">Días Vencer</span>
+                          <p id="vista-dias-vencer" style="margin:0; font-weight:600; color:#1e293b;">-</p>
+                      </div>
+                      <div>
+                          <span style="display:block; font-size:10px; font-weight:600; color:#475569;">Fecha Pago</span>
+                          <p id="vista-fecha-pago" style="margin:0; font-weight:600; color:#1e293b;">-</p>
+                      </div>
+                  </div>
+              </div>
+
+              <div style="text-align:right;">
+                  <button type="button" id="btn-cerrar-vista-btn" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; padding:10px 25px; border-radius:6px; cursor:pointer; font-weight:600;">Cerrar</button>
+              </div>
+          </div>
+      </div>
+  </div>`;
+}
+
+// --- MODAL DE EDICIÓN ---
+function renderModalEdicion() {
+  return `
+  <div id="modal-edicion" class="modal" style="display:none; position:fixed; z-index:1001; left:0; top:0; width:100%; height:100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); overflow-y: auto;">
+      <div class="modal-content" style="background:#fff; margin:3% auto; width:900px; border-radius:12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid #e2e8f0; overflow: hidden;">
+          <div style="display:flex; justify-content:space-between; align-items:center; background: #f8fafc; padding:15px 25px; border-bottom:1px solid #e2e8f0;">
+              <h3 style="margin:0; color: #1e293b; font-size: 1.25rem; font-weight: 700;">Editar Proyección de Factura</h3>
+              <button id="btn-cerrar-edicion" style="background:none; border:none; font-size:28px; cursor:pointer; color: #94a3b8; line-height:1;">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:25px;">
+              <form id="form-editar-factura">
+                  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px; padding:15px; background:#f1f5f9; border-radius:8px; border:1px solid #e2e8f0;">
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Actividad</label>
+                          <input type="text" id="edit-actividad" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Empresa (Emisor)</label>
+                          <select id="edit-alias" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-weight:bold; color:#1e293b;">
+                              <option value="2">MULTI</option>
+                              <option value="1">CIM</option>
+                          </select>
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Cliente</label>
+                          <input type="text" id="edit-cliente" readonly style="width:100%; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
+                      </div>
+                      <div style="grid-column: 1 / -1;">
+                          <label style="display:block; font-size:12px; font-weight:600; margin-bottom:8px;">Servicios/Productos y Frecuencias</label>
+                          <div style="border:1px solid #bae6fd; border-radius:8px; overflow:hidden; background:#ffffff;">
+                              <table style="width:100%; border-collapse:collapse;">
+                                  <thead>
+                                      <tr style="background:#f0f9ff; border-bottom:2px solid #bae6fd;">
+                                          <th style="padding:10px 12px; text-align:left; font-size:12px; font-weight:600; color:#0c4a6e;">Servicio/Producto</th>
+                                          <th style="padding:10px 12px; text-align:center; font-size:12px; font-weight:600; color:#0c4a6e; width:200px;">Frecuencia</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody id="edit-servicios-tabla">
+                                      <tr>
+                                          <td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Cargando...</td>
+                                      </tr>
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                  </div>
+
+                  <h4 style="margin:0 0 15px 0; color: #334155; font-size: 15px; border-bottom: 2px solid #8b5cf6; display: inline-block; padding-bottom: 4px;">Importes y Totales</h4>
+                  
+                  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px; padding:15px; border: 1px solid #8b5cf6; border-radius:8px; background:#faf5ff;">
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#6b21a8; margin-bottom:5px;">Subtotal</label>
+                          <p id="edit-subtotal" style="margin:0; padding:8px; background:#ffffff; border:1px solid #e9d5ff; border-radius:6px; color:#1f2937; font-weight:600;">S/ 0.00</p>
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#6b21a8; margin-bottom:5px;">IGV (18%)</label>
+                          <p id="edit-igv" style="margin:0; padding:8px; background:#ffffff; border:1px solid #e9d5ff; border-radius:6px; color:#1f2937; font-weight:600;">S/ 0.00</p>
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#6b21a8; margin-bottom:5px;">Total Orden</label>
+                          <p id="edit-total-os" style="margin:0; padding:8px; background:#ffffff; border:1px solid #e9d5ff; border-radius:6px; color:#1f2937; font-weight:600;">S/ 0.00</p>
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#dc2626; margin-bottom:5px;">Detracción (12%)</label>
+                          <p id="edit-detrax" style="margin:0; padding:8px; background:#fff5f5; border:1px solid #fecaca; border-radius:6px; color:#991b1b; font-weight:600;">S/ 0.00</p>
+                      </div>
+                      <div style="grid-column: 1 / -1;">
+                          <label style="display:block; font-size:12px; font-weight:600; color:#10b981; margin-bottom:5px;">Total Neto</label>
+                          <p id="edit-neto" style="margin:0; padding:8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; color:#16a34a; font-weight:700; font-size:14px;">S/ 0.00</p>
+                      </div>
+                  </div>
+
+                  <h4 style="margin:0 0 15px 0; color: #334155; font-size: 15px; border-bottom: 2px solid #10b981; display: inline-block; padding-bottom: 4px;">Datos de Facturación</h4>
+                  
+                  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px; padding:15px; border: 1px solid #10b981; border-radius:8px;">
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Ejecución</label>
+                          <input type="date" id="edit-fecha-ejecucion" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">N° de Factura</label>
+                          <input type="text" id="edit-num-factura" placeholder="F001-000000" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Factura</label>
+                          <input type="date" id="edit-fecha-factura" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Días Crédito</label>
+                          <input type="number" id="edit-dias-credito" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Vcto Factura</label>
+                          <input type="date" id="edit-fecha-vcto" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Días Vencer</label>
+                          <input type="number" id="edit-dias-vencer" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Pago</label>
+                          <input type="date" id="edit-fecha-pago" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                  </div>
+
+                  <div style="text-align:right; margin-top:30px; padding-top:20px; border-top: 1px solid #e2e8f0;">
+                      <button type="button" id="btn-cancelar-edicion" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; padding:10px 25px; border-radius:6px; margin-right:12px; cursor:pointer; font-weight:600;">Cancelar</button>
+                      <button type="submit" style="background:#10b981; color:white; border:none; padding:10px 30px; border-radius:6px; cursor:pointer; font-weight:700; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);">
+                          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:middle; margin-right:5px;"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                          Guardar Cambios
+                      </button>
+                  </div>
+              </form>
+          </div>
+      </div>
+  </div>`;
+}
 // --- TAB: ÓRDENES PROYECTADAS (Tabla principal) ---
 export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
   if (proyecciones.length === 0) {
     return `<div style="text-align:center; padding:50px; color: #64748b;">No hay registros.</div>`;
   }
 
-  const fDate = (d: string | null) => d ? d.split('T')[0] : '---';
+  const fDate = (d: string | null) => {
+    if (!d) return '---';
+    try {
+      const [year, month, day] = d.split('T')[0].split('-');
+      return `${day}/${month}/${year}`;
+    } catch {
+      return '---';
+    }
+  };
 
   return `
     <div class="table-container" style="overflow-x: auto;">
@@ -155,7 +449,6 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
             <th style="padding: 12px; text-align: left;">ACTIVIDAD</th>
             <th style="padding: 12px; text-align: left;">EMPRESA</th>
             <th style="padding: 12px; text-align: left;">CLIENTE</th>
-            <th style="padding: 12px; text-align: left;">SERVICIO / FRECUENCIA</th>
             <th style="padding: 12px; text-align: left;">FECHA EJECUCION</th>
             <th style="padding: 12px; text-align: left;">IMPORTES (S/)</th>
             <th style="padding: 12px; text-align: left;">N° FACTURA</th>
@@ -166,6 +459,7 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
             <th style="padding: 12px; text-align: left;">FECHA VCTO FACTURA</th>
             <th style="padding: 12px; text-align: left;">DIAS VENCER</th>
             <th style="padding: 12px; text-align: left;">FECHA PAGO</th>
+            <th style="padding: 12px; text-align: center;">ACCIONES</th>
           </tr>
         </thead>
         <tbody>
@@ -174,17 +468,6 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
           const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || {};
           
           const clienteNombre = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : 'Sin cliente';
-          
-          // Generamos la lista de servicios con su frecuencia respectiva
-          const servicioFrecuenciaHtml = ref.detalles 
-            ? ref.detalles.map((d: any) => `
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">
-                    <span style="font-size: 11px; color: #2563eb; font-weight: 500;">• ${d.servicio ? d.servicio.nombre : 'Servicio'}</span>
-                    <span style="background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 9px; border: 1px solid #e2e8f0;">
-                        ${d.frecuencia || '---'}
-                    </span>
-                </div>`).join('')
-            : `<div style="font-size: 10px;">${ref.servicio || '---'}</div>`;
 
           return `
           <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
@@ -193,10 +476,6 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
                   ${p.multicim_emisora ? p.multicim_emisora.alias_empresa : '---'}
               </td>
               <td style="padding: 10px; font-weight: 600;">${clienteNombre}</td>
-
-              <td style="padding: 10px; min-width: 200px;">
-                  ${servicioFrecuenciaHtml}
-              </td>
 
               <td style="padding: 10px; text-align: center;">${fDate(p.fecha_ejecucion)}</td>
 
@@ -222,6 +501,11 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
                   </span>
               </td>
               <td style="padding: 10px; color: #6366f1; font-weight: 600;">${fDate(p.fecha_pago)}</td>
+              <td style="padding: 10px; text-align: center;">
+                  <button class="btn-accion-ver" data-id="${p.id}" style="background: #3b82f6; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 4px; font-size: 11px; font-weight: 600;" title="Ver">👁️</button>
+                  <button class="btn-accion-editar" data-id="${p.id}" style="background: #f59e0b; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 4px; font-size: 11px; font-weight: 600;" title="Editar">✏️</button>
+                  <button class="btn-accion-eliminar" data-id="${p.id}" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;" title="Eliminar">🗑️</button>
+              </td>
           </tr>`;
         }).join('')}
         </tbody>
@@ -348,6 +632,8 @@ export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: a
       <button id="btn-nueva-factura" class="btn-primary"> + Nueva Proyección</button>
     </div>
 
+    ${renderAlertaOrdenesPendientes(ordenesPendientes)}
+
     <div class="tabs-container">
       <div class="tabs-header">
         <button class="tab-btn active" data-tab="ordenes">Órdenes Proyectadas</button>
@@ -361,6 +647,8 @@ export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: a
     </div>
 
     ${renderModalFactura()}
+    ${renderModalVista()}
+    ${renderModalEdicion()}
   `;
 }
 
@@ -381,11 +669,23 @@ interface OrdenReferencia {
   total_final: number;
 }
 
-export function initFacturacionEvents(proyecciones: any[] = []) {
+export function initFacturacionEvents(proyecciones: any[] = []) {       
   const modalTipo = document.getElementById('modal-tipo-orden') as HTMLSelectElement;
   const selectOrden = document.getElementById('modal-select-orden') as HTMLSelectElement;
   const form = document.getElementById('form-nueva-factura') as HTMLFormElement;
   const modal = document.getElementById('modal-factura');
+
+  // --- 0. VER ÓRDENES PENDIENTES ---
+  const btnVerPendientes = document.getElementById('btn-ver-pendientes');
+  btnVerPendientes?.addEventListener('click', () => {
+    // Cambiar a tipo servicio por defecto y cargar órdenes pendientes
+    if (modalTipo) modalTipo.value = '';
+    if (selectOrden) {
+      selectOrden.innerHTML = '<option value="">-- Seleccione Orden Pendiente --</option>';
+      selectOrden.disabled = true;
+    }
+    if (modal) modal.style.display = 'block';
+  });
 
   // --- 1. ABRIR MODAL ---
   const btnNueva = document.getElementById('btn-nueva-factura');
@@ -466,9 +766,27 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
 
         // Ahora sí, los nombres coinciden 1:1 con tu Thunder Client
         (document.getElementById('res-cliente') as HTMLInputElement).value = d.nombre_cliente;
-        (document.getElementById('res-servicio') as HTMLInputElement).value = d.servicio;
-        (document.getElementById('res-frecuencia') as HTMLInputElement).value = d.frecuencia || '---';
         (document.getElementById('in-actividad') as HTMLInputElement).value = d.actividad || '';
+
+        // Llenar tabla de servicios
+        const serviciosTabla = document.getElementById('res-servicios-tabla') as HTMLTableSectionElement;
+        if (serviciosTabla) {
+            const servicios = d.servicios_detallados || [];
+            if (servicios.length > 0) {
+                serviciosTabla.innerHTML = servicios.map((s: any, idx: number) => `
+                    <tr style="${idx % 2 === 0 ? 'background:#ffffff' : 'background:#f9fafb;'} border-bottom:1px solid #e5e7eb;">
+                        <td style="padding:12px; font-size:13px; color:#1f2937;">${s.nombre || '---'}</td>
+                        <td style="padding:12px; text-align:center;">
+                            <span style="display:inline-block; padding:6px 12px; background:#06b6d4; color:white; border-radius:20px; font-weight:600; font-size:12px; white-space:nowrap;">
+                                ${s.frecuencia || '---'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                serviciosTabla.innerHTML = '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Sin servicios</td></tr>';
+            }
+        }
 
         const comboEmpresa = document.getElementById('res-alias') as HTMLSelectElement;
         if (comboEmpresa && d.id_multicim) {
@@ -501,49 +819,41 @@ form?.addEventListener('submit', async (e) => {
     const idRef = Number(selectOrden.value);
     const tipo = modalTipo.value;
 
-    // CAPTURA DE VALORES NUEVOS (Obligatorios para tu nuevo store)
     const clienteNombre = (document.getElementById('res-cliente') as HTMLInputElement).value;
-    const servicioNombre = (document.getElementById('res-servicio') as HTMLInputElement).value;
     const actividadManual = (document.getElementById('in-actividad') as HTMLInputElement).value;
 
-    // Captura de importes desglosados (limpiando posibles espacios o S/)
     const subtotal = parseFloat(document.getElementById('info-subtotal')?.innerText || '0');
     const igv = parseFloat(document.getElementById('info-igv')?.innerText || '0');
     const totalOS = parseFloat(document.getElementById('info-total-os')?.innerText || '0');
 
-    const numFactura = (document.getElementById('in-num-factura') as HTMLInputElement).value;
-    const fechaFactura = (document.getElementById('in-fecha-factura') as HTMLInputElement).value;
-    const diasCredito = Number((document.getElementById('in-dias-credito') as HTMLInputElement).value);
-    const diasVencer = Number((document.getElementById('in-dias-vencer') as HTMLInputElement).value);
+    const numFactura = (document.getElementById('in-num-factura') as HTMLInputElement).value || null;
+    const fechaFactura = (document.getElementById('in-fecha-factura') as HTMLInputElement).value || null;
+    const diasCredito = (document.getElementById('in-dias-credito') as HTMLInputElement).value ? Number((document.getElementById('in-dias-credito') as HTMLInputElement).value) : null;
+    const diasVencer = (document.getElementById('in-dias-vencer') as HTMLInputElement).value ? Number((document.getElementById('in-dias-vencer') as HTMLInputElement).value) : null;
 
-    // Fechas adicionales
-    const fechaPago = (document.getElementById('in-fecha-pago') as HTMLInputElement).value;
-    const fechaEjecucion = (document.getElementById('in-fecha-ejecucion') as HTMLInputElement).value;
+    const fechaPago = (document.getElementById('in-fecha-pago') as HTMLInputElement).value || null;
+    const fechaEjecucion = (document.getElementById('in-fecha-ejecucion') as HTMLInputElement).value || null;
+    const fechaVcto = (document.getElementById('in-fecha-vcto') as HTMLInputElement).value || null;
 
     const montoDetrax = parseFloat(document.getElementById('res-detrax')?.innerText || '0');
     const totalFinal = parseFloat(document.getElementById('res-neto')?.innerText || '0');
 
     const idMulticimReal = Number((document.getElementById('res-alias') as HTMLSelectElement).value);
 
-    // EL PAYLOAD COMPLETO QUE ESPERA LARAVEL
     const payload = {
         id_multicim: idMulticimReal,
         tipo_orden: tipo,
         id_referencia: idRef,
-        actividad: actividadManual,
-        cliente: clienteNombre,      
-        servicio: servicioNombre,    
-        subtotal: subtotal,          
-        igv: igv,                    
-        precio_total_os: totalOS,    
+        actividad: actividadManual || null,
         monto_detrax: montoDetrax,
         total_final: totalFinal,
         n_factura: numFactura,
-        fecha_factura: fechaFactura || null,
+        fecha_factura: fechaFactura,
         dias_credito: diasCredito,
         dia_vencer: diasVencer,
-        fecha_pago: fechaPago || null,
-        fecha_ejecucion: fechaEjecucion || null
+        fecha_pago: fechaPago,
+        fecha_ejecucion: fechaEjecucion,
+        fecha_vcto: fechaVcto
     };
 
     console.log("Enviando al controlador:", payload);
@@ -570,6 +880,261 @@ form?.addEventListener('submit', async (e) => {
         }
     } catch (error) {
         console.error("Error en submit:", error);
+        alert('Error de conexión con el servidor');
+    }
+});
+
+// --- 6. MANEJADORES DE ACCIONES (VER, EDITAR, ELIMINAR) ---
+document.addEventListener('click', async (e) => {
+    const target = e.target as HTMLElement;
+
+    // --- BOTÓN VER ---
+    if (target.classList.contains('btn-accion-ver')) {
+        const id = target.getAttribute('data-id');
+        if (!id) return;
+
+        try {
+            const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                headers: getAuthHeaders()
+            });
+            const result = await resp.json();
+
+            if (result.success) {
+                const p = result.data;
+                const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || {};
+                const empresaNombre = p.multicim_emisora ? p.multicim_emisora.alias_empresa : '---';
+                const clienteNombre = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : '---';
+
+                // Llenar modal de vista
+                (document.getElementById('vista-actividad') as HTMLElement).innerText = p.actividad || '---';
+                (document.getElementById('vista-empresa') as HTMLElement).innerText = empresaNombre;
+                (document.getElementById('vista-cliente') as HTMLElement).innerText = clienteNombre;
+                
+                // Llenar tabla de servicios
+                const serviciosTabla = document.getElementById('vista-servicios-tabla') as HTMLTableSectionElement;
+                if (serviciosTabla) {
+                    const servicios = p.servicios_detallados || [];
+                    if (servicios.length > 0) {
+                        serviciosTabla.innerHTML = servicios.map((s: any, idx: number) => `
+                            <tr style="${idx % 2 === 0 ? 'background:#ffffff' : 'background:#f9fafb;'} border-bottom:1px solid #e5e7eb;">
+                                <td style="padding:10px 12px; font-size:12px; color:#1f2937;">${s.nombre || '---'}</td>
+                                <td style="padding:10px 12px; text-align:center;">
+                                    <span style="display:inline-block; padding:4px 10px; background:#06b6d4; color:white; border-radius:20px; font-weight:600; font-size:11px; white-space:nowrap;">
+                                        ${s.frecuencia || '---'}
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('');
+                    } else {
+                        serviciosTabla.innerHTML = '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Sin servicios</td></tr>';
+                    }
+                }
+
+                // Llenar importes y totales
+                (document.getElementById('vista-subtotal') as HTMLElement).innerText = `S/ ${Number(ref.subtotal || 0).toFixed(2)}`;
+                (document.getElementById('vista-igv') as HTMLElement).innerText = `S/ ${Number(ref.igv || 0).toFixed(2)}`;
+                (document.getElementById('vista-total-os') as HTMLElement).innerText = `S/ ${Number(ref.precio_total_os || ref.total_costo || 0).toFixed(2)}`;
+                (document.getElementById('vista-detrax') as HTMLElement).innerText = `S/ ${Number(p.monto_detrax || 0).toFixed(2)}`;
+                (document.getElementById('vista-neto') as HTMLElement).innerText = `S/ ${Number(p.total_final || 0).toFixed(2)}`;
+                
+                // Llenar datos de facturación
+                (document.getElementById('vista-fecha-ejecucion') as HTMLElement).innerText = p.fecha_ejecucion ? p.fecha_ejecucion.split('T')[0] : '---';
+                (document.getElementById('vista-num-factura') as HTMLElement).innerText = p.n_factura || '---';
+                (document.getElementById('vista-fecha-factura') as HTMLElement).innerText = p.fecha_factura ? p.fecha_factura.split('T')[0] : '---';
+                (document.getElementById('vista-dias-credito') as HTMLElement).innerText = p.dias_credito || '0';
+                (document.getElementById('vista-fecha-vcto') as HTMLElement).innerText = p.fecha_vcto ? p.fecha_vcto.split('T')[0] : '---';
+                (document.getElementById('vista-dias-vencer') as HTMLElement).innerText = p.dia_vencer || '0';
+                (document.getElementById('vista-fecha-pago') as HTMLElement).innerText = p.fecha_pago ? p.fecha_pago.split('T')[0] : '---';
+
+                const modalVista = document.getElementById('modal-vista');
+                if (modalVista) modalVista.style.display = 'block';
+            }
+        } catch (error) {
+            console.error("Error al obtener detalles:", error);
+        }
+    }
+
+    // --- BOTÓN EDITAR ---
+    if (target.classList.contains('btn-accion-editar')) {
+        const id = target.getAttribute('data-id');
+        if (!id) return;
+
+        try {
+            const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                headers: getAuthHeaders()
+            });
+            const result = await resp.json();
+
+            if (result.success) {
+                const p = result.data;
+                const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || {};
+
+                // Llenar modal de edición
+                (document.getElementById('edit-actividad') as HTMLInputElement).value = p.actividad || '';
+                (document.getElementById('edit-alias') as HTMLSelectElement).value = String(p.id_multicim || 1);
+                (document.getElementById('edit-cliente') as HTMLInputElement).value = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : '---';
+                
+                // Llenar tabla de servicios en modal de edición
+                const serviciosTablaEdit = document.getElementById('edit-servicios-tabla') as HTMLTableSectionElement;
+                if (serviciosTablaEdit) {
+                    const servicios = p.servicios_detallados || [];
+                    if (servicios.length > 0) {
+                        serviciosTablaEdit.innerHTML = servicios.map((s: any, idx: number) => `
+                            <tr style="${idx % 2 === 0 ? 'background:#ffffff' : 'background:#f9fafb;'} border-bottom:1px solid #e5e7eb;">
+                                <td style="padding:10px 12px; font-size:12px; color:#1f2937;">${s.nombre || '---'}</td>
+                                <td style="padding:10px 12px; text-align:center;">
+                                    <span style="display:inline-block; padding:6px 12px; background:#06b6d4; color:white; border-radius:20px; font-weight:600; font-size:12px; white-space:nowrap;">
+                                        ${s.frecuencia || '---'}
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('');
+                    } else {
+                        serviciosTablaEdit.innerHTML = '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Sin servicios</td></tr>';
+                    }
+                }
+                
+                // Llenar importes y totales
+                (document.getElementById('edit-subtotal') as HTMLElement).innerText = `S/ ${Number(ref.subtotal || 0).toFixed(2)}`;
+                (document.getElementById('edit-igv') as HTMLElement).innerText = `S/ ${Number(ref.igv || 0).toFixed(2)}`;
+                (document.getElementById('edit-total-os') as HTMLElement).innerText = `S/ ${Number(ref.precio_total_os || ref.total_costo || 0).toFixed(2)}`;
+                (document.getElementById('edit-detrax') as HTMLElement).innerText = `S/ ${Number(p.monto_detrax || 0).toFixed(2)}`;
+                (document.getElementById('edit-neto') as HTMLElement).innerText = `S/ ${Number(p.total_final || 0).toFixed(2)}`;
+                
+                // Función para convertir YYYY-MM-DD a DD/MM/YYYY para display en la tabla
+                const formatDateForDisplay = (dateStr: string) => {
+                    if (!dateStr) return '---';
+                    try {
+                        const [year, month, day] = dateStr.split('T')[0].split('-');
+                        return `${day}/${month}/${year}`;
+                    } catch {
+                        return '---';
+                    }
+                };
+                
+                // Para los inputs type="date", mantener formato YYYY-MM-DD
+                (document.getElementById('edit-fecha-ejecucion') as HTMLInputElement).value = p.fecha_ejecucion ? p.fecha_ejecucion.split('T')[0] : '';
+                (document.getElementById('edit-num-factura') as HTMLInputElement).value = p.n_factura || '';
+                (document.getElementById('edit-fecha-factura') as HTMLInputElement).value = p.fecha_factura ? p.fecha_factura.split('T')[0] : '';
+                (document.getElementById('edit-dias-credito') as HTMLInputElement).value = p.dias_credito ? String(p.dias_credito) : '';
+                (document.getElementById('edit-fecha-vcto') as HTMLInputElement).value = p.fecha_vcto ? p.fecha_vcto.split('T')[0] : '';
+                (document.getElementById('edit-dias-vencer') as HTMLInputElement).value = p.dia_vencer ? String(p.dia_vencer) : '';
+                (document.getElementById('edit-fecha-pago') as HTMLInputElement).value = p.fecha_pago ? p.fecha_pago.split('T')[0] : '';
+
+                // Guardar el ID en el formulario
+                const formEditar = document.getElementById('form-editar-factura') as HTMLFormElement;
+                if (formEditar) formEditar.dataset.idProyeccion = String(id);
+
+                const modalEdicion = document.getElementById('modal-edicion');
+                if (modalEdicion) modalEdicion.style.display = 'block';
+            }
+        } catch (error) {
+            console.error("Error al cargar datos para edición:", error);
+        }
+    }
+
+    // --- BOTÓN ELIMINAR ---
+    if (target.classList.contains('btn-accion-eliminar')) {
+        const id = target.getAttribute('data-id');
+        if (!id) return;
+
+        if (confirm('¿Está seguro de que desea eliminar esta proyección?')) {
+            try {
+                const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+
+                const result = await resp.json();
+
+                if (resp.ok && result.success) {
+                    alert('Proyección eliminada con éxito');
+                    window.location.reload();
+                } else {
+                    alert('Error al eliminar: ' + (result.message || 'Error desconocido'));
+                }
+            } catch (error) {
+                console.error("Error al eliminar:", error);
+                alert('Error de conexión');
+            }
+        }
+    }
+});
+
+// --- 7. MANEJADORES DE MODALES DE VISTA Y EDICIÓN ---
+const modalVista = document.getElementById('modal-vista');
+const btnCerrarVista = document.getElementById('btn-cerrar-vista');
+const btnCerrarVistaBtn = document.getElementById('btn-cerrar-vista-btn');
+
+btnCerrarVista?.addEventListener('click', () => { if (modalVista) modalVista.style.display = 'none'; });
+btnCerrarVistaBtn?.addEventListener('click', () => { if (modalVista) modalVista.style.display = 'none'; });
+modalVista?.addEventListener('click', (e) => { if (e.target === modalVista) modalVista.style.display = 'none'; });
+
+const modalEdicion = document.getElementById('modal-edicion');
+const btnCerrarEdicion = document.getElementById('btn-cerrar-edicion');
+const btnCancelarEdicion = document.getElementById('btn-cancelar-edicion');
+const formEditar = document.getElementById('form-editar-factura') as HTMLFormElement;
+
+btnCerrarEdicion?.addEventListener('click', () => { if (modalEdicion) modalEdicion.style.display = 'none'; });
+btnCancelarEdicion?.addEventListener('click', () => { if (modalEdicion) modalEdicion.style.display = 'none'; });
+modalEdicion?.addEventListener('click', (e) => { if (e.target === modalEdicion) modalEdicion.style.display = 'none'; });
+
+// --- 8. SUBMIT DEL FORMULARIO DE EDICIÓN ---
+formEditar?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const idProyeccion = formEditar.dataset.idProyeccion;
+    if (!idProyeccion) {
+        alert('Error: ID no identificado');
+        return;
+    }
+
+    const numFactura = (document.getElementById('edit-num-factura') as HTMLInputElement).value || null;
+    const fechaFactura = (document.getElementById('edit-fecha-factura') as HTMLInputElement).value || null;
+    const diasCredito = (document.getElementById('edit-dias-credito') as HTMLInputElement).value ? Number((document.getElementById('edit-dias-credito') as HTMLInputElement).value) : null;
+    const diasVencer = (document.getElementById('edit-dias-vencer') as HTMLInputElement).value ? Number((document.getElementById('edit-dias-vencer') as HTMLInputElement).value) : null;
+    const fechaPago = (document.getElementById('edit-fecha-pago') as HTMLInputElement).value || null;
+    const fechaEjecucion = (document.getElementById('edit-fecha-ejecucion') as HTMLInputElement).value || null;
+    const fechaVcto = (document.getElementById('edit-fecha-vcto') as HTMLInputElement).value || null;
+    const actividad = (document.getElementById('edit-actividad') as HTMLInputElement).value || null;
+    const idMulticim = (document.getElementById('edit-alias') as HTMLSelectElement).value ? Number((document.getElementById('edit-alias') as HTMLSelectElement).value) : null;
+    
+    console.log('DEBUG - Enviando idMulticim:', idMulticim, 'select value:', (document.getElementById('edit-alias') as HTMLSelectElement).value);
+
+    const payload = {
+        id_multicim: idMulticim,
+        actividad: actividad,
+        n_factura: numFactura,
+        fecha_factura: fechaFactura,
+        dias_credito: diasCredito,
+        dia_vencer: diasVencer,
+        fecha_pago: fechaPago,
+        fecha_ejecucion: fechaEjecucion,
+        fecha_vcto: fechaVcto
+    };
+
+    try {
+        const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${idProyeccion}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await resp.json();
+
+        if (resp.ok && result.success) {
+            alert('¡Cambios guardados con éxito!');
+            if (modalEdicion) modalEdicion.style.display = 'none';
+            window.location.reload();
+        } else {
+            const msg = result.errors ? JSON.stringify(result.errors) : (result.message || 'Error desconocido');
+            alert('Error al guardar: ' + msg);
+        }
+    } catch (error) {
+        console.error("Error en actualización:", error);
         alert('Error de conexión con el servidor');
     }
 });
