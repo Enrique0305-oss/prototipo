@@ -15,9 +15,9 @@ return [
     'allowed_origins' => [
         'http://localhost:5173',
         'http://127.0.0.1:5173',
-        'http://qsci-system.com',
-        'https://qsci-system.com',
-        'https://www.qsci-system.com',
+        'http://prueba.qsci-system.com',
+        'https://prueba.qsci-system.com',
+        'https://www.prueba.qsci-system.com',
     ],
 
     'allowed_origins_patterns' => [],

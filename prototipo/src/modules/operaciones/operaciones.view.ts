@@ -178,7 +178,7 @@ async function cargarServiciosParaCrearInforme() {
           rellenarFormularioDesdeServicio(realizados[serviceIdx]);
           
           // Marcar el botón como seleccionado
-          container.querySelectorAll('.js-servicio-item').forEach(b => b.style.background = '#fff');
+          container.querySelectorAll('.js-servicio-item').forEach(b => (b as HTMLElement).style.background = '#fff');
           target.style.background = '#dbeafe';
           target.style.borderColor = '#3b82f6';
         }
@@ -216,12 +216,12 @@ async function cargarServiciosParaCrearInforme() {
   }
 }
 
-function rellenarFormularioDesdeServicio(servicio: Programacion) {
+function rellenarFormularioDesdeServicio(servicio: ProgramacionConEvidencias) {
   const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
   if (!form) return;
 
   const cliente = servicio.orden_servicio?.cliente?.nombre_empresa || '';
-  const ubicacion = `${servicio.orden_servicio?.direccion || ''}, ${servicio.orden_servicio?.distrito || ''}`.trim();
+  const ubicacion = `${servicio.planta?.direccion || ''}`.trim();
   const actividad = servicio.servicio?.nombre || '';
   const fecha = servicio.fecha_ejecucion_real || servicio.fecha_programada || '';
 
