@@ -1,8 +1,112 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/services_repository.dart';
-import '../domain/formato_operacional_dispositivo.dart';
 import '../domain/service_task.dart';
+
+String _valueOrDash(String? value) {
+  final text = value?.trim() ?? '';
+  return text.isEmpty ? '-' : text;
+}
+
+class _InsectFamily {
+  const _InsectFamily({
+    required this.key,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String key;
+  final String title;
+  final String subtitle;
+}
+
+class _DualCountDraft {
+  _DualCountDraft()
+      : verdaderaController = TextEditingController(text: '0'),
+        auditivaController = TextEditingController(text: '0');
+
+  final TextEditingController verdaderaController;
+  final TextEditingController auditivaController;
+
+  int get verdadera => int.tryParse(verdaderaController.text.trim()) ?? 0;
+  int get auditiva => int.tryParse(auditivaController.text.trim()) ?? 0;
+}
+
+class _RastreroCountDraft {
+  _RastreroCountDraft()
+      : verdaderaController = TextEditingController(text: '0'),
+        falsaController = TextEditingController(text: '0');
+
+  final TextEditingController verdaderaController;
+  final TextEditingController falsaController;
+
+  int get verdadera => int.tryParse(verdaderaController.text.trim()) ?? 0;
+  int get falsa => int.tryParse(falsaController.text.trim()) ?? 0;
+}
+
+class _RastreroStageCountDraft {
+  _RastreroStageCountDraft()
+      : verdaderaController = TextEditingController(text: '0'),
+        auditivaController = TextEditingController(text: '0');
+
+  final TextEditingController verdaderaController;
+  final TextEditingController auditivaController;
+
+  int get verdadera => int.tryParse(verdaderaController.text.trim()) ?? 0;
+  int get auditiva => int.tryParse(auditivaController.text.trim()) ?? 0;
+}
+
+const List<_InsectFamily> _insectFamilies = <_InsectFamily>[
+  _InsectFamily(
+    key: 'muscidae',
+    title: 'Fam. Muscidae',
+    subtitle: '(mosca domestica)',
+  ),
+  _InsectFamily(
+    key: 'drosophilidae',
+    title: 'Fam. Drosophilidae',
+    subtitle: '(mosca de vinagre)',
+  ),
+  _InsectFamily(
+    key: 'phoridae',
+    title: 'Fam. Phoridae',
+    subtitle: '(mosca jorobada)',
+  ),
+  _InsectFamily(
+    key: 'psychodidae',
+    title: 'Fam. Psychodidae',
+    subtitle: '(mosca de drenaje)',
+  ),
+  _InsectFamily(
+    key: 'chironomidae',
+    title: 'Fam. Chironomidae',
+    subtitle: '(mosquito enano)',
+  ),
+  _InsectFamily(
+    key: 'culicidae',
+    title: 'Fam. Culicidae',
+    subtitle: '(mosquitos)',
+  ),
+  _InsectFamily(
+    key: 'pyralidae_tineridae_gelechidae',
+    title: 'Fam. Pyralidae/Tineridae/Gelechidae',
+    subtitle: '(polillas)',
+  ),
+  _InsectFamily(
+    key: 'sarcophagidae_calliphoridae',
+    title: 'Fam. Sarcophagidae/Calliphoridae',
+    subtitle: '(mosca de la carne/mosca metalica)',
+  ),
+  _InsectFamily(
+    key: 'otros_no_identificados',
+    title: 'Otros no identificados',
+    subtitle: '',
+  ),
+];
+
+const List<String> _estadoLaminaOptions = <String>['D', 'M', 'B'];
+const List<String> _estadioLabels = <String>['Adulto', 'Ninfa', 'Ooteca'];
 
 class ServiceFormatoOperacionalPage extends StatefulWidget {
   const ServiceFormatoOperacionalPage({
@@ -22,31 +126,18 @@ class ServiceFormatoOperacionalPage extends StatefulWidget {
 
 class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperacionalPage> {
   static const List<String> _estadoOptions = <String>['D', 'A', 'B', 'N', 'OB'];
+  static const List<String> _estadoOptionsVoladores = <String>['A', 'B', 'AP', 'D', 'OB'];
   static const List<String> _hallazgoOptions = <String>['C-TP', 'C-J', 'C-R', 'CNT-SC'];
   static const List<String> _senalOptions = <String>['C', 'E', 'H', 'O', 'P', 'R'];
 
   final _formKey = GlobalKey<FormState>();
-  late Future<List<_DispositivoDraft>> _futureDispositivos;
+  late Future<List<_DispositivoGroup>> _futureGroups;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _futureDispositivos = _loadDispositivos();
-  }
-
-  Future<List<_DispositivoDraft>> _loadDispositivos() async {
-    final byKey = <String, FormatoOperacionalDispositivo>{};
-
-    for (final service in _effectiveServices) {
-      final dispositivos = await widget.servicesRepository.getFormatoOperacionalDispositivos(service.id);
-      for (final item in dispositivos) {
-        final key = '${item.idProducto}|${item.descripcion.toLowerCase()}|${item.numeroLote ?? ''}';
-        byKey.putIfAbsent(key, () => item);
-      }
-    }
-
-    return byKey.values.map(_DispositivoDraft.fromDomain).toList(growable: false);
+    _futureGroups = _loadGroups();
   }
 
   List<ServiceTask> get _effectiveServices {
@@ -56,32 +147,453 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
     return <ServiceTask>[widget.representativeService];
   }
 
+  List<String> get _formatosFichasDisponibles {
+    final raw = _effectiveServices
+        .expand((service) => service.formatosFichas)
+        .map((formato) => formato.trim())
+        .where((formato) => formato.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (raw.isNotEmpty) {
+      return raw;
+    }
+    return const <String>[];
+  }
+
+  String get _formatoFichasSeleccionado {
+    final formatos = _formatosFichasDisponibles;
+    if (formatos.isEmpty) {
+      return 'Formato Operacional';
+    }
+    return formatos.join(' + ');
+  }
+
+  String get _formatosFichasResumen {
+    final formatos = _formatosFichasDisponibles;
+    if (formatos.isEmpty) {
+      return 'Sin formatos seleccionados en programación';
+    }
+    if (formatos.length == 1) {
+      return formatos.first;
+    }
+    return formatos.join(' + ');
+  }
+
+  Future<List<_DispositivoGroup>> _loadGroups() async {
+    final serviceIds = _effectiveServices.map((s) => s.id).toSet().toList(growable: false);
+    final representativeId = widget.representativeService.id;
+
+    final calculo = await widget.servicesRepository.getFormatoOperacionalCalculo(
+      programacionId: representativeId,
+      idsProgramaciones: serviceIds,
+    );
+
+    final seccionesRaw = (calculo['secciones'] as List<dynamic>? ?? const <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .toList(growable: false);
+
+    return seccionesRaw
+      .map<_DispositivoGroup>((section) {
+          final cantidad = (section['cantidad_asignada'] as num?)?.toInt() ??
+              (section['cantidad'] as num?)?.toInt() ??
+              0;
+          final tipoSeccion = (section['tipo_seccion'] ?? section['tipo'] ?? 'otros').toString();
+          final titulo = (section['titulo']?.toString().trim().isNotEmpty ?? false)
+              ? section['titulo'].toString().trim()
+              : (section['descripcion']?.toString().trim().isNotEmpty ?? false)
+                  ? section['descripcion'].toString().trim()
+                  : 'Sección';
+          final isJaula = _isJaulaSection(tipoSeccion, titulo);
+          final isTrampaLuz = _isTrampaLuzSection(tipoSeccion, titulo);
+          final isRastreros = _isRastrerosSection(tipoSeccion, titulo);
+          final units = List.generate(
+            cantidad < 0 ? 0 : cantidad,
+            (_) => _DispositivoUnitDraft(enableInsectCounts: isTrampaLuz),
+          );
+
+          return _DispositivoGroup(
+            idProducto: (section['id_producto'] as num?)?.toInt() ?? 0,
+            descripcion: isJaula ? 'Jaulas' : titulo,
+            tipoSeccion: tipoSeccion,
+            codePrefix: isJaula ? 'J' : _codePrefixForType(tipoSeccion, titulo, isRastreros),
+            unitLabel: isJaula ? 'jaula' : (isRastreros ? 'lámina pegante' : 'unidad'),
+            cantidadTotal: cantidad,
+            isVoladores: isTrampaLuz,
+            isRastreros: isRastreros,
+            formatoOperacional: _detectarFormatoOperacional(tipoSeccion, titulo),
+            rastreroLocations: isRastreros && cantidad > 0 ? [_RastreroLocationDraft(initialQuantity: 1)] : const <_RastreroLocationDraft>[],
+            units: units,
+          );
+        })
+        .where((group) => group.cantidadTotal > 0)
+        .toList(growable: false);
+  }
+
+  bool _isJaulaSection(String tipoSeccion, String titulo) {
+    final normalized = _normalizeText('$tipoSeccion $titulo');
+    return normalized.contains('jaula');
+  }
+
+  bool _isTrampaLuzSection(String tipoSeccion, String titulo) {
+    final normalized = _normalizeText('$tipoSeccion $titulo');
+    return normalized.contains('trampa') && normalized.contains('luz');
+  }
+
+  bool _isCajaCebaderaSection(String tipoSeccion, String titulo) {
+    final normalized = _normalizeText('$tipoSeccion $titulo');
+    return normalized.contains('caja cebadera') || normalized.contains('cajas cebaderas');
+  }
+
+  String _detectarFormatoOperacional(String tipoSeccion, String titulo) {
+    final normalized = _normalizeText('$tipoSeccion $titulo');
+    if (normalized.contains('trampa') && normalized.contains('luz')) {
+      return 'CONTROL DE INSECTOS VOLADORES';
+    }
+    if (_isCajaCebaderaSection(tipoSeccion, titulo)) {
+      return 'CONTROL DE ROEDORES';
+    }
+    if (normalized.contains('lamina') && (normalized.contains('rastreros') || normalized.contains('pegante') || normalized.contains('adhesiva'))) {
+      return 'CONTROL DE INSECTOS RASTREROS';
+    }
+    return 'CONTROL DE ROEDORES';
+  }
+
+  bool _isRastrerosSection(String tipoSeccion, String titulo) {
+    final normalized = _normalizeText('$tipoSeccion $titulo');
+    if (_isCajaCebaderaSection(tipoSeccion, titulo)) {
+      return false;
+    }
+    return normalized.contains('lamina') && (normalized.contains('rastreros') || normalized.contains('pegante') || normalized.contains('adhesiva'));
+  }
+
+  String _codePrefixForType(String tipoSeccion, String titulo, bool isRastreros) {
+    final normalized = _normalizeText('$tipoSeccion $titulo');
+    if (normalized.contains('trampa') && normalized.contains('luz')) {
+      return 'T';
+    }
+    if (isRastreros) {
+      return 'L';
+    }
+    if (normalized.contains('cebo') || normalized.contains('lamina')) {
+      return 'C';
+    }
+    return 'C';
+  }
+
+  String _normalizeText(String raw) {
+    return raw
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u');
+  }
+
+  int _totalUnits(List<_DispositivoGroup> groups) {
+    return groups.fold(0, (sum, g) => sum + g.cantidadTotal);
+  }
+
+  String _formatDisplayName(String formato) {
+    final normalized = _normalizeText(formato);
+    if (normalized.contains('voladores')) {
+      return 'Control de Insectos Voladores';
+    }
+    if (normalized.contains('rastreros')) {
+      return 'Control de Insectos Rastreros';
+    }
+    if (normalized.contains('roedores')) {
+      return 'Control de Roedores';
+    }
+    return formato;
+  }
+
+  List<String> _formatosOrdenados(List<_DispositivoGroup> groups) {
+    final formatos = <String>[];
+    for (final group in groups) {
+      final formato = group.formatoOperacional ?? 'CONTROL DE ROEDORES';
+      if (!formatos.contains(formato)) {
+        formatos.add(formato);
+      }
+    }
+    return formatos;
+  }
+
+  List<Widget> _buildFormatoBlocks(List<_DispositivoGroup> groups) {
+    final formatos = _formatosOrdenados(groups);
+    final multipleFormatos = formatos.length > 1;
+
+    return formatos.expand((formato) {
+      final formatGroups = groups
+          .where((group) => (group.formatoOperacional ?? 'CONTROL DE ROEDORES') == formato)
+          .toList(growable: false);
+
+      final hasVoladoresSection = formatGroups.any((g) => g.isVoladores);
+      final hasRastrerosSection = formatGroups.any((g) => g.isRastreros);
+      final hasRodentOrOtherSections = formatGroups.any((g) => !g.isVoladores && !g.isRastreros);
+
+      final children = <Widget>[
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.inventory_2_outlined, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _formatDisplayName(formato).toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      multipleFormatos
+                          ? 'Formato operacional combinado'
+                          : '${_formatDisplayName(formato)} · ${groups.fold<int>(0, (sum, g) => sum + g.cantidadTotal)} elementos',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _LegendCard(
+          title: hasVoladoresSection ? 'Leyenda de estado del dispositivo' : 'Leyenda de Estados',
+          items: hasVoladoresSection
+              ? const <String>[
+                  'A = Dispositivo averiado',
+                  'B = Buen estado',
+                  'AP = Dispositivo apagado',
+                  'D = Dispositivo desaparecido',
+                  'OB = Dispositivo obstruido',
+                ]
+              : const <String>['D = Desinstalado', 'A = Averiado', 'B = Buen estado', 'N = No encontrado', 'OB = Obstruido'],
+        ),
+        const SizedBox(height: 12),
+        if (hasRodentOrOtherSections)
+          _LegendCard(
+            title: 'Leyenda de Hallazgos y Presencia',
+            items: const <String>['C-TP = Captura en trampa pegante', 'C-J = Captura en jaula', 'C-R = Consumo de rodenticida', 'CNT-SC = Consumo de cebo no tóxico', 'C / E / H / O / P / R = Señales de presencia'],
+          ),
+        if (hasVoladoresSection)
+          const _LegendCard(
+            title: 'Insectos',
+            items: <String>[
+              'Registrar conteo Verdadera y Auditiva por familia',
+            ],
+          ),
+        if (hasRastrerosSection) ...[
+          const SizedBox(height: 12),
+          const _LegendCard(
+            title: 'Leyenda de Estado de Lámina',
+            items: <String>['D = Lámina desprendida', 'M = Lámina mojada', 'B = Lámina en buen estado'],
+          ),
+          const SizedBox(height: 12),
+          const _LegendCard(
+            title: 'Leyenda de Estadio',
+            items: <String>['Adulto', 'Ninfa', 'Ooteca'],
+          ),
+        ],
+        const SizedBox(height: 16),
+        ...formatGroups.asMap().entries.expand((entry) {
+          final groupIndex = entry.key;
+          final group = entry.value;
+          final startCode = groups
+                  .take(groups.indexOf(group))
+                  .where((previous) => previous.codePrefix == group.codePrefix)
+                  .fold<int>(0, (sum, previous) => sum + previous.cantidadTotal) +
+              1;
+
+          return <Widget>[
+            if (group.isRastreros)
+              _RastreroGroupSection(
+                key: ValueKey('rastrero-${formato}-${groupIndex}-${group.descripcion}'),
+                group: group,
+                startCode: startCode,
+              )
+            else
+              _GroupSection(
+                key: ValueKey('group-${formato}-${groupIndex}-${group.descripcion}'),
+                group: group,
+                startCode: startCode,
+                estadoOptions: group.isVoladores ? _estadoOptionsVoladores : _estadoOptions,
+                hallazgoOptions: _hallazgoOptions,
+                senalOptions: _senalOptions,
+              ),
+          ];
+        }),
+        const SizedBox(height: 18),
+      ];
+
+      return children;
+    }).toList(growable: false);
+  }
+
   Future<void> _submit() async {
     final valid = _formKey.currentState?.validate() ?? false;
-    if (!valid) return;
+    if (!valid) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Por favor, completa todos los campos requeridos marcados en rojo.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
 
-    final dispositivos = await _futureDispositivos;
-    if (dispositivos.isEmpty) {
+    final groups = await _futureGroups;
+    if (groups.isEmpty) {
       if (!mounted) return;
       Navigator.of(context).pop(true);
       return;
     }
 
-    final payload = dispositivos.map((draft) => draft.toJson()).toList(growable: false);
-    debugPrint('Formato operacional: $payload');
+    final payload = _buildPayload(groups);
+    await widget.servicesRepository.saveFormatoOperacionalDraft(
+      programacionId: widget.representativeService.id,
+      formData: payload,
+    );
 
     if (!mounted) return;
     Navigator.of(context).pop(true);
+  }
+
+  Map<String, dynamic> _buildPayload(List<_DispositivoGroup> groups) {
+    final sections = <Map<String, dynamic>>[];
+
+    for (final group in groups) {
+      final tipo = _sectionTypeFor(group.tipoSeccion);
+      final items = <Map<String, dynamic>>[];
+
+      if (group.isRastreros) {
+        var laminaSequence = 1;
+        for (final location in group.rastreroLocations) {
+          final quantity = location.cantidad;
+          for (final lamina in location.laminas.take(quantity)) {
+            final conteoEstadio = <String, Map<String, int>>{
+              for (final estadio in _estadioLabels)
+                estadio: <String, int>{
+                  'verdadera': lamina.estadioCounts[estadio]?.verdadera ?? 0,
+                  'auditiva': lamina.estadioCounts[estadio]?.auditiva ?? 0,
+                },
+            };
+
+            items.add({
+              'codigo_caja': '${group.codePrefix}-${laminaSequence.toString().padLeft(2, '0')}',
+              'ubicacion': location.ubicacionController.text.trim(),
+              'estado_dispositivo': _valueOrDash(lamina.verdaderaEstadoLamina),
+              'estado_dispositivo_verdadera': _valueOrDash(lamina.verdaderaEstadoLamina),
+              'estado_dispositivo_auditiva': _valueOrDash(lamina.auditivaEstadoLamina),
+              'estado_lamina': _valueOrDash(lamina.verdaderaEstadoLamina),
+              'estado_lamina_verdadera': _valueOrDash(lamina.verdaderaEstadoLamina),
+              'estado_lamina_auditiva': _valueOrDash(lamina.auditivaEstadoLamina),
+              'estadio': 'MULTIPLE',
+              'conteo_estadio': conteoEstadio,
+            });
+            laminaSequence++;
+          }
+        }
+      } else {
+        var unitSequence = 1;
+        for (final unit in group.units) {
+          final item = <String, dynamic>{
+            'codigo_caja': '${group.codePrefix}-${unitSequence.toString().padLeft(2, '0')}',
+            'ubicacion': unit.ubicacionController.text.trim(),
+            'estado_dispositivo': unit.estadoDispositivoVerdadera,
+            'estado_dispositivo_verdadera': unit.estadoDispositivoVerdadera,
+            'estado_dispositivo_auditiva': unit.estadoDispositivoAuditiva,
+            'hallazgo': _valueOrDash(unit.hallazgoVerdadera),
+            'hallazgo_verdadera': _valueOrDash(unit.hallazgoVerdadera),
+            'hallazgo_auditiva': _valueOrDash(unit.hallazgoAuditiva),
+            'senales_presencia': _valueOrDash(unit.senalesPresenciaVerdadera),
+            'senales_presencia_verdadera': _valueOrDash(unit.senalesPresenciaVerdadera),
+            'senales_presencia_auditiva': _valueOrDash(unit.senalesPresenciaAuditiva),
+          };
+
+          if (unit.hasInsectCounts) {
+            item['conteo_insectos'] = unit.insectCountsToJson();
+          }
+
+          items.add(item);
+          unitSequence++;
+        }
+      }
+
+      final formatoOperacional = group.formatoOperacional ?? _detectarFormatoOperacional(group.tipoSeccion, group.descripcion);
+      
+      sections.add({
+        'tipo': tipo,
+        'formato': formatoOperacional,
+        'items': items,
+      });
+    }
+
+    return {
+      'codigo_documento': 'FO-OP-002',
+      'version': '01',
+      'cliente': widget.representativeService.client,
+      'direccion': widget.representativeService.address,
+      'fecha': widget.representativeService.date,
+      'hora_inicio': widget.representativeService.startTime,
+      'hora_final': widget.representativeService.endTime,
+      'observaciones': widget.representativeService.observations,
+      'secciones': sections,
+    };
+  }
+
+  String _sectionTypeFor(String descripcion) {
+    final normalized = _normalizeText(descripcion);
+    if (normalized.contains('cebo')) {
+      return 'cebo';
+    }
+    if (normalized.contains('lamina')) {
+      return 'lamina';
+    }
+    if (normalized.contains('trampa') && normalized.contains('luz')) {
+      return 'trampa_luz';
+    }
+    return 'otros';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Formato Operacional'),
+        backgroundColor: const Color(0xFF1E3A8A),
+        foregroundColor: Colors.white,
+        title: Text(_formatosFichasResumen.isEmpty ? 'Formato Operacional' : _formatosFichasResumen),
       ),
-      body: FutureBuilder<List<_DispositivoDraft>>(
-        future: _futureDispositivos,
+      body: FutureBuilder<List<_DispositivoGroup>>(
+        future: _futureGroups,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -111,7 +623,7 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
                     FilledButton(
                       onPressed: () {
                         setState(() {
-                          _futureDispositivos = _loadDispositivos();
+                          _futureGroups = _loadGroups();
                         });
                       },
                       child: const Text('Reintentar'),
@@ -122,7 +634,11 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
             );
           }
 
-          final dispositivos = snapshot.data ?? const <_DispositivoDraft>[];
+          final groups = snapshot.data ?? const <_DispositivoGroup>[];
+          final totalCount = _totalUnits(groups);
+          final hasVoladoresSection = groups.any((g) => g.isVoladores);
+          final hasRastrerosSection = groups.any((g) => g.isRastreros);
+          final hasRodentOrOtherSections = groups.any((g) => !g.isVoladores && !g.isRastreros);
 
           return Form(
             key: _formKey,
@@ -130,44 +646,92 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
               padding: const EdgeInsets.all(16),
               children: [
                 _HeaderCard(
-                  serviceTitle: _effectiveServices.map((s) => s.title).join(' + '),
+                  serviceTitle: _formatosFichasResumen.isEmpty ? 'Formato Operacional' : _formatosFichasResumen,
                   client: widget.representativeService.client,
                   address: widget.representativeService.address ?? 'Sin dirección',
-                  count: dispositivos.length,
+                  count: totalCount,
+                  groupCount: groups.length,
+                  countLabel: hasRastrerosSection ? 'Total de láminas pegantes' : 'Dispositivos',
                 ),
-                const SizedBox(height: 16),
-                _LegendCard(
-                  title: 'Leyenda de Estados',
-                  items: const <String>['D = Desinstalado', 'A = Averiado', 'B = Buen estado', 'N = No encontrado', 'OB = Obstruido'],
-                ),
-                const SizedBox(height: 12),
-                _LegendCard(
-                  title: 'Leyenda de Hallazgos y Presencia',
-                  items: const <String>['C-TP = Captura en trampa pegante', 'C-J = Captura en jaula', 'C-R = Consumo de rodenticida', 'CNT-SC = Consumo de cebo no tóxico', 'C / E / H / O / P / R = Señales de presencia'],
-                ),
-                const SizedBox(height: 16),
-                if (dispositivos.isEmpty)
+                if (groups.isEmpty)
                   const _EmptyState()
-                else
-                  ...dispositivos.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final draft = entry.value;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: _DispositivoCard(
-                        number: index + 1,
-                        draft: draft,
-                        estadoOptions: _estadoOptions,
-                        hallazgoOptions: _hallazgoOptions,
-                        senalOptions: _senalOptions,
-                      ),
-                    );
+                else if (_formatosOrdenados(groups).length > 1)
+                  ..._buildFormatoBlocks(groups)
+                else ...[
+                  const SizedBox(height: 16),
+                  _LegendCard(
+                    title: hasVoladoresSection ? 'Leyenda de estado del dispositivo' : 'Leyenda de Estados',
+                    items: hasVoladoresSection
+                        ? const <String>[
+                            'A = Dispositivo averiado',
+                            'B = Buen estado',
+                            'AP = Dispositivo apagado',
+                            'D = Dispositivo desaparecido',
+                            'OB = Dispositivo obstruido',
+                          ]
+                        : const <String>['D = Desinstalado', 'A = Averiado', 'B = Buen estado', 'N = No encontrado', 'OB = Obstruido'],
+                  ),
+                  const SizedBox(height: 12),
+                  if (hasRodentOrOtherSections)
+                    _LegendCard(
+                      title: 'Leyenda de Hallazgos y Presencia',
+                      items: const <String>['C-TP = Captura en trampa pegante', 'C-J = Captura en jaula', 'C-R = Consumo de rodenticida', 'CNT-SC = Consumo de cebo no tóxico', 'C / E / H / O / P / R = Señales de presencia'],
+                    ),
+                  if (hasVoladoresSection)
+                    const _LegendCard(
+                      title: 'Insectos',
+                      items: <String>[
+                        'Registrar conteo Verdadera y Auditiva por familia',
+                      ],
+                    ),
+                  if (hasRastrerosSection) ...[
+                    const SizedBox(height: 12),
+                    const _LegendCard(
+                      title: 'Leyenda de Estado de Lámina',
+                      items: <String>['D = Lámina desprendida', 'M = Lámina mojada', 'B = Lámina en buen estado'],
+                    ),
+                    const SizedBox(height: 12),
+                    const _LegendCard(
+                      title: 'Leyenda de Estadio',
+                      items: <String>['Adulto', 'Ninfa', 'Ooteca'],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  ...groups.asMap().entries.expand((entry) {
+                    final groupIndex = entry.key;
+                    final group = entry.value;
+                    final startCode = groups
+                            .take(groupIndex)
+                            .where((previous) => previous.codePrefix == group.codePrefix)
+                            .fold<int>(0, (sum, previous) => sum + previous.cantidadTotal) +
+                        1;
+
+                    return <Widget>[
+                      if (group.isRastreros)
+                        _RastreroGroupSection(
+                          group: group,
+                          startCode: startCode,
+                        )
+                      else
+                        _GroupSection(
+                          group: group,
+                          startCode: startCode,
+                          estadoOptions: group.isVoladores ? _estadoOptionsVoladores : _estadoOptions,
+                          hallazgoOptions: _hallazgoOptions,
+                          senalOptions: _senalOptions,
+                        ),
+                    ];
                   }),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF1D4ED8),
+                          side: const BorderSide(color: Color(0xFF1D4ED8)),
+                        ),
                         onPressed: () => Navigator.of(context).pop(false),
                         child: const Text('Volver'),
                       ),
@@ -175,12 +739,25 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
                     const SizedBox(width: 10),
                     Expanded(
                       child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed: _isSaving
                             ? null
                             : () async {
                                 setState(() => _isSaving = true);
                                 try {
                                   await _submit();
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error: ${e.toString()}'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
                                 } finally {
                                   if (mounted) {
                                     setState(() => _isSaving = false);
@@ -191,7 +768,7 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
                             : const Text('Guardar formato y continuar'),
                       ),
@@ -207,74 +784,405 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
   }
 }
 
-class _DispositivoDraft {
-  _DispositivoDraft({
-    required this.idProducto,
-    required this.descripcion,
-    required this.cantidadAsignada,
-    required this.ubicacionController,
-  });
+// ---------------------------------------------------------------------------
+// Data classes
+// ---------------------------------------------------------------------------
 
-  factory _DispositivoDraft.fromDomain(FormatoOperacionalDispositivo item) {
-    return _DispositivoDraft(
-      idProducto: item.idProducto,
-      descripcion: item.descripcion,
-      cantidadAsignada: item.cantidadAsignada,
-      ubicacionController: TextEditingController(),
-    );
+class _DispositivoUnitDraft {
+  _DispositivoUnitDraft({this.enableInsectCounts = false})
+      : insectCounts = enableInsectCounts
+            ? {
+                for (final family in _insectFamilies) family.key: _DualCountDraft(),
+              }
+            : const <String, _DualCountDraft>{};
+
+  final bool enableInsectCounts;
+  final TextEditingController ubicacionController = TextEditingController();
+  String? estadoDispositivoVerdadera;
+  String? estadoDispositivoAuditiva;
+  String? hallazgoVerdadera;
+  String? hallazgoAuditiva;
+  String? senalesPresenciaVerdadera;
+  String? senalesPresenciaAuditiva;
+  String? estadoLamina;
+  String? estadio;
+  final _RastreroCountDraft rastreroCounts = _RastreroCountDraft();
+  final Map<String, _DualCountDraft> insectCounts;
+
+  bool get hasInsectCounts => insectCounts.isNotEmpty;
+
+  Map<String, Map<String, int>> insectCountsToJson() {
+    final result = <String, Map<String, int>>{};
+    for (final entry in insectCounts.entries) {
+      result[entry.key] = <String, int>{
+        'verdadera': entry.value.verdadera,
+        'auditiva': entry.value.auditiva,
+      };
+    }
+    return result;
   }
 
-  final int idProducto;
-  final String descripcion;
-  final int cantidadAsignada;
-  final TextEditingController ubicacionController;
-  String? estadoDispositivo;
-  String? hallazgo;
-  String? senalesPresencia;
-
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson(int idProducto, String descripcion) {
     return <String, dynamic>{
       'id_producto': idProducto,
       'descripcion': descripcion,
-      'cantidad_asignada': cantidadAsignada,
       'ubicacion': ubicacionController.text.trim(),
-      'estado_dispositivo': estadoDispositivo,
-      'hallazgo': hallazgo,
-      'senales_presencia': senalesPresencia,
+      'estado_dispositivo': estadoDispositivoVerdadera,
+      'estado_dispositivo_verdadera': estadoDispositivoVerdadera,
+      'estado_dispositivo_auditiva': estadoDispositivoAuditiva,
+      'hallazgo': _valueOrDash(hallazgoVerdadera),
+      'hallazgo_verdadera': _valueOrDash(hallazgoVerdadera),
+      'hallazgo_auditiva': _valueOrDash(hallazgoAuditiva),
+      'senales_presencia': _valueOrDash(senalesPresenciaVerdadera),
+      'senales_presencia_verdadera': _valueOrDash(senalesPresenciaVerdadera),
+      'senales_presencia_auditiva': _valueOrDash(senalesPresenciaAuditiva),
+      'estado_lamina': estadoLamina,
+      'estadio': estadio,
+      'conteo_estadio_verdadera': rastreroCounts.verdadera,
+      'conteo_estadio_falsa': rastreroCounts.falsa,
     };
   }
 }
 
-class _DispositivoCard extends StatefulWidget {
-  const _DispositivoCard({
-    required this.number,
-    required this.draft,
+class _DispositivoGroup {
+  _DispositivoGroup({
+    required this.idProducto,
+    required this.descripcion,
+    required this.tipoSeccion,
+    required this.codePrefix,
+    required this.unitLabel,
+    required this.cantidadTotal,
+    required this.isVoladores,
+    required this.isRastreros,
+    required this.rastreroLocations,
+    required this.units,
+    this.formatoOperacional,
+  });
+
+  final int idProducto;
+  final String descripcion;
+  final String tipoSeccion;
+  final String codePrefix;
+  final String unitLabel;
+  final int cantidadTotal;
+  final bool isVoladores;
+  final bool isRastreros;
+  final List<_RastreroLocationDraft> rastreroLocations;
+  final List<_DispositivoUnitDraft> units;
+  final String? formatoOperacional;
+
+  List<Map<String, dynamic>> toJsonList() {
+    return units.map((u) => u.toJson(idProducto, descripcion)).toList(growable: false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Group section — header + individual unit cards
+// ---------------------------------------------------------------------------
+
+class _GroupSection extends StatelessWidget {
+  const _GroupSection({
+    super.key,
+    required this.group,
+    required this.startCode,
     required this.estadoOptions,
     required this.hallazgoOptions,
     required this.senalOptions,
   });
 
-  final int number;
-  final _DispositivoDraft draft;
+  final _DispositivoGroup group;
+  final int startCode;
   final List<String> estadoOptions;
   final List<String> hallazgoOptions;
   final List<String> senalOptions;
 
   @override
-  State<_DispositivoCard> createState() => _DispositivoCardState();
+  Widget build(BuildContext context) {
+    String buildCode(int number) {
+      if (group.codePrefix == 'T') {
+        return 'T-${number.toString().padLeft(2, '0')}';
+      }
+      return '${group.codePrefix}-$number';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.inventory_2_outlined, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.descripcion.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      group.isRastreros
+                          ? '${group.cantidadTotal} ${group.cantidadTotal > 1 ? 'láminas pegantes' : 'lámina pegante'}'
+                          : '${group.cantidadTotal} ${group.unitLabel}${group.cantidadTotal > 1 ? 's' : ''}',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Individual unit cards
+        ...group.units.asMap().entries.map((entry) {
+          final index = entry.key;
+          final unit = entry.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _UnitCard(
+              code: buildCode(startCode + index),
+              unit: unit,
+              isVoladores: group.isVoladores,
+              isRastreros: group.isRastreros,
+              estadoOptions: estadoOptions,
+              hallazgoOptions: hallazgoOptions,
+              senalOptions: senalOptions,
+            ),
+          );
+        }),
+
+        const SizedBox(height: 8),
+      ],
+    );
+  }
 }
 
-class _DispositivoCardState extends State<_DispositivoCard> {
+// ---------------------------------------------------------------------------
+// Rastreros section — multiple locations + lamina rows
+// ---------------------------------------------------------------------------
+
+class _RastreroLocationDraft {
+  _RastreroLocationDraft({int initialQuantity = 1})
+      : cantidadController = TextEditingController(text: initialQuantity.toString()) {
+    syncLaminas();
+  }
+
+  final TextEditingController ubicacionController = TextEditingController();
+  final TextEditingController cantidadController;
+  final List<_RastreroLaminaDraft> laminas = <_RastreroLaminaDraft>[];
+
+  int get cantidad => int.tryParse(cantidadController.text.trim()) ?? 1;
+
+  void syncLaminas() {
+    final target = cantidad <= 0 ? 1 : cantidad;
+    while (laminas.length < target) {
+      laminas.add(_RastreroLaminaDraft());
+    }
+    while (laminas.length > target) {
+      laminas.removeLast();
+    }
+  }
+}
+
+class _RastreroLaminaDraft {
+  _RastreroLaminaDraft()
+      : verdaderaController = TextEditingController(text: '0'),
+        auditivaController = TextEditingController(text: '0');
+
+  String? verdaderaEstadoLamina;
+  String? auditivaEstadoLamina;
+  final TextEditingController verdaderaController;
+  final TextEditingController auditivaController;
+  final Map<String, _RastreroStageCountDraft> estadioCounts = <String, _RastreroStageCountDraft>{
+    for (final estadio in _estadioLabels) estadio: _RastreroStageCountDraft(),
+  };
+
+  int get verdadera => int.tryParse(verdaderaController.text.trim()) ?? 0;
+  int get auditiva => int.tryParse(auditivaController.text.trim()) ?? 0;
+  int get falsa => auditiva;
+}
+
+class _RastreroGroupSection extends StatefulWidget {
+  const _RastreroGroupSection({
+    super.key,
+    required this.group,
+    required this.startCode,
+  });
+
+  final _DispositivoGroup group;
+  final int startCode;
+
+  @override
+  State<_RastreroGroupSection> createState() => _RastreroGroupSectionState();
+}
+
+class _RastreroGroupSectionState extends State<_RastreroGroupSection> {
+  List<_RastreroLocationDraft> get _locations => widget.group.rastreroLocations;
+
+  int get _assignedTotal => _locations.fold<int>(0, (sum, location) => sum + location.cantidad);
+
+  int get _remainingTotal => widget.group.cantidadTotal - _assignedTotal;
+
+  void _addLocation() {
+    if (_remainingTotal <= 0) {
+      return;
+    }
+
+    setState(() {
+      _locations.add(_RastreroLocationDraft(initialQuantity: 1));
+    });
+  }
+
+  void _refreshLocation(_RastreroLocationDraft location, int maxAllowed) {
+    final parsed = int.tryParse(location.cantidadController.text.trim()) ?? 1;
+    final normalized = parsed.clamp(1, maxAllowed <= 0 ? 1 : maxAllowed);
+    final normalizedText = normalized.toString();
+    if (location.cantidadController.text != normalizedText) {
+      location.cantidadController.value = TextEditingValue(
+        text: normalizedText,
+        selection: TextSelection.collapsed(offset: normalizedText.length),
+      );
+    }
+    location.syncLaminas();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final draft = widget.draft;
+    if (_locations.isEmpty) {
+      _locations.add(_RastreroLocationDraft(initialQuantity: 1));
+    }
 
+    final remainingText = _remainingTotal < 0 ? 0 : _remainingTotal;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.layers_outlined, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.group.descripcion.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Total de láminas pegantes: ${widget.group.cantidadTotal} · Asignadas: $_assignedTotal · Restantes: $remainingText',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        ..._locations.asMap().entries.map((entry) {
+          final index = entry.key;
+          final location = entry.value;
+          final maxAllowed = widget.group.cantidadTotal - (_assignedTotal - location.cantidad);
+          _refreshLocation(location, maxAllowed);
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _RastreroLocationCard(
+              index: index,
+              location: location,
+              maxAllowed: maxAllowed,
+              canAddLocation: _remainingTotal > 0,
+              onChanged: () => setState(() {}),
+              onAddLocation: _addLocation,
+            ),
+          );
+        }),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+class _RastreroLocationCard extends StatelessWidget {
+  const _RastreroLocationCard({
+    required this.index,
+    required this.location,
+    required this.maxAllowed,
+    required this.canAddLocation,
+    required this.onChanged,
+    required this.onAddLocation,
+  });
+
+  final int index;
+  final _RastreroLocationDraft location;
+  final int maxAllowed;
+  final bool canAddLocation;
+  final VoidCallback onChanged;
+  final VoidCallback onAddLocation;
+
+  @override
+  Widget build(BuildContext context) {
     return Card(
       elevation: 0,
       color: Colors.white,
       shape: RoundedRectangleBorder(
         side: const BorderSide(color: Color(0xFFE2E8F0)),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -282,43 +1190,447 @@ class _DispositivoCardState extends State<_DispositivoCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
+                  constraints: const BoxConstraints(minWidth: 92, minHeight: 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF4FF),
-                    borderRadius: BorderRadius.circular(10),
+                    color: const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    '${widget.number}',
-                    style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1F3C68)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        draft.descripcion,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Cantidad salida: ${draft.cantidadAsignada}${draft.cantidadAsignada > 1 ? ' unidades' : ' unidad'}',
-                        style: const TextStyle(color: Color(0xFF64748B)),
-                      ),
-                    ],
+                    '+Ubicación ${index + 1}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1D4ED8),
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             TextFormField(
-              controller: draft.ubicacionController,
+              controller: location.ubicacionController,
+              decoration: InputDecoration(
+                labelText: 'Ubicación',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              validator: (value) {
+                if ((value ?? '').trim().isEmpty) {
+                  return 'Ingresa la ubicación';
+                }
+                return null;
+              },
+              onChanged: (_) => onChanged(),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: location.cantidadController,
+              keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                labelText: 'Cantidad de láminas',
+                helperText: 'Máximo permitido: $maxAllowed',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onTap: () {
+                if (location.cantidadController.text.isNotEmpty) {
+                  location.cantidadController.selection = TextSelection(
+                    baseOffset: 0,
+                    extentOffset: location.cantidadController.text.length,
+                  );
+                }
+              },
+              validator: (value) {
+                final parsed = int.tryParse(value ?? '') ?? 0;
+                if (parsed <= 0) {
+                  return 'Ingresa una cantidad válida';
+                }
+                if (parsed > maxAllowed) {
+                  return 'No puede superar el total disponible';
+                }
+                return null;
+              },
+              onChanged: (_) => onChanged(),
+            ),
+            const SizedBox(height: 12),
+            ...location.laminas.asMap().entries.map((entry) {
+              final laminaIndex = entry.key;
+              final lamina = entry.value;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Lámina ${laminaIndex + 1}',
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildDualDropdownFieldRow(
+                        label: 'Estado de lámina',
+                        leftValue: lamina.verdaderaEstadoLamina,
+                        rightValue: lamina.auditivaEstadoLamina,
+                        items: _estadoLaminaOptions,
+                        requiredField: true,
+                        leftHeaderLabel: 'V',
+                        rightHeaderLabel: 'F',
+                        onLeftChanged: (value) {
+                          lamina.verdaderaEstadoLamina = value;
+                          onChanged();
+                        },
+                        onRightChanged: (value) {
+                          lamina.auditivaEstadoLamina = value;
+                          onChanged();
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _buildStageCountTable(lamina, onChanged),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF1D4ED8),
+                ),
+                onPressed: canAddLocation ? onAddLocation : null,
+                icon: const Icon(Icons.add),
+                label: const Text('Ubicación'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDualDropdownFieldRow({
+    required String label,
+    required String? leftValue,
+    required String? rightValue,
+    required List<String> items,
+    required ValueChanged<String?> onLeftChanged,
+    required ValueChanged<String?> onRightChanged,
+    bool requiredField = false,
+    String leftHeaderLabel = 'Verdadera',
+    String rightHeaderLabel = 'Auditiva',
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Expanded(flex: 5, child: SizedBox()),
+            Expanded(
+              flex: 3,
+              child: Text(
+                leftHeaderLabel,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+              ),
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              flex: 3,
+              child: Text(
+                rightHeaderLabel,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            const Expanded(flex: 5, child: SizedBox()),
+            Expanded(
+              flex: 3,
+              child: _buildDropdownField(
+                label: '',
+                value: leftValue ?? '',
+                items: items,
+                requiredField: requiredField,
+                onChanged: onLeftChanged,
+                compact: true,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 3,
+              child: _buildDropdownField(
+                label: '',
+                value: rightValue ?? '',
+                items: items,
+                requiredField: requiredField,
+                onChanged: onRightChanged,
+                compact: true,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDualCountRow({
+    required String title,
+    required String leftLabel,
+    required String rightLabel,
+    required TextEditingController leftController,
+    required TextEditingController rightController,
+    required VoidCallback onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                leftLabel,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                rightLabel,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(child: _buildCountField(leftController, onChanged)),
+            const SizedBox(width: 10),
+            Expanded(child: _buildCountField(rightController, onChanged)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStageCountTable(_RastreroLaminaDraft lamina, VoidCallback onChanged) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Estadio',
+            style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+          ),
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              Expanded(flex: 5, child: SizedBox()),
+              Expanded(
+                flex: 3,
+                child: Text('V', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Color(0xFF334155))),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: Text('F', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Color(0xFF334155))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._estadioLabels.map((estadio) {
+            final draft = lamina.estadioCounts[estadio]!;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      estadio,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: _buildCountField(draft.verdaderaController, onChanged),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: _buildCountField(draft.auditivaController, onChanged),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCountField(TextEditingController controller, VoidCallback onChanged) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      onTap: () {
+        if (controller.text.isNotEmpty) {
+          controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+        }
+      },
+      onChanged: (value) {
+        onChanged();
+      },
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    bool requiredField = false,
+    bool compact = false,
+  }) {
+    return DropdownButtonFormField<String>(
+      key: ValueKey(value),
+      value: value.isEmpty ? null : value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: compact ? null : label,
+        isDense: compact,
+        contentPadding: compact ? const EdgeInsets.symmetric(horizontal: 10, vertical: 12) : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(compact ? 10 : 12)),
+      ),
+      items: items
+          .map((item) => DropdownMenuItem<String>(
+                value: item,
+                child: Text(item, style: const TextStyle(fontSize: 14)),
+              ))
+          .toList(growable: false),
+      validator: (selected) {
+        if (requiredField && (selected == null || selected.trim().isEmpty)) {
+          return 'Selecciona una opción';
+        }
+        return null;
+      },
+      hint: requiredField ? null : const Text('-', style: TextStyle(fontSize: 14)),
+      onChanged: onChanged,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Individual unit card
+// ---------------------------------------------------------------------------
+
+class _UnitCard extends StatefulWidget {
+  const _UnitCard({
+    required this.code,
+    required this.unit,
+    required this.isVoladores,
+    required this.isRastreros,
+    required this.estadoOptions,
+    required this.hallazgoOptions,
+    required this.senalOptions,
+  });
+
+  final String code;
+  final _DispositivoUnitDraft unit;
+  final bool isVoladores;
+  final bool isRastreros;
+  final List<String> estadoOptions;
+  final List<String> hallazgoOptions;
+  final List<String> senalOptions;
+
+  @override
+  State<_UnitCard> createState() => _UnitCardState();
+}
+
+class _UnitCardState extends State<_UnitCard> {
+  @override
+  Widget build(BuildContext context) {
+    final unit = widget.unit;
+
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Number badge
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    widget.code,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1D4ED8),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Ubicación
+            TextFormField(
+              controller: unit.ubicacionController,
               decoration: InputDecoration(
                 labelText: 'Ubicación',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -330,35 +1642,318 @@ class _DispositivoCardState extends State<_DispositivoCard> {
                 return null;
               },
             ),
-            const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth >= 720) {
-                  return Row(
-                    children: [
-                      Expanded(child: _buildDropdown(label: 'Estado de Dispositivo', value: draft.estadoDispositivo, items: widget.estadoOptions, onChanged: (value) => setState(() => draft.estadoDispositivo = value))),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildDropdown(label: 'Hallazgo', value: draft.hallazgo, items: widget.hallazgoOptions, onChanged: (value) => setState(() => draft.hallazgo = value))),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildDropdown(label: 'Señales de Presencia', value: draft.senalesPresencia, items: widget.senalOptions, onChanged: (value) => setState(() => draft.senalesPresencia = value))),
-                    ],
-                  );
-                }
+            const SizedBox(height: 10),
 
-                return Column(
-                  children: [
-                    _buildDropdown(label: 'Estado de Dispositivo', value: draft.estadoDispositivo, items: widget.estadoOptions, onChanged: (value) => setState(() => draft.estadoDispositivo = value)),
-                    const SizedBox(height: 10),
-                    _buildDropdown(label: 'Hallazgo', value: draft.hallazgo, items: widget.hallazgoOptions, onChanged: (value) => setState(() => draft.hallazgo = value)),
-                    const SizedBox(height: 10),
-                    _buildDropdown(label: 'Señales de Presencia', value: draft.senalesPresencia, items: widget.senalOptions, onChanged: (value) => setState(() => draft.senalesPresencia = value)),
-                  ],
-                );
-              },
+            _buildDualDropdownRow(
+              title: 'Estado de dispositivo',
+              leftLabel: 'V',
+              rightLabel: 'F',
+              leftValue: unit.estadoDispositivoVerdadera,
+              rightValue: unit.estadoDispositivoAuditiva,
+              items: widget.estadoOptions,
+              requiredField: true,
+              onLeftChanged: (value) => setState(() => unit.estadoDispositivoVerdadera = value),
+              onRightChanged: (value) => setState(() => unit.estadoDispositivoAuditiva = value),
             ),
+            const SizedBox(height: 10),
+            if (!widget.isRastreros && !widget.isVoladores) ...[
+              _buildDualDropdownRow(
+                title: 'Hallazgo',
+                leftLabel: 'Verdadera',
+                rightLabel: 'Auditiva',
+                leftValue: unit.hallazgoVerdadera,
+                rightValue: unit.hallazgoAuditiva,
+                items: widget.hallazgoOptions,
+                onLeftChanged: (value) => setState(() => unit.hallazgoVerdadera = value),
+                onRightChanged: (value) => setState(() => unit.hallazgoAuditiva = value),
+              ),
+            ],
+            if (widget.isRastreros) ...[
+              const SizedBox(height: 10),
+              _buildDropdown(
+                label: 'Estado de lámina',
+                value: unit.estadoLamina,
+                items: _estadoLaminaOptions,
+                requiredField: true,
+                onChanged: (value) => setState(() => unit.estadoLamina = value),
+              ),
+              const SizedBox(height: 10),
+              _buildDropdown(
+                label: 'Estadio',
+                value: unit.estadio,
+                items: _estadioLabels,
+                requiredField: true,
+                onChanged: (value) => setState(() => unit.estadio = value),
+              ),
+              const SizedBox(height: 10),
+              _buildDualCountRow(
+                title: 'Conteo por estadio',
+                leftLabel: 'V',
+                rightLabel: 'F',
+                leftController: unit.rastreroCounts.verdaderaController,
+                rightController: unit.rastreroCounts.falsaController,
+              ),
+            ] else if (widget.isVoladores) ...[
+              const SizedBox(height: 10),
+              _buildInsectosTable(unit),
+            ] else ...[
+              const SizedBox(height: 10),
+              _buildDualDropdownRow(
+                title: 'Señales de presencia',
+                leftLabel: 'Verdadera',
+                rightLabel: 'Auditiva',
+                leftValue: unit.senalesPresenciaVerdadera,
+                rightValue: unit.senalesPresenciaAuditiva,
+                items: widget.senalOptions,
+                onLeftChanged: (value) => setState(() => unit.senalesPresenciaVerdadera = value),
+                onRightChanged: (value) => setState(() => unit.senalesPresenciaAuditiva = value),
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildInsectosTable(_DispositivoUnitDraft unit) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'INSECTOS',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              Expanded(
+                flex: 7,
+                child: SizedBox(),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'V',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'F',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._insectFamilies.map((family) {
+            final draft = unit.insectCounts[family.key];
+            if (draft == null) {
+              return const SizedBox.shrink();
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    flex: 7,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          family.title,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        if (family.subtitle.isNotEmpty)
+                          Text(
+                            family.subtitle,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: _buildCountField(draft.verdaderaController),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: _buildCountField(draft.auditivaController),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDualCountRow({
+    required String title,
+    required String leftLabel,
+    required String rightLabel,
+    required TextEditingController leftController,
+    required TextEditingController rightController,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF1E293B),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                leftLabel,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                rightLabel,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(child: _buildCountField(leftController)),
+            const SizedBox(width: 10),
+            Expanded(child: _buildCountField(rightController)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCountField(TextEditingController controller) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      onTap: () {
+        if (controller.text.isNotEmpty) {
+          controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+        }
+      },
+      onChanged: (value) {
+        if (value.trim().isEmpty) {
+          controller.clear();
+        }
+      },
+    );
+  }
+
+  Widget _buildDualDropdownRow({
+    required String title,
+    required String leftLabel,
+    required String rightLabel,
+    required String? leftValue,
+    required String? rightValue,
+    required List<String> items,
+    required ValueChanged<String?> onLeftChanged,
+    required ValueChanged<String?> onRightChanged,
+    bool requiredField = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF1E293B),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                leftLabel,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                rightLabel,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown(
+                label: '',
+                value: leftValue,
+                items: items,
+                requiredField: requiredField,
+                onChanged: onLeftChanged,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildDropdown(
+                label: '',
+                value: rightValue,
+                items: items,
+                requiredField: requiredField,
+                onChanged: onRightChanged,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -367,26 +1962,32 @@ class _DispositivoCardState extends State<_DispositivoCard> {
     required String? value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
+    bool requiredField = false,
   }) {
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      value: value,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: label.isEmpty ? null : label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       items: items
           .map((item) => DropdownMenuItem<String>(value: item, child: Text(item)))
           .toList(growable: false),
       validator: (selected) {
-        if (selected == null || selected.trim().isEmpty) {
+        if (requiredField && (selected == null || selected.trim().isEmpty)) {
           return 'Selecciona una opción';
         }
         return null;
       },
+      hint: requiredField ? null : const Text('-'),
       onChanged: onChanged,
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Header card
+// ---------------------------------------------------------------------------
 
 class _HeaderCard extends StatelessWidget {
   const _HeaderCard({
@@ -394,12 +1995,16 @@ class _HeaderCard extends StatelessWidget {
     required this.client,
     required this.address,
     required this.count,
+    required this.groupCount,
+    required this.countLabel,
   });
 
   final String serviceTitle;
   final String client;
   final String address;
   final int count;
+  final int groupCount;
+  final String countLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -430,12 +2035,19 @@ class _HeaderCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text('Dirección: $address', style: const TextStyle(color: Color(0xE6FFFFFF))),
           const SizedBox(height: 4),
-          Text('Dispositivos cargados: $count', style: const TextStyle(color: Color(0xE6FFFFFF))),
+          Text(
+            '$countLabel: $count · Secciones: $groupCount',
+            style: const TextStyle(color: Color(0xE6FFFFFF)),
+          ),
         ],
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Legend card
+// ---------------------------------------------------------------------------
 
 class _LegendCard extends StatelessWidget {
   const _LegendCard({required this.title, required this.items});
@@ -479,6 +2091,10 @@ class _LegendCard extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();

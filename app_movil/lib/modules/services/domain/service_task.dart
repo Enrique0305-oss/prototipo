@@ -19,6 +19,7 @@ class ServiceTask {
     this.evidenceItems = const <ServiceEvidence>[],
     this.completedAt,
     this.areaNames = const <String>[],
+    this.formatosFichas = const <String>[],
   });
 
   final int id;
@@ -38,6 +39,7 @@ class ServiceTask {
   final List<ServiceEvidence> evidenceItems;
   final String? completedAt;
   final List<String> areaNames;
+  final List<String> formatosFichas;
 
   bool get isCompleted {
     final normalized = status.toLowerCase();
@@ -47,6 +49,8 @@ class ServiceTask {
   ServiceTask copyWith({
     String? status,
     String? observations,
+    List<String>? areaNames,
+    List<String>? formatosFichas,
   }) {
     return ServiceTask(
       id: id,
@@ -66,6 +70,7 @@ class ServiceTask {
       evidenceItems: evidenceItems,
       completedAt: completedAt ?? this.completedAt,
       areaNames: areaNames ?? this.areaNames,
+      formatosFichas: formatosFichas ?? this.formatosFichas,
     );
   }
 
@@ -85,6 +90,9 @@ class ServiceTask {
         .where((n) => n.isNotEmpty)
         .toList();
     final coords = _resolveCoordinates(json, planta);
+    final formatosFichas = _parseStringList(
+      json['formatos_fichas'] ?? (json['programacion_servicio'] is Map ? (json['programacion_servicio'] as Map)['formatos_fichas'] : null),
+    );
 
     return ServiceTask(
       id: (json['id'] ?? 0) as int,
@@ -104,6 +112,7 @@ class ServiceTask {
       evidenceItems: _parseEvidenceItems(json['fotos_evidencia']),
       completedAt: (json['fecha_ejecucion_real'] ?? '').toString(),
       areaNames: parsedAreaNames,
+      formatosFichas: formatosFichas,
     );
   }
 
@@ -237,6 +246,42 @@ class ServiceTask {
       }
       return ServiceEvidence(path: item.toString().trim());
     }).where((item) => item.path.isNotEmpty).toList(growable: false);
+  }
+
+  static List<String> _parseStringList(dynamic raw) {
+    if (raw == null) {
+      return const <String>[];
+    }
+
+    if (raw is List) {
+      return raw
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    }
+
+    final text = raw.toString().trim();
+    if (text.isEmpty) {
+      return const <String>[];
+    }
+
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is List) {
+        return decoded
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList(growable: false);
+      }
+    } catch (_) {
+      // Fallback: soporta valores separados por coma o un solo string.
+    }
+
+    return text
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
   }
 
   static (double?, double?) _parseCoordinates(String raw) {

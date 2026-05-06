@@ -8,6 +8,252 @@ type ProgramacionConEvidencias = Programacion & {
   fotos_evidencia?: unknown;
 }
 
+// Modal: Crear Informe (visual)
+export function renderCrearInformeModal(prefillCliente = ''): string {
+  return `
+    <div class="modal-overlay js-close-crear-informe" style="position:fixed;inset:0;background:rgba(15,23,42,0.65);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px;">
+      <div class="modal-content" style="background:#fff;border-radius:14px;max-width:860px;width:min(860px,100%);max-height:90vh;overflow:auto;padding:18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div>
+            <h3 style="margin:0 0 6px 0;font-size:18px;color:#0f172a;">Crear Informe Técnico</h3>
+            <p style="margin:0;color:#475569;font-size:13px;">Formulario visual para registrar un informe con evidencias (simulado)</p>
+          </div>
+          <button class="btn-secondary js-close-crear-informe" type="button">Cerrar</button>
+        </div>
+
+        <form id="operaciones-crear-informe-form" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div style="grid-column:1 / -1;display:grid;grid-template-columns:160px 1fr;align-items:center;gap:8px;">
+            <label style="font-weight:700;color:#334155;">Código de Informe</label>
+            <input name="codigo_informe" type="text" placeholder="AQO-12-25" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Cliente</label>
+            <input name="cliente" type="text" value="${escapeHtml(prefillCliente)}" placeholder="Nombre del cliente" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Ubicación</label>
+            <input name="ubicacion" type="text" placeholder="Dirección, distrito" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Actividad</label>
+            <input name="actividad" type="text" placeholder="Manejo integrado de plagas" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Mes de la Actividad</label>
+            <input name="mes_actividad" type="month" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Fecha de Emisión</label>
+            <input name="fecha_emision" type="date" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Elaborado por</label>
+            <input name="elaborado_por" type="text" placeholder="Nombre del responsable" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Nº de visitas</label>
+            <input name="n_visitas" type="number" min="0" value="1" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="grid-column:1 / -1;display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Fechas de Visitas (separadas por coma)</label>
+            <input name="fechas_visitas" type="text" placeholder="10/12/2025, 23/12/2025" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-weight:600;color:#334155;">Nº de Fichas</label>
+            <input name="n_fichas" type="text" placeholder="007678" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+          </div>
+
+          <div style="grid-column:1 / -1;display:flex;gap:8px;justify-content:flex-end;margin-top:6px;">
+            <button type="button" class="btn-secondary js-close-crear-informe">Cancelar</button>
+            <button type="submit" class="btn-primary">Crear Informe (simulado)</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+export function abrirModalCrearInforme(prefillCliente = '') {
+  const existing = document.getElementById('operaciones-crear-informe-host');
+  if (existing) existing.remove();
+
+  const host = document.createElement('div');
+  host.id = 'operaciones-crear-informe-host';
+  host.innerHTML = renderCrearInformeModal(prefillCliente);
+  document.body.appendChild(host);
+
+  const close = () => host.remove();
+
+  host.querySelectorAll('.js-close-crear-informe').forEach(el => el.addEventListener('click', close));
+
+  const form = host.querySelector('#operaciones-crear-informe-form') as HTMLFormElement | null;
+  if (!form) return;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const data = new FormData(form);
+    const payload: Record<string, string> = {};
+    data.forEach((value, key) => { payload[key] = String(value || '').trim(); });
+
+    // Validación mínima
+    if (!payload.cliente) {
+      alert('Por favor complete el campo Cliente.');
+      return;
+    }
+
+    // Aquí solo simulamos la creación visual del informe.
+    console.log('Crear Informe (simulado):', payload);
+    alert('Informe creado (simulado). Luego implementaremos el backend para persistirlo.');
+    close();
+  });
+}
+
+export function initInformesClienteEvents() {
+  // Botones para abrir el modal de creación dentro de la tabla de Informes por Cliente
+  document.querySelectorAll('.js-crear-informe').forEach((button) => {
+    button.addEventListener('click', (e) => {
+      const target = e.currentTarget as HTMLButtonElement;
+      const cliente = target.dataset.cliente || '';
+      abrirModalCrearInforme(cliente);
+    });
+  });
+}
+
+export function initCrearInformeEvents() {
+  // Esta función se llamará cuando se renderice el tab "Crear Informe"
+  // y cargará los servicios realizados del "Servicio del Día"
+  setTimeout(() => {
+    cargarServiciosParaCrearInforme();
+  }, 100);
+}
+
+async function cargarServiciosParaCrearInforme() {
+  const container = document.querySelector('#operaciones-servicios-lista') as HTMLElement | null;
+  if (!container) return;
+
+  try {
+    // Cargar servicios realizados desde la API
+    const { programacionServicioService } = await import('../../modules/programaciones/programacion-servicio/programacion-servicio.service');
+    const response = await programacionServicioService.getAll();
+    const lista = Array.isArray(response?.data) ? response.data : [];
+
+    const realizados = lista
+      .filter((item): item is Programacion => Boolean(item))
+      .filter((item) => item.estado_ejecucion === 'Realizado');
+    
+    if (realizados.length === 0) {
+      container.innerHTML = '<p style="color:#64748b;font-size:13px;">No hay servicios realizados disponibles</p>';
+      return;
+    }
+
+    // Renderizar servicios como botones en el panel izquierdo
+    container.innerHTML = realizados.map((servicio, idx) => {
+      const titulo = `${servicio.servicio?.nombre || `Servicio #${servicio.id_servicio}`} - ${servicio.orden_servicio?.cliente?.nombre_empresa || 'Cliente sin nombre'}`;
+      const fecha = servicio.fecha_ejecucion_real || servicio.fecha_programada || '';
+      return `
+        <button class="js-servicio-item" data-service-id="${servicio.id}" data-service-idx="${idx}" type="button" style="padding:10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;text-align:left;font-size:12px;transition:all 0.2s;">
+          <div style="font-weight:600;color:#0f172a;margin-bottom:3px;">${escapeHtml(titulo)}</div>
+          <div style="color:#64748b;font-size:11px;">${escapeHtml(fecha || 'Sin fecha')}</div>
+        </button>
+      `;
+    }).join('');
+
+    // Agregar event listeners a los botones de servicios
+    container.querySelectorAll('.js-servicio-item').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLButtonElement;
+        const serviceId = parseInt(target.dataset.serviceId || '0', 10);
+        const serviceIdx = parseInt(target.dataset.serviceIdx || '0', 10);
+        
+        if (serviceId > 0 && realizados[serviceIdx]) {
+          rellenarFormularioDesdeServicio(realizados[serviceIdx]);
+          
+          // Marcar el botón como seleccionado
+          container.querySelectorAll('.js-servicio-item').forEach(b => b.style.background = '#fff');
+          target.style.background = '#dbeafe';
+          target.style.borderColor = '#3b82f6';
+        }
+      });
+    });
+
+    // Agregar event listener al formulario principal
+    const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const data = new FormData(form);
+        const payload: Record<string, string> = {};
+        data.forEach((value, key) => { payload[key] = String(value || '').trim(); });
+
+        // Validaciones básicas
+        if (!payload.cliente) {
+          alert('Por favor selecciona un servicio para pre-llenar el cliente.');
+          return;
+        }
+        if (!payload.codigo_informe) {
+          alert('Por favor completa el código de informe.');
+          return;
+        }
+
+        // Envío simulado (luego se integrará con backend)
+        console.log('Crear Informe (simulado):', payload);
+        alert(`Informe ${payload.codigo_informe} creado exitosamente (simulado). Backend: siguiente paso.`);
+        form.reset();
+      });
+    }
+  } catch (error) {
+    console.error('Error cargando servicios para crear informe:', error);
+    container.innerHTML = '<p style="color:#b91c1c;font-size:13px;">Error cargando servicios</p>';
+  }
+}
+
+function rellenarFormularioDesdeServicio(servicio: Programacion) {
+  const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
+  if (!form) return;
+
+  const cliente = servicio.orden_servicio?.cliente?.nombre_empresa || '';
+  const ubicacion = `${servicio.orden_servicio?.direccion || ''}, ${servicio.orden_servicio?.distrito || ''}`.trim();
+  const actividad = servicio.servicio?.nombre || '';
+  const fecha = servicio.fecha_ejecucion_real || servicio.fecha_programada || '';
+
+  // Llenar campos del formulario
+  (form.querySelector('[name="cliente"]') as HTMLInputElement)!.value = cliente;
+  (form.querySelector('[name="ubicacion"]') as HTMLInputElement)!.value = ubicacion;
+  (form.querySelector('[name="actividad"]') as HTMLInputElement)!.value = actividad;
+  
+  // Establecer mes de la actividad basado en la fecha
+  if (fecha) {
+    const dateObj = new Date(fecha);
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    (form.querySelector('[name="mes_actividad"]') as HTMLInputElement)!.value = `${year}-${month}`;
+  }
+
+  // Mostrar imágenes de evidencia
+  const evidenciasContainer = document.querySelector('#operaciones-evidencias-preview') as HTMLElement | null;
+  if (evidenciasContainer && servicio.fotos_evidencia) {
+    const evidencias = parseEvidenceEntries(servicio.fotos_evidencia);
+    const uniqueImages = Array.from(new Set(evidencias.map(e => resolvePhotoUrl(e.path))));
+    
+    if (uniqueImages.length > 0) {
+      evidenciasContainer.innerHTML = uniqueImages.map(url => `
+        <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:block;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;">
+          <img src="${escapeHtml(url)}" alt="Evidencia" style="width:100%;height:100px;object-fit:cover;display:block;" />
+        </a>
+      `).join('');
+    }
+  }
+}
+
 type ServiceEvidenceEntry = {
   path: string;
   serviceId: number | null;
@@ -58,6 +304,73 @@ export type FichaOperacionalViewModel = {
   observaciones: string;
 }
 
+export type FormatoOperacionalViewModel = {
+  codigoDocumento: string;
+  version: string;
+  cliente: string;
+  direccion: string;
+  fecha: string;
+  horaLlegada: string;
+  horaInicio: string;
+  horaFinal: string;
+  observaciones: string;
+  secciones: Array<{
+    tipo: string;
+    titulo: string;
+    cantidad: number;
+    items: Array<{
+      codigoCaja: string;
+      ubicacion: string;
+      estadoDispositivoVerdadera: string;
+      estadoDispositivoAuditiva: string;
+      hallazgoVerdadera: string;
+      hallazgoAuditiva: string;
+      senalesPresenciaVerdadera: string;
+      senalesPresenciaAuditiva: string;
+      conteoInsectos?: Record<string, { verdadera: number; auditiva: number }> | null;
+      estadoLamina?: string | null;
+      estadio?: string | null;
+      conteoEstadio?: Record<string, number> | Array<{ estadio?: string; conteo?: number; cantidad?: number; valor?: number }> | null;
+      conteoEstadioVerdadera?: number | null;
+      conteoEstadioFalsa?: number | null;
+      numeroLote: string;
+    }>;
+  }>;
+}
+
+const INSECTOS_VOLADORES = [
+  { key: 'muscidae', label: 'Fam. Muscidae (mosca doméstica)' },
+  { key: 'drosophilidae', label: 'Fam. Drosophilidae (mosca de vinagre)' },
+  { key: 'phoridae', label: 'Fam. Phoridae (mosca jorobada)' },
+  { key: 'psychodidae', label: 'Fam. Psychodidae (mosca de drenaje)' },
+  { key: 'chironomidae', label: 'Fam. Chironomidae (mosquito enano)' },
+  { key: 'culicidae', label: 'Fam. Culicidae (mosquitos)' },
+  { key: 'pyralidae_tineridae_gelechidae', label: 'Fam. Pyralidae/Tineridae/Gelechidae (polillas)' },
+  { key: 'sarcophagidae_calliphoridae', label: 'Fam. Sarcophagidae/Calliphoridae (mosca de la carne/mosca metálica)' },
+  { key: 'otros_no_identificados', label: 'Otros no identificados' },
+] as const;
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function isVoladoresFormato(formato: FormatoOperacionalViewModel): boolean {
+  return formato.secciones.some((seccion) => {
+    const hayTitulo = normalizeText(`${seccion.titulo} ${seccion.tipo}`);
+    return hayTitulo.includes('trampa de luz') || hayTitulo.includes('trampa_luz') || hayTitulo.includes('voladores');
+  });
+}
+
+function isRastrerosFormato(formato: FormatoOperacionalViewModel): boolean {
+  return formato.secciones.some((seccion) => {
+    const hayTitulo = normalizeText(`${seccion.titulo} ${seccion.tipo}`);
+    return hayTitulo.includes('lamina') || hayTitulo.includes('pegante') || hayTitulo.includes('rastreros');
+  });
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -74,6 +387,38 @@ function formatFecha(value?: string): string {
     return value;
   }
   return parsed.toLocaleDateString('es-PE');
+}
+
+function formatFechaDocumento(value?: string): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+  return parsed.toLocaleDateString('es-PE');
+}
+
+function formatHoraDocumento(value?: string): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+
+  const simpleHour = raw.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+  if (simpleHour) {
+    const hour = simpleHour[1].padStart(2, '0');
+    return `${hour}:${simpleHour[2]}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+
+  return parsed.toLocaleTimeString('es-PE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 function resolvePhotoUrl(raw: string): string {
@@ -259,44 +604,55 @@ export function renderServiciosRealizadosCards(cards: ServicioRealizadoCardViewM
   }
 
   return cards.map((card) => {
-    const photosBlock = card.previewImages.length > 0
-      ? `
-          <div class="report-photos">
-            ${card.previewImages.map((url) => `
-              <div class="photo-thumb" style="overflow:hidden;">
-                <img src="${escapeHtml(url)}" alt="Evidencia" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" />
-              </div>
-            `).join('')}
-            ${card.extraCount > 0 ? `<div class="photo-count">+${card.extraCount}</div>` : ''}
-          </div>
-        `
-      : '<div class="report-photos"><span style="color:#64748b;font-size:14px;">Sin imágenes registradas</span></div>';
+    const compactPhotos = card.previewImages.length > 0
+      ? `<div class="compact-photos">${card.previewImages.map((url) => `
+            <div class="photo-thumb"><img src="${escapeHtml(url)}" alt="Evidencia" loading="lazy"/></div>
+          `).join('')}${card.extraCount > 0 ? `<div class="photo-count">+${card.extraCount}</div>` : ''}</div>`
+      : `<div class="compact-photos"><span style="color:#64748b;font-size:13px;">Sin imágenes</span></div>`;
+
+    const expandedContent = `
+      <div class="report-content-split">
+        <div class="report-evidence-column">
+          ${card.previewImages.length > 0 ? `
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;">
+              ${card.previewImages.map((url) => `
+                <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:block;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#f8fafc;">
+                  <img src="${escapeHtml(url)}" alt="Evidencia" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
+                </a>
+              `).join('')}
+            </div>
+          ` : '<div style="color:#64748b;font-size:14px;">Sin imágenes registradas</div>'}
+        </div>
+        <div class="report-docs-column">
+          <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver ficha operacional">Ficha</button>
+          <button class="report-doc report-doc-placeholder js-open-formato-operacional" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver formato operacional">Formato</button>
+        </div>
+      </div>
+      <div class="report-actions-row">
+        <button class="btn-secondary fullwidth js-open-imagenes-completas" data-card-key="${escapeHtml(card.key)}" ${card.secciones.length === 0 ? 'disabled' : ''}>Ver imágenes completas</button>
+      </div>
+    `;
 
     return `
-      <div class="report-card">
-        <div class="report-header">
-          <h4>${escapeHtml(card.titulo)}</h4>
-          <span class="report-date">${escapeHtml(card.fechaLabel)}</span>
-        </div>
-        <div class="report-details">
-          <p><strong>Técnico(s):</strong> ${escapeHtml(card.tecnicosLabel)}</p>
-        </div>
-        <div class="report-content-split">
-          <div class="report-evidence-column">
-            ${photosBlock}
+      <div class="report-card" data-card-key="${escapeHtml(card.key)}">
+        <div class="report-row">
+          <div class="report-main">
+            <div class="report-header-row">
+              <div class="report-title">${escapeHtml(card.titulo)}</div>
+              <div class="report-date">${escapeHtml(card.fechaLabel)}</div>
+            </div>
+            <div class="report-meta">${escapeHtml(card.tecnicosLabel)}</div>
           </div>
-          <div class="report-docs-column">
-            <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver ficha operacional">
-              <span class="report-doc-icon" aria-hidden="true">📄</span>
-            </button>
-            <button class="report-doc report-doc-placeholder" type="button" disabled title="Disponible próximamente">
-              <span class="report-doc-icon" aria-hidden="true">📄</span>
-            </button>
+          <div class="report-right">
+            ${compactPhotos}
+            <div class="compact-actions">
+              <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(card.key)}">Ficha</button>
+              <button class="report-doc report-doc-placeholder js-open-formato-operacional" type="button" data-card-key="${escapeHtml(card.key)}">Formato</button>
+              <button class="btn-secondary js-toggle-report-details" type="button" data-card-key="${escapeHtml(card.key)}">▼</button>
+            </div>
           </div>
         </div>
-        <div class="report-actions-row">
-          <button class="btn-secondary fullwidth js-open-imagenes-completas" data-card-key="${escapeHtml(card.key)}" ${card.secciones.length === 0 ? 'disabled' : ''}>Ver imágenes completas</button>
-        </div>
+        <div class="report-expanded">${expandedContent}</div>
       </div>
     `;
   }).join('');
@@ -489,9 +845,9 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
             <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Cliente:</strong> ${escapeHtml(fallbackText(ficha.cliente))}</div>
             <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Dirección:</strong> ${escapeHtml(fallbackText(ficha.direccion))}</div>
             <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Fecha:</strong> ${escapeHtml(fallbackText(formatFecha(ficha.fecha), 'No registrado'))}</div>
-            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora llegada:</strong> ${escapeHtml(fallbackText(ficha.horaLlegada))}</div>
-            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora inicio:</strong> ${escapeHtml(fallbackText(ficha.horaInicio))}</div>
-            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora final:</strong> ${escapeHtml(fallbackText(ficha.horaFinal))}</div>
+            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora llegada:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(ficha.horaLlegada)))}</div>
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora inicio:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(ficha.horaInicio)))}</div>
+            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora final:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(ficha.horaFinal)))}</div>
             <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:14px;"><strong>Estado:</strong> ${escapeHtml(fallbackText(ficha.estado))}</div>
             <div style="padding:8px 10px;font-size:14px;"><strong>Giro:</strong> ${escapeHtml(fallbackText(ficha.giro))}</div>
           </div>
@@ -583,6 +939,535 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
   `;
 }
 
+export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewModel, formato: FormatoOperacionalViewModel): string {
+  const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
+  const logoUrl = `${base}/images/logo-orden.png`;
+  
+  // Detectar tipos de formatos presentes en las secciones
+  const formatosPresentesSet = new Set<string>();
+  for (const seccion of formato.secciones) {
+    const normalizado = normalizeText(seccion.titulo + ' ' + (seccion.tipo || ''));
+    if (normalizado.includes('trampa') && normalizado.includes('luz')) {
+      formatosPresentesSet.add('voladores');
+    } else if (normalizado.includes('lamina') && (normalizado.includes('rastreros') || normalizado.includes('pegante'))) {
+      formatosPresentesSet.add('rastreros');
+    } else {
+      formatosPresentesSet.add('roedores');
+    }
+  }
+  
+  const hayMultiplesFormatos = formatosPresentesSet.size > 1;
+  const formatosPresentes = Array.from(formatosPresentesSet);
+  const formatoLabel = (key: string) => key === 'roedores' ? 'Control de Roedores' : key === 'rastreros' ? 'Control de Insectos Rastreros' : 'Control de Insectos Voladores';
+  const esRastreros = isRastrerosFormato(formato) && formatosPresentesSet.size === 1;
+  const esVoladores = isVoladoresFormato(formato) && formatosPresentesSet.size === 1;
+  const tituloPrincipal = hayMultiplesFormatos
+    ? 'MÚLTIPLES FORMATOS'
+    : esVoladores
+      ? 'CONTROL DE INSECTOS VOLADORES'
+      : esRastreros
+        ? 'CONTROL DE INSECTOS RASTREROS'
+        : 'CONTROL DE CAJAS CEBADERAS';
+
+  const renderHoja = (variant: 'verdadera' | 'falsa') => {
+    const sheetTitle = variant === 'verdadera' ? 'HOJA VERDADERA' : 'HOJA FALSA';
+
+    // Cuando hay múltiples formatos, renderizar cada formato completo (detallado)
+    if (hayMultiplesFormatos) {
+      const filtroPorFormato = (key: string) => {
+        return formato.secciones.filter((s) => {
+          const normalizado = normalizeText(s.titulo + ' ' + (s.tipo || ''));
+          if (key === 'rastreros') return normalizado.includes('lamina') && (normalizado.includes('rastreros') || normalizado.includes('pegante'));
+          if (key === 'voladores') return normalizado.includes('trampa') && normalizado.includes('luz');
+          return !(normalizado.includes('lamina') && (normalizado.includes('rastreros') || normalizado.includes('pegante')) || (normalizado.includes('trampa') && normalizado.includes('luz')));
+        });
+      };
+
+      const renderFullRoedores = (secciones: any[]) => {
+        return secciones.map((seccion) => `
+          <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+            <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;margin:0;">
+                <thead>
+                  <tr style="background:#eff6ff;">
+                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Código</th>
+                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Ubicación</th>
+                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Estado</th>
+                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Hallazgo</th>
+                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Señales</th>
+                  </tr>
+                </thead>
+                <tbody>
+                ${seccion.items.map((item: any) => {
+                  const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
+                  const hallazgo = variant === 'verdadera' ? item.hallazgoVerdadera : item.hallazgoAuditiva;
+                  const senales = variant === 'verdadera' ? item.senalesPresenciaVerdadera : item.senalesPresenciaAuditiva;
+                  return `
+                    <tr>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(estado))}</td>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(hallazgo, '-'))}</td>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(senales, '-'))}</td>
+                    </tr>
+                  `;
+                }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `).join('');
+      };
+
+      const renderFullRastreros = (secciones: any[]) => {
+        const estadioOrden = ['ADULTO', 'NINFA', 'OOTECA'];
+        const parseConteoEstadio = (value: any) => {
+          if (!value) return {};
+          if (Array.isArray(value)) {
+            return value.reduce((acc: any, entry: any) => {
+              const nombre = String(entry?.estadio ?? entry?.label ?? entry?.nombre ?? '').trim().toUpperCase();
+              if (!nombre) return acc;
+              const verdadera = Number(entry?.verdadera ?? entry?.conteo_verdadera ?? entry?.conteo ?? entry?.cantidad ?? entry?.valor ?? 0) || 0;
+              const falsa = Number(entry?.falsa ?? entry?.auditiva ?? entry?.conteo_falsa ?? 0) || 0;
+              acc[nombre] = { verdadera, falsa };
+              return acc;
+            }, {});
+          }
+          if (typeof value === 'object') {
+            return Object.entries(value as Record<string, any>).reduce((acc: any, [key, raw]) => {
+              const nombre = String(key ?? '').trim().toUpperCase();
+              if (!nombre) return acc;
+              if (typeof raw === 'number') {
+                acc[nombre] = { verdadera: Number(raw) || 0, falsa: 0 };
+                return acc;
+              }
+              acc[nombre] = {
+                verdadera: Number(raw?.verdadera ?? raw?.conteo_verdadera ?? raw?.conteo ?? raw?.cantidad ?? raw?.valor ?? raw?.count ?? 0) || 0,
+                falsa: Number(raw?.falsa ?? raw?.auditiva ?? raw?.conteo_falsa ?? 0) || 0,
+              };
+              return acc;
+            }, {});
+          }
+          return {};
+        };
+
+        return secciones.map((seccion) => `
+          <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+            <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
+            <div style="overflow-x:auto;min-width:720px;">
+              <table style="width:100%;border-collapse:collapse;margin:0;min-width:720px;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Ubicación</th>
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">N°</th>
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estadio</th>
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">Conteo</th>
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estado de lámina</th>
+                  </tr>
+                </thead>
+                <tbody>
+                ${seccion.items.map((item: any) => {
+                  const estadoLamina = fallbackText(item.estadoLamina, '-');
+                  const estadio = fallbackText(item.estadio, '-');
+                  const conteoVerdadera = Number(item.conteoEstadioVerdadera ?? 0);
+                  const conteoFalsa = Number(item.conteoEstadioFalsa ?? 0);
+                  const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
+                  const tieneDetallePorEstadio = Object.keys(conteoPorEstadio).length > 0;
+
+                  if (tieneDetallePorEstadio) {
+                    const filasEstadio = estadioOrden
+                      .filter((est) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, est))
+                      .map((est, idxEst) => `
+                        <tr>
+                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(fallbackText(item.ubicacion))}</td>` : ''}
+                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;vertical-align:middle;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>` : ''}
+                          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(est)}</td>
+                          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? Number(conteoPorEstadio[est]?.verdadera ?? 0) : Number(conteoPorEstadio[est]?.falsa ?? 0)}</td>
+                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(estadoLamina)}</td>` : ''}
+                        </tr>
+                      `).join('');
+
+                    return filasEstadio;
+                  }
+
+                  return `
+                    <tr style="background:#fff;">
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadio)}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? conteoVerdadera : conteoFalsa}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>
+                    </tr>
+                  `;
+                }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `).join('');
+      };
+
+      const renderFullVoladores = (secciones: any[]) => {
+        const INSECTOS_VOLADORES_LOCAL = INSECTOS_VOLADORES || [];
+        return secciones.map((seccion) => `
+          <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+            <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
+            <div style="display:grid;gap:12px;padding:10px;">
+              ${seccion.items.map((item: any) => {
+                const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
+                const conteos = item.conteoInsectos ?? {};
+                const getConteo = (key: string) => {
+                  const raw = conteos[key];
+                  if (!raw) return 0;
+                  return variant === 'verdadera' ? Number(raw.verdadera ?? 0) : Number(raw.auditiva ?? 0);
+                };
+
+                return `
+                  <div style="border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#fafafa;">
+                    <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#eff6ff;font-size:12px;font-weight:600;color:#1e40af;display:flex;justify-content:space-between;align-items:center;">
+                      <span>Código: ${escapeHtml(fallbackText(item.codigoCaja))}</span>
+                      <span>Ubicación: ${escapeHtml(fallbackText(item.ubicacion))}</span>
+                      <span>Estado de Dispositivo: ${escapeHtml(fallbackText(estado))}</span>
+                    </div>
+                    <div style="overflow-x:auto;">
+                      <table style="width:100%;border-collapse:collapse;margin:0;">
+                        <thead>
+                          <tr style="background:#f0f9ff;">
+                            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Insecto</th>
+                            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:center;">Conteo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${INSECTOS_VOLADORES_LOCAL.map((insecto) => `
+                            <tr>
+                              <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(insecto.label)}</td>
+                              <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:600;">${getConteo(insecto.key)}</td>
+                            </tr>
+                          `).join('')}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `).join('');
+      };
+
+      // construir HTML combinando cada formato presente con su render completo
+      const bloques: string[] = [];
+      formatosPresentes.forEach((k) => {
+        const secciones = filtroPorFormato(k);
+        if (!secciones || secciones.length === 0) return;
+        if (k === 'rastreros') {
+          bloques.push(`<div class="formato-bloque" data-formato="${k}"><div style="font-size:13px;font-weight:700;color:#9333ea;margin-bottom:8px;padding:6px;background:#f3e8ff;border-radius:4px;">${formatoLabel(k)}</div>${renderFullRastreros(secciones)}</div>`);
+        } else if (k === 'voladores') {
+          bloques.push(`<div class="formato-bloque" data-formato="${k}"><div style="font-size:13px;font-weight:700;color:#0284c7;margin-bottom:8px;padding:6px;background:#e0f2fe;border-radius:4px;">${formatoLabel(k)}</div>${renderFullVoladores(secciones)}</div>`);
+        } else {
+          bloques.push(`<div class="formato-bloque" data-formato="${k}"><div style="font-size:13px;font-weight:700;color:#1e40af;margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:4px;">${formatoLabel(k)}</div>${renderFullRoedores(secciones)}</div>`);
+        }
+      });
+
+      return `
+      <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
+        <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;letter-spacing:0.2px;">
+          ${sheetTitle}
+        </div>
+        <div style="padding:10px;display:grid;gap:16px;">${bloques.join('')}</div>
+      </div>
+      `;
+    }
+
+    if (esRastreros) {
+      const estadioOrden = ['ADULTO', 'NINFA', 'OOTECA'];
+
+      const parseConteoEstadio = (value: unknown): Record<string, { verdadera: number; falsa: number }> => {
+        if (!value) return {};
+        if (Array.isArray(value)) {
+          return value.reduce((acc: Record<string, { verdadera: number; falsa: number }>, entry: any) => {
+            const nombre = String(entry?.estadio ?? entry?.label ?? entry?.nombre ?? '').trim().toUpperCase();
+            if (!nombre) return acc;
+            const verdadera = Number(entry?.verdadera ?? entry?.conteo_verdadera ?? entry?.conteo ?? entry?.cantidad ?? entry?.valor ?? 0) || 0;
+            const falsa = Number(entry?.falsa ?? entry?.auditiva ?? entry?.conteo_falsa ?? 0) || 0;
+            acc[nombre] = { verdadera, falsa };
+            return acc;
+          }, {});
+        }
+        if (typeof value === 'object') {
+          return Object.entries(value as Record<string, any>).reduce((acc: Record<string, { verdadera: number; falsa: number }>, [key, raw]) => {
+            const nombre = String(key ?? '').trim().toUpperCase();
+            if (!nombre) return acc;
+            if (typeof raw === 'number') {
+              acc[nombre] = { verdadera: Number(raw) || 0, falsa: 0 };
+              return acc;
+            }
+            acc[nombre] = {
+              verdadera: Number(raw?.verdadera ?? raw?.conteo_verdadera ?? raw?.conteo ?? raw?.cantidad ?? raw?.valor ?? raw?.count ?? 0) || 0,
+              falsa: Number(raw?.falsa ?? raw?.auditiva ?? raw?.conteo_falsa ?? 0) || 0,
+            };
+            return acc;
+          }, {});
+        }
+        return {};
+      };
+
+      return `
+      <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
+        <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;letter-spacing:0.2px;">
+          ${sheetTitle}
+        </div>
+        <div style="padding:10px;display:grid;gap:12px;">
+          ${formato.secciones.map((seccion) => `
+            <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+              <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">
+                ${escapeHtml(seccion.titulo)} (${seccion.cantidad})
+              </div>
+              <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;margin:0;min-width:720px;">
+                  <thead>
+                    <tr style="background:#f8fafc;">
+                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Ubicación</th>
+                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">N°</th>
+                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estadio</th>
+                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">Conteo</th>
+                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estado de lámina</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                ${seccion.items.map((item, index) => {
+                  const estadoLamina = fallbackText(item.estadoLamina, '-');
+                  const estadio = fallbackText(item.estadio, '-');
+                  const conteoVerdadera = Number(item.conteoEstadioVerdadera ?? 0);
+                  const conteoFalsa = Number(item.conteoEstadioFalsa ?? 0);
+                  const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
+                  const tieneDetallePorEstadio = Object.keys(conteoPorEstadio).length > 0;
+
+                  if (tieneDetallePorEstadio) {
+                    const filasEstadio = estadioOrden
+                      .filter((est) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, est))
+                      .map((est, idxEst) => `
+                        <tr>
+                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(fallbackText(item.ubicacion))}</td>` : ''}
+                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;vertical-align:middle;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>` : ''}
+                          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(est)}</td>
+                          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? Number(conteoPorEstadio[est]?.verdadera ?? 0) : Number(conteoPorEstadio[est]?.falsa ?? 0)}</td>
+                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(estadoLamina)}</td>` : ''}
+                        </tr>
+                      `).join('');
+
+                    return filasEstadio;
+                  }
+
+                  return `
+                    <tr style="background:#fff;">
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadio)}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? conteoVerdadera : conteoFalsa}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>
+                    </tr>
+                  `;
+                }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    }
+
+    if (esVoladores) {
+      return `
+      <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
+        <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;letter-spacing:0.2px;">
+          ${sheetTitle}
+        </div>
+        <div style="padding:10px;display:grid;gap:12px;">
+          ${formato.secciones.map((seccion) => `
+            <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+              <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">
+                ${escapeHtml(seccion.titulo)} (${seccion.cantidad})
+              </div>
+              <div style="display:grid;gap:12px;padding:10px;">
+                ${seccion.items.map((item) => {
+                  const estado = variant === 'verdadera'
+                    ? item.estadoDispositivoVerdadera
+                    : item.estadoDispositivoAuditiva;
+                  const conteos = item.conteoInsectos ?? {};
+                  const getConteo = (key: string) => {
+                    const raw = conteos[key];
+                    if (!raw) return 0;
+                    return variant === 'verdadera' ? Number(raw.verdadera ?? 0) : Number(raw.auditiva ?? 0);
+                  };
+
+                  return `
+                    <div style="border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#fafafa;">
+                      <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#eff6ff;font-size:12px;font-weight:600;color:#1e40af;display:flex;justify-content:space-between;align-items:center;">
+                        <span>Código: ${escapeHtml(fallbackText(item.codigoCaja))}</span>
+                        <span>Ubicación: ${escapeHtml(fallbackText(item.ubicacion))}</span>
+                        <span>Estado de Dispositivo: ${escapeHtml(fallbackText(estado))}</span>
+                      </div>
+                      <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;margin:0;">
+                          <thead>
+                            <tr style="background:#f0f9ff;">
+                              <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Insecto</th>
+                              <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:center;">Conteo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${INSECTOS_VOLADORES.map((insecto) => `
+                              <tr>
+                                <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(insecto.label)}</td>
+                                <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:600;">${getConteo(insecto.key)}</td>
+                              </tr>
+                            `).join('')}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    }
+
+    return `
+      <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
+        <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;letter-spacing:0.2px;">
+          ${sheetTitle}
+        </div>
+        <div style="padding:10px;display:grid;gap:12px;">
+          ${formato.secciones.map((seccion) => `
+            <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
+              <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">
+                ${escapeHtml(seccion.titulo)} (${seccion.cantidad})
+              </div>
+              <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;margin:0;">
+                  <thead>
+                    <tr style="background:#eff6ff;">
+                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Código</th>
+                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Ubicación</th>
+                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Estado</th>
+                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Hallazgo</th>
+                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Señales</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${seccion.items.map((item) => {
+                      const estado = variant === 'verdadera'
+                        ? item.estadoDispositivoVerdadera
+                        : item.estadoDispositivoAuditiva;
+                      const hallazgo = variant === 'verdadera'
+                        ? item.hallazgoVerdadera
+                        : item.hallazgoAuditiva;
+                      const senales = variant === 'verdadera'
+                        ? item.senalesPresenciaVerdadera
+                        : item.senalesPresenciaAuditiva;
+
+                      return `
+                        <tr>
+                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
+                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(estado))}</td>
+                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(hallazgo, '-'))}</td>
+                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(senales, '-'))}</td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  };
+
+  return `
+    <div class="modal-overlay js-close-formato-modal" style="position:fixed;inset:0;background:rgba(15,23,42,0.65);display:flex;align-items:center;justify-content:center;z-index:3000;padding:20px;">
+      <div class="modal-content" style="background:#fff;border-radius:14px;max-width:980px;width:min(980px,100%);max-height:90vh;overflow:auto;padding:20px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">
+          <div>
+            <h3 style="margin:0 0 6px 0;font-size:20px;color:#0f172a;">Formato operacional</h3>
+            <p style="margin:0;color:#475569;">${escapeHtml(card.titulo)}</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+              <select class="js-tipo-pdf-selector" style="padding:6px 10px;font-size:13px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;outline:none;">
+                <option value="verdadera">Hoja Verdadera</option>
+                <option value="falsa">Hoja Falsa/Auditiva</option>
+              </select>
+              <select class="js-formato-view-selector" style="padding:6px 10px;font-size:13px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;outline:none;">
+                ${hayMultiplesFormatos ? `<option value="all" selected>Ver todos los formatos</option>` + formatosPresentes.map((k) => `<option value="${k}">${formatoLabel(k)}</option>`).join('') : `<option value="all" selected>Todos los formatos</option>`}
+              </select>
+            <button class="btn-primary js-download-formato-pdf" type="button" data-service-id="${card.serviceId}" data-group-id="${card.groupId || ''}" style="display:flex;align-items:center;gap:6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Descargar PDF
+            </button>
+            <button class="btn-secondary js-close-formato-modal" type="button">Cerrar</button>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 210px;min-height:110px;">
+            <div style="display:grid;grid-template-columns:110px minmax(0,1fr);">
+              <div style="border-right:1px solid #cbd5e1;display:flex;align-items:center;justify-content:center;padding:8px;">
+                <img src="${escapeHtml(logoUrl)}" alt="Logo" style="max-width:100%;max-height:78px;object-fit:contain;display:block;" />
+              </div>
+              <div style="padding:10px 12px;border-right:1px solid #cbd5e1;display:flex;flex-direction:column;justify-content:center;gap:4px;">
+                <div style="font-size:14px;font-weight:700;color:#0f172a;text-align:center;letter-spacing:0.3px;">FORMATO OPERACIONAL</div>
+                <div style="font-size:13px;font-weight:600;color:#1e293b;text-align:center;line-height:1.35;">${escapeHtml(tituloPrincipal)}</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-rows:repeat(3,minmax(0,1fr));">
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr);border-bottom:1px solid #cbd5e1;">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Código</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(formato.codigoDocumento || 'FO-OP-002')}</div>
+              </div>
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr);border-bottom:1px solid #cbd5e1;">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Fecha</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;">${escapeHtml(fallbackText(formatFechaDocumento(formato.fecha), 'No registrado'))}</div>
+              </div>
+              <div style="display:grid;grid-template-columns:80px minmax(0,1fr);">
+                <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Versión</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;">${escapeHtml(formato.version || '01')}</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #cbd5e1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));">
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Cliente:</strong> ${escapeHtml(fallbackText(formato.cliente))}</div>
+            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Dirección:</strong> ${escapeHtml(fallbackText(formato.direccion))}</div>
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Fecha:</strong> ${escapeHtml(fallbackText(formatFechaDocumento(formato.fecha)))}</div>
+            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora llegada:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(formato.horaLlegada)))}</div>
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora inicio:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(formato.horaInicio)))}</div>
+            <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora final:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(formato.horaFinal)))}</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:grid;gap:12px;">
+          ${renderHoja('verdadera')}
+          ${renderHoja('falsa')}
+        </div>
+
+        <div style="margin-top:12px;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;line-height:1.35;color:#334155;font-size:12px;white-space:pre-wrap;">
+          <strong>Observaciones:</strong> ${escapeHtml(fallbackText(formato.observaciones, 'Sin observaciones registradas'))}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // Tab: Servicios del Día
 export function renderServiciosDiaTab() {
   return `
@@ -634,8 +1519,105 @@ export function renderServiciosDiaTab() {
   `;
 }
 
-// Tab: Informes por Cliente
-export function renderInformesClienteTab() {
+// Tab: Crear Informe (interfaz principal)
+export function renderCrearInformeTab(): string {
+  return `
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:20px;">
+      <!-- Panel izquierdo: Selector de Servicios -->
+      <div style="display:grid;gap:12px;height:fit-content;">
+        <div>
+          <h3 style="margin:0 0 8px 0;font-size:14px;font-weight:700;color:#0f172a;">Servicios Disponibles</h3>
+          <input type="text" placeholder="Buscar servicio..." class="js-servicio-search" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+        </div>
+        <div id="operaciones-servicios-lista" style="display:grid;gap:8px;max-height:600px;overflow-y:auto;">
+          <p style="color:#64748b;font-size:13px;">Cargando servicios...</p>
+        </div>
+      </div>
+
+      <!-- Panel derecho: Formulario de Informe -->
+      <div style="display:grid;gap:16px;">
+        <form id="operaciones-crear-informe-form-principal" style="display:grid;gap:14px;">
+          <!-- Encabezado -->
+          <div style="border-bottom:1px solid #cbd5e1;padding-bottom:12px;">
+            <h2 style="margin:0 0 4px 0;font-size:16px;font-weight:700;color:#0f172a;">Crear Informe Técnico Mensual</h2>
+            <p style="margin:0;color:#475569;font-size:13px;">Selecciona un servicio para pre-llenar los datos</p>
+          </div>
+
+          <!-- Fila 1: Código y Mes -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Código de Informe</label>
+              <input name="codigo_informe" type="text" placeholder="AQO-12-25" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+            </div>
+            <div>
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Mes de la Actividad</label>
+              <input name="mes_actividad" type="month" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+            </div>
+          </div>
+
+          <!-- Fila 2: Cliente y Ubicación -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Cliente</label>
+              <input name="cliente" type="text" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background:#f8fafc;color:#334155;" />
+            </div>
+            <div>
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Ubicación</label>
+              <input name="ubicacion" type="text" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background:#f8fafc;color:#334155;" />
+            </div>
+          </div>
+
+          <!-- Fila 3: Actividad -->
+          <div>
+            <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Actividad</label>
+            <input name="actividad" type="text" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background:#f8fafc;color:#334155;" />
+          </div>
+
+          <!-- Fila 4: Fechas de visitas y N° de fichas -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Fechas de Visitas (separadas por coma)</label>
+              <input name="fechas_visitas" type="text" placeholder="10/12/2025, 23/12/2025" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+            </div>
+            <div>
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Nº de Fichas</label>
+              <input name="n_fichas" type="text" placeholder="007678" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+            </div>
+          </div>
+
+          <!-- Fila 5: Elaborado por y N° visitas -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Elaborado por</label>
+              <input name="elaborado_por" type="text" placeholder="Nombre del responsable" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+            </div>
+            <div>
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Nº de visitas</label>
+              <input name="n_visitas" type="number" min="0" value="1" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+            </div>
+          </div>
+
+          <!-- Sección: Evidencias -->
+          <div style="border-top:1px solid #cbd5e1;padding-top:12px;">
+            <h4 style="margin:0 0 10px 0;font-size:13px;font-weight:700;color:#0f172a;">Evidencias Fotográficas del Servicio</h4>
+            <div id="operaciones-evidencias-preview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;">
+              <p style="color:#64748b;font-size:12px;grid-column:1/-1;">Selecciona un servicio para ver evidencias</p>
+            </div>
+          </div>
+
+          <!-- Botones de acción -->
+          <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #cbd5e1;padding-top:12px;">
+            <button type="reset" class="btn-secondary" style="padding:8px 16px;">Limpiar</button>
+            <button type="submit" class="btn-primary" style="padding:8px 16px;">Crear Informe</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+// Tab: Historial de Informes
+export function renderHistorialInformesTab() {
   return `
     <div class="search-filter-bar">
       <div class="search-input-wrapper">
@@ -643,9 +1625,10 @@ export function renderInformesClienteTab() {
         <input type="text" placeholder="Buscar cliente..." class="search-input">
       </div>
       <select class="filter-select">
-        <option>Todos los Clientes</option>
-        <option>Con Informes Pendientes</option>
-        <option>Informes Entregados</option>
+        <option>Todos los Informes</option>
+        <option>Últimos 30 días</option>
+        <option>Últimos 3 meses</option>
+        <option>Este año</option>
       </select>
       <input type="date" class="filter-select" value="2025-01-31">
       <button class="btn-filter">
@@ -658,126 +1641,63 @@ export function renderInformesClienteTab() {
       <table class="data-table">
         <thead>
           <tr>
+            <th>CÓDIGO INFORME</th>
             <th>CLIENTE</th>
-            <th>SERVICIOS DEL MES</th>
-            <th>INFORMES ENTREGADOS</th>
-            <th>PENDIENTES</th>
-            <th>ÚLTIMA VISITA</th>
-            <th>PRÓXIMA VISITA</th>
+            <th>MES ACTIVIDAD</th>
+            <th>FECHA EMISIÓN</th>
+            <th>ELABORADO POR</th>
+            <th>Nº FICHAS</th>
             <th>ACCIONES</th>
           </tr>
         </thead>
         <tbody>
           <tr>
+            <td><strong>AQO-12-25</strong></td>
+            <td>EMBOTELLADORA AGUAOASIS PERÚ S.A.C.</td>
+            <td>Diciembre 2025</td>
+            <td>17/01/2026</td>
+            <td>BEATRIZ SULCA - ASISTENTE MIP</td>
+            <td>007678</td>
             <td>
-              <div class="equipment-info">
-                <div class="equipment-icon blue">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Logística Transandina</div>
-                  <div class="equipment-id">Carlos Mendoza</div>
-                </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn-secondary" style="padding:4px 8px;font-size:11px;">Ver Detalles</button>
+                <button class="btn-primary" style="padding:4px 8px;font-size:11px;">Descargar PDF</button>
               </div>
-            </td>
-            <td><strong>5</strong></td>
-            <td><span class="status-indicator success">5/5</span></td>
-            <td><span class="badge">0</span></td>
-            <td>28/01/2025</td>
-            <td>05/02/2025</td>
-            <td>
-              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Informes</button>
             </td>
           </tr>
           <tr>
+            <td><strong>AQO-11-25</strong></td>
+            <td>FARMACÉUTICA CENTRAL</td>
+            <td>Noviembre 2025</td>
+            <td>05/12/2025</td>
+            <td>JUAN GARCÍA - SUPERVISOR</td>
+            <td>007654</td>
             <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Farmacéutica Central</div>
-                  <div class="equipment-id">Roberto Díaz</div>
-                </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn-secondary" style="padding:4px 8px;font-size:11px;">Ver Detalles</button>
+                <button class="btn-primary" style="padding:4px 8px;font-size:11px;">Descargar PDF</button>
               </div>
-            </td>
-            <td><strong>4</strong></td>
-            <td><span class="status-indicator warning">2/4</span></td>
-            <td><span class="badge orange">2</span></td>
-            <td>30/01/2025</td>
-            <td>07/02/2025</td>
-            <td>
-              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Informes</button>
             </td>
           </tr>
           <tr>
+            <td><strong>AQO-10-25</strong></td>
+            <td>HOTEL MIRAMAR</td>
+            <td>Octubre 2025</td>
+            <td>31/10/2025</td>
+            <td>BEATRIZ SULCA - ASISTENTE MIP</td>
+            <td>007645</td>
             <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Hotel Miramar</div>
-                  <div class="equipment-id">Jorge Pérez</div>
-                </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn-secondary" style="padding:4px 8px;font-size:11px;">Ver Detalles</button>
+                <button class="btn-primary" style="padding:4px 8px;font-size:11px;">Descargar PDF</button>
               </div>
-            </td>
-            <td><strong>3</strong></td>
-            <td><span class="status-indicator success">3/3</span></td>
-            <td><span class="badge">0</span></td>
-            <td>25/01/2025</td>
-            <td>01/02/2025</td>
-            <td>
-              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Informes</button>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Almacenes del Norte</div>
-                  <div class="equipment-id">Ana Torres</div>
-                </div>
-              </div>
-            </td>
-            <td><strong>6</strong></td>
-            <td><span class="status-indicator success">6/6</span></td>
-            <td><span class="badge">0</span></td>
-            <td>29/01/2025</td>
-            <td>03/02/2025</td>
-            <td>
-              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Informes</button>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <div class="equipment-info">
-                <div class="equipment-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </div>
-                <div>
-                  <div class="equipment-name">Supermercado Central</div>
-                  <div class="equipment-id">María Sánchez</div>
-                </div>
-              </div>
-            </td>
-            <td><strong>8</strong></td>
-            <td><span class="status-indicator warning">5/8</span></td>
-            <td><span class="badge orange">3</span></td>
-            <td>31/01/2025</td>
-            <td>06/02/2025</td>
-            <td>
-              <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Informes</button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div class="stats-row" style="margin-top: 24px; grid-template-columns: repeat(4, minmax(0, 1fr));">
+    <div class="stats-row" style="margin-top:24px;grid-template-columns:repeat(4,minmax(0,1fr));">
       <div class="stat-box">
         <div class="stat-box-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
@@ -1089,8 +2009,8 @@ export function renderOperaciones() {
 
     <div class="inventory-tabs">
       <button class="tab-btn active" data-tab="servicios">Servicios del Día</button>
-      <button class="tab-btn" data-tab="informes">Informes por Cliente</button>
-      <button class="tab-btn" data-tab="reportes">Reportes Generales</button>
+      <button class="tab-btn" data-tab="crear">Crear Informe</button>
+      <button class="tab-btn" data-tab="historial">Historial de Informes</button>
     </div>
 
     <div id="operaciones-tab-content">

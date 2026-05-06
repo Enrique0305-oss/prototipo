@@ -21,6 +21,7 @@ class ApiClient {
   Map<String, String> _headers(String? token) {
     return {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }

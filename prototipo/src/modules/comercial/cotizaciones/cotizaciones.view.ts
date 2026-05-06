@@ -54,6 +54,11 @@ let estadisticasData: EstadisticasCotizaciones | null = null;
 let filtros = { search: '', tipo: '', estado: '' };
 let contadorLineas = 0;
 let incluyeIgv = true;
+let serviciosExtraRows: Array<{
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+}> = [];
 let plantasClienteData: any[] = [];
 let paginaActual = 1;
 const itemsPorPagina = 15;
@@ -1368,10 +1373,16 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           ${seccionLimpiezaCisternas}
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;">
             <h3 style="font-size: 16px; font-weight: 600; color: #1e293b; margin: 0;">Detalle de Cotización</h3>
-            <button type="button" class="btn-secondary" id="btn-agregar-linea" ${tipoFijo ? '' : 'disabled'} style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:${tipoFijo ? 'pointer' : 'not-allowed'};opacity:${tipoFijo ? '1' : '0.6'};font-size:13px;font-weight:600;color:#475569;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              Agregar Línea
-            </button>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn-secondary" id="btn-agregar-linea" ${tipoFijo ? '' : 'disabled'} style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:${tipoFijo ? 'pointer' : 'not-allowed'};opacity:${tipoFijo ? '1' : '0.6'};font-size:13px;font-weight:600;color:#475569;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Agregar Línea
+              </button>
+              <button type="button" class="btn-secondary" id="btn-agregar-servicio-extra" ${tipoFijo ? '' : 'disabled'} style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:${tipoFijo ? 'pointer' : 'not-allowed'};opacity:${tipoFijo ? '1' : '0.6'};font-size:13px;font-weight:600;color:#475569;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Servicio Extra
+              </button>
+            </div>
           </div>
           <div class="table-container">
             <table class="data-table" id="tabla-detalle-cotizacion">
@@ -1391,6 +1402,52 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
               </thead>
               <tbody id="detalle-cotizacion-body"></tbody>
             </table>
+          </div>
+          <div id="servicios-extra-container" style="margin-top: 24px; display: none;">
+            <h4 style="font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 12px;">Servicios Extra</h4>
+            <div class="table-container">
+              <table class="data-table" id="tabla-servicios-extra">
+                <thead>
+                  <tr>
+                    <th style="width: 40%;">Descripción</th>
+                    <th style="width: 20%; text-align: center;">Cantidad</th>
+                    <th style="width: 20%; text-align: center;">Precio Unit.</th>
+                    <th style="width: 20%; text-align: center;">Subtotal</th>
+                    <th style="width: 3%;"></th>
+                  </tr>
+                </thead>
+                <tbody id="servicios-extra-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="modal-servicio-extra" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10000;align-items:center;justify-content:center;">
+          <div style="background:#fff;border-radius:12px;width:min(520px,92vw);box-shadow:0 20px 40px rgba(15,23,42,.25);overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e2e8f0;">
+              <h4 style="margin:0;font-size:16px;color:#0f172a;">Agregar Servicio Extra</h4>
+              <button type="button" id="modal-servicio-extra-cerrar" style="background:none;border:none;font-size:20px;line-height:1;color:#64748b;cursor:pointer;">&times;</button>
+            </div>
+            <div style="padding:16px;display:grid;gap:12px;">
+              <div>
+                <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Descripción <span style="color:#ef4444">*</span></label>
+                <input type="text" id="servicio-extra-descripcion" class="form-control" placeholder="Ej: Análisis complementario, servicio de traslado..." style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Cantidad <span style="color:#ef4444">*</span></label>
+                  <input type="number" id="servicio-extra-cantidad" class="form-control" value="1" min="1" step="0.1" style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;">
+                </div>
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;">Precio Unit. <span style="color:#ef4444">*</span></label>
+                  <input type="number" id="servicio-extra-precio" class="form-control" value="0" min="0" step="0.01" style="width:100%;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;">
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #e2e8f0;background:#f8fafc;">
+              <button type="button" id="modal-servicio-extra-cancelar" class="btn-secondary" style="padding:6px 10px;font-size:12px;">Cancelar</button>
+              <button type="button" id="modal-servicio-extra-confirmar" class="btn-primary" style="padding:6px 10px;font-size:12px;">Agregar</button>
+            </div>
           </div>
         </div>
 
@@ -1871,9 +1928,12 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
     const tbody = panelEl.querySelector('#detalle-cotizacion-body') as HTMLElement;
     if (tbody) tbody.innerHTML = '';
     contadorLineas = 0;
+    serviciosExtraRows = [];
     calcularTotales();
+    renderizarServiciosExtra(panelEl);
 
     const btnAgregar = document.getElementById('btn-agregar-linea') as HTMLButtonElement;
+    const btnServicioExtra = document.getElementById('btn-agregar-servicio-extra') as HTMLButtonElement;
     const tipo = (document.getElementById('cot-tipo') as HTMLSelectElement)?.value;
     if (btnAgregar) {
       const enabled = Boolean(tipo);
@@ -1881,12 +1941,34 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
       btnAgregar.style.cursor = enabled ? 'pointer' : 'not-allowed';
       btnAgregar.style.opacity = enabled ? '1' : '0.6';
     }
+    if (btnServicioExtra) {
+      const enabled = Boolean(tipo);
+      btnServicioExtra.disabled = !enabled;
+      btnServicioExtra.style.cursor = enabled ? 'pointer' : 'not-allowed';
+      btnServicioExtra.style.opacity = enabled ? '1' : '0.6';
+    }
   });
 
   panelEl.querySelector('#btn-agregar-linea')?.addEventListener('click', () => {
     console.log('[FORM] 📍 Click en agregar línea - tabActivo:', tabActivo, 'panel:', panelEl.id);
     const tipo = (panelEl.querySelector('#cot-tipo') as HTMLSelectElement)?.value;
     agregarLineaDetalle(tipo);
+  });
+
+  panelEl.querySelector('#btn-agregar-servicio-extra')?.addEventListener('click', () => {
+    abrirModalServicioExtra(panelEl);
+  });
+
+  panelEl.querySelector('#modal-servicio-extra-cerrar')?.addEventListener('click', () => {
+    cerrarModalServicioExtra(panelEl);
+  });
+
+  panelEl.querySelector('#modal-servicio-extra-cancelar')?.addEventListener('click', () => {
+    cerrarModalServicioExtra(panelEl);
+  });
+
+  panelEl.querySelector('#modal-servicio-extra-confirmar')?.addEventListener('click', () => {
+    confirmarAgregarServicioExtra(panelEl);
   });
 
   if (tipoFijo === 'Capacitacion' || tipoFijo === 'Asesoria' || tipoFijo === 'Auditoria') {
@@ -2036,6 +2118,7 @@ function cerrarFormulario() {
   selectedExponentesCotizacion = [];
   contadorLineas = 0;
   recetaServicioRows = [];
+  serviciosExtraRows = [];
   incluyeIgv = true;
 
   // Forzar recarga limpia de formularios cuando se vuelva a ingresar.
@@ -2872,6 +2955,108 @@ function actualizarSeccionLimpiezaCisternas(panelEl: HTMLElement) {
   }
 }
 
+function abrirModalServicioExtra(panelEl: HTMLElement) {
+  const modal = panelEl.querySelector('#modal-servicio-extra') as HTMLElement;
+  if (modal) {
+    modal.style.display = 'flex';
+    const descripcionInput = panelEl.querySelector('#servicio-extra-descripcion') as HTMLInputElement;
+    if (descripcionInput) {
+      descripcionInput.focus();
+    }
+  }
+}
+
+function cerrarModalServicioExtra(panelEl: HTMLElement) {
+  const modal = panelEl.querySelector('#modal-servicio-extra') as HTMLElement;
+  if (modal) {
+    modal.style.display = 'none';
+    // Limpiar campos
+    const descripcionInput = panelEl.querySelector('#servicio-extra-descripcion') as HTMLInputElement;
+    const cantidadInput = panelEl.querySelector('#servicio-extra-cantidad') as HTMLInputElement;
+    const precioInput = panelEl.querySelector('#servicio-extra-precio') as HTMLInputElement;
+    if (descripcionInput) descripcionInput.value = '';
+    if (cantidadInput) cantidadInput.value = '1';
+    if (precioInput) precioInput.value = '0';
+  }
+}
+
+function confirmarAgregarServicioExtra(panelEl: HTMLElement) {
+  const descripcionInput = panelEl.querySelector('#servicio-extra-descripcion') as HTMLInputElement;
+  const cantidadInput = panelEl.querySelector('#servicio-extra-cantidad') as HTMLInputElement;
+  const precioInput = panelEl.querySelector('#servicio-extra-precio') as HTMLInputElement;
+
+  const descripcion = (descripcionInput?.value || '').trim();
+  const cantidad = parseFloat(cantidadInput?.value || '0');
+  const precio = parseFloat(precioInput?.value || '0');
+
+  // Validar
+  if (!descripcion) {
+    mostrarToast('warning', 'Atención', 'Ingrese una descripción para el servicio extra');
+    return;
+  }
+  if (cantidad <= 0) {
+    mostrarToast('warning', 'Atención', 'La cantidad debe ser mayor a 0');
+    return;
+  }
+  if (precio < 0) {
+    mostrarToast('warning', 'Atención', 'El precio no puede ser negativo');
+    return;
+  }
+
+  // Agregar a array
+  serviciosExtraRows.push({
+    descripcion,
+    cantidad,
+    precio_unitario: precio,
+  });
+
+  // Renderizar y cerrar
+  renderizarServiciosExtra(panelEl);
+  calcularTotales();
+  cerrarModalServicioExtra(panelEl);
+  mostrarToast('success', 'Éxito', 'Servicio extra agregado');
+}
+
+function renderizarServiciosExtra(panelEl: HTMLElement) {
+  const container = panelEl.querySelector('#servicios-extra-container') as HTMLElement;
+  const tbody = panelEl.querySelector('#servicios-extra-body') as HTMLElement;
+
+  if (!container || !tbody) return;
+
+  // Mostrar/ocultar container
+  container.style.display = serviciosExtraRows.length > 0 ? 'block' : 'none';
+
+  // Renderizar filas
+  tbody.innerHTML = serviciosExtraRows.map((row, index) => {
+    const subtotal = row.cantidad * row.precio_unitario;
+    return `
+      <tr>
+        <td>${row.descripcion}</td>
+        <td style="text-align: center;">${row.cantidad.toFixed(2)}</td>
+        <td style="text-align: center;">S/ ${row.precio_unitario.toFixed(2)}</td>
+        <td style="text-align: center;"><strong>S/ ${subtotal.toFixed(2)}</strong></td>
+        <td>
+          <button type="button" class="btn-eliminar-servicio-extra" data-index="${index}" title="Eliminar" style="background:none;border:none;cursor:pointer;color:#ef4444;padding:4px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // Event listeners para botones de eliminar
+  tbody.querySelectorAll('.btn-eliminar-servicio-extra').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt((e.currentTarget as HTMLElement).dataset.index || '-1');
+      if (index >= 0) {
+        serviciosExtraRows.splice(index, 1);
+        renderizarServiciosExtra(panelEl);
+        calcularTotales();
+      }
+    });
+  });
+}
+
 function calcularSubtotalLinea(lineaId: string) {
   const linea = document.getElementById(lineaId);
   if (!linea) return;
@@ -2891,10 +3076,16 @@ function calcularTotales() {
   const lineas = panelActivoElement.querySelectorAll('#detalle-cotizacion-body tr');
   let subtotalGeneral = 0;
 
+  // Sumar líneas normales
   lineas.forEach(linea => {
     const cantidad = parseFloat((linea.querySelector('.cantidad-input') as HTMLInputElement)?.value || '0');
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
     subtotalGeneral += cantidad * precio;
+  });
+
+  // Sumar servicios extras
+  serviciosExtraRows.forEach(servicio => {
+    subtotalGeneral += servicio.cantidad * servicio.precio_unitario;
   });
 
   const igv = incluyeIgv ? subtotalGeneral * 0.18 : 0;
@@ -3317,8 +3508,8 @@ async function guardarCotizacion(tipoFijo?: string) {
   }
 
   const lineas = panelActivoElement.querySelectorAll('#detalle-cotizacion-body tr');
-  if (lineas.length === 0) {
-    mostrarToast('warning', 'Sin detalles', 'Agregue al menos una línea de detalle');
+  if (lineas.length === 0 && serviciosExtraRows.length === 0) {
+    mostrarToast('warning', 'Sin detalles', 'Agregue al menos una línea o un servicio extra');
     return;
   }
 
@@ -3482,6 +3673,34 @@ async function guardarCotizacion(tipoFijo?: string) {
       meses_implementacion: mesesImplementacion,
       frecuencia_visita: frecuenciaVisita,
       horario_auditoria: horarioAuditoria,
+    });
+  });
+
+  // Agregar servicios extras como detalles
+  serviciosExtraRows.forEach((servicioExtra) => {
+    detalles.push({
+      es_servicio_extra: true,
+      id_servicio: null,
+      id_producto: null,
+      id_catalogo_cap_aud: null,
+      descripcion_manual: servicioExtra.descripcion,
+      cantidad: servicioExtra.cantidad,
+      precio_unitario: servicioExtra.precio_unitario,
+      frecuencia_sugerida: null,
+      modalidad_sugerida: null,
+      op_tecnicos: null,
+      supervisor: null,
+      medida_tanque: null,
+      fosfina_producto: null,
+      fosfina_cantidad: null,
+      id_cliente_planta: null,
+      id_cliente_planta_area: null,
+      horas_capacitacion: null,
+      num_participantes: null,
+      fecha_servicio: null,
+      meses_implementacion: null,
+      frecuencia_visita: null,
+      horario_auditoria: null,
     });
   });
 

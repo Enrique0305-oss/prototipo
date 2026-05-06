@@ -45,13 +45,18 @@ import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab
 import {
   renderOperaciones,
   renderServiciosDiaTab,
-  renderInformesClienteTab,
-  renderReportesGeneralesTab,
+  renderCrearInformeTab,
+  renderHistorialInformesTab,
   mapServiciosRealizadosCards,
   renderServiciosRealizadosCards,
   renderServicioImagenesModal,
   renderFichaOperacionalModal,
+  renderFormatoOperacionalModal,
+  initInformesClienteEvents,
+  initCrearInformeEvents,
+  abrirModalCrearInforme,
   type FichaOperacionalViewModel,
+  type FormatoOperacionalViewModel,
   type ServicioRealizadoCardViewModel,
 } from './modules/operaciones/operaciones.view'
 import { programacionServicioService } from './modules/programaciones/programacion-servicio/programacion-servicio.service'
@@ -93,6 +98,42 @@ type FichaOperacionalApiData = {
   firmas?: unknown;
   observaciones?: string | null;
   insumos_utilizados?: unknown;
+};
+
+type FormatoOperacionalApiData = {
+  codigo_documento?: string | null;
+  version?: string | null;
+  cliente?: string | null;
+  direccion?: string | null;
+  fecha?: string | null;
+  hora_llegada?: string | null;
+  hora_inicio?: string | null;
+  hora_final?: string | null;
+  observaciones?: string | null;
+  secciones?: Array<{
+    tipo?: string | null;
+    titulo?: string | null;
+    cantidad?: number | null;
+    items?: Array<{
+      codigo_caja?: string | null;
+      ubicacion?: string | null;
+      estado_dispositivo?: string | null;
+      estado_dispositivo_verdadera?: string | null;
+      estado_dispositivo_auditiva?: string | null;
+      hallazgo?: string | null;
+      hallazgo_verdadera?: string | null;
+      hallazgo_auditiva?: string | null;
+      senales_presencia?: string | null;
+      senales_presencia_verdadera?: string | null;
+      senales_presencia_auditiva?: string | null;
+      conteo_insectos?: Record<string, { verdadera?: number | null; auditiva?: number | null }> | null;
+      estado_lamina?: string | null;
+      estadio?: string | null;
+      conteo_estadio_verdadera?: number | null;
+      conteo_estadio_falsa?: number | null;
+      numero_lote?: string | null;
+    }>;
+  }>;
 };
 
 declare global {
@@ -885,11 +926,12 @@ function updateOperacionesTabContent() {
 
 
   switch (activeOperacionesTab) {
-    case 'informes':
-      tabContent.innerHTML = renderInformesClienteTab();
+    case 'crear':
+      tabContent.innerHTML = renderCrearInformeTab();
+      setTimeout(() => initCrearInformeEvents(), 0);
       break;
-    case 'reportes':
-      tabContent.innerHTML = renderReportesGeneralesTab();
+    case 'historial':
+      tabContent.innerHTML = renderHistorialInformesTab();
       break;
     default:
       tabContent.innerHTML = renderServiciosDiaTab();
@@ -955,6 +997,48 @@ function initOperacionesImagenesHandlers(container: HTMLElement) {
         target.disabled = false;
         target.textContent = originalText;
       }
+    });
+  });
+
+  container.querySelectorAll('.js-open-formato-operacional').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      const target = event.currentTarget as HTMLButtonElement;
+      const key = target.dataset.cardKey || '';
+      if (!key) return;
+
+      const card = operacionesRealizadosCardsCache.get(key);
+      if (!card) return;
+
+      const originalText = target.textContent;
+      target.disabled = true;
+      target.textContent = 'Cargando...';
+
+      try {
+        const formato = await cargarFormatoOperacional(card);
+        abrirModalFormatoOperacional(card, formato);
+      } catch (error) {
+        console.error('No se pudo abrir el formato operacional:', error);
+        alert('No se pudo cargar el formato operacional para este servicio.');
+      } finally {
+        target.disabled = false;
+        target.textContent = originalText;
+      }
+    });
+  });
+
+  // Toggle detalles expandibles por servicio (mostrar/ocultar imágenes y acciones)
+  container.querySelectorAll('.js-toggle-report-details').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      const target = event.currentTarget as HTMLButtonElement;
+      const cardEl = target.closest('.report-card') as HTMLElement | null;
+      if (!cardEl) return;
+
+      const expanded = cardEl.querySelector('.report-expanded') as HTMLElement | null;
+      if (!expanded) return;
+
+      const isOpen = expanded.style.display && expanded.style.display !== 'none';
+      expanded.style.display = isOpen ? 'none' : 'block';
+      target.textContent = isOpen ? '▼' : '▲';
     });
   });
 }
@@ -1029,6 +1113,76 @@ async function cargarFichaOperacional(card: ServicioRealizadoCardViewModel): Pro
   return normalizeFicha(data);
 }
 
+function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalViewModel {
+  const secciones = Array.isArray(data.secciones)
+    ? data.secciones.map((section) => ({
+        tipo: String(section.tipo ?? '').trim(),
+        titulo: String(section.titulo ?? '').trim(),
+        cantidad: Number(section.cantidad ?? 0) || 0,
+        items: Array.isArray(section.items)
+          ? section.items.map((item) => {
+              const itemAny = item as any;
+              return {
+                codigoCaja: String(itemAny.codigo_caja ?? '').trim(),
+                ubicacion: String(itemAny.ubicacion ?? '').trim(),
+                estadoDispositivoVerdadera: String(itemAny.estado_dispositivo_verdadera ?? itemAny.estado_dispositivo ?? '').trim(),
+                estadoDispositivoAuditiva: String(itemAny.estado_dispositivo_auditiva ?? itemAny.estado_dispositivo ?? '').trim(),
+                hallazgoVerdadera: String(itemAny.hallazgo_verdadera ?? itemAny.hallazgo ?? '-').trim(),
+                hallazgoAuditiva: String(itemAny.hallazgo_auditiva ?? itemAny.hallazgo ?? '-').trim(),
+                senalesPresenciaVerdadera: String(itemAny.senales_presencia_verdadera ?? itemAny.senales_presencia ?? '-').trim(),
+                senalesPresenciaAuditiva: String(itemAny.senales_presencia_auditiva ?? itemAny.senales_presencia ?? '-').trim(),
+                conteoInsectos: itemAny.conteo_insectos && typeof itemAny.conteo_insectos === 'object'
+                  ? Object.fromEntries(
+                      Object.entries(itemAny.conteo_insectos).map(([key, value]) => [
+                        key,
+                        {
+                          verdadera: Number((value as any)?.verdadera ?? 0) || 0,
+                          auditiva: Number((value as any)?.auditiva ?? 0) || 0,
+                        },
+                      ]),
+                    )
+                  : null,
+                estadoLamina: String(itemAny.estado_lamina ?? '').trim() || null,
+                estadio: String(itemAny.estadio ?? '').trim() || null,
+                conteoEstadio: itemAny.conteo_estadio && typeof itemAny.conteo_estadio === 'object'
+                  ? itemAny.conteo_estadio
+                  : null,
+                conteoEstadioVerdadera: Number(itemAny.conteo_estadio_verdadera ?? 0) || 0,
+                conteoEstadioFalsa: Number(itemAny.conteo_estadio_falsa ?? 0) || 0,
+                numeroLote: String(itemAny.numero_lote ?? '').trim(),
+              };
+            })
+          : [],
+      }))
+    : [];
+
+  return {
+    codigoDocumento: String(data.codigo_documento ?? 'FO-OP-002').trim(),
+    version: String(data.version ?? '01').trim(),
+    cliente: String(data.cliente ?? '').trim(),
+    direccion: String(data.direccion ?? '').trim(),
+    fecha: String(data.fecha ?? '').trim(),
+    horaLlegada: String(data.hora_llegada ?? '').trim(),
+    horaInicio: String(data.hora_inicio ?? '').trim(),
+    horaFinal: String(data.hora_final ?? '').trim(),
+    observaciones: String(data.observaciones ?? '').trim(),
+    secciones,
+  };
+}
+
+async function cargarFormatoOperacional(card: ServicioRealizadoCardViewModel): Promise<FormatoOperacionalViewModel> {
+  const response = card.groupId && card.groupId > 0
+    ? await programacionServicioService.getFormatoOperacionalByGrupoId(card.groupId)
+    : await programacionServicioService.getFormatoOperacionalByServiceId(card.serviceId);
+
+  const data = (response?.data ?? null) as FormatoOperacionalApiData | null;
+  if (!data) {
+    throw new Error('No se encontró formato operacional');
+  }
+
+  return normalizeFormato(data);
+}
+
 function abrirModalFichaOperacional(card: ServicioRealizadoCardViewModel, ficha: FichaOperacionalViewModel) {
   const existing = document.getElementById('operaciones-ficha-modal-host');
   if (existing) {
@@ -1083,6 +1237,97 @@ function abrirModalFichaOperacional(card: ServicioRealizadoCardViewModel, ficha:
       }
     });
   });
+
+  document.addEventListener('keydown', function onEsc(event) {
+    if (event.key !== 'Escape') return;
+    close();
+    document.removeEventListener('keydown', onEsc);
+  });
+}
+
+function abrirModalFormatoOperacional(card: ServicioRealizadoCardViewModel, formato: FormatoOperacionalViewModel) {
+  const existing = document.getElementById('operaciones-formato-modal-host');
+  if (existing) {
+    existing.remove();
+  }
+
+  const host = document.createElement('div');
+  host.id = 'operaciones-formato-modal-host';
+  host.innerHTML = renderFormatoOperacionalModal(card, formato);
+  document.body.appendChild(host);
+
+  const close = () => {
+    host.remove();
+  };
+
+  host.querySelectorAll('.js-close-formato-modal').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      const clicked = event.target as HTMLElement;
+      if (clicked.classList.contains('js-close-formato-modal')) {
+        close();
+      }
+    });
+  });
+
+  host.querySelectorAll('.js-download-formato-pdf').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const btn = button as HTMLButtonElement;
+      const groupId = btn.dataset.groupId ? parseInt(btn.dataset.groupId, 10) : null;
+      const serviceId = parseInt(btn.dataset.serviceId || '0', 10);
+
+      // Obtener el tipo seleccionado del selector
+      const selector = host.querySelector('.js-tipo-pdf-selector') as HTMLSelectElement | null;
+      const tipoPdf = selector ? selector.value : 'verdadera';
+      // Obtener el formato seleccionado (si aplica)
+      const formatoSelectorEl = host.querySelector('.js-formato-view-selector') as HTMLSelectElement | null;
+      const formatoSeleccionado = formatoSelectorEl ? formatoSelectorEl.value : 'all';
+      const queryParams = `?tipo_pdf=${tipoPdf}` + (formatoSeleccionado && formatoSeleccionado !== 'all' ? `&formato=${encodeURIComponent(formatoSeleccionado)}` : '');
+
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>Generando PDF...</span>';
+
+      try {
+        const { apiClient } = await import('./core/api/api.client');
+        const clienteSafe = (formato.cliente || 'formato').replace(/[^a-zA-Z0-9_\- ]/g, '_').substring(0, 30);
+        const labelTipo = tipoPdf === 'falsa' ? '_Falsa' : '_Verdadera';
+        const filename = `Formato_Operacional_${clienteSafe}${labelTipo}.pdf`;
+
+        if (groupId && groupId > 0) {
+          await apiClient.downloadFile(`/programacion-servicio/grupos/${groupId}/formato-operacional/pdf${queryParams}`, filename);
+        } else {
+          await apiClient.downloadFile(`/programacion-servicio/${serviceId}/formato-operacional/pdf${queryParams}`, filename);
+        }
+      } catch (error) {
+        console.error('Error descargando PDF del formato operacional:', error);
+        alert('No se pudo descargar el PDF. Verifique que el formato esté guardado.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    });
+  });
+
+  // Selector para filtrar por formato (roedores/rastreros/voladores/all)
+  const formatoSelector = host.querySelector('.js-formato-view-selector') as HTMLSelectElement | null;
+  if (formatoSelector) {
+    const updateVisibility = () => {
+      const val = formatoSelector.value;
+      host.querySelectorAll('.formato-seccion').forEach((el) => {
+        const htmlEl = el as HTMLElement;
+        const elFormat = htmlEl.getAttribute('data-formato');
+        if (val === 'all' || !elFormat) {
+          htmlEl.style.display = '';
+        } else {
+          htmlEl.style.display = elFormat === val ? '' : 'none';
+        }
+      });
+    };
+
+    formatoSelector.addEventListener('change', updateVisibility);
+    // inicializar visibilidad según selección por defecto
+    updateVisibility();
+  }
 
   document.addEventListener('keydown', function onEsc(event) {
     if (event.key !== 'Escape') return;

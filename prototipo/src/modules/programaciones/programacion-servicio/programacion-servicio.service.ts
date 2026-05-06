@@ -55,6 +55,14 @@ export const programacionServicioService = {
 		return apiClient.get<ApiResponse<any>>(`/programacion-servicio/grupos/${idGrupo}/ficha`);
 	},
 
+	getFormatoOperacionalByServiceId: async (id: number) => {
+		return apiClient.get<ApiResponse<any>>(`/programacion-servicio/${id}/formato-operacional`);
+	},
+
+	getFormatoOperacionalByGrupoId: async (idGrupo: number) => {
+		return apiClient.get<ApiResponse<any>>(`/programacion-servicio/grupos/${idGrupo}/formato-operacional`);
+	},
+
 	create: async (data: Record<string, any>) => {
 		return apiClient.post<ApiResponse<Programacion>>('/programacion-servicio', data);
 	},

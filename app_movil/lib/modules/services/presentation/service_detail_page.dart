@@ -657,7 +657,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: _isFichaBorrador ? const Color(0xFF0369A1) : const Color(0xFF166534),
+                      color: _isFichaBorrador ? const Color(0xFF2563EB) : const Color(0xFF1E3A8A),
                     ),
                   ),
                 ),
@@ -692,6 +692,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: ficha == null ? null : _openFichaViewer,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1E3A8A),
+                    side: const BorderSide(color: Color(0xFF1E3A8A)),
+                  ),
                   icon: const Icon(Icons.visibility_outlined),
                   label: const Text('Ver ficha'),
                 ),
@@ -700,6 +704,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               Expanded(
                 child: FilledButton.icon(
                   onPressed: ficha != null && _isFichaBorrador ? _openFichaEditor : (ficha == null ? _startService : null),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E3A8A),
+                    foregroundColor: Colors.white,
+                  ),
                   icon: Icon(ficha != null && _isFichaBorrador ? Icons.edit_outlined : Icons.play_arrow),
                   label: Text(
                     ficha == null
@@ -973,6 +981,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _loadPosition,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1E3A8A),
+                    side: const BorderSide(color: Color(0xFF1E3A8A)),
+                  ),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Actualizar ubicacion'),
                 ),
@@ -981,6 +993,10 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               Expanded(
                 child: FilledButton.icon(
                   onPressed: _isCompleted ? _openCompletedDetails : (_canStart ? _startService : null),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E3A8A),
+                    foregroundColor: Colors.white,
+                  ),
                   icon: Icon(_isCompleted ? Icons.visibility_outlined : Icons.play_arrow),
                   label: Text(_isCompleted ? 'Ver detalles' : 'Empezar servicio'),
                 ),

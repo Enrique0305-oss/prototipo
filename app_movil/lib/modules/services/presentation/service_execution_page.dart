@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:path_provider/path_provider.dart';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -123,6 +126,7 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
   void initState() {
     super.initState();
     _markStart();
+    _loadPersistedEvidence();
   }
 
   Future<void> _markStart() async {
@@ -225,16 +229,124 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
 
     final photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 75);
     if (photo == null) return;
+    // Pedir descripción antes de guardar
+    final description = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('Agregar descripción'),
+          content: TextField(
+            controller: controller,
+            maxLines: 3,
+            decoration: const InputDecoration(hintText: 'Descripción opcional de la foto'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(null), child: const Text('Omitir')),
+            FilledButton(onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()), child: const Text('Guardar')),
+          ],
+        );
+      },
+    );
 
-    setState(() {
-      _evidence.add(
-        _EvidenceDraft(
-          file: photo,
-          serviceId: selectedService.id,
-          serviceTitle: selectedService.title,
-        ),
-      );
-    });
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final destDir = Directory('${appDir.path}/evidence');
+      if (!await destDir.exists()) await destDir.create(recursive: true);
+      final fileName = 'svc_${selectedService.id}_${DateTime.now().millisecondsSinceEpoch}${_extensionForPath(photo.path)}';
+      final destPath = '${destDir.path}/$fileName';
+      await photo.saveTo(destPath);
+
+      final saved = XFile(destPath);
+      setState(() {
+        _evidence.add(
+          _EvidenceDraft(
+            file: saved,
+            serviceId: selectedService.id,
+            serviceTitle: selectedService.title,
+            description: description,
+          ),
+        );
+      });
+
+      await _persistEvidenceIndex();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo guardar la foto: $e')));
+    }
+  }
+
+  String _extensionForPath(String p) {
+    final idx = p.lastIndexOf('.');
+    if (idx < 0) return '.jpg';
+    return p.substring(idx);
+  }
+
+  Future<File> _evidenceIndexFile() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    return File('${appDir.path}/evidence_index.json');
+  }
+
+  Future<void> _persistEvidenceIndex() async {
+    try {
+      final file = await _evidenceIndexFile();
+      Map<String, dynamic> index = {};
+      if (await file.exists()) {
+        final text = await file.readAsString();
+        index = json.decode(text) as Map<String, dynamic>;
+      }
+
+      for (final item in _evidence) {
+        final key = item.serviceId.toString();
+        final list = (index[key] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ?? [];
+        // ensure we don't duplicate entries for same path
+        final exists = list.any((e) => e['path'] == item.file.path);
+        if (!exists) {
+          list.add({
+            'path': item.file.path,
+            'serviceId': item.serviceId,
+            'serviceTitle': item.serviceTitle,
+            'description': item.description ?? '',
+          });
+        }
+        index[key] = list;
+      }
+
+      await file.writeAsString(json.encode(index));
+    } catch (_) {}
+  }
+
+  Future<void> _loadPersistedEvidence() async {
+    try {
+      final file = await _evidenceIndexFile();
+      if (!await file.exists()) return;
+      final text = await file.readAsString();
+      final Map<String, dynamic> index = json.decode(text) as Map<String, dynamic>;
+      final List<_EvidenceDraft> loaded = [];
+      for (final entry in index.entries) {
+        final items = (entry.value as List<dynamic>?) ?? [];
+        for (final e in items) {
+          final map = e as Map<String, dynamic>;
+          final path = map['path'] as String?;
+          if (path == null) continue;
+          final fileOnDisk = File(path);
+          if (!await fileOnDisk.exists()) continue;
+          loaded.add(
+            _EvidenceDraft(
+              file: XFile(path),
+              serviceId: map['serviceId'] as int? ?? int.parse(entry.key),
+              serviceTitle: map['serviceTitle'] as String? ?? 'Servicio',
+              description: (map['description'] as String?)?.trim(),
+            ),
+          );
+        }
+      }
+      if (loaded.isNotEmpty) {
+        setState(() {
+          _evidence.addAll(loaded);
+        });
+      }
+    } catch (_) {}
   }
 
   Map<String, List<_EvidenceDraft>> _groupedEvidenceByService() {
@@ -244,6 +356,94 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
       grouped.putIfAbsent(key, () => <_EvidenceDraft>[]).add(item);
     }
     return grouped;
+  }
+
+  Future<void> _showEvidenceDialog(_EvidenceDraft item) async {
+    final controller = TextEditingController(text: item.description ?? '');
+    final result = await showDialog<String?>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          titlePadding: EdgeInsets.zero,
+          title: Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(dialogContext).pop(null),
+            ),
+          ),
+          contentPadding: const EdgeInsets.all(8),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 300, maxWidth: 300),
+                child: Image.file(File(item.file.path), fit: BoxFit.contain),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Descripción (opcional)'),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              onPressed: () => Navigator.of(dialogContext).pop('delete'),
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Confirmar'),
+          content: const Text('¿Eliminar esta foto definitivamente?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Eliminar')),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        try {
+          final f = File(item.file.path);
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+        setState(() {
+          _evidence.removeWhere((e) => e.file.path == item.file.path);
+        });
+        await _persistEvidenceIndex();
+      }
+      return;
+    }
+
+    if (result != null) {
+      // guardar descripción
+      final idx = _evidence.indexWhere((e) => e.file.path == item.file.path);
+      if (idx >= 0) {
+        final updated = _EvidenceDraft(
+          file: item.file,
+          serviceId: item.serviceId,
+          serviceTitle: item.serviceTitle,
+          description: result.isEmpty ? null : result,
+        );
+        setState(() {
+          _evidence[idx] = updated;
+        });
+        await _persistEvidenceIndex();
+      }
+    }
   }
 
   Widget _buildElapsedCard() {
@@ -299,6 +499,8 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Servicio finalizado correctamente')),
       );
+      // Borrar evidencias locales asociadas a los servicios completados
+      await _removePersistedEvidenceForServiceIds(_serviceIds);
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -308,6 +510,38 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _removePersistedEvidenceForServiceIds(List<int> serviceIds) async {
+    try {
+      final file = await _evidenceIndexFile();
+      if (!await file.exists()) return;
+      final text = await file.readAsString();
+      final Map<String, dynamic> index = json.decode(text) as Map<String, dynamic>;
+      bool changed = false;
+      for (final sid in serviceIds) {
+        final key = sid.toString();
+        final items = (index[key] as List<dynamic>?) ?? [];
+        for (final e in items) {
+          try {
+            final path = (e as Map<String, dynamic>)['path'] as String?;
+            if (path != null) {
+              final f = File(path);
+              if (await f.exists()) await f.delete();
+            }
+          } catch (_) {}
+        }
+        if (index.containsKey(key)) {
+          index.remove(key);
+          changed = true;
+        }
+        // Also remove from in-memory list
+        _evidence.removeWhere((ev) => serviceIds.contains(ev.serviceId));
+      }
+      if (changed) {
+        await file.writeAsString(json.encode(index));
+      }
+    } catch (_) {}
   }
 
   Future<void> _openOperationalSheetAndFinalize() async {
@@ -349,7 +583,11 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
     final schedule = _mergedSchedule;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Servicio en curso')),
+      appBar: AppBar(
+        title: const Text('Servicio en curso'),
+        backgroundColor: const Color(0xFF1E3A8A),
+        foregroundColor: Colors.white,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -413,6 +651,10 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: _takePhoto,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1E3A8A),
+                foregroundColor: Colors.white,
+              ),
               icon: const Icon(Icons.camera_alt_outlined),
               label: const Text('Camara'),
             ),
@@ -453,11 +695,35 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
                         ),
                         itemBuilder: (context, index) {
                           final item = entry.value[index];
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.file(
-                              File(item.file.path),
-                              fit: BoxFit.cover,
+                          return GestureDetector(
+                            onTap: () => _showEvidenceDialog(item),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.file(
+                                    File(item.file.path),
+                                    fit: BoxFit.cover,
+                                  ),
+                                  if ((item.description ?? '').trim().isNotEmpty)
+                                    Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      bottom: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                        color: Colors.black.withOpacity(0.5),
+                                        child: Text(
+                                          item.description!,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -481,6 +747,10 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: (_saving || _starting) ? null : _openOperationalSheetAndFinalize,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1E3A8A),
+              foregroundColor: Colors.white,
+            ),
             icon: const Icon(Icons.check_circle_outline),
             label: _saving
                 ? const SizedBox(
@@ -501,11 +771,13 @@ class _EvidenceDraft {
     required this.file,
     required this.serviceId,
     required this.serviceTitle,
+    this.description,
   });
 
   final XFile file;
   final int serviceId;
   final String serviceTitle;
+  final String? description;
 }
 
 class _StatusPalette {

@@ -49,6 +49,7 @@ use App\Http\Controllers\API\OrdenCompraController;
 use App\Http\Controllers\API\PersonalController;
 use App\Http\Controllers\API\InventarioAjusteController;
 use App\Http\Controllers\API\FichaOperacionalController;
+use App\Http\Controllers\API\FormatoOperacionalController;
 use App\Http\Controllers\API\LoteController;
 use App\Http\Middleware\CacheJsonGetResponses;
 
@@ -304,8 +305,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // para las proyecciones :v
     Route::get('proyecciones', [ProyeccionesController::class, 'index']);
     Route::post('proyecciones', [ProyeccionesController::class, 'store']);
+    Route::get('proyecciones/pendientes', [ProyeccionesController::class, 'obtenerOrdenesPendientes']);
     Route::get('proyecciones/buscar-orden/{tipo}/{id}', [ProyeccionesController::class, 'obtenerDatosOrden']);
-
+    Route::get('proyecciones/{id}', [ProyeccionesController::class, 'show']);
+    Route::put('proyecciones/{id}', [ProyeccionesController::class, 'update']);
+    Route::delete('proyecciones/{id}', [ProyeccionesController::class, 'destroy']);
+    
     // Para los servicios :v
     Route::get('/servicios/estadisticas/resumen', [ServicioController::class, 'estadisticas']);
     Route::get('/servicios', [ServicioController::class, 'index']);
@@ -377,6 +382,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'update']);
     Route::patch('/programacion-servicio/{id}/iniciar', [ProgramacionServicioController::class, 'iniciar']);
     Route::patch('/programacion-servicio/{id}/completar', [ProgramacionServicioController::class, 'completar']);
+    Route::post('/programacion-servicio/{id}/calcular-formato-operacional', [ProgramacionServicioController::class, 'calcularFormatoOperacional']);
+    Route::post('/programacion-servicio/{id}/crear-formato-operacional', [ProgramacionServicioController::class, 'crearFormatoOperacional']);
     Route::delete('/programacion-servicio/{id}', [ProgramacionServicioController::class, 'destroy']);
 
     // Fichas Operacionales (Operational Sheets)
@@ -389,6 +396,17 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/fichas-operacionales/{id}/finalizar', [FichaOperacionalController::class, 'finalize']);
     Route::get('/programacion-servicio/grupos/{idGrupo}/ficha', [FichaOperacionalController::class, 'showByGrupo']);
     Route::get('/programacion-servicio/grupos/{idGrupo}/ficha/pdf', [FichaOperacionalController::class, 'generarPDFByGrupo']);
+
+    // Formato Operacional (cajas cebaderas)
+    Route::get('/formatos-operacionales', [FormatoOperacionalController::class, 'index']);
+    Route::get('/formatos-operacionales/{id}/pdf', [FormatoOperacionalController::class, 'generarPDF']);
+    Route::get('/programacion-servicio/{id}/formato-operacional', [FormatoOperacionalController::class, 'show']);
+    Route::get('/programacion-servicio/{id}/formato-operacional/pdf', [FormatoOperacionalController::class, 'generarPDFByProgramacion']);
+    Route::post('/programacion-servicio/{id}/formato-operacional', [FormatoOperacionalController::class, 'store']);
+    Route::put('/formatos-operacionales/{id}', [FormatoOperacionalController::class, 'update']);
+    Route::post('/formatos-operacionales/{id}/finalizar', [FormatoOperacionalController::class, 'finalize']);
+    Route::get('/programacion-servicio/grupos/{idGrupo}/formato-operacional', [FormatoOperacionalController::class, 'showByGrupo']);
+    Route::get('/programacion-servicio/grupos/{idGrupo}/formato-operacional/pdf', [FormatoOperacionalController::class, 'generarPDFByGrupo']);
 
     // Programación de Visitas (independiente)
     Route::get('/programacion-visita', [ProgramacionVisitaController::class, 'index']);

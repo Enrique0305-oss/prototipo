@@ -355,6 +355,53 @@ class ServicesRepository {
         .toList(growable: false);
   }
 
+  /// Obtener cálculo automático del formato operacional desde Programación.
+  /// Soporta cálculo agrupado enviando IDs adicionales.
+  Future<Map<String, dynamic>> getFormatoOperacionalCalculo({
+    required int programacionId,
+    List<int> idsProgramaciones = const <int>[],
+  }) async {
+    if (AppConfig.useMockData) {
+      return <String, dynamic>{
+        'formatos_aplicados': <String>['CONTROL DE ROEDORES'],
+        'secciones': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'titulo': 'Cebo final blox',
+            'tipo_seccion': 'cebo',
+            'cantidad_asignada': 2,
+            'cantidad_disponible': 2,
+          },
+        ],
+      };
+    }
+
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    final ids = idsProgramaciones
+        .map((e) => e)
+        .where((e) => e > 0)
+        .toSet()
+        .toList(growable: false);
+
+    final response = await _apiClient.post(
+      '/v1/programacion-servicio/$programacionId/calcular-formato-operacional',
+      token: token,
+      body: ids.isEmpty
+          ? const <String, dynamic>{}
+          : <String, dynamic>{'ids_programaciones': ids},
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw ApiException('No se pudo calcular el formato operacional', 500, response);
+    }
+
+    return data;
+  }
+
   Future<List<InsumoQuimicoEntregado>> getInsumosQuimicosEntregados(int programacionId) async {
     if (AppConfig.useMockData) {
       return const <InsumoQuimicoEntregado>[
@@ -551,6 +598,100 @@ class ServicesRepository {
     if (response['success'] != true) {
       throw ApiException(
         response['message'] ?? 'Error al finalizar ficha',
+        500,
+        response,
+      );
+    }
+  }
+
+  /// Obtener formato operacional por ID de programación
+  Future<Map<String, dynamic>?> getFormatoOperacionalByServiceId(int programacionId) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    try {
+      final response = await _apiClient.get(
+        '/v1/programacion-servicio/$programacionId/formato-operacional',
+        token: token,
+      );
+
+      final data = response['data'];
+      return data is Map<String, dynamic> ? data : null;
+    } catch (e) {
+      if (e is ApiException && e.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// Obtener formato operacional por ID de grupo de programación
+  Future<Map<String, dynamic>?> getFormatoOperacionalByGrupoId(int grupoId) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    try {
+      final response = await _apiClient.get(
+        '/v1/programacion-servicio/grupos/$grupoId/formato-operacional',
+        token: token,
+      );
+
+      final data = response['data'];
+      return data is Map<String, dynamic> ? data : null;
+    } catch (e) {
+      if (e is ApiException && e.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// Guardar o actualizar formato operacional como borrador
+  Future<Map<String, dynamic>> saveFormatoOperacionalDraft({
+    required int programacionId,
+    required Map<String, dynamic> formData,
+  }) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    final response = await _apiClient.post(
+      '/v1/programacion-servicio/$programacionId/formato-operacional',
+      token: token,
+      body: formData,
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw ApiException('Error al guardar formato operacional', 500, response);
+    }
+
+    return data;
+  }
+
+  /// Finalizar formato operacional y marcar como completado
+  Future<void> finalizeFormatoOperacional({
+    required int formatoId,
+  }) async {
+    final token = await _authRepository.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('No hay sesión activa', 401, const {});
+    }
+
+    final response = await _apiClient.post(
+      '/v1/formatos-operacionales/$formatoId/finalizar',
+      token: token,
+      body: const <String, dynamic>{},
+    );
+
+    if (response['success'] != true) {
+      throw ApiException(
+        response['message'] ?? 'Error al finalizar formato operacional',
         500,
         response,
       );
