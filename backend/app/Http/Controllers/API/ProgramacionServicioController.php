@@ -16,6 +16,7 @@ use App\Models\Tecnico;
 use App\Models\Vehiculo;
 use App\Models\Servicio;
 use App\Models\OrdenCapacitacionAuditoria;
+use App\Services\CalculoFormatoOperacionalService;
 use App\Models\ProgramacionVisita;
 use App\Models\ProgramacionFabricacion;
 use App\Models\ProgramacionOtro;
@@ -174,6 +175,8 @@ class ProgramacionServicioController extends Controller
             'id_cliente_planta_area' => 'nullable',
             'observaciones'     => 'nullable|string',
             'dias_semana'       => 'nullable|string|max:100',
+            'formatos_fichas'   => 'nullable|array',
+            'formatos_fichas.*' => 'string|max:120',
         ]);
 
         DB::beginTransaction();
@@ -217,6 +220,7 @@ class ProgramacionServicioController extends Controller
                 'longitud'           => $validated['longitud'] ?? null,
                 'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
                 'id_cliente_planta_area' => $areaIdsJson,
+                'formatos_fichas'    => $this->normalizeFormatosFichas($validated['formatos_fichas'] ?? null),
                 'estado_ejecucion'   => 'Programado',
                 'requiere_asignacion_recursos' => false,
                 'observaciones'      => $validated['observaciones'] ?? null,
@@ -290,6 +294,8 @@ class ProgramacionServicioController extends Controller
             'longitud'            => 'nullable|numeric|between:-180,180',
             'id_cliente_planta'   => 'nullable|integer|exists:cliente_planta,id',
             'id_cliente_planta_area' => 'nullable',
+            'formatos_fichas'     => 'nullable|array',
+            'formatos_fichas.*'   => 'string|max:120',
             'observaciones'       => 'nullable|string',
             'dias_semana'         => 'nullable|string|max:100',
             'aplicar_recursos_mes_actual' => 'nullable|boolean',
@@ -364,6 +370,7 @@ class ProgramacionServicioController extends Controller
                     'longitud'           => $validated['longitud'] ?? null,
                     'id_cliente_planta'  => $validated['id_cliente_planta'] ?? null,
                     'id_cliente_planta_area' => $areaIdsJson,
+                    'formatos_fichas'    => $this->normalizeFormatosFichas($validated['formatos_fichas'] ?? null),
                     'estado_ejecucion'   => 'Programado',
                     'requiere_asignacion_recursos' => !$asignarRecursos,
                     'observaciones'      => $validated['observaciones'] ?? null,
@@ -476,6 +483,8 @@ class ProgramacionServicioController extends Controller
             'longitud'            => 'nullable|numeric|between:-180,180',
             'id_cliente_planta'   => 'nullable|integer|exists:cliente_planta,id',
             'id_cliente_planta_area' => 'nullable',
+            'formatos_fichas'     => 'nullable|array',
+            'formatos_fichas.*'   => 'string|max:120',
             'estado_ejecucion'    => 'sometimes|in:Programado,Confirmado,En Camino,En Ejecución,Realizado,Reprogramado,Cancelado',
             'observaciones'       => 'nullable|string',
         ]);
@@ -492,6 +501,9 @@ class ProgramacionServicioController extends Controller
             'id_supervisor',
             'id_servicio',
             'id_orden_servicio',
+            'formatos_fichas'    => array_key_exists('formatos_fichas', $validated)
+                ? $this->normalizeFormatosFichas($validated['formatos_fichas'])
+                : $prog->formatos_fichas,
         ];
 
         if (!empty($prog->id_grupo_programacion) && !empty(array_intersect(array_keys($validated), $camposAgrupacion))) {
@@ -1749,6 +1761,33 @@ class ProgramacionServicioController extends Controller
         return array_values(array_unique(array_filter(array_map('intval', $ids), fn (int $id) => $id > 0)));
     }
 
+    private function normalizeFormatosFichas(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $value = $decoded;
+            }
+        }
+
+        if (is_string($value)) {
+            $parts = array_map('trim', explode(',', $value));
+            return array_values(array_unique(array_filter($parts, fn (string $item) => $item !== '')));
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map(function ($item) {
+            return trim((string) $item);
+        }, $value), fn (string $item) => $item !== '')));
+    }
+
     private function tieneRecursosCompletos(
         ?int $principalId,
         array $tecnicosIds,
@@ -1800,5 +1839,79 @@ class ProgramacionServicioController extends Controller
             ->all();
 
         return empty($ids) ? null : json_encode($ids);
+    }
+
+    /**
+     * Calcula automáticamente la asignación de dispositivos para un Formato Operacional
+     * Devuelve el resultado sin guardar (para previsualización en modal)
+     */
+    public function calcularFormatoOperacional(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'ids_programaciones' => 'nullable|array',
+                'ids_programaciones.*' => 'integer|exists:programacion_servicio,id',
+            ]);
+
+            $service = new CalculoFormatoOperacionalService();
+            $asignacion = $service->calcularAsignacion(
+                (int) $id,
+                $request->user()?->id,
+                $validated['ids_programaciones'] ?? []
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $asignacion,
+                'message' => 'Cálculo realizado exitosamente',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Crea el FormatoOperacional con la asignación automática calculada
+     */
+    public function crearFormatoOperacional(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'secciones' => 'required|array|min:1',
+                'secciones.*.clave' => 'nullable|string|max:120',
+                'secciones.*.formato' => 'nullable|string|max:120',
+                'secciones.*.titulo' => 'required|string|max:255',
+                'secciones.*.tipo_seccion' => 'nullable|string|max:50',
+                'secciones.*.tipo_contenido' => 'nullable|string|max:50',
+                'secciones.*.cantidad_disponible' => 'nullable|integer|min:0',
+                'secciones.*.cantidad_asignada' => 'required|integer|min:0',
+                'secciones.*.descripcion' => 'nullable|string|max:255',
+                'secciones.*.nota' => 'nullable|string|max:255',
+            ]);
+
+            $service = new CalculoFormatoOperacionalService();
+
+            $resultado = $service->crearFormatoOperacional(
+                $id,
+                [
+                    'secciones' => $validated['secciones'],
+                ],
+                $request->user()?->id ?? 1
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $resultado,
+                'message' => 'Formato Operacional creado exitosamente',
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 }

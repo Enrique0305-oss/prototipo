@@ -12,6 +12,7 @@ class CotizacionDetalle extends Model
 
     protected $fillable = [
         'id_cotizacion',
+        'es_servicio_extra',
         'id_servicio',
         'id_producto',
         'id_catalogo_cap_aud',
@@ -46,6 +47,7 @@ class CotizacionDetalle extends Model
         'frecuencia_visita' => 'array',
         'horario_auditoria' => 'array',
         'id_cliente_planta_area' => 'array',
+        'es_servicio_extra' => 'boolean',
     ];
 
     // Relaciones

@@ -214,6 +214,7 @@ class CotizacionController extends Controller
             foreach ($validated['detalles'] as $detalle) {
                 CotizacionDetalle::create([
                     'id_cotizacion' => $cotizacion->id,
+                    'es_servicio_extra' => $detalle['es_servicio_extra'] ?? false,
                     'id_servicio' => $detalle['id_servicio'] ?? null,
                     'id_producto' => $detalle['id_producto'] ?? null,
                     'id_catalogo_cap_aud' => $detalle['id_catalogo_cap_aud'] ?? null,

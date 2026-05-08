@@ -313,6 +313,20 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
     return '$dd/$mm/$yyyy';
   }
 
+  String _formatTime(TimeOfDay t) => t.format(context);
+
+  TimeOfDay _parseTime(String raw) {
+    try {
+      final parts = raw.split(':');
+      if (parts.length < 2) return TimeOfDay.now();
+      final h = int.tryParse(parts[0]) ?? 0;
+      final m = int.tryParse(parts[1]) ?? 0;
+      return TimeOfDay(hour: h, minute: m);
+    } catch (_) {
+      return TimeOfDay.now();
+    }
+  }
+
   void _toggleQuimico(InsumoQuimicoEntregado insumo, bool selected) {
     setState(() {
       if (selected) {
@@ -434,6 +448,27 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
     );
   }
 
+  Widget _buildTimeField(String label, TextEditingController controller) {
+    return TextFormField(
+      controller: controller,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        suffixIcon: const Icon(Icons.access_time),
+      ),
+      onTap: () async {
+        final initial = controller.text.isNotEmpty ? _parseTime(controller.text) : TimeOfDay.now();
+        final result = await showTimePicker(context: context, initialTime: initial);
+        if (result != null) {
+          controller.text = _formatTime(result);
+        }
+      },
+      validator: (value) => null,
+    );
+  }
+
   Widget _buildManualField(String label, TextEditingController controller, {int maxLines = 1, bool readOnly = false}) {
     return TextFormField(
       controller: controller,
@@ -481,6 +516,8 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
       appBar: AppBar(
         title: const Text('Ficha Operacional'),
         elevation: 0,
+        backgroundColor: const Color(0xFF1E3A8A),
+        foregroundColor: Colors.white,
       ),
       body: Form(
         key: _formKey,
@@ -505,13 +542,13 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Expanded(child: _buildManualField('Hora llegada', _horaLlegadaController)),
+                      Expanded(child: _buildTimeField('Hora llegada', _horaLlegadaController)),
                       const SizedBox(width: 8),
-                      Expanded(child: _buildManualField('Hora inicio', _horaInicioController)),
+                      Expanded(child: _buildTimeField('Hora inicio', _horaInicioController)),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  _buildManualField('Hora final', _horaFinalController),
+                  _buildTimeField('Hora final', _horaFinalController),
                   const SizedBox(height: 8),
                   _buildManualField('Giro del lugar', _giroLugarController),
                 ],
@@ -607,28 +644,6 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
                 ],
               ),
             ),
-            _buildSectionCard(
-              title: 'Personal técnico / Firmas',
-              child: Column(
-                children: [
-                  _buildManualField('Nombre técnico principal', _firmaTecnicoController),
-                  const SizedBox(height: 8),
-                  _buildManualField('Nombre representante del cliente', _firmaClienteController),
-                  const SizedBox(height: 10),
-                  const Row(
-                    children: [
-                      Expanded(
-                        child: _SignatureBox(label: 'Firma responsable técnico'),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: _SignatureBox(label: 'Firma representante cliente'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
             Container(
               margin: const EdgeInsets.only(top: 6, bottom: 14),
               padding: const EdgeInsets.all(12),
@@ -649,6 +664,10 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1E3A8A),
+                      side: const BorderSide(color: Color(0xFF1E3A8A)),
+                    ),
                     child: const Text('Volver'),
                   ),
                 ),
@@ -656,6 +675,10 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
                 Expanded(
                   child: FilledButton(
                     onPressed: _isSaving ? null : _finalizeFicha,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E3A8A),
+                      foregroundColor: Colors.white,
+                    ),
                     child: _isSaving
                         ? const SizedBox(
                             height: 20,

@@ -2,6 +2,12 @@
 import '../programaciones.css';
 import './programacion-servicio.css';
 import { programacionServicioService as programacionService } from './programacion-servicio.service';
+import {
+  formatoOperacionalAutomaticoService,
+  type FormatoOperacionalAsignacionSeccion,
+  type FormatoOperacionalCalculoRespuesta,
+} from './formato-operacional-automatico.service';
+import { ApiError, getApiErrorDebugInfo } from '../../../core/api/api.client';
 import { mostrarToast, confirmarAccion } from '../../../shared/toast';
 import { clienteService } from '../../../services/clienteService';
 import type {
@@ -47,6 +53,16 @@ let resumenPendientesRecursos: ResumenPendientesRecursos = {
   total_pendientes: 0,
   items: [],
 };
+let formatoOperacionalAutomaticoActual: FormatoOperacionalCalculoRespuesta | null = null;
+let formatoOperacionalAutomaticoProgramacionId: number | null = null;
+
+const FORMATOS_FICHAS_SERVICIO = [
+  'CONTROL DE ROEDORES',
+  'CONTROL DE INSECTOS RASTREROS',
+  'CONTROL DE INSECTOS VOLADORES',
+  'REPORTE DE PRE - DESINSECTACION',
+  'REPORTE DE POST - DESINSECTACION',
+];
 
 type GrupoProgramacionManual = {
   id: string;
@@ -596,6 +612,125 @@ function bindPersonalMultiInteractionsServicio(container: HTMLElement) {
   });
 }
 
+function getFormatosFichasSeleccionados(container: HTMLElement): string[] {
+  const multi = container.querySelector('#formatosFichasSelectServicio') as HTMLSelectElement | null;
+  const checkboxValues = Array.from(container.querySelectorAll<HTMLInputElement>('.formatos-fichas-check-servicio'))
+    .filter((input) => input.checked)
+    .map((input) => input.dataset.value || input.value || '')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  if (checkboxValues.length > 0) {
+    return checkboxValues;
+  }
+
+  if (!multi) return [];
+  return Array.from(multi.selectedOptions)
+    .map((opt) => (opt.text || opt.value || '').trim())
+    .filter((value) => value.length > 0);
+}
+
+function actualizarResumenFormatosFichasServicio(container: HTMLElement) {
+  const multi = container.querySelector('#formatosFichasSelectServicio') as HTMLSelectElement | null;
+  const resumen = container.querySelector('#formatosFichasSummaryServicio') as HTMLElement | null;
+  const toggle = container.querySelector('#formatosFichasToggleServicio') as HTMLButtonElement | null;
+  if (!multi || !resumen) return;
+
+  const seleccionados = getFormatosFichasSeleccionados(container);
+  if (seleccionados.length === 0) {
+    resumen.textContent = 'Sin formatos seleccionados';
+    resumen.style.color = '#94a3b8';
+    if (toggle) toggle.textContent = 'Seleccionar formatos';
+    return;
+  }
+
+  if (toggle) toggle.textContent = `${seleccionados.length} formato(s)`;
+  resumen.style.color = '#334155';
+
+  const chips = seleccionados.slice(0, 2)
+    .map((nombre) => `<span style="display:inline-block;background:#ecfeff;color:#0f766e;border:1px solid #99f6e4;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`)
+    .join('');
+
+  if (seleccionados.length > 2) {
+    resumen.innerHTML = chips + `<span style="font-size:11px;color:#64748b;">+${seleccionados.length - 2} más</span>`;
+  } else {
+    resumen.innerHTML = chips;
+  }
+}
+
+function renderFormatoFichasPickerOptionsServicio(container: HTMLElement) {
+  const multi = container.querySelector('#formatosFichasSelectServicio') as HTMLSelectElement | null;
+  const wrap = container.querySelector('#formatosFichasOptionsServicio') as HTMLElement | null;
+  if (!multi || !wrap) return;
+
+  const selectedValues = new Set(
+    Array.from(multi.selectedOptions)
+      .map((opt) => (opt.value || opt.text || '').trim())
+      .filter((value) => value.length > 0),
+  );
+
+  wrap.innerHTML = `
+    <div class="prog-tecnicos-list" style="max-height:220px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
+      ${FORMATOS_FICHAS_SERVICIO.map((formato, index) => `
+        <label class="prog-tecnico-check" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;transition:background .15s;">
+          <input type="checkbox" class="formatos-fichas-check-servicio" data-index="${index}" data-value="${formato}" ${selectedValues.has(formato) ? 'checked' : ''} style="accent-color:#4f7cff;">
+          <span style="font-weight:500;">${formato}</span>
+        </label>`).join('')}
+    </div>`;
+
+  wrap.querySelectorAll('.formatos-fichas-check-servicio').forEach((el) => {
+    el.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const input = e.currentTarget as HTMLInputElement;
+      const idx = Number(input.dataset.index || '-1');
+      const value = (input.dataset.value || input.value || '').trim();
+      const option = Array.from(multi.options).find((opt) => (opt.value || opt.text || '').trim() === value) ?? multi.options[idx];
+      if (option) {
+        option.selected = input.checked;
+      }
+      actualizarResumenFormatosFichasServicio(container);
+    });
+  });
+}
+
+function bindFormatoFichasInteractionsServicio(container: HTMLElement) {
+  const panel = container.querySelector('#formatosFichasPanelServicio') as HTMLElement | null;
+  const toggle = container.querySelector('#formatosFichasToggleServicio') as HTMLButtonElement | null;
+  const btnAll = container.querySelector('#formatosFichasSelectAllServicio') as HTMLButtonElement | null;
+  const btnClear = container.querySelector('#formatosFichasClearAllServicio') as HTMLButtonElement | null;
+  const multi = container.querySelector('#formatosFichasSelectServicio') as HTMLSelectElement | null;
+
+  if (!panel || !multi) return;
+
+  if (toggle) {
+    toggle.onclick = (e) => {
+      e.preventDefault();
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    };
+  }
+
+  btnAll?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = true; });
+    renderFormatoFichasPickerOptionsServicio(container);
+    actualizarResumenFormatosFichasServicio(container);
+  });
+
+  btnClear?.addEventListener('click', (e) => {
+    e.preventDefault();
+    Array.from(multi.options).forEach((opt) => { opt.selected = false; });
+    renderFormatoFichasPickerOptionsServicio(container);
+    actualizarResumenFormatosFichasServicio(container);
+  });
+
+  document.addEventListener('click', (ev) => {
+    if (!toggle) return;
+    if (!panel.contains(ev.target as Node) && !toggle.contains(ev.target as Node)) {
+      panel.style.display = 'none';
+    }
+  });
+}
+
 function normalizeAreaIds(input: any): number[] {
   if (input === null || input === undefined || input === '') return [];
 
@@ -957,6 +1092,17 @@ export function renderProgramacionServicio(): string {
       </div>
     </div>
 
+    <div class="prog-modal" id="modalFormatoOperacionalAutomatico" style="display:none;">
+      <div class="prog-modal-overlay"></div>
+      <div class="prog-modal-content prog-modal-large">
+        <div class="prog-modal-header">
+          <h2>Crear Formato Operacional</h2>
+          <button class="prog-modal-close" id="closeModalFormatoOperacionalAutomatico">&times;</button>
+        </div>
+        <div class="prog-modal-body" id="modalFormatoOperacionalAutomaticoBody"></div>
+      </div>
+    </div>
+
   `;
 }
 
@@ -999,6 +1145,7 @@ export async function initProgramacionServicioEvents(): Promise<void> {
   document.getElementById('closeModalNueva')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacion'));
   document.getElementById('closeModalNuevaVisita')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacionVisita'));
   document.getElementById('closeModalSugerencia')?.addEventListener('click', () => cerrarModal('modalSugerencia'));
+  document.getElementById('closeModalFormatoOperacionalAutomatico')?.addEventListener('click', () => cerrarModal('modalFormatoOperacionalAutomatico'));
   document.querySelectorAll('.prog-modal-overlay').forEach(el => {
     el.addEventListener('click', () => {
       cerrarModal('modalSelectorTipoProgramacion');
@@ -1006,6 +1153,7 @@ export async function initProgramacionServicioEvents(): Promise<void> {
       cerrarModal('modalNuevaProgramacion');
       cerrarModal('modalNuevaProgramacionVisita');
       cerrarModal('modalSugerencia');
+      cerrarModal('modalFormatoOperacionalAutomatico');
     });
   });
 
@@ -2053,6 +2201,8 @@ function abrirModalDetalleGrupo(groupId: string) {
   }
 
   const principal = items[0];
+  const idsProgramacionesGrupo = items.map((p) => p.id);
+  const formatosAgrupados = Array.from(new Set(items.flatMap((p) => getFormatosFichasProgramacion(p))));
   const horaInicio = fmtH(principal.hora_inicio || '');
   const finMayor = items.reduce((max, p) => Math.max(max, parseHoraToMin(p.hora_fin || p.hora_inicio || '00:00')), 0);
   const horaFin = `${String(Math.floor(finMayor / 60)).padStart(2, '0')}:${String(finMayor % 60).padStart(2, '0')}`;
@@ -2069,6 +2219,7 @@ function abrirModalDetalleGrupo(groupId: string) {
         ${personalCoincide ? `<div class="prog-detalle-row"><div class="prog-detalle-label">Personal administrativo:</div><div class="prog-detalle-value">${getPersonalAdministrativoLabel(principal)}</div></div>` : ''}
         <div class="prog-detalle-row"><div class="prog-detalle-label">Fecha:</div><div class="prog-detalle-value">${fmtFechaDetalle(principal.fecha_programada)}</div></div>
         <div class="prog-detalle-row"><div class="prog-detalle-label">Rango agrupado:</div><div class="prog-detalle-value">${horaInicio} - ${horaFin}</div></div>
+        <div class="prog-detalle-row"><div class="prog-detalle-label">Formatos de fichas:</div><div class="prog-detalle-value">${renderFormatoFichasDetalleLabel(formatosAgrupados)}</div></div>
       </div>
       <div class="prog-detalle-section prog-detalle-section-full">
         <h3 class="prog-detalle-section-title">Servicios incluidos (${items.length})</h3>
@@ -2095,7 +2246,10 @@ function abrirModalDetalleGrupo(groupId: string) {
           </tbody>
         </table>
       </div>
-      <div class="prog-modal-footer"><button type="button" class="prog-btn-secondary" id="btnCerrarDetalleGrupo">Cerrar</button></div>
+      <div class="prog-modal-footer">
+        ${formatosAgrupados.length > 0 ? '<button type="button" class="prog-btn-primary" id="btnCrearFormatoOperacionalAutomaticoGrupo">Crear Formato Operacional</button>' : ''}
+        <button type="button" class="prog-btn-secondary" id="btnCerrarDetalleGrupo">Cerrar</button>
+      </div>
     </div>
   `;
 
@@ -2103,6 +2257,10 @@ function abrirModalDetalleGrupo(groupId: string) {
   document.body.style.overflow = 'hidden';
 
   body.querySelector('#btnCerrarDetalleGrupo')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
+  body.querySelector('#btnCrearFormatoOperacionalAutomaticoGrupo')?.addEventListener('click', () => {
+    cerrarModal('modalDetalleProgramacion');
+    abrirModalFormatoOperacionalAutomatico(principal.id, idsProgramacionesGrupo);
+  });
   body.querySelectorAll('.btn-ver-detalle-servicio-grupo').forEach((btn) => {
     btn.addEventListener('click', (ev) => {
       const id = Number((ev.currentTarget as HTMLElement).dataset.progId || 0);
@@ -2417,6 +2575,16 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
           <div class="prog-detalle-row"><div class="prog-detalle-label">Cliente:</div><div class="prog-detalle-value">${clienteNombre(p)}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Planta:</div><div class="prog-detalle-value">${p.planta ? p.planta.nombre : (p.local_sede || '—')}</div></div>
           <div class="prog-detalle-row"><div class="prog-detalle-label">Área:</div><div class="prog-detalle-value">${getAreasSeleccionadasLabel(p)}</div></div>
+          <div class="prog-detalle-row"><div class="prog-detalle-label">Formato de fichas:</div><div class="prog-detalle-value">${renderFormatoFichasDetalleLabel(getFormatosFichasProgramacion(p))}</div></div>
+          ${getFormatosFichasProgramacion(p).length > 0 ? `
+          <div class="prog-detalle-row">
+            <div class="prog-detalle-label">Formato Operacional:</div>
+            <div class="prog-detalle-value">
+              <button type="button" class="prog-btn-primary" id="btnCrearFormatoOperacionalAutomatico" style="padding:8px 14px;font-size:13px;">
+                Crear Formato Operacional
+              </button>
+            </div>
+          </div>` : ''}
           <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.planta ? (p.planta.direccion || '—') : (p.direccion_completa || '—')}</div></div>
         </div>
         <div class="prog-detalle-section">
@@ -2455,10 +2623,71 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
     body.querySelector('#btnCancelarProg')?.addEventListener('click', () => cancelarProg(p.id));
     body.querySelector('#btnEditarProg')?.addEventListener('click', () => abrirEdicion(p));
     body.querySelector('#btnCompletarProg')?.addEventListener('click', () => completarProg(p.id));
+    body.querySelector('#btnCrearFormatoOperacionalAutomatico')?.addEventListener('click', () => abrirModalFormatoOperacionalAutomatico(p.id));
   } catch (err) {
     body.innerHTML = '<p style="padding:24px;color:red;">Error al cargar detalle</p>';
     console.error(err);
   }
+}
+
+function renderFormatoFichasDetalleLabel(value: unknown): string {
+  const items = parseFormatosFichasValue(value);
+
+  if (items.length === 0) return '—';
+
+  return items.map((nombre) => `<span style="display:inline-block;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:2px 8px;font-size:11px;margin:2px 4px 2px 0;">${nombre}</span>`).join('');
+}
+
+function getFormatosFichasProgramacion(p: any): string[] {
+  const candidates = [
+    p?.formatos_fichas,
+    p?.programacion_servicio?.formatos_fichas,
+    p?.programacionServicio?.formatos_fichas,
+    p?.programacion_servicio?.formatosFichas,
+    p?.programacionServicio?.formatosFichas,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseFormatosFichasValue(candidate);
+    if (parsed.length > 0) {
+      return parsed;
+    }
+  }
+
+  return [];
+}
+
+function parseFormatosFichasValue(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item ?? '').trim())
+      .filter((item) => item.length > 0);
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return [];
+
+    if (text.startsWith('[') || text.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((item) => String(item ?? '').trim())
+            .filter((item) => item.length > 0);
+        }
+      } catch {
+        // Fallback abajo.
+      }
+    }
+
+    return text
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+  }
+
+  return [];
 }
 
 async function eliminarProg(id: number) {
@@ -2529,6 +2758,206 @@ async function completarProg(id: number) {
     mostrarToast('success', 'Completada', 'La programación fue marcada como realizada');
     if (res.sugerencia_siguiente) mostrarModalSugerencia(res.sugerencia_siguiente);
   } catch (err) { mostrarToast('error', 'Error', 'No se pudo completar la programación'); console.error(err); }
+}
+
+function renderFormatoOperacionalAutomaticoModal(data: FormatoOperacionalCalculoRespuesta): string {
+  const totales = data.dispositivos?.totales ?? {
+    cajas_cebaderas: 0,
+    jaulas: 0,
+    cebos: 0,
+    laminas: 0,
+    trampas_luz: 0,
+    otros: 0,
+  };
+
+  const secciones = Array.isArray(data.secciones) ? data.secciones : [];
+  const rows = secciones.map((seccion, index) => ({
+    inputId: `foSeccion_${index}`,
+    titulo: seccion.titulo || seccion.descripcion || `Sección ${index + 1}`,
+    disponible: Number(seccion.cantidad_disponible ?? seccion.cantidad_asignada ?? seccion.cantidad ?? 0),
+    asignado: Number(seccion.cantidad_asignada ?? seccion.cantidad ?? 0),
+    nota: seccion.nota || seccion.tipo_contenido || '',
+  }));
+
+  return `
+    <div style="display:grid;gap:16px;">
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;">
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;">
+          <div style="font-size:11px;color:#1d4ed8;font-weight:700;text-transform:uppercase;">Cajas cebaderas</div>
+          <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.cajas_cebaderas ?? 0}</div>
+        </div>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;">
+          <div style="font-size:11px;color:#15803d;font-weight:700;text-transform:uppercase;">Cebos</div>
+          <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.cebos ?? 0}</div>
+        </div>
+        <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;">
+          <div style="font-size:11px;color:#c2410c;font-weight:700;text-transform:uppercase;">Láminas pegantes</div>
+          <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.laminas ?? 0}</div>
+        </div>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;">
+          <div style="font-size:11px;color:#334155;font-weight:700;text-transform:uppercase;">Jaulas</div>
+          <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.jaulas ?? 0}</div>
+        </div>
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:12px;">
+          <div style="font-size:11px;color:#6d28d9;font-weight:700;text-transform:uppercase;">Trampas de luz</div>
+          <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.trampas_luz ?? 0}</div>
+        </div>
+      </div>
+
+      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;">
+        <div style="font-weight:700;color:#0f172a;margin-bottom:8px;">Formatos aplicados</div>
+        <div style="font-size:13px;color:#475569;">${(data.formatos_aplicados || []).join(' · ') || '—'}</div>
+      </div>
+
+      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;">
+        <div style="font-weight:700;color:#0f172a;margin-bottom:10px;">Asignación editable por sección</div>
+        <div style="overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:720px;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:10px;border:1px solid #e2e8f0;text-align:left;">Sección</th>
+                <th style="padding:10px;border:1px solid #e2e8f0;text-align:center;">Disponible</th>
+                <th style="padding:10px;border:1px solid #e2e8f0;text-align:center;">Asignado</th>
+                <th style="padding:10px;border:1px solid #e2e8f0;text-align:left;">Nota</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.length > 0 ? rows.map((row) => `
+                <tr>
+                  <td style="padding:10px;border:1px solid #e2e8f0;font-weight:600;">${row.titulo}</td>
+                  <td style="padding:10px;border:1px solid #e2e8f0;text-align:center;">${row.disponible}</td>
+                  <td style="padding:10px;border:1px solid #e2e8f0;text-align:center;">
+                    <input id="${row.inputId}" type="number" min="0" max="${row.disponible}" value="${row.asignado}" style="width:90px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;text-align:center;font-weight:600;">
+                  </td>
+                  <td style="padding:10px;border:1px solid #e2e8f0;color:#475569;">${row.nota || '—'}</td>
+                </tr>
+              `).join('') : `
+                <tr><td colspan="4" style="padding:14px;border:1px solid #e2e8f0;color:#64748b;">No hay secciones para mostrar.</td></tr>
+              `}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">
+        <div style="font-size:12px;color:#64748b;max-width:720px;">
+          El cálculo se reparte según el formato seleccionado: roedores usa cajas/cebos/láminas, rastreros usa láminas y voladores usa trampas de luz.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="prog-btn-secondary" id="btnRecalcularFormatoOperacionalAutomatico">Calcular automático</button>
+          <button type="button" class="prog-btn-primary" id="btnConfirmarFormatoOperacionalAutomatico">Confirmar creación</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function leerAsignacionFormatoOperacionalAutomatico(data: FormatoOperacionalCalculoRespuesta): FormatoOperacionalAsignacionSeccion[] | null {
+  const secciones = Array.isArray(data.secciones) ? data.secciones : [];
+  const resultado: FormatoOperacionalAsignacionSeccion[] = [];
+
+  for (let index = 0; index < secciones.length; index++) {
+    const seccion = secciones[index];
+    const input = document.getElementById(`foSeccion_${index}`) as HTMLInputElement | null;
+    const cantidad = Number(input?.value ?? seccion.cantidad_asignada ?? seccion.cantidad ?? 0);
+
+    if (Number.isNaN(cantidad) || cantidad < 0) {
+      return null;
+    }
+
+    resultado.push({
+      ...seccion,
+      cantidad_disponible: Number(seccion.cantidad_disponible ?? 0),
+      cantidad_asignada: Math.floor(cantidad),
+      cantidad: Math.floor(cantidad),
+    });
+  }
+
+  return resultado;
+}
+
+function validarAsignacionFormatoOperacionalAutomatico(secciones: FormatoOperacionalAsignacionSeccion[] | null): string | null {
+  if (!secciones) {
+    return 'Revise que todos los valores sean numéricos y mayores o iguales a cero.';
+  }
+
+  for (const seccion of secciones) {
+    const disponible = Number(seccion.cantidad_disponible || 0);
+    const asignado = Number(seccion.cantidad_asignada ?? seccion.cantidad ?? 0);
+    if (asignado > disponible) {
+      return `La cantidad asignada para "${seccion.titulo}" no puede superar lo disponible.`;
+    }
+  }
+
+  return null;
+}
+
+async function abrirModalFormatoOperacionalAutomatico(idProgramacion: number, idsProgramaciones?: number[]) {
+  const modal = document.getElementById('modalFormatoOperacionalAutomatico');
+  const body = document.getElementById('modalFormatoOperacionalAutomaticoBody');
+  if (!modal || !body) return;
+
+  formatoOperacionalAutomaticoProgramacionId = idProgramacion;
+  body.innerHTML = '<p style="padding:24px;color:#64748b;">Calculando formato operacional...</p>';
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const res = await formatoOperacionalAutomaticoService.calcular(idProgramacion, idsProgramaciones);
+    formatoOperacionalAutomaticoActual = res.data;
+    body.innerHTML = renderFormatoOperacionalAutomaticoModal(res.data);
+
+    body.querySelector('#btnRecalcularFormatoOperacionalAutomatico')?.addEventListener('click', () => {
+      if (formatoOperacionalAutomaticoProgramacionId) {
+        abrirModalFormatoOperacionalAutomatico(formatoOperacionalAutomaticoProgramacionId, idsProgramaciones);
+      }
+    });
+
+    body.querySelector('#btnConfirmarFormatoOperacionalAutomatico')?.addEventListener('click', async () => {
+      const actual = formatoOperacionalAutomaticoActual;
+      if (!actual || !formatoOperacionalAutomaticoProgramacionId) return;
+
+      const payload = leerAsignacionFormatoOperacionalAutomatico(actual);
+      if (!payload) {
+        mostrarToast('error', 'Validación', 'Revise que todos los valores sean numéricos y mayores o iguales a cero.');
+        return;
+      }
+
+      const error = validarAsignacionFormatoOperacionalAutomatico(payload);
+      if (error) {
+        mostrarToast('error', 'Validación', error);
+        return;
+      }
+
+      try {
+        await formatoOperacionalAutomaticoService.crear(formatoOperacionalAutomaticoProgramacionId, { secciones: payload });
+        cerrarModal('modalFormatoOperacionalAutomatico');
+        mostrarToast('success', 'Formato Operacional creado', 'El Formato Operacional fue generado correctamente.');
+      } catch (err) {
+        console.error(err);
+        let msg = 'No se pudo crear el Formato Operacional.';
+        if (err instanceof ApiError) {
+          const info = getApiErrorDebugInfo(err);
+          msg = info.message || msg;
+        } else if (err && typeof err === 'object' && 'message' in err) {
+          // @ts-ignore
+          msg = err.message || msg;
+        }
+        mostrarToast('error', 'Error', msg);
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    let msg = 'No se pudo calcular el Formato Operacional.';
+    if (err instanceof ApiError) {
+      const info = getApiErrorDebugInfo(err);
+      msg = info.message || msg;
+    } else if (err && typeof err === 'object' && 'message' in err) {
+      // @ts-ignore
+      msg = err.message || msg;
+    }
+    body.innerHTML = `<p style="padding:24px;color:#b91c1c;">${msg}</p>`;
+  }
 }
 
 // ═══════════ Modal Sugerencia ═══════════
@@ -2632,6 +3061,7 @@ async function abrirEdicion(p: Programacion) {
     ?? (px as any).id_cliente_planta_area
     ?? null;
   const areaIdsEdicion = normalizeAreaIds(idAreaEdicion);
+  const formatosFichasEdicion = getFormatosFichasProgramacion(p);
   const modalidadVisitaEdicion = String((px as any).modalidad_visita || (px as any).modalidadVisita || px.modalidad || ordenAsesoria?.modalidad || '').trim().toLowerCase();
   const esVirtualEdicion = modalidadVisitaEdicion.startsWith('vir');
 
@@ -2745,6 +3175,24 @@ async function abrirEdicion(p: Programacion) {
             <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="2">${p.observaciones || ''}</textarea></div>
           `}
         </div>
+
+        <div class="prog-form-section prog-form-section-full">
+          <h3 class="prog-form-section-title">Formato de fichas</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Seleccionar formatos <span style="font-weight:400;font-size:12px;color:#888;">(puedes seleccionar uno o varios)</span></label>
+            <select class="prog-form-control" id="formatosFichasSelectServicio" name="formatos_fichas" multiple style="display:none;">
+              ${FORMATOS_FICHAS_SERVICIO.map((formato) => `<option value="${formato}" ${formatosFichasEdicion.includes(formato) ? 'selected' : ''}>${formato}</option>`).join('')}
+            </select>
+            <div id="formatosFichasSummaryServicio" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin formatos seleccionados</div>
+            <div id="formatosFichasPanelServicio" style="position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;flex:1;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="formatosFichasSelectAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todos</button>
+                <button type="button" id="formatosFichasClearAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="formatosFichasOptionsServicio"></div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="prog-modal-footer">
         <button type="button" class="prog-btn-secondary" id="btnVolverDetalle">Cancelar</button>
@@ -2772,6 +3220,9 @@ async function abrirEdicion(p: Programacion) {
     renderPersonalPickerOptionsServicio(body);
     actualizarResumenPersonalServicio(body);
     bindPersonalMultiInteractionsServicio(body);
+    renderFormatoFichasPickerOptionsServicio(body);
+    actualizarResumenFormatosFichasServicio(body);
+    bindFormatoFichasInteractionsServicio(body);
   }
 
   if (isAsesoria) {
@@ -2850,6 +3301,13 @@ async function abrirEdicion(p: Programacion) {
     fd.forEach((v, k) => {
       if (k !== 'tecnicos_ids' && k !== 'exponentes_ids' && k !== 'id_supervisor') data[k] = v || null;
     });
+
+    const formatosFichasSelect = body.querySelector('#formatosFichasSelectServicio') as HTMLSelectElement | null;
+    data.formatos_fichas = formatosFichasSelect && formatosFichasSelect.selectedOptions.length > 0
+      ? Array.from(formatosFichasSelect.selectedOptions)
+          .map((o) => (o.value || o.text || '').trim())
+          .filter((value) => value.length > 0)
+      : null;
 
     // Derivar local_sede y direccion_completa de planta si se seleccionó
     const idPlantaSel = parseInt(fd.get('id_cliente_planta') as string) || idPlantaEdicion || null;
@@ -3029,6 +3487,9 @@ async function abrirEdicionOtros(p: Programacion) {
   renderPersonalPickerOptionsServicio(body);
   actualizarResumenPersonalServicio(body);
   bindPersonalMultiInteractionsServicio(body);
+  renderFormatoFichasPickerOptionsServicio(body);
+  actualizarResumenFormatosFichasServicio(body);
+  bindFormatoFichasInteractionsServicio(body);
 
   body.querySelector('#formEditarOtros')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -3230,11 +3691,30 @@ function renderFormNueva(body: HTMLElement) {
         </div>
 
         <!-- Ubicación -->
-        <div class="prog-form-section">
+        <div class="prog-form-section" style="min-height:420px;display:flex;flex-direction:column;">
           <h3 class="prog-form-section-title">Ubicación</h3>
           <div class="prog-form-group"><label class="prog-form-label">Planta</label><select class="prog-form-control" name="id_cliente_planta" id="newPlantaSelect"><option value="">-- Planta --</option></select></div>
           <div id="infoAreasServicio" style="display:none;margin-top:-4px;margin-bottom:8px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;color:#475569;"></div>
-          <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="2"></textarea></div>
+          <div class="prog-form-group"><label class="prog-form-label">Observaciones</label><textarea class="prog-form-control" name="observaciones" rows="5"></textarea></div>
+        </div>
+
+        <!-- Formato de fichas -->
+        <div class="prog-form-section" style="min-height:420px;display:flex;flex-direction:column;">
+          <h3 class="prog-form-section-title">Formato de fichas</h3>
+          <div class="prog-form-group">
+            <label class="prog-form-label">Seleccionar formatos <span style="font-weight:400;font-size:12px;color:#888;">(puedes seleccionar uno o varios)</span></label>
+            <select class="prog-form-control" id="formatosFichasSelectServicio" name="formatos_fichas" multiple style="display:none;">
+              ${FORMATOS_FICHAS_SERVICIO.map((formato) => `<option value="${formato}">${formato}</option>`).join('')}
+            </select>
+            <div id="formatosFichasSummaryServicio" style="margin-top:6px;font-size:12px;color:#94a3b8;">Sin formatos seleccionados</div>
+            <div id="formatosFichasPanelServicio" style="position:relative;margin-top:6px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:8px;max-height:220px;overflow:auto;flex:1;">
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px;">
+                <button type="button" id="formatosFichasSelectAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Todos</button>
+                <button type="button" id="formatosFichasClearAllServicio" class="prog-btn-secondary" style="font-size:11px;padding:3px 8px;">Limpiar</button>
+              </div>
+              <div id="formatosFichasOptionsServicio"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3258,6 +3738,9 @@ function renderFormNueva(body: HTMLElement) {
   renderPersonalPickerOptionsServicio(body);
   actualizarResumenPersonalServicio(body);
   bindPersonalMultiInteractionsServicio(body);
+  renderFormatoFichasPickerOptionsServicio(body);
+  actualizarResumenFormatosFichasServicio(body);
+  bindFormatoFichasInteractionsServicio(body);
 
   selectODS?.addEventListener('change', async () => {
     areaIdsServicioSeleccionado = [];
@@ -3528,6 +4011,11 @@ async function submitIndividual(body: HTMLElement) {
   const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
   data.id_supervisor = personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0
     ? Array.from(personalAdministrativoSelect.selectedOptions).map(o => parseInt(o.value))
+    : null;
+
+  const formatosFichasSelect = body.querySelector('#formatosFichasSelectServicio') as HTMLSelectElement;
+  data.formatos_fichas = formatosFichasSelect && formatosFichasSelect.selectedOptions.length > 0
+    ? Array.from(formatosFichasSelect.selectedOptions).map(o => o.value)
     : null;
 
   // Recoger días de semana si está visible
@@ -4304,6 +4792,11 @@ async function submitAnual(body: HTMLElement) {
   const personalAdministrativoSelect = body.querySelector('#personalAdministrativoSelectServicio') as HTMLSelectElement;
   data.id_supervisor = personalAdministrativoSelect && personalAdministrativoSelect.selectedOptions.length > 0
     ? Array.from(personalAdministrativoSelect.selectedOptions).map(o => parseInt(o.value))
+    : null;
+
+  const formatosFichasSelect = body.querySelector('#formatosFichasSelectServicio') as HTMLSelectElement;
+  data.formatos_fichas = formatosFichasSelect && formatosFichasSelect.selectedOptions.length > 0
+    ? Array.from(formatosFichasSelect.selectedOptions).map(o => o.value)
     : null;
 
   // Recoger días de semana si está visible

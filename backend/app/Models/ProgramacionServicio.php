@@ -28,6 +28,7 @@ class ProgramacionServicio extends Model
         'duracion_real',
         'id_cliente_planta',
         'id_cliente_planta_area',
+        'formatos_fichas',
         'local_sede',
         'direccion_completa',
         'latitud',
@@ -59,6 +60,7 @@ class ProgramacionServicio extends Model
         'fecha_modificacion' => 'datetime',
         'id_supervisor' => 'array',
         'fotos_evidencia' => 'array',
+        'formatos_fichas' => 'array',
         'latitud' => 'float',
         'longitud' => 'float',
     ];
@@ -123,6 +125,11 @@ class ProgramacionServicio extends Model
     public function grupoProgramacion()
     {
         return $this->belongsTo(ProgramacionServicioGrupo::class, 'id_grupo_programacion');
+    }
+
+    public function formatoOperacional()
+    {
+        return $this->hasOne(FormatoOperacional::class, 'id_programacion_servicio');
     }
 
     public function creador()
