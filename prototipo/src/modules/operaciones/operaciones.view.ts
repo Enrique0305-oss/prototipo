@@ -1,5 +1,15 @@
 import { API_CONFIG } from '../../core/api/api.config'
 import type { Programacion } from '../programaciones/programaciones.types'
+import { programacionServicioService } from '../programaciones/programacion-servicio/programacion-servicio.service'
+
+// Cache local para formatos cargados por programación (id -> formato)
+const formatosCache = new Map<number, any>();
+let informeGruposCache: ClienteMesGroup[] = [];
+let informeGrupoSeleccionadoKey: string | null = null;
+let informeServiciosPorId = new Map<number, ProgramacionConEvidencias>();
+
+type FichaOperacionalApiData = any;
+type FormatoOperacionalApiData = any;
 
 // Operaciones e Informes View
 
@@ -132,7 +142,7 @@ export function initCrearInformeEvents() {
   // Esta función se llamará cuando se renderice el tab "Crear Informe"
   // y cargará los servicios realizados del "Servicio del Día"
   setTimeout(() => {
-    cargarServiciosParaCrearInforme();
+    void cargarServiciosParaCrearInforme();
   }, 100);
 }
 
@@ -141,8 +151,6 @@ async function cargarServiciosParaCrearInforme() {
   if (!container) return;
 
   try {
-    // Cargar servicios realizados desde la API
-    const { programacionServicioService } = await import('../../modules/programaciones/programacion-servicio/programacion-servicio.service');
     const response = await programacionServicioService.getAll();
     const lista = Array.isArray(response?.data) ? response.data : [];
 
@@ -155,38 +163,46 @@ async function cargarServiciosParaCrearInforme() {
       return;
     }
 
-    // Renderizar servicios como botones en el panel izquierdo
-    container.innerHTML = realizados.map((servicio, idx) => {
-      const titulo = `${servicio.servicio?.nombre || `Servicio #${servicio.id_servicio}`} - ${servicio.orden_servicio?.cliente?.nombre_empresa || 'Cliente sin nombre'}`;
-      const fecha = servicio.fecha_ejecucion_real || servicio.fecha_programada || '';
-      return `
-        <button class="js-servicio-item" data-service-id="${servicio.id}" data-service-idx="${idx}" type="button" style="padding:10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;text-align:left;font-size:12px;transition:all 0.2s;">
-          <div style="font-weight:600;color:#0f172a;margin-bottom:3px;">${escapeHtml(titulo)}</div>
-          <div style="color:#64748b;font-size:11px;">${escapeHtml(fecha || 'Sin fecha')}</div>
-        </button>
-      `;
-    }).join('');
+    const grupos = mapServiciosPorClienteMes(realizados);
+    informeGruposCache = grupos;
+    informeGrupoSeleccionadoKey = grupos[0]?.key ?? null;
+    informeServiciosPorId = new Map(realizados.map((item) => [item.id, item as ProgramacionConEvidencias]));
 
-    // Agregar event listeners a los botones de servicios
-    container.querySelectorAll('.js-servicio-item').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        const target = e.currentTarget as HTMLButtonElement;
-        const serviceId = parseInt(target.dataset.serviceId || '0', 10);
-        const serviceIdx = parseInt(target.dataset.serviceIdx || '0', 10);
-        
-        if (serviceId > 0 && realizados[serviceIdx]) {
-          rellenarFormularioDesdeServicio(realizados[serviceIdx]);
-          
-          // Marcar el botón como seleccionado
-          container.querySelectorAll('.js-servicio-item').forEach(b => (b as HTMLElement).style.background = '#fff');
-          target.style.background = '#dbeafe';
-          target.style.borderColor = '#3b82f6';
-        }
-      });
-    });
-
-    // Agregar event listener al formulario principal
     const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
+    const detalleContainer = document.querySelector('#operaciones-informe-detalle') as HTMLElement | null;
+    const searchInput = document.querySelector('.js-servicio-search') as HTMLInputElement | null;
+
+    const renderList = (filterText = '') => {
+      const normalized = filterText.trim().toLowerCase();
+      const visibleGroups = normalized.length > 0
+        ? grupos.filter((group) => {
+            const hayTexto = `${group.cliente} ${group.monthLabel} ${group.visitas.map((v) => v.serviceName).join(' ')}`.toLowerCase();
+            return hayTexto.includes(normalized);
+          })
+        : grupos;
+
+      container.innerHTML = renderListaCrearInformeGrupos(visibleGroups);
+
+      container.querySelectorAll('.js-grupo-informe-item').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          const target = e.currentTarget as HTMLButtonElement;
+          const groupIdx = Number(target.dataset.groupIdx || '0');
+          const group = visibleGroups[groupIdx];
+          if (!group) return;
+
+          informeGrupoSeleccionadoKey = group.key;
+          renderList(searchInput?.value || '');
+          await cargarDetalleGrupoInforme(group);
+        });
+      });
+    };
+
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        renderList(searchInput.value);
+      });
+    }
+
     if (form) {
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -194,9 +210,8 @@ async function cargarServiciosParaCrearInforme() {
         const payload: Record<string, string> = {};
         data.forEach((value, key) => { payload[key] = String(value || '').trim(); });
 
-        // Validaciones básicas
         if (!payload.cliente) {
-          alert('Por favor selecciona un servicio para pre-llenar el cliente.');
+          alert('Por favor selecciona un cliente para generar el informe.');
           return;
         }
         if (!payload.codigo_informe) {
@@ -204,16 +219,405 @@ async function cargarServiciosParaCrearInforme() {
           return;
         }
 
-        // Envío simulado (luego se integrará con backend)
         console.log('Crear Informe (simulado):', payload);
         alert(`Informe ${payload.codigo_informe} creado exitosamente (simulado). Backend: siguiente paso.`);
         form.reset();
       });
+
+      const hojaSelect = form.querySelector('.js-hoja-tipo-select') as HTMLSelectElement | null;
+      if (hojaSelect) {
+        hojaSelect.addEventListener('change', () => {
+          const current = informeGruposCache.find((group) => group.key === informeGrupoSeleccionadoKey) || informeGruposCache[0];
+          if (current) {
+            void cargarDetalleGrupoInforme(current);
+          }
+        });
+      }
+    }
+
+    renderList(searchInput?.value || '');
+    const current = informeGruposCache.find((group) => group.key === informeGrupoSeleccionadoKey) || informeGruposCache[0];
+    if (current) {
+      await cargarDetalleGrupoInforme(current);
+    } else if (detalleContainer) {
+      detalleContainer.innerHTML = '<div style="color:#64748b;font-size:13px;">Selecciona un cliente para ver el detalle por visitas.</div>';
     }
   } catch (error) {
     console.error('Error cargando servicios para crear informe:', error);
     container.innerHTML = '<p style="color:#b91c1c;font-size:13px;">Error cargando servicios</p>';
   }
+}
+
+function aplicarFormatoAlFormulario(formEl: HTMLFormElement | null, formatoData: any, tipoHoja: 'verdadera' | 'falsa') {
+  if (!formEl || !formatoData) return;
+
+  // Rellenar código de informe con el código del formato si existe
+  const codigo = formatoData.codigo_documento ?? formatoData.codigoDocumento ?? '';
+  const codigoInput = formEl.querySelector('[name="codigo_informe"]') as HTMLInputElement | null;
+  if (codigoInput && codigo) codigoInput.value = String(codigo);
+
+  // Agregar dispositivos (codigo, ubicacion) extraídos de las secciones
+  const dispositivosContainer = document.querySelector('#operaciones-dispositivos-preview') as HTMLElement | null;
+  if (!dispositivosContainer) return;
+
+  const devices: Array<{ codigo: string; ubicacion: string }> = [];
+  const secciones = Array.isArray(formatoData.secciones) ? formatoData.secciones : [];
+  for (const s of secciones) {
+    const items = Array.isArray(s.items) ? s.items : [];
+    for (const it of items) {
+      const codigoCaja = String((it.codigo_caja ?? it.codigoCaja ?? it.codigo) || '').trim();
+      const ubicacion = String(it.ubicacion || '').trim();
+      if (codigoCaja) devices.push({ codigo: codigoCaja, ubicacion });
+    }
+  }
+
+  if (devices.length === 0) {
+    dispositivosContainer.innerHTML = '<div style="color:#64748b;font-size:13px;">No hay dispositivos en el Formato Operacional.</div>';
+    return;
+  }
+
+  dispositivosContainer.innerHTML = `
+    <div style="font-weight:700;color:#0f172a;margin-bottom:6px;">Dispositivos del Formato (${tipoHoja === 'verdadera' ? 'Hoja Verdadera' : 'Hoja Falsa'})</div>
+    <div style="border:1px solid #e6eef7;border-radius:8px;padding:8px;background:#fbfdff;max-height:200px;overflow:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="text-align:left;color:#475569;font-weight:700;font-size:12px;"><th style="padding:6px;border-bottom:1px solid #e6eef7;">Código</th><th style="padding:6px;border-bottom:1px solid #e6eef7;">Ubicación</th></tr>
+        </thead>
+        <tbody>
+          ${devices.map(d => `<tr><td style="padding:8px;border-bottom:1px dashed #eef3fb;">${escapeHtml(d.codigo)}</td><td style="padding:8px;border-bottom:1px dashed #eef3fb;">${escapeHtml(d.ubicacion)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderFormatoVisitaResumen(formato: FormatoOperacionalViewModel, tipoHoja: 'verdadera' | 'falsa'): string {
+  if (!formato || !Array.isArray(formato.secciones) || formato.secciones.length === 0) {
+    return '<div style="color:#64748b;font-size:13px;">Sin información de formato para esta visita.</div>';
+  }
+
+  const formatosPresentesSet = new Set<string>();
+  for (const seccion of formato.secciones) {
+    const normalizado = normalizeText(`${seccion.titulo} ${seccion.tipo}`);
+    if (normalizado.includes('trampa') && normalizado.includes('luz')) {
+      formatosPresentesSet.add('voladores');
+    } else if (normalizado.includes('lamina') && (normalizado.includes('rastreros') || normalizado.includes('pegante'))) {
+      formatosPresentesSet.add('rastreros');
+    } else {
+      formatosPresentesSet.add('roedores');
+    }
+  }
+
+  const esRastreros = isRastrerosFormato(formato) && formatosPresentesSet.size === 1;
+  const esVoladores = isVoladoresFormato(formato) && formatosPresentesSet.size === 1;
+  const sheetTitle = tipoHoja === 'verdadera' ? 'Hoja Verdadera' : 'Hoja Falsa';
+
+  const renderRoedores = (secciones: Array<FormatoOperacionalViewModel['secciones'][number]>) => `
+    <div style="display:grid;gap:10px;">
+      ${secciones.map((seccion) => `
+        <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+          <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
+          <div style="overflow:auto;">
+            <table style="width:100%;border-collapse:collapse;margin:0;">
+              <thead>
+                <tr style="background:#eff6ff;">
+                  <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Código</th>
+                  <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Ubicación</th>
+                  <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Estado</th>
+                  <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Hallazgo</th>
+                  <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Señales</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${seccion.items.map((item) => {
+                  const estado = tipoHoja === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
+                  const hallazgo = tipoHoja === 'verdadera' ? item.hallazgoVerdadera : item.hallazgoAuditiva;
+                  const senales = tipoHoja === 'verdadera' ? item.senalesPresenciaVerdadera : item.senalesPresenciaAuditiva;
+                  return `
+                    <tr>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(estado))}</td>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(hallazgo, '-'))}</td>
+                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(senales, '-'))}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  const renderRastreros = (secciones: Array<FormatoOperacionalViewModel['secciones'][number]>) => {
+    const estadioOrden = ['ADULTO', 'NINFA', 'OOTECA'];
+    const parseConteoEstadio = (value: any) => {
+      if (!value) return {};
+      if (Array.isArray(value)) {
+        return value.reduce((acc: any, entry: any) => {
+          const nombre = String(entry?.estadio ?? entry?.label ?? entry?.nombre ?? '').trim().toUpperCase();
+          if (!nombre) return acc;
+          acc[nombre] = {
+            verdadera: Number(entry?.verdadera ?? entry?.conteo_verdadera ?? entry?.conteo ?? entry?.cantidad ?? entry?.valor ?? 0) || 0,
+            falsa: Number(entry?.falsa ?? entry?.auditiva ?? entry?.conteo_falsa ?? 0) || 0,
+          };
+          return acc;
+        }, {});
+      }
+      if (typeof value === 'object') {
+        return Object.entries(value as Record<string, any>).reduce((acc: any, [key, raw]) => {
+          const nombre = String(key ?? '').trim().toUpperCase();
+          if (!nombre) return acc;
+          acc[nombre] = {
+            verdadera: Number(raw?.verdadera ?? raw?.conteo_verdadera ?? raw?.conteo ?? raw?.cantidad ?? raw?.valor ?? raw?.count ?? 0) || 0,
+            falsa: Number(raw?.falsa ?? raw?.auditiva ?? raw?.conteo_falsa ?? 0) || 0,
+          };
+          return acc;
+        }, {});
+      }
+      return {};
+    };
+
+    return `
+      <div style="display:grid;gap:10px;">
+        ${secciones.map((seccion) => `
+          <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+            <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
+            <div style="overflow:auto;">
+              <table style="width:100%;border-collapse:collapse;margin:0;min-width:680px;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Ubicación</th>
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">N°</th>
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estadio</th>
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">Conteo</th>
+                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estado de lámina</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${seccion.items.map((item) => {
+                    const estadoLamina = fallbackText(item.estadoLamina, '-');
+                    const estadio = fallbackText(item.estadio, '-');
+                    const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
+                    const keys = Object.keys(conteoPorEstadio);
+                    if (keys.length > 0) {
+                      return estadioOrden
+                        .filter((est) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, est))
+                        .map((est, idxEst) => `
+                          <tr>
+                            ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(fallbackText(item.ubicacion))}</td>` : ''}
+                            ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;vertical-align:middle;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>` : ''}
+                            <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(est)}</td>
+                            <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${tipoHoja === 'verdadera' ? Number(conteoPorEstadio[est]?.verdadera ?? 0) : Number(conteoPorEstadio[est]?.falsa ?? 0)}</td>
+                            ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(estadoLamina)}</td>` : ''}
+                          </tr>
+                        `).join('');
+                    }
+
+                    return `
+                      <tr>
+                        <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
+                        <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                        <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadio)}</td>
+                        <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${tipoHoja === 'verdadera' ? Number(item.conteoEstadioVerdadera ?? 0) : Number(item.conteoEstadioFalsa ?? 0)}</td>
+                        <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  };
+
+  const renderVoladores = (secciones: Array<FormatoOperacionalViewModel['secciones'][number]>) => `
+    <div style="display:grid;gap:10px;">
+      ${secciones.map((seccion) => `
+        <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+          <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
+          <div style="display:grid;gap:12px;padding:10px;">
+            ${seccion.items.map((item) => {
+              const estado = tipoHoja === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
+              const conteos = item.conteoInsectos ?? {};
+              const getConteo = (key: string) => {
+                const raw = conteos[key];
+                if (!raw) return 0;
+                return tipoHoja === 'verdadera' ? Number(raw.verdadera ?? 0) : Number(raw.auditiva ?? 0);
+              };
+
+              return `
+                <div style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fafafa;">
+                  <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#eff6ff;font-size:12px;font-weight:600;color:#1e40af;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                    <span>Código: ${escapeHtml(fallbackText(item.codigoCaja))}</span>
+                    <span>Ubicación: ${escapeHtml(fallbackText(item.ubicacion))}</span>
+                    <span>Estado: ${escapeHtml(fallbackText(estado))}</span>
+                  </div>
+                  <div style="overflow:auto;">
+                    <table style="width:100%;border-collapse:collapse;margin:0;min-width:420px;">
+                      <thead>
+                        <tr style="background:#f0f9ff;">
+                          <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Insecto</th>
+                          <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:center;">Conteo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${INSECTOS_VOLADORES.map((insecto) => `
+                          <tr>
+                            <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(insecto.label)}</td>
+                            <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:600;">${getConteo(insecto.key)}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  const hojas = Array.from(formatosPresentesSet);
+  const bloque = esRastreros
+    ? renderRastreros(formato.secciones)
+    : esVoladores
+      ? renderVoladores(formato.secciones)
+      : renderRoedores(formato.secciones);
+
+  return `
+    <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
+      <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;">
+        ${sheetTitle}${hojas.length > 1 ? ` • ${hojas.join(' + ')}` : ''}
+      </div>
+      <div style="padding:10px;">${bloque}</div>
+    </div>
+  `;
+}
+
+function renderEvidenciasVisita(visita: ClienteVisitaViewModel): string {
+  if (!visita.evidenceImages || visita.evidenceImages.length === 0) {
+    return '<div style="color:#64748b;font-size:13px;">Sin evidencias registradas para esta visita.</div>';
+  }
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;">
+      ${visita.evidenceImages.map((url) => `
+        <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:block;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#f8fafc;">
+          <img src="${escapeHtml(url)}" alt="Evidencia ${escapeHtml(visita.titulo)}" style="width:100%;height:110px;object-fit:cover;display:block;" loading="lazy" />
+        </a>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderInformeVisitaCard(visita: ClienteVisitaViewModel, formato: FormatoOperacionalViewModel | null, tipoHoja: 'verdadera' | 'falsa', index: number): string {
+  return `
+    <section style="border:1px solid #dbe7f2;border-radius:12px;background:#fff;overflow:hidden;display:grid;gap:12px;padding:14px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:14px;font-weight:800;color:#0f172a;">Visita ${index + 1}</div>
+          <div style="font-size:13px;color:#475569;">${escapeHtml(visita.serviceName)} • ${escapeHtml(visita.fechaLabel)}</div>
+        </div>
+        <div style="font-size:12px;color:#64748b;">${escapeHtml(visita.tecnicosLabel)}</div>
+      </div>
+
+      <div style="display:grid;gap:8px;">
+        <h4 style="margin:0;font-size:13px;color:#0f172a;">Dispositivos del Formato (${tipoHoja === 'verdadera' ? 'Hoja Verdadera' : 'Hoja Falsa'})</h4>
+        ${formato ? renderFormatoVisitaResumen(formato, tipoHoja) : '<div style="color:#64748b;font-size:13px;">No se encontró formato para esta visita.</div>'}
+      </div>
+
+      <div style="display:grid;gap:8px;">
+        <h4 style="margin:0;font-size:13px;color:#0f172a;">Evidencias Fotográficas del Servicio</h4>
+        ${renderEvidenciasVisita(visita)}
+      </div>
+    </section>
+  `;
+}
+
+function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null }>) {
+  const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
+  if (!form) return;
+
+  const visitas = group.visitas || [];
+  const primerVisita = visitas[0] || null;
+  const nombresServicios = Array.from(new Set(visitas.map((v) => v.serviceName).filter((v) => v && v.length > 0)));
+
+  (form.querySelector('[name="cliente"]') as HTMLInputElement)!.value = group.cliente || '';
+  const primeraProgramacion = primerVisita ? informeServiciosPorId.get(primerVisita.serviceId) : null;
+  (form.querySelector('[name="ubicacion"]') as HTMLInputElement)!.value = primeraProgramacion ? String(primeraProgramacion.planta?.direccion || '').trim() : '';
+  (form.querySelector('[name="actividad"]') as HTMLInputElement)!.value = nombresServicios.length > 1 ? nombresServicios.join(' + ') : (nombresServicios[0] || '');
+  (form.querySelector('[name="mes_actividad"]') as HTMLInputElement)!.value = group.monthKey !== 'unknown' ? group.monthKey : '';
+  (form.querySelector('[name="n_visitas"]') as HTMLInputElement)!.value = String(visitas.length || 1);
+  (form.querySelector('[name="fechas_visitas"]') as HTMLInputElement)!.value = visitas.map((v) => v.fechaLabel).filter((v) => v && v !== 'Sin fecha').join(', ');
+
+  const codigoInput = form.querySelector('[name="codigo_informe"]') as HTMLInputElement | null;
+  if (codigoInput && !codigoInput.value.trim()) {
+    const firstFormat = formatosPorVisita?.find((entry) => entry.formato)?.formato;
+    if (firstFormat?.codigoDocumento) {
+      codigoInput.value = firstFormat.codigoDocumento;
+    }
+  }
+}
+
+function renderListaCrearInformeGrupos(groups: ClienteMesGroup[]): string {
+  if (!groups || groups.length === 0) {
+    return '<p style="color:#64748b;font-size:13px;">No hay servicios realizados disponibles</p>';
+  }
+
+  return groups.map((group, idx) => {
+    const visitasTexto = `${group.visitas.length} visita${group.visitas.length === 1 ? '' : 's'}`;
+    const serviciosTexto = Array.from(new Set(group.visitas.map((v) => v.serviceName))).join(' + ');
+    const selected = informeGrupoSeleccionadoKey === group.key;
+    return `
+      <button class="js-grupo-informe-item" data-group-idx="${idx}" type="button" style="padding:10px;border:1px solid ${selected ? '#3b82f6' : '#cbd5e1'};border-radius:8px;background:${selected ? '#dbeafe' : '#fff'};cursor:pointer;text-align:left;font-size:12px;transition:all 0.2s;display:grid;gap:4px;">
+        <div style="font-weight:700;color:#0f172a;">${escapeHtml(group.cliente)}</div>
+        <div style="color:#475569;font-size:11px;">${escapeHtml(group.monthLabel)} • ${escapeHtml(visitasTexto)}</div>
+        <div style="color:#64748b;font-size:11px;">${escapeHtml(serviciosTexto)}</div>
+      </button>
+    `;
+  }).join('');
+}
+
+async function cargarDetalleGrupoInforme(group: ClienteMesGroup) {
+  const detalleContainer = document.querySelector('#operaciones-informe-detalle') as HTMLElement | null;
+  const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
+  if (!detalleContainer || !form) return;
+
+  const hojaSelect = form.querySelector('.js-hoja-tipo-select') as HTMLSelectElement | null;
+  const tipoHoja = hojaSelect && hojaSelect.value === 'falsa' ? 'falsa' : 'verdadera';
+
+  detalleContainer.innerHTML = '<div style="color:#64748b;font-size:13px;">Cargando visitas del cliente seleccionado...</div>';
+
+  const formatosPorVisita = await Promise.all(group.visitas.map(async (visita) => {
+    try {
+      const cached = formatosCache.get(visita.serviceId);
+      if (cached) {
+        return { visita, formato: cached as FormatoOperacionalViewModel };
+      }
+
+      const response = await programacionServicioService.getFormatoOperacionalByServiceId(visita.serviceId);
+      const data = (response?.data ?? null) as FormatoOperacionalApiData | null;
+      const formato = data ? normalizeFormato(data) : null;
+      if (formato) {
+        formatosCache.set(visita.serviceId, formato);
+      }
+      return { visita, formato };
+    } catch {
+      return { visita, formato: null };
+    }
+  }));
+
+  rellenarFormularioDesdeGrupo(group, formatosPorVisita);
+
+  const html = formatosPorVisita.map((entry, idx) => renderInformeVisitaCard(entry.visita, entry.formato, tipoHoja, idx)).join('');
+  detalleContainer.innerHTML = html || '<div style="color:#64748b;font-size:13px;">No se encontraron detalles para este cliente.</div>';
 }
 
 function rellenarFormularioDesdeServicio(servicio: ProgramacionConEvidencias) {
@@ -314,6 +718,7 @@ export type FormatoOperacionalViewModel = {
   horaInicio: string;
   horaFinal: string;
   observaciones: string;
+  formatos_fichas?: string[];
   secciones: Array<{
     tipo: string;
     titulo: string;
@@ -336,6 +741,30 @@ export type FormatoOperacionalViewModel = {
       numeroLote: string;
     }>;
   }>;
+}
+
+// Tipos para la vista agrupada por cliente/mes
+export type ClienteVisitaViewModel = {
+  key: string;
+  serviceId: number;
+  serviceName: string;
+  fechaRaw: string;
+  titulo: string;
+  fechaLabel: string;
+  tecnicosLabel: string;
+  previewImages: string[];
+  extraCount: number;
+  secciones: Array<{ servicio: string; imagenes: string[] }>;
+  evidenceImages: string[];
+  devices?: Array<{ codigo: string; ubicacion: string }>;
+}
+
+export type ClienteMesGroup = {
+  key: string;
+  cliente: string;
+  monthKey: string;
+  monthLabel: string;
+  visitas: ClienteVisitaViewModel[];
 }
 
 const INSECTOS_VOLADORES = [
@@ -371,13 +800,20 @@ function isRastrerosFormato(formato: FormatoOperacionalViewModel): boolean {
   });
 }
 
-function escapeHtml(value: string): string {
-  return value
+function escapeHtml(value: string | null | undefined): string {
+  return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+function getApiBaseWithoutVersion(): string {
+  const baseUrl = String(API_CONFIG?.baseURL ?? '').trim();
+  if (!baseUrl) return '';
+
+  return baseUrl.replace(/\/api(?:\/v\d+)?\/?$/i, '');
 }
 
 function formatFecha(value?: string): string {
@@ -387,6 +823,36 @@ function formatFecha(value?: string): string {
     return value;
   }
   return parsed.toLocaleDateString('es-PE');
+}
+
+function getMonthKeyFromFecha(value?: string): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 'unknown';
+
+  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    return `${isoDate[1]}-${isoDate[2]}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'unknown';
+  }
+
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(monthKey: string): string {
+  if (monthKey === 'unknown') return 'Mes desconocido';
+
+  const [year, month] = monthKey.split('-').map((part) => Number(part));
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return 'Mes desconocido';
+
+  return new Intl.DateTimeFormat('es-PE', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
 
 function formatFechaDocumento(value?: string): string {
@@ -422,24 +888,25 @@ function formatHoraDocumento(value?: string): string {
 }
 
 function resolvePhotoUrl(raw: string): string {
-  const value = (raw || '').trim();
+  const value = String(raw ?? '').trim();
   if (!value) return '';
   if (value.startsWith('http://') || value.startsWith('https://')) {
     return value;
   }
 
-  const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
+  const base = getApiBaseWithoutVersion();
   const normalized = value.startsWith('/') ? value.substring(1) : value;
 
   if (normalized.startsWith('media/')) {
-    return `${base}/${normalized}`;
+    return base ? `${base}/${normalized}` : `/${normalized}`;
   }
 
   if (normalized.startsWith('public/')) {
-    return `${base}/media/${normalized.substring('public/'.length)}`;
+    const mediaPath = normalized.substring('public/'.length);
+    return base ? `${base}/media/${mediaPath}` : `/media/${mediaPath}`;
   }
 
-  return `${base}/media/${normalized}`;
+  return base ? `${base}/media/${normalized}` : `/media/${normalized}`;
 }
 
 function parseEvidenceEntries(value: unknown): ServiceEvidenceEntry[] {
@@ -487,6 +954,61 @@ function parseEvidenceEntries(value: unknown): ServiceEvidenceEntry[] {
   }
 
   return mapped;
+}
+
+function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalViewModel {
+  const secciones = Array.isArray(data?.secciones)
+    ? data.secciones.map((section: any) => ({
+        tipo: String(section?.tipo ?? '').trim(),
+        titulo: String(section?.titulo ?? '').trim(),
+        cantidad: Number(section?.cantidad ?? 0) || 0,
+        items: Array.isArray(section?.items)
+          ? section.items.map((item: any) => ({
+              codigoCaja: String(item?.codigo_caja ?? item?.codigoCaja ?? item?.codigo ?? '').trim(),
+              ubicacion: String(item?.ubicacion ?? '').trim(),
+              estadoDispositivoVerdadera: String(item?.estado_dispositivo_verdadera ?? item?.estado_dispositivo ?? '').trim(),
+              estadoDispositivoAuditiva: String(item?.estado_dispositivo_auditiva ?? item?.estado_dispositivo ?? '').trim(),
+              hallazgoVerdadera: String(item?.hallazgo_verdadera ?? item?.hallazgo ?? '-').trim(),
+              hallazgoAuditiva: String(item?.hallazgo_auditiva ?? item?.hallazgo ?? '-').trim(),
+              senalesPresenciaVerdadera: String(item?.senales_presencia_verdadera ?? item?.senales_presencia ?? '-').trim(),
+              senalesPresenciaAuditiva: String(item?.senales_presencia_auditiva ?? item?.senales_presencia ?? '-').trim(),
+              conteoInsectos: item?.conteo_insectos && typeof item.conteo_insectos === 'object'
+                ? Object.fromEntries(
+                    Object.entries(item.conteo_insectos).map(([key, value]) => [
+                      key,
+                      {
+                        verdadera: Number((value as any)?.verdadera ?? 0) || 0,
+                        auditiva: Number((value as any)?.auditiva ?? 0) || 0,
+                      },
+                    ]),
+                  )
+                : null,
+              estadoLamina: String(item?.estado_lamina ?? '').trim() || null,
+              estadio: String(item?.estadio ?? '').trim() || null,
+              conteoEstadio: item?.conteo_estadio && typeof item.conteo_estadio === 'object'
+                ? item.conteo_estadio
+                : null,
+              conteoEstadioVerdadera: Number(item?.conteo_estadio_verdadera ?? 0) || 0,
+              conteoEstadioFalsa: Number(item?.conteo_estadio_falsa ?? 0) || 0,
+              numeroLote: String(item?.numero_lote ?? '').trim(),
+            }))
+          : [],
+      }))
+    : [];
+
+  return {
+    codigoDocumento: String(data?.codigo_documento ?? 'FO-OP-002').trim(),
+    version: String(data?.version ?? '01').trim(),
+    cliente: String(data?.cliente ?? '').trim(),
+    direccion: String(data?.direccion ?? '').trim(),
+    fecha: String(data?.fecha ?? '').trim(),
+    horaLlegada: String(data?.hora_llegada ?? '').trim(),
+    horaInicio: String(data?.hora_inicio ?? '').trim(),
+    horaFinal: String(data?.hora_final ?? '').trim(),
+    observaciones: String(data?.observaciones ?? '').trim(),
+    formatos_fichas: (data as any)?.formatos_fichas || [],
+    secciones: secciones,
+  };
 }
 
 function getTecnicosList(item: Programacion): string[] {
@@ -686,9 +1208,169 @@ export function renderServicioImagenesModal(card: ServicioRealizadoCardViewModel
   `;
 }
 
+// Agrupar servicios por cliente y mes (YYYY-MM)
+export function mapServiciosPorClienteMes(items: Programacion[]): ClienteMesGroup[] {
+  const groups = new Map<string, ClienteMesGroup>();
+
+  for (const baseItem of items) {
+    const item = baseItem as ProgramacionConEvidencias;
+    const cliente = (item.orden_servicio?.cliente?.nombre_empresa || 'Cliente sin nombre').trim();
+    const fechaRaw = (item.fecha_ejecucion_real || item.fecha_programada || '')?.trim();
+    const fecha = fechaRaw || '';
+    const monthKey = getMonthKeyFromFecha(fecha);
+
+    const groupKey = `${cliente}::${monthKey}`;
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        key: groupKey,
+        cliente,
+        monthKey,
+        monthLabel: formatMonthLabel(monthKey),
+        visitas: [],
+      });
+    }
+
+    // construir visita (similar a mapServiciosRealizadosCards)
+    const servicio = (item.servicio?.nombre || `Servicio #${item.id_servicio}`).trim();
+    const titulo = `${servicio} - ${cliente}`;
+    const fechaLabel = formatFecha(fechaRaw || '');
+    const tecnicos = getTecnicosList(item).join(', ') || 'Sin técnico asignado';
+
+    const evidencias = parseEvidenceEntries(item.fotos_evidencia);
+    const images: string[] = [];
+    for (const ev of evidencias) {
+      const url = resolvePhotoUrl(ev.path);
+      if (url) images.push(url);
+    }
+    const uniqueImages = Array.from(new Set(images));
+
+    const visita: ClienteVisitaViewModel = {
+      key: `${item.id}_${item.id_grupo_programacion ?? ''}`,
+      serviceId: item.id,
+      serviceName: servicio,
+      fechaRaw: fechaRaw || '',
+      titulo,
+      fechaLabel,
+      tecnicosLabel: tecnicos,
+      previewImages: uniqueImages.slice(0, 4),
+      extraCount: Math.max(0, uniqueImages.length - 4),
+      secciones: [], // secciones las cargaremos a demanda usando handlers existentes
+      evidenceImages: uniqueImages,
+    };
+
+    groups.get(groupKey)!.visitas.push(visita);
+  }
+
+  // ordenar groups por month desc
+  const arr = Array.from(groups.values()).sort((a, b) => {
+    if (a.monthKey === b.monthKey) return a.cliente.localeCompare(b.cliente);
+    if (a.monthKey === 'unknown') return 1;
+    if (b.monthKey === 'unknown') return -1;
+    return b.monthKey.localeCompare(a.monthKey);
+  });
+
+  // ordenar visitas por fecha asc (de antigua a nueva)
+  for (const g of arr) {
+    g.visitas.sort((x: ClienteVisitaViewModel, y: ClienteVisitaViewModel) => (x.fechaLabel || '').localeCompare(y.fechaLabel || ''));
+  }
+
+  return arr;
+}
+
+export function renderServiciosPorClienteMes(groups: ClienteMesGroup[]): string {
+  if (!groups || groups.length === 0) return '<p style="color:#64748b; margin:0;">No hay servicios realizados para mostrar.</p>';
+
+  return groups.map((group, gi) => {
+    const circles = group.visitas.map((v: ClienteVisitaViewModel, idx: number) => `
+      <button class="visit-circle" data-group-idx="${gi}" data-visit-idx="${idx}" type="button" title="${escapeHtml(v.titulo)}">
+        <span class="visit-circle-label">Visita ${idx + 1}</span>
+        <span class="visit-circle-date">${escapeHtml(v.fechaLabel || 'Sin fecha')}</span>
+      </button>
+    `).join('');
+
+    return `
+      <div class="cliente-mes-group">
+        <div class="group-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;">
+          <div>
+            <h4 style="margin:0;font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(group.cliente)}</h4>
+            <div style="color:#64748b;font-size:13px;">${escapeHtml(group.monthLabel)} • N° de Visitas</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="visit-circles-wrapper">
+              <button class="btn-secondary group-toggle-btn" type="button" data-group-idx="${gi}" title="Mostrar visitas">▶</button>
+            </div>
+          </div>
+        </div>
+        <div class="group-body" style="display:none;">
+          <div class="visit-circles">${circles}</div>
+          <div class="group-visit-details"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function fallbackText(value: string | null | undefined, emptyLabel = 'No registrado'): string {
   const normalized = String(value ?? '').trim();
   return normalized.length > 0 ? normalized : emptyLabel;
+}
+
+// Render detalle completo para una visita (imágenes, botones ficha/formato)
+export function renderVisitaDetail(v: ClienteVisitaViewModel): string {
+  const previewCount = v.previewImages.length;
+  return `
+    <div class="report-card report-card-detail" data-card-key="${escapeHtml(v.key)}">
+      <div class="report-header report-header-visit">
+        <div>
+          <div class="report-visit-title">${escapeHtml(v.titulo)}</div>
+          <div class="report-visit-subtitle">${escapeHtml(v.tecnicosLabel)}</div>
+        </div>
+        <span class="report-date">${escapeHtml(v.fechaLabel)}</span>
+      </div>
+      <div class="report-content-split report-content-split-visit">
+        <div class="report-evidence-column">
+          ${previewCount > 0 ? `
+            <div class="visit-gallery">
+              ${v.previewImages.map((u: string) => `
+                <a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer" class="visit-gallery-item">
+                  <img src="${escapeHtml(u)}" alt="Evidencia de visita" loading="lazy" />
+                </a>
+              `).join('')}
+              ${v.extraCount > 0 ? `<div class="visit-gallery-more">+${v.extraCount}</div>` : ''}
+            </div>
+          ` : '<div class="visit-empty">Sin imágenes registradas</div>'}
+        </div>
+        <div class="report-docs-column report-docs-column-visit">
+          <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(v.key)}" aria-label="Abrir ficha operacional">
+            <span class="report-doc-icon">F</span>
+            <span class="report-doc-text">Ficha</span>
+          </button>
+          <button class="report-doc report-doc-placeholder js-open-formato-operacional" type="button" data-card-key="${escapeHtml(v.key)}" aria-label="Abrir formato operacional">
+            <span class="report-doc-icon">O</span>
+            <span class="report-doc-text">Formato</span>
+          </button>
+        </div>
+      </div>
+      ${v.devices && v.devices.length > 0 ? `
+        <div style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0;color:#1e293b;font-size:14px;">Dispositivos (Código • Ubicación)</h4>
+          <div style="overflow:auto;border:1px solid #e6eef7;border-radius:8px;padding:8px;background:#fbfdff;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="text-align:left;color:#475569;font-weight:700;font-size:12px;"><th style="padding:6px;border-bottom:1px solid #e6eef7;">Código</th><th style="padding:6px;border-bottom:1px solid #e6eef7;">Ubicación</th></tr>
+              </thead>
+              <tbody>
+                ${v.devices.map(d => `<tr><td style="padding:8px;border-bottom:1px dashed #eef3fb;">${escapeHtml(d.codigo)}</td><td style="padding:8px;border-bottom:1px dashed #eef3fb;">${escapeHtml(d.ubicacion)}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ` : ''}
+      <div class="report-actions-row" style="margin-top:12px;">
+        <button class="btn-secondary fullwidth js-open-imagenes-completas" data-card-key="${escapeHtml(v.key)}">Ver imágenes completas</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderValueList(items: string[]): string {
@@ -774,7 +1456,7 @@ function renderInsumosTable(insumos: any[]): string {
 }
 
 export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel, ficha: FichaOperacionalViewModel): string {
-  const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
+  const base = getApiBaseWithoutVersion();
   const logoUrl = `${base}/images/logo-orden.png`;
   const tecnicoNombre = fallbackText(
     pickFirstNonEmptyValue(ficha.firmas, ['tecnico_nombre', 'nombre_tecnico', 'tecnico', 'responsable_tecnico']),
@@ -940,16 +1622,20 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
 }
 
 export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewModel, formato: FormatoOperacionalViewModel): string {
-  const base = API_CONFIG.baseURL.replace(/\/api(?:\/v\d+)?\/?$/i, '');
+  const base = getApiBaseWithoutVersion();
   const logoUrl = `${base}/images/logo-orden.png`;
   
   // Detectar tipos de formatos presentes en las secciones
   const formatosPresentesSet = new Set<string>();
   for (const seccion of formato.secciones) {
     const normalizado = normalizeText(seccion.titulo + ' ' + (seccion.tipo || ''));
-    if (normalizado.includes('trampa') && normalizado.includes('luz')) {
+    const tipo = seccion.tipo || '';
+    
+    if (tipo === 'trampa_luz' || (normalizado.includes('trampa') && normalizado.includes('luz'))) {
       formatosPresentesSet.add('voladores');
-    } else if (normalizado.includes('lamina') && (normalizado.includes('rastreros') || normalizado.includes('pegante'))) {
+    } else if (tipo.startsWith('roedores') || normalizado.includes('cebadera')) {
+      formatosPresentesSet.add('roedores');
+    } else if (tipo === 'rastreros_lamina' || normalizado.includes('lamina')) {
       formatosPresentesSet.add('rastreros');
     } else {
       formatosPresentesSet.add('roedores');
@@ -959,234 +1645,64 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
   const hayMultiplesFormatos = formatosPresentesSet.size > 1;
   const formatosPresentes = Array.from(formatosPresentesSet);
   const formatoLabel = (key: string) => key === 'roedores' ? 'Control de Roedores' : key === 'rastreros' ? 'Control de Insectos Rastreros' : 'Control de Insectos Voladores';
-  const esRastreros = isRastrerosFormato(formato) && formatosPresentesSet.size === 1;
-  const esVoladores = isVoladoresFormato(formato) && formatosPresentesSet.size === 1;
-  const tituloPrincipal = hayMultiplesFormatos
-    ? 'MÚLTIPLES FORMATOS'
-    : esVoladores
-      ? 'CONTROL DE INSECTOS VOLADORES'
-      : esRastreros
-        ? 'CONTROL DE INSECTOS RASTREROS'
-        : 'CONTROL DE CAJAS CEBADERAS';
+
+  const soloRoedores = formatosPresentesSet.size === 1 && formatosPresentesSet.has('roedores');
+  const soloRastreros = formatosPresentesSet.size === 1 && formatosPresentesSet.has('rastreros');
+  const soloVoladores = formatosPresentesSet.size === 1 && formatosPresentesSet.has('voladores');
+
+  const nombreFormatoAsignado = (formato.formatos_fichas && formato.formatos_fichas.length > 0) 
+    ? formato.formatos_fichas[0] 
+    : 'FORMATO OPERACIONAL';
+
+  const tituloPrincipal = nombreFormatoAsignado.toUpperCase();
 
   const renderHoja = (variant: 'verdadera' | 'falsa') => {
     const sheetTitle = variant === 'verdadera' ? 'HOJA VERDADERA' : 'HOJA FALSA';
 
-    // Cuando hay múltiples formatos, renderizar cada formato completo (detallado)
-    if (hayMultiplesFormatos) {
-      const filtroPorFormato = (key: string) => {
-        return formato.secciones.filter((s) => {
-          const normalizado = normalizeText(s.titulo + ' ' + (s.tipo || ''));
-          if (key === 'rastreros') return normalizado.includes('lamina') && (normalizado.includes('rastreros') || normalizado.includes('pegante'));
-          if (key === 'voladores') return normalizado.includes('trampa') && normalizado.includes('luz');
-          return !(normalizado.includes('lamina') && (normalizado.includes('rastreros') || normalizado.includes('pegante')) || (normalizado.includes('trampa') && normalizado.includes('luz')));
-        });
-      };
-
-      const renderFullRoedores = (secciones: any[]) => {
-        return secciones.map((seccion) => `
-          <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
-            <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
-            <div style="overflow-x:auto;">
-              <table style="width:100%;border-collapse:collapse;margin:0;">
-                <thead>
-                  <tr style="background:#eff6ff;">
-                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Código</th>
-                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Ubicación</th>
-                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Estado</th>
-                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Hallazgo</th>
-                    <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Señales</th>
-                  </tr>
-                </thead>
-                <tbody>
-                ${seccion.items.map((item: any) => {
-                  const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
-                  const hallazgo = variant === 'verdadera' ? item.hallazgoVerdadera : item.hallazgoAuditiva;
-                  const senales = variant === 'verdadera' ? item.senalesPresenciaVerdadera : item.senalesPresenciaAuditiva;
-                  return `
-                    <tr>
-                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
-                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
-                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(estado))}</td>
-                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(hallazgo, '-'))}</td>
-                      <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(senales, '-'))}</td>
-                    </tr>
-                  `;
-                }).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        `).join('');
-      };
-
-      const renderFullRastreros = (secciones: any[]) => {
-        const estadioOrden = ['ADULTO', 'NINFA', 'OOTECA'];
-        const parseConteoEstadio = (value: any) => {
-          if (!value) return {};
-          if (Array.isArray(value)) {
-            return value.reduce((acc: any, entry: any) => {
-              const nombre = String(entry?.estadio ?? entry?.label ?? entry?.nombre ?? '').trim().toUpperCase();
-              if (!nombre) return acc;
-              const verdadera = Number(entry?.verdadera ?? entry?.conteo_verdadera ?? entry?.conteo ?? entry?.cantidad ?? entry?.valor ?? 0) || 0;
-              const falsa = Number(entry?.falsa ?? entry?.auditiva ?? entry?.conteo_falsa ?? 0) || 0;
-              acc[nombre] = { verdadera, falsa };
-              return acc;
-            }, {});
-          }
-          if (typeof value === 'object') {
-            return Object.entries(value as Record<string, any>).reduce((acc: any, [key, raw]) => {
-              const nombre = String(key ?? '').trim().toUpperCase();
-              if (!nombre) return acc;
-              if (typeof raw === 'number') {
-                acc[nombre] = { verdadera: Number(raw) || 0, falsa: 0 };
-                return acc;
-              }
-              acc[nombre] = {
-                verdadera: Number(raw?.verdadera ?? raw?.conteo_verdadera ?? raw?.conteo ?? raw?.cantidad ?? raw?.valor ?? raw?.count ?? 0) || 0,
-                falsa: Number(raw?.falsa ?? raw?.auditiva ?? raw?.conteo_falsa ?? 0) || 0,
-              };
-              return acc;
-            }, {});
-          }
-          return {};
-        };
-
-        return secciones.map((seccion) => `
-          <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
-            <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
-            <div style="overflow-x:auto;min-width:720px;">
-              <table style="width:100%;border-collapse:collapse;margin:0;min-width:720px;">
-                <thead>
-                  <tr style="background:#f8fafc;">
-                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Ubicación</th>
-                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">N°</th>
-                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estadio</th>
-                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">Conteo</th>
-                    <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estado de lámina</th>
-                  </tr>
-                </thead>
-                <tbody>
-                ${seccion.items.map((item: any) => {
-                  const estadoLamina = fallbackText(item.estadoLamina, '-');
-                  const estadio = fallbackText(item.estadio, '-');
-                  const conteoVerdadera = Number(item.conteoEstadioVerdadera ?? 0);
-                  const conteoFalsa = Number(item.conteoEstadioFalsa ?? 0);
-                  const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
-                  const tieneDetallePorEstadio = Object.keys(conteoPorEstadio).length > 0;
-
-                  if (tieneDetallePorEstadio) {
-                    const filasEstadio = estadioOrden
-                      .filter((est) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, est))
-                      .map((est, idxEst) => `
-                        <tr>
-                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(fallbackText(item.ubicacion))}</td>` : ''}
-                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;vertical-align:middle;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>` : ''}
-                          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(est)}</td>
-                          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? Number(conteoPorEstadio[est]?.verdadera ?? 0) : Number(conteoPorEstadio[est]?.falsa ?? 0)}</td>
-                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(estadoLamina)}</td>` : ''}
-                        </tr>
-                      `).join('');
-
-                    return filasEstadio;
-                  }
-
-                  return `
-                    <tr style="background:#fff;">
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadio)}</td>
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? conteoVerdadera : conteoFalsa}</td>
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>
-                    </tr>
-                  `;
-                }).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        `).join('');
-      };
-
-      const renderFullVoladores = (secciones: any[]) => {
-        const INSECTOS_VOLADORES_LOCAL = INSECTOS_VOLADORES || [];
-        return secciones.map((seccion) => `
-          <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
-            <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
-            <div style="display:grid;gap:12px;padding:10px;">
-              ${seccion.items.map((item: any) => {
-                const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
-                const conteos = item.conteoInsectos ?? {};
-                const getConteo = (key: string) => {
-                  const raw = conteos[key];
-                  if (!raw) return 0;
-                  return variant === 'verdadera' ? Number(raw.verdadera ?? 0) : Number(raw.auditiva ?? 0);
-                };
-
-                return `
-                  <div style="border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#fafafa;">
-                    <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#eff6ff;font-size:12px;font-weight:600;color:#1e40af;display:flex;justify-content:space-between;align-items:center;">
-                      <span>Código: ${escapeHtml(fallbackText(item.codigoCaja))}</span>
-                      <span>Ubicación: ${escapeHtml(fallbackText(item.ubicacion))}</span>
-                      <span>Estado de Dispositivo: ${escapeHtml(fallbackText(estado))}</span>
-                    </div>
-                    <div style="overflow-x:auto;">
-                      <table style="width:100%;border-collapse:collapse;margin:0;">
-                        <thead>
-                          <tr style="background:#f0f9ff;">
-                            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Insecto</th>
-                            <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:center;">Conteo</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          ${INSECTOS_VOLADORES_LOCAL.map((insecto) => `
-                            <tr>
-                              <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(insecto.label)}</td>
-                              <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:600;">${getConteo(insecto.key)}</td>
-                            </tr>
-                          `).join('')}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        `).join('');
-      };
-
-      // construir HTML combinando cada formato presente con su render completo
-      const bloques: string[] = [];
-      formatosPresentes.forEach((k) => {
-        const secciones = filtroPorFormato(k);
-        if (!secciones || secciones.length === 0) return;
-        if (k === 'rastreros') {
-          bloques.push(`<div class="formato-bloque" data-formato="${k}"><div style="font-size:13px;font-weight:700;color:#9333ea;margin-bottom:8px;padding:6px;background:#f3e8ff;border-radius:4px;">${formatoLabel(k)}</div>${renderFullRastreros(secciones)}</div>`);
-        } else if (k === 'voladores') {
-          bloques.push(`<div class="formato-bloque" data-formato="${k}"><div style="font-size:13px;font-weight:700;color:#0284c7;margin-bottom:8px;padding:6px;background:#e0f2fe;border-radius:4px;">${formatoLabel(k)}</div>${renderFullVoladores(secciones)}</div>`);
-        } else {
-          bloques.push(`<div class="formato-bloque" data-formato="${k}"><div style="font-size:13px;font-weight:700;color:#1e40af;margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:4px;">${formatoLabel(k)}</div>${renderFullRoedores(secciones)}</div>`);
-        }
-      });
-
-      return `
-      <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
-        <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;letter-spacing:0.2px;">
-          ${sheetTitle}
+    // Helpers de renderizado (Movidos fuera para uso general)
+    const renderFullRoedores = (seccion: any) => `
+      <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;margin-bottom:16px;">
+        <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#eff6ff;text-align:center;font-size:13px;font-weight:700;color:#1e40af;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;margin:0;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Código</th>
+                <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Ubicación</th>
+                <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Estado</th>
+                <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Hallazgo</th>
+                <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Señales</th>
+              </tr>
+            </thead>
+            <tbody>
+            ${seccion.items.map((item: any) => {
+              const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
+              const hallazgo = variant === 'verdadera' ? item.hallazgoVerdadera : item.hallazgoAuditiva;
+              const senales = variant === 'verdadera' ? item.senalesPresenciaVerdadera : item.senalesPresenciaAuditiva;
+              return `
+                <tr>
+                  <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                  <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
+                  <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;">${escapeHtml(fallbackText(estado))}</td>
+                  <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;">${escapeHtml(fallbackText(hallazgo, '-'))}</td>
+                  <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;">${escapeHtml(fallbackText(senales, '-'))}</td>
+                </tr>
+              `;
+            }).join('')}
+            </tbody>
+          </table>
         </div>
-        <div style="padding:10px;display:grid;gap:16px;">${bloques.join('')}</div>
       </div>
-      `;
-    }
+    `;
 
-    if (esRastreros) {
+    const renderFullRastreros = (seccion: any) => {
       const estadioOrden = ['ADULTO', 'NINFA', 'OOTECA'];
-
-      const parseConteoEstadio = (value: unknown): Record<string, { verdadera: number; falsa: number }> => {
+      const parseConteoEstadio = (value: any) => {
         if (!value) return {};
+        
+        // Caso 1: Es un Array (formato nuevo)
         if (Array.isArray(value)) {
-          return value.reduce((acc: Record<string, { verdadera: number; falsa: number }>, entry: any) => {
+          return value.reduce((acc: any, entry: any) => {
             const nombre = String(entry?.estadio ?? entry?.label ?? entry?.nombre ?? '').trim().toUpperCase();
             if (!nombre) return acc;
             const verdadera = Number(entry?.verdadera ?? entry?.conteo_verdadera ?? entry?.conteo ?? entry?.cantidad ?? entry?.valor ?? 0) || 0;
@@ -1195,8 +1711,10 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
             return acc;
           }, {});
         }
+
+        // Caso 2: Es un Objeto (formato antiguo/clásico)
         if (typeof value === 'object') {
-          return Object.entries(value as Record<string, any>).reduce((acc: Record<string, { verdadera: number; falsa: number }>, [key, raw]) => {
+          return Object.entries(value as Record<string, any>).reduce((acc: any, [key, raw]) => {
             const nombre = String(key ?? '').trim().toUpperCase();
             if (!nombre) return acc;
             if (typeof raw === 'number') {
@@ -1214,181 +1732,116 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
       };
 
       return `
-      <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
-        <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;letter-spacing:0.2px;">
-          ${sheetTitle}
+        <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;margin-bottom:16px;">
+          <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f3e8ff;text-align:center;font-size:13px;font-weight:700;color:#9333ea;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;margin:0;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Ubicación</th>
+                  <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">N°</th>
+                  <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estadio</th>
+                  <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">Conteo</th>
+                  <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estado de lámina</th>
+                </tr>
+              </thead>
+              <tbody>
+              ${seccion.items.map((item: any) => {
+                const estadoLamina = fallbackText(item.estadoLamina, '-');
+                const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
+                const keys = Object.keys(conteoPorEstadio).filter(k => estadioOrden.includes(k));
+
+                if (keys.length > 0) {
+                  return keys.map((est, idx) => `
+                    <tr>
+                      ${idx === 0 ? `<td rowspan="${keys.length}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>` : ''}
+                      ${idx === 0 ? `<td rowspan="${keys.length}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>` : ''}
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(est)}</td>
+                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? Number(conteoPorEstadio[est]?.verdadera ?? 0) : Number(conteoPorEstadio[est]?.falsa ?? 0)}</td>
+                      ${idx === 0 ? `<td rowspan="${keys.length}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>` : ''}
+                    </tr>
+                  `).join('');
+                }
+
+                return `
+                  <tr>
+                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
+                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.estadio, '-'))}</td>
+                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? Number(item.conteoEstadioVerdadera ?? 0) : Number(item.conteoEstadioFalsa ?? 0)}</td>
+                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>
+                  </tr>
+                `;
+              }).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div style="padding:10px;display:grid;gap:12px;">
-          ${formato.secciones.map((seccion) => `
-            <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
-              <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">
-                ${escapeHtml(seccion.titulo)} (${seccion.cantidad})
+      `;
+    };
+
+    const renderFullVoladores = (seccion: any) => `
+      <div style="border:1px solid #cbd5e1;border-radius:12px;overflow:hidden;background:#f8fafc;margin-bottom:20px;box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+        <div style="padding:10px 15px;border-bottom:1px solid #cbd5e1;background:#e0f2fe;text-align:center;font-size:14px;font-weight:800;color:#0369a1;text-transform:uppercase;letter-spacing:0.5px;">
+          ${escapeHtml(seccion.titulo)} (${seccion.cantidad})
+        </div>
+        <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fill, minmax(450px, 1fr));gap:16px;">
+          ${seccion.items.map((item: any) => {
+            const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
+            const conteos = Object.entries(item.conteoInsectos || {});
+            const totalCapturas = conteos.reduce((acc, [_, raw]: [string, any]) => acc + (variant === 'verdadera' ? (Number(raw.verdadera) || 0) : (Number(raw.auditiva) || 0)), 0);
+
+            return `
+              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                <div style="padding:10px 12px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="background:#0369a1;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</span>
+                    <span style="color:#475569;font-size:12px;font-weight:600;">${escapeHtml(fallbackText(item.ubicacion))}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="font-size:11px;color:#64748b;">Estado: <strong style="color:${estado === 'A' ? '#10b981' : '#f59e0b'}">${escapeHtml(fallbackText(estado))}</strong></div>
+                    <div style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">Total: ${totalCapturas}</div>
+                  </div>
+                </div>
+                <div style="padding:12px;display:grid;grid-template-columns:1fr;gap:8px;">
+                  ${conteos.length > 0 ? conteos.map(([key, raw]: [string, any]) => {
+                    const valor = variant === 'verdadera' ? (Number(raw.verdadera) || 0) : (Number(raw.auditiva) || 0);
+                    return `
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px dashed #f1f5f9;">
+                        <span style="font-size:11.5px;color:#334155;text-transform:capitalize;">${escapeHtml(key.replace(/_/g, ' '))}</span>
+                        <span style="font-size:12px;font-weight:700;color:${valor > 0 ? '#0369a1' : '#94a3b8'}">${valor}</span>
+                      </div>
+                    `;
+                  }).join('') : '<div style="text-align:center; color:#94a3b8; font-size:12px; padding:10px;">Sin capturas registradas</div>'}
+                </div>
               </div>
-              <div style="overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;margin:0;min-width:720px;">
-                  <thead>
-                    <tr style="background:#f8fafc;">
-                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Ubicación</th>
-                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">N°</th>
-                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estadio</th>
-                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:center;">Conteo</th>
-                      <th style="padding:8px 6px;border:1px solid #cbd5e1;font-size:11px;text-transform:uppercase;text-align:left;">Estado de lámina</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                ${seccion.items.map((item, index) => {
-                  const estadoLamina = fallbackText(item.estadoLamina, '-');
-                  const estadio = fallbackText(item.estadio, '-');
-                  const conteoVerdadera = Number(item.conteoEstadioVerdadera ?? 0);
-                  const conteoFalsa = Number(item.conteoEstadioFalsa ?? 0);
-                  const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
-                  const tieneDetallePorEstadio = Object.keys(conteoPorEstadio).length > 0;
-
-                  if (tieneDetallePorEstadio) {
-                    const filasEstadio = estadioOrden
-                      .filter((est) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, est))
-                      .map((est, idxEst) => `
-                        <tr>
-                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(fallbackText(item.ubicacion))}</td>` : ''}
-                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;vertical-align:middle;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>` : ''}
-                          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(est)}</td>
-                          <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? Number(conteoPorEstadio[est]?.verdadera ?? 0) : Number(conteoPorEstadio[est]?.falsa ?? 0)}</td>
-                          ${idxEst === 0 ? `<td rowspan="${Math.max(1, estadioOrden.filter((e) => Object.prototype.hasOwnProperty.call(conteoPorEstadio, e)).length)}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;vertical-align:middle;">${escapeHtml(estadoLamina)}</td>` : ''}
-                        </tr>
-                      `).join('');
-
-                    return filasEstadio;
-                  }
-
-                  return `
-                    <tr style="background:#fff;">
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadio)}</td>
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? conteoVerdadera : conteoFalsa}</td>
-                      <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>
-                    </tr>
-                  `;
-                }).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `;
-    }
 
-    if (esVoladores) {
-      return `
-      <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
-        <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;letter-spacing:0.2px;">
-          ${sheetTitle}
-        </div>
-        <div style="padding:10px;display:grid;gap:12px;">
-          ${formato.secciones.map((seccion) => `
-            <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
-              <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">
-                ${escapeHtml(seccion.titulo)} (${seccion.cantidad})
-              </div>
-              <div style="display:grid;gap:12px;padding:10px;">
-                ${seccion.items.map((item) => {
-                  const estado = variant === 'verdadera'
-                    ? item.estadoDispositivoVerdadera
-                    : item.estadoDispositivoAuditiva;
-                  const conteos = item.conteoInsectos ?? {};
-                  const getConteo = (key: string) => {
-                    const raw = conteos[key];
-                    if (!raw) return 0;
-                    return variant === 'verdadera' ? Number(raw.verdadera ?? 0) : Number(raw.auditiva ?? 0);
-                  };
+    // Lógica Principal de Renderizado: Sección por Sección
+    const bloquesHtml = formato.secciones.map((seccion: any) => {
+      const tipo = seccion.tipo || '';
+      const normalizado = normalizeText(seccion.titulo + ' ' + tipo);
 
-                  return `
-                    <div style="border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#fafafa;">
-                      <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#eff6ff;font-size:12px;font-weight:600;color:#1e40af;display:flex;justify-content:space-between;align-items:center;">
-                        <span>Código: ${escapeHtml(fallbackText(item.codigoCaja))}</span>
-                        <span>Ubicación: ${escapeHtml(fallbackText(item.ubicacion))}</span>
-                        <span>Estado de Dispositivo: ${escapeHtml(fallbackText(estado))}</span>
-                      </div>
-                      <div style="overflow-x:auto;">
-                        <table style="width:100%;border-collapse:collapse;margin:0;">
-                          <thead>
-                            <tr style="background:#f0f9ff;">
-                              <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Insecto</th>
-                              <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:center;">Conteo</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            ${INSECTOS_VOLADORES.map((insecto) => `
-                              <tr>
-                                <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(insecto.label)}</td>
-                                <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:600;">${getConteo(insecto.key)}</td>
-                              </tr>
-                            `).join('')}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-    }
+      if (tipo === 'trampa_luz' || (normalizado.includes('trampa') && normalizado.includes('luz'))) {
+        return renderFullVoladores(seccion);
+      } else if (tipo.startsWith('roedores') || normalizado.includes('cebadera')) {
+        return renderFullRoedores(seccion);
+      } else {
+        return renderFullRastreros(seccion);
+      }
+    }).join('');
 
     return `
       <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
         <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;background:#e2e8f0;text-align:center;font-size:13px;font-weight:800;color:#0f172a;letter-spacing:0.2px;">
           ${sheetTitle}
         </div>
-        <div style="padding:10px;display:grid;gap:12px;">
-          ${formato.secciones.map((seccion) => `
-            <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;">
-              <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;text-align:center;font-size:13px;font-weight:700;color:#334155;">
-                ${escapeHtml(seccion.titulo)} (${seccion.cantidad})
-              </div>
-              <div style="overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;margin:0;">
-                  <thead>
-                    <tr style="background:#eff6ff;">
-                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Código</th>
-                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Ubicación</th>
-                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Estado</th>
-                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Hallazgo</th>
-                      <th style="padding:6px;border:1px solid #cbd5e1;font-size:11px;text-align:left;">Señales</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${seccion.items.map((item) => {
-                      const estado = variant === 'verdadera'
-                        ? item.estadoDispositivoVerdadera
-                        : item.estadoDispositivoAuditiva;
-                      const hallazgo = variant === 'verdadera'
-                        ? item.hallazgoVerdadera
-                        : item.hallazgoAuditiva;
-                      const senales = variant === 'verdadera'
-                        ? item.senalesPresenciaVerdadera
-                        : item.senalesPresenciaAuditiva;
-
-                      return `
-                        <tr>
-                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
-                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
-                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(estado))}</td>
-                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(hallazgo, '-'))}</td>
-                          <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(senales, '-'))}</td>
-                        </tr>
-                      `;
-                    }).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          `).join('')}
+        <div style="padding:16px;background:#f1f5f9;">
+          ${bloquesHtml || '<div style="text-align:center;padding:20px;color:#64748b;">No hay dispositivos registrados en esta hoja</div>'}
         </div>
       </div>
     `;
@@ -1406,9 +1859,6 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
               <select class="js-tipo-pdf-selector" style="padding:6px 10px;font-size:13px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;outline:none;">
                 <option value="verdadera">Hoja Verdadera</option>
                 <option value="falsa">Hoja Falsa/Auditiva</option>
-              </select>
-              <select class="js-formato-view-selector" style="padding:6px 10px;font-size:13px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;outline:none;">
-                ${hayMultiplesFormatos ? `<option value="all" selected>Ver todos los formatos</option>` + formatosPresentes.map((k) => `<option value="${k}">${formatoLabel(k)}</option>`).join('') : `<option value="all" selected>Todos los formatos</option>`}
               </select>
             <button class="btn-primary js-download-formato-pdf" type="button" data-service-id="${card.serviceId}" data-group-id="${card.groupId || ''}" style="display:flex;align-items:center;gap:6px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -1541,6 +1991,13 @@ export function renderCrearInformeTab(): string {
           <div style="border-bottom:1px solid #cbd5e1;padding-bottom:12px;">
             <h2 style="margin:0 0 4px 0;font-size:16px;font-weight:700;color:#0f172a;">Crear Informe Técnico Mensual</h2>
             <p style="margin:0;color:#475569;font-size:13px;">Selecciona un servicio para pre-llenar los datos</p>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+              <label style="font-size:13px;color:#334155;font-weight:600;margin-right:6px;">Hoja:</label>
+              <select name="hoja_tipo" class="js-hoja-tipo-select" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+                <option value="verdadera">Hoja Verdadera</option>
+                <option value="falsa">Hoja Falsa</option>
+              </select>
+            </div>
           </div>
 
           <!-- Fila 1: Código y Mes -->
@@ -1568,6 +2025,10 @@ export function renderCrearInformeTab(): string {
           </div>
 
           <!-- Fila 3: Actividad -->
+          <div id="operaciones-dispositivos-preview" style="margin-top:6px;">
+            <!-- Aquí se mostrarán los códigos y ubicaciones extraídos del Formato Operacional -->
+          </div>
+
           <div>
             <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Actividad</label>
             <input name="actividad" type="text" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background:#f8fafc;color:#334155;" />
@@ -1611,6 +2072,10 @@ export function renderCrearInformeTab(): string {
             <button type="submit" class="btn-primary" style="padding:8px 16px;">Crear Informe</button>
           </div>
         </form>
+
+        <div id="operaciones-informe-detalle" style="display:grid;gap:14px;">
+          <div style="color:#64748b;font-size:13px;">Selecciona un cliente para ver el detalle por visitas.</div>
+        </div>
       </div>
     </div>
   `;

@@ -733,7 +733,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
       else if (tipo === 'capacitacion') {
         endpoint = 'ordenes-capacitacion-auditoria';
       }
-      const resp = await fetch(`http://backend.qsci-system.com/api/v1/${endpoint}`, { headers: getAuthHeaders() });
+      const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/${endpoint}`, { headers: getAuthHeaders() });
       const result = await resp.json();
 
       selectOrden.disabled = false;
@@ -757,7 +757,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
 
     try {
       // LLAMAMOS A LA RUTA QUE PROBASTE EN THUNDER CLIENT
-      const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/buscar-orden/${tipo}/${id}`, { headers: getAuthHeaders() });
+      const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/buscar-orden/${tipo}/${id}`, { headers: getAuthHeaders() });
       const result = await resp.json();
 
       if (result.success) {
@@ -859,7 +859,7 @@ form?.addEventListener('submit', async (e) => {
     console.log("Enviando al controlador:", payload);
 
     try {
-        const resp = await fetch('http://backend.qsci-system.com/api/v1/proyecciones', {
+        const resp = await fetch('http://pruebabackend.qsci-system.com/api/v1/proyecciones', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 
@@ -894,7 +894,7 @@ document.addEventListener('click', async (e) => {
         if (!id) return;
 
         try {
-            const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+            const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/${id}`, {
                 headers: getAuthHeaders()
             });
             const result = await resp.json();
@@ -960,7 +960,7 @@ document.addEventListener('click', async (e) => {
         if (!id) return;
 
         try {
-            const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+            const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/${id}`, {
                 headers: getAuthHeaders()
             });
             const result = await resp.json();
@@ -1040,7 +1040,7 @@ document.addEventListener('click', async (e) => {
 
         if (confirm('¿Está seguro de que desea eliminar esta proyección?')) {
             try {
-                const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/${id}`, {
                     method: 'DELETE',
                     headers: getAuthHeaders()
                 });
@@ -1114,7 +1114,7 @@ formEditar?.addEventListener('submit', async (e) => {
     };
 
     try {
-        const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${idProyeccion}`, {
+        const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/${idProyeccion}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',

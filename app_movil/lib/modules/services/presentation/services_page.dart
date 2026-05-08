@@ -3,11 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/network/connectivity_service.dart';
+import '../../../core/sync/sync_worker.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/domain/user_session.dart';
+import '../data/local/ficha_local_dao.dart';
+import '../data/local/sync_queue_dao.dart';
 import '../data/services_repository.dart';
 import '../domain/service_task.dart';
 import 'service_detail_page.dart';
+import 'widgets/offline_banner.dart';
 
 class ServicesPage extends StatefulWidget {
   const ServicesPage({
@@ -39,6 +44,9 @@ class _ServicesPageState extends State<ServicesPage> with WidgetsBindingObserver
   final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');
   Timer? _autoRefreshTimer;
 
+  final ConnectivityService _connectivityService = ConnectivityService();
+  late SyncWorker _syncWorker;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +62,17 @@ class _ServicesPageState extends State<ServicesPage> with WidgetsBindingObserver
       if (!mounted) return;
       _reload();
     });
+
+    // Iniciar SyncWorker para foreground sync al recuperar conexión
+    _syncWorker = SyncWorker(
+      queueDao: const SyncQueueDao(),
+      fichaDao: const FichaLocalDao(),
+      apiClient: widget.servicesRepository.apiClient,
+      connectivity: _connectivityService,
+    );
+    widget.authRepository.getToken().then((token) {
+      _syncWorker.startListening(token);
+    });
   }
 
   @override
@@ -67,6 +86,8 @@ class _ServicesPageState extends State<ServicesPage> with WidgetsBindingObserver
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _autoRefreshTimer?.cancel();
+    _syncWorker.dispose();
+    _connectivityService.dispose();
     super.dispose();
   }
 
@@ -273,6 +294,9 @@ class _ServicesPageState extends State<ServicesPage> with WidgetsBindingObserver
         color: _surface,
         child: Column(
           children: [
+            // ─── Banner offline ───────────────────────────────────────────────
+            OfflineBanner(connectivityService: _connectivityService),
+            // ─────────────────────────────────────────────────────────────────
             Container(
               margin: const EdgeInsets.fromLTRB(14, 14, 14, 10),
               padding: const EdgeInsets.all(14),

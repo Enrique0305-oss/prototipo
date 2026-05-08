@@ -106,10 +106,31 @@ class FormatoOperacionalController extends Controller
 
     public function show($id)
     {
+        // 1. Obtener la programación solicitada para saber qué servicio es
+        $progRequest = ProgramacionServicio::find($id);
+        if (!$progRequest) {
+            return response()->json(['success' => false, 'message' => 'Programación no encontrada'], 404);
+        }
+
+        // Determinar qué tipo de servicio estamos buscando (ej: "CONTROL DE ROEDORES")
+        $tipoServicioConsultado = null;
+        if (!empty($progRequest->formatos_fichas) && is_array($progRequest->formatos_fichas)) {
+            $tipoServicioConsultado = $progRequest->formatos_fichas[0];
+        }
+
+        // 2. Intentar buscar el formato por ID directo
         $formato = FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
             ->where('id_programacion_servicio', $id)
             ->latest()
             ->first();
+
+        // 3. Si no se encuentra, buscar por el grupo
+        if (!$formato && $progRequest->id_grupo_programacion) {
+            $formato = FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
+                ->where('id_grupo_programacion', $progRequest->id_grupo_programacion)
+                ->latest()
+                ->first();
+        }
 
         if (!$formato) {
             return response()->json([
@@ -118,6 +139,36 @@ class FormatoOperacionalController extends Controller
             ], 404);
         }
 
+        // --- FILTRADO POR FORMATO ASIGNADO ---
+        // Recuperamos el nombre del formato oficial asignado a este servicio específico
+        $formatoOficial = !empty($progRequest->formatos_fichas) && is_array($progRequest->formatos_fichas) 
+            ? $progRequest->formatos_fichas[0] 
+            : null;
+
+        if ($formatoOficial) {
+            $contextoUpper = strtoupper($this->normalizeText($formatoOficial));
+            
+            $esRoedores = str_contains($contextoUpper, 'ROEDORES') || str_contains($contextoUpper, 'CEBADERA') || str_contains($contextoUpper, 'DESRATIZACION');
+            $esVoladores = str_contains($contextoUpper, 'VOLADORES') || str_contains($contextoUpper, 'LUZ') || str_contains($contextoUpper, 'MOSCA');
+            $esRastreros = str_contains($contextoUpper, 'RASTREROS') || str_contains($contextoUpper, 'CUCARACHA') || str_contains($contextoUpper, 'HORMIGA') || str_contains($contextoUpper, 'DESINSECTACION');
+
+            $detallesFiltrados = $formato->detalles->filter(function($detalle) use ($esRoedores, $esVoladores, $esRastreros) {
+                $sectionKey = $this->displaySectionKey($detalle);
+                
+                if ($esRoedores) return str_contains($sectionKey, 'roedores') || $sectionKey === 'jaula';
+                if ($esRastreros) return str_contains($sectionKey, 'rastreros');
+                if ($esVoladores) return $sectionKey === 'trampa_luz';
+                
+                return true; 
+            });
+
+            $formato->setRelation('detalles', $detallesFiltrados->values());
+            
+            // Sobrescribir los formatos para que solo muestre el relevante en el título
+            if ($formato->programacionServicio) {
+                $formato->programacionServicio->formatos_fichas = [$formatoOficial];
+            }
+        }
         return response()->json([
             'success' => true,
             'data' => $this->toResponseData($formato),
@@ -203,24 +254,66 @@ class FormatoOperacionalController extends Controller
 
     public function generarPDFByProgramacion($id)
     {
+        $prog = ProgramacionServicio::find($id);
+        
         $formato = FormatoOperacional::with([
             'detalles',
             'programacionServicio.tecnico',
             'programacionServicio.tecnicos',
         ])->where('id_programacion_servicio', $id)->latest()->first();
 
+        if (!$formato && $prog && $prog->id_grupo_programacion) {
+            $formato = FormatoOperacional::with([
+                'detalles',
+                'programacionServicio.tecnico',
+                'programacionServicio.tecnicos',
+            ])->where('id_grupo_programacion', $prog->id_grupo_programacion)->latest()->first();
+        }
+
         if (!$formato) {
             return response()->json([
                 'success' => false,
-                'message' => 'Formato operacional no encontrado para esta programación',
+                'message' => 'Formato operacional no encontrado',
             ], 404);
         }
 
+        // --- FILTRADO POR FORMATO ASIGNADO PARA EL PDF ---
+        $formatoOficial = !empty($prog->formatos_fichas) && is_array($prog->formatos_fichas) 
+            ? $prog->formatos_fichas[0] 
+            : null;
+
+        if ($formatoOficial) {
+            $contextoUpper = strtoupper($this->normalizeText($formatoOficial));
+            
+            $esRoedores = str_contains($contextoUpper, 'ROEDORES') || str_contains($contextoUpper, 'CEBADERA') || str_contains($contextoUpper, 'DESRATIZACION');
+            $esVoladores = str_contains($contextoUpper, 'VOLADORES') || str_contains($contextoUpper, 'LUZ') || str_contains($contextoUpper, 'MOSCA');
+            $esRastreros = str_contains($contextoUpper, 'RASTREROS') || str_contains($contextoUpper, 'CUCARACHA') || str_contains($contextoUpper, 'HORMIGA') || str_contains($contextoUpper, 'DESINSECTACION');
+
+            $detallesFiltrados = $formato->detalles->filter(function($detalle) use ($esRoedores, $esVoladores, $esRastreros) {
+                $sectionKey = $this->displaySectionKey($detalle);
+                if ($esRoedores) return str_contains($sectionKey, 'roedores') || $sectionKey === 'jaula';
+                if ($esRastreros) return str_contains($sectionKey, 'rastreros');
+                if ($esVoladores) return $sectionKey === 'trampa_luz';
+                return true; 
+            });
+
+            $formato->setRelation('detalles', $detallesFiltrados->values());
+            
+            // Sobrescribir para el PDF
+            if ($formato->programacionServicio) {
+                $formato->programacionServicio->formatos_fichas = [$formatoOficial];
+            }
+        }
+
+        $secciones = $this->groupDetalles($formato);
+        // ----------------------------------------
+
         $view = $this->resolveViewName($formato);
         $tipoPdf = request('tipo_pdf', 'verdadera');
+        
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
             'formato' => $formato,
-            'secciones' => $this->groupDetalles($formato),
+            'secciones' => $secciones,
             'tipo_pdf' => $tipoPdf,
         ]);
         $pdf->setPaper('a4', 'portrait');
@@ -417,6 +510,8 @@ class FormatoOperacionalController extends Controller
         foreach ($sections as $section) {
             // Normalizar el tipo con sectionKey para garantizar que sea 'cebo' o 'lamina'
             $tipo = $this->sectionKey($section['tipo'] ?? null);
+            // El campo 'formato' viene de la app móvil (ej: 'CONTROL DE ROEDORES')
+            $formatoContexto = trim((string) ($section['formato'] ?? ''));
             
             foreach ($section['items'] as $item) {
                 $estadoVerdadera = $this->nullableText($item['estado_dispositivo_verdadera'] ?? $item['estado_verdadera'] ?? $item['estado_dispositivo'] ?? null);
@@ -426,12 +521,14 @@ class FormatoOperacionalController extends Controller
                 $senalesVerdadera = $this->dashText($item['senales_presencia_verdadera'] ?? $item['senales_presencia'] ?? null);
                 $senalesAuditiva = $this->dashText($item['senales_presencia_auditiva'] ?? null);
 
+                $codigoResuelto = $this->resolveCodigoCaja($item, $sequence, $tipo);
+
                 $details[] = [
                     'tipo_seccion' => $tipo,
-                    'codigo_caja' => $this->resolveCodigoCaja($item, $sequence),
+                    'codigo_caja' => $codigoResuelto,
                     'orden_caja' => $sequence,
                     'id_producto' => $this->toNullableInt($item['id_producto'] ?? null),
-                    'descripcion' => $this->resolveDescripcion($item, $tipo),
+                    'descripcion' => $this->resolveDescripcion($item, $tipo, $formatoContexto, $codigoResuelto),
                     'ubicacion' => trim((string) ($item['ubicacion'] ?? '')),
                     'estado_dispositivo' => $estadoVerdadera,
                     'estado_dispositivo_verdadera' => $estadoVerdadera,
@@ -542,51 +639,61 @@ class FormatoOperacionalController extends Controller
 
     private function displaySectionKey(FormatoOperacionalDetalle $detalle): string
     {
-        $codigo = strtoupper(trim((string) $detalle->codigo_caja));
         $descripcion = $this->normalizeText((string) $detalle->descripcion);
         $tipo = $this->sectionKey($detalle->tipo_seccion);
 
-        if (str_contains($descripcion, 'caja cebaderas con cebo') || str_contains($descripcion, 'cajas cebaderas con cebo')) {
+        // ═══ PRIORIDAD 1: tipo_seccion (valor más confiable de la BD) ═══
+
+        // Cebos → siempre Roedores
+        if ($tipo === 'cebo') {
             return 'roedores_cebo';
         }
 
-        if (str_contains($descripcion, 'caja cebaderas con lamina pegante') || str_contains($descripcion, 'cajas cebaderas con lamina pegante')) {
-            return 'roedores_lamina';
-        }
-
-        if (str_contains($descripcion, 'laminas pegantes') || str_contains($descripcion, 'lamina pegante')) {
-            return 'rastreros_lamina';
-        }
-
-        if (str_starts_with($codigo, 'J-')) {
-            return 'jaula';
-        }
-
-        if (str_starts_with($codigo, 'TL-') || str_starts_with($codigo, 'IV-')) {
-            return 'trampa_luz';
-        }
-
-        if (str_starts_with($codigo, 'L-') || str_starts_with($codigo, 'IR-')) {
-            return 'rastreros_lamina';
-        }
-
+        // Trampas de luz → siempre Voladores (sin importar el código C-)
         if ($tipo === 'trampa_luz') {
             return 'trampa_luz';
         }
 
-        if ($tipo === 'lamina') {
-            return 'rastreros_lamina';
-        }
-
+        // Jaulas → siempre Roedores
         if ($tipo === 'jaula') {
             return 'jaula';
         }
 
-        return str_starts_with($codigo, 'C-') ? 'roedores_cebo' : $tipo;
+        // ═══ PRIORIDAD 2: Láminas (tipo_seccion='lamina') ═══
+        // Tanto Roedores como Rastreros usan tipo_seccion='lamina'.
+        // La DESCRIPCIÓN guardada en la BD es lo que las diferencia:
+        //   - Roedores: "Cajas cebaderas con lámina pegante" (contiene "cebadera")
+        //   - Rastreros: "Láminas pegantes" (NO contiene "cebadera")
+        if ($tipo === 'lamina') {
+            // Si es una lámina de roedores (en caja cebadera), la agrupamos aparte
+            // pero bajo una clave que el PDF reconocerá como "Formato Roedores"
+            if (str_contains($descripcion, 'cebadera') || str_starts_with(strtoupper((string)$detalle->codigo_caja), 'C-')) {
+                return 'roedores_lamina';
+            }
+            return 'rastreros_lamina';
+        }
+
+        // ═══ FALLBACK: items sin tipo reconocido (tipo_seccion='otros') ═══
+        if (str_contains($descripcion, 'cebadera')) {
+            return str_contains($descripcion, 'lamina') || str_contains($descripcion, 'pegante')
+                ? 'roedores_lamina'
+                : 'roedores_cebo';
+        }
+        if (str_contains($descripcion, 'jaula')) {
+            return 'jaula';
+        }
+
+        return 'otros';
     }
 
     private function displayCodigoCaja(FormatoOperacionalDetalle $detalle, string $sectionKey, int $sequence): string
     {
+        // 1. Si ya tiene un código guardado (ej: C-08), lo respetamos
+        if (!empty($detalle->codigo_caja)) {
+            return strtoupper(trim((string) $detalle->codigo_caja));
+        }
+
+        // 2. Si no tiene código, generamos uno según la sección
         $prefix = match ($sectionKey) {
             'roedores_cebo' => 'C',
             'roedores_lamina' => 'C',
@@ -596,10 +703,6 @@ class FormatoOperacionalController extends Controller
             default => 'C',
         };
 
-        if ($prefix === 'J' && str_starts_with(strtoupper((string) $detalle->codigo_caja), 'J-')) {
-            return strtoupper((string) $detalle->codigo_caja);
-        }
-
         return sprintf('%s-%02d', $prefix, $sequence);
     }
 
@@ -607,7 +710,7 @@ class FormatoOperacionalController extends Controller
     {
         return match ($key) {
             'roedores_cebo' => 'Cebo Final Box',
-            'roedores_lamina' => 'Cajas cebaderas con lámina pegante',
+            'roedores_lamina' => 'Láminas pegantes',
             'rastreros_lamina' => 'Láminas pegantes',
             'trampa_luz' => 'Trampa de luz',
             'jaula' => 'Jaulas',
@@ -620,24 +723,57 @@ class FormatoOperacionalController extends Controller
         return $this->sectionKey($descripcion);
     }
 
-    private function resolveCodigoCaja(array $item, int $sequence): string
+    private function resolveCodigoCaja(array $item, int $sequence, string $tipoSeccion = ''): string
     {
         $code = trim((string) ($item['codigo_caja'] ?? $item['codigo'] ?? ''));
         
-        // Para códigos de cajas (C-), siempre usar la secuencia global para garantizar consecutividad
-        // Solo mantener códigos especiales como J- (jaulas)
-        if ($code !== '' && str_starts_with($code, 'J-')) {
-            return $code;
+        // Si la app móvil envió un código válido con prefijo reconocido, preservarlo
+        if ($code !== '' && preg_match('/^(C|L|TL|J|T)-\d+$/i', $code)) {
+            return strtoupper($code);
         }
 
-        return sprintf('C-%02d', $sequence);
+        // Generar código basado en el tipo de sección si no hay código válido
+        $prefix = match ($tipoSeccion) {
+            'trampa_luz' => 'TL',
+            'lamina' => 'L',
+            'jaula' => 'J',
+            default => 'C', // cebo y otros
+        };
+
+        return sprintf('%s-%02d', $prefix, $sequence);
     }
 
-    private function resolveDescripcion(array $item, string $tipo): string
+    private function resolveDescripcion(array $item, string $tipo, string $formatoContexto = '', string $codigo = ''): string
     {
         $descripcion = trim((string) ($item['descripcion'] ?? ''));
-        if ($descripcion !== '') {
+        if ($descripcion !== '' && strtolower($descripcion) !== 'otros') {
             return $descripcion;
+        }
+
+        // Generar la descripción correcta basada en tipo_seccion + formato operacional
+        $formatoUpper = strtoupper($formatoContexto);
+        $codigoUpper = strtoupper($codigo);
+
+        if ($tipo === 'cebo') {
+            return 'Cajas cebaderas con cebo';
+        }
+
+        if ($tipo === 'trampa_luz') {
+            return 'Trampa de luz';
+        }
+
+        if ($tipo === 'jaula') {
+            return 'Jaulas';
+        }
+
+        if ($tipo === 'lamina') {
+            // REGLA DE ORO: Si el código empieza con C-, es una caja cebadera (ROEDORES)
+            // Incluso si el contexto dice RASTREROS, el prefijo C- manda.
+            if (str_starts_with($codigoUpper, 'C-') || str_contains($formatoUpper, 'ROEDORES')) {
+                return 'Cajas cebaderas con lámina pegante';
+            }
+            // Si el formato es RASTREROS o no tiene prefijo C, son láminas de monitoreo
+            return 'Láminas pegantes';
         }
 
         return $this->sectionTitle($tipo);

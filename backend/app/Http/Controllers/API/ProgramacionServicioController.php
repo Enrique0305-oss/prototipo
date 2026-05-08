@@ -20,6 +20,7 @@ use App\Services\CalculoFormatoOperacionalService;
 use App\Models\ProgramacionVisita;
 use App\Models\ProgramacionFabricacion;
 use App\Models\ProgramacionOtro;
+use App\Models\FormatoOperacional;
 use App\Services\ScheduleConflictService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -142,11 +143,54 @@ class ProgramacionServicioController extends Controller
             'area',
             'grupoProgramacion.cliente',
             'grupoProgramacion.planta',
+            'formatoOperacional',
         ])->findOrFail($id);
+
+        $data = $prog->toArray();
+
+        // ─── INFORMACIÓN DE FORMATO OPERACIONAL PARA SERVICIOS RECURRENTES ─
+        $data['formato_operacional_propio'] = $prog->formatoOperacional ? $prog->formatoOperacional->id : null;
+
+        // Buscar si existe un formato previo de otro servicio de la misma orden+planta
+        $formatoPrevio = null;
+        if ($prog->id_orden_servicio && $prog->id_cliente_planta) {
+            $formatoPrevio = FormatoOperacional::query()
+                ->where('id_programacion_servicio', '!=', $prog->id)
+                ->whereHas('programacionServicio', function ($q) use ($prog) {
+                    $q->where('id_orden_servicio', $prog->id_orden_servicio)
+                      ->where('id_cliente_planta', $prog->id_cliente_planta);
+                })
+                ->whereIn('estado', ['completada', 'borrador'])
+                ->orderByRaw("FIELD(estado, 'completada', 'borrador')")
+                ->orderBy('fecha', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+        }
+
+        $data['formato_operacional_previo'] = $formatoPrevio ? [
+            'id' => $formatoPrevio->id,
+            'estado' => $formatoPrevio->estado,
+            'id_programacion_servicio' => $formatoPrevio->id_programacion_servicio,
+            'fecha' => $formatoPrevio->fecha,
+        ] : null;
+
+        // Determinar si este servicio es el primero programado (fecha más temprana)
+        $esPrimero = true;
+        if ($prog->id_orden_servicio && $prog->id_cliente_planta) {
+            $existeAnterior = ProgramacionServicio::query()
+                ->where('id', '!=', $prog->id)
+                ->where('id_orden_servicio', $prog->id_orden_servicio)
+                ->where('id_cliente_planta', $prog->id_cliente_planta)
+                ->where('fecha_programada', '<', $prog->fecha_programada)
+                ->exists();
+            $esPrimero = !$existeAnterior;
+        }
+        $data['es_primer_servicio_formato'] = $esPrimero;
+        // ───────────────────────────────────────────────────────────────────
 
         return response()->json([
             'success' => true,
-            'data' => $prog,
+            'data' => $data,
         ]);
     }
 

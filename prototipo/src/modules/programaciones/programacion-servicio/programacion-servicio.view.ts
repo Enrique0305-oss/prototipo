@@ -2580,9 +2580,23 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
           <div class="prog-detalle-row">
             <div class="prog-detalle-label">Formato Operacional:</div>
             <div class="prog-detalle-value">
-              <button type="button" class="prog-btn-primary" id="btnCrearFormatoOperacionalAutomatico" style="padding:8px 14px;font-size:13px;">
-                Crear Formato Operacional
-              </button>
+              ${p.formato_operacional_propio ? `
+                <span style="display:inline-block;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;margin-right:8px;">Formato creado</span>
+                <button type="button" class="prog-btn-primary" id="btnVerFormatoOperacionalPropio" style="padding:6px 12px;font-size:12px;">
+                  Ver Formato
+                </button>
+              ` : p.formato_operacional_previo ? `
+                <span style="display:inline-block;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;margin-right:8px;">Heredado de visita anterior</span>
+                <button type="button" class="prog-btn-primary" id="btnVerFormatoOperacionalPrevio" style="padding:6px 12px;font-size:12px;background:#0284c7;">
+                  Ver Formato Referencia
+                </button>
+              ` : p.es_primer_servicio_formato ? `
+                <button type="button" class="prog-btn-primary" id="btnCrearFormatoOperacionalAutomatico" style="padding:8px 14px;font-size:13px;">
+                  Crear Formato Operacional
+                </button>
+              ` : `
+                <span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;">Pendiente — se creará desde el primer servicio</span>
+              `}
             </div>
           </div>` : ''}
           <div class="prog-detalle-row"><div class="prog-detalle-label">Dirección:</div><div class="prog-detalle-value">${p.planta ? (p.planta.direccion || '—') : (p.direccion_completa || '—')}</div></div>
@@ -2624,6 +2638,15 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
     body.querySelector('#btnEditarProg')?.addEventListener('click', () => abrirEdicion(p));
     body.querySelector('#btnCompletarProg')?.addEventListener('click', () => completarProg(p.id));
     body.querySelector('#btnCrearFormatoOperacionalAutomatico')?.addEventListener('click', () => abrirModalFormatoOperacionalAutomatico(p.id));
+    body.querySelector('#btnVerFormatoOperacionalPropio')?.addEventListener('click', () => abrirModalFormatoOperacionalAutomatico(p.id));
+    body.querySelector('#btnVerFormatoOperacionalPrevio')?.addEventListener('click', () => {
+      const prevId = p.formato_operacional_previo?.id_programacion_servicio;
+      if (prevId) {
+        abrirModalFormatoOperacionalAutomatico(prevId);
+      } else {
+        mostrarToast('warning', 'Sin formato previo', 'No se encontró el formato de referencia.');
+      }
+    });
   } catch (err) {
     body.innerHTML = '<p style="padding:24px;color:red;">Error al cargar detalle</p>';
     console.error(err);

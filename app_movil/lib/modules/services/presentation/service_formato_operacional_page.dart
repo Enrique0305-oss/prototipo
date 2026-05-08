@@ -203,15 +203,59 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
               : (section['descripcion']?.toString().trim().isNotEmpty ?? false)
                   ? section['descripcion'].toString().trim()
                   : 'Sección';
+          
+          // ─── LÓGICA DE MEMORIA TÉCNICA ───────────────────────────────────
+          final historial = (section['historial_dispositivos'] as List<dynamic>? ?? const <dynamic>[])
+              .whereType<Map<String, dynamic>>()
+              .toList(growable: false);
+          // ─────────────────────────────────────────────────────────────────
+
           final isJaula = _isJaulaSection(tipoSeccion, titulo);
           final isTrampaLuz = _isTrampaLuzSection(tipoSeccion, titulo);
           final isRastreros = _isRastrerosSection(tipoSeccion, titulo);
+          
           final units = List.generate(
             cantidad < 0 ? 0 : cantidad,
-            (_) => _DispositivoUnitDraft(enableInsectCounts: isTrampaLuz),
+            (index) {
+              final draft = _DispositivoUnitDraft(enableInsectCounts: isTrampaLuz);
+              
+              // Si hay historial para esta posición (index), rellenar ubicación
+              if (index < historial.length) {
+                final h = historial[index];
+                final prevUbicacion = (h['ubicacion'] ?? '').toString();
+                if (prevUbicacion.isNotEmpty) {
+                  draft.ubicacionController.text = prevUbicacion;
+                }
+              }
+              
+              return draft;
+            },
           );
 
-          return _DispositivoGroup(
+          // ─── MANEJO DE UBICACIONES PARA RASTREROS (HISTORIAL) ─────────────
+          final rastreroLocations = <_RastreroLocationDraft>[];
+          if (isRastreros && cantidad > 0) {
+            final seenLocations = <String>{};
+
+            // Intentar reconstruir ubicaciones desde el historial
+            for (final h in historial) {
+              final loc = (h['ubicacion'] ?? '').toString().trim();
+              if (loc.isNotEmpty && !seenLocations.contains(loc)) {
+                seenLocations.add(loc);
+                final draft = _RastreroLocationDraft(initialQuantity: 1);
+                draft.ubicacionController.text = loc;
+                rastreroLocations.add(draft);
+              }
+            }
+
+            // Si no hay historial o estaba vacío, poner una ubicación vacía por defecto
+            if (rastreroLocations.isEmpty) {
+              rastreroLocations.add(_RastreroLocationDraft(initialQuantity: 1));
+            }
+          }
+          // ───────────────────────────────────────────────────────────────────
+
+          final group = _DispositivoGroup(
             idProducto: (section['id_producto'] as num?)?.toInt() ?? 0,
             descripcion: isJaula ? 'Jaulas' : titulo,
             tipoSeccion: tipoSeccion,
@@ -221,9 +265,11 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
             isVoladores: isTrampaLuz,
             isRastreros: isRastreros,
             formatoOperacional: _detectarFormatoOperacional(tipoSeccion, titulo),
-            rastreroLocations: isRastreros && cantidad > 0 ? [_RastreroLocationDraft(initialQuantity: 1)] : const <_RastreroLocationDraft>[],
+            rastreroLocations: rastreroLocations,
             units: units,
           );
+
+          return group;
         })
         .where((group) => group.cantidadTotal > 0)
         .toList(growable: false);
@@ -246,19 +292,27 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
 
   String _detectarFormatoOperacional(String tipoSeccion, String titulo) {
     final normalized = _normalizeText('$tipoSeccion $titulo');
+    
+    // 1. Voladores
     if (normalized.contains('trampa') && normalized.contains('luz')) {
       return 'CONTROL DE INSECTOS VOLADORES';
     }
-    if (_isCajaCebaderaSection(tipoSeccion, titulo)) {
+    
+    // 2. Roedores (Prioridad sobre láminas genéricas)
+    if (_isCajaCebaderaSection(tipoSeccion, titulo) || normalized.contains('cebadera') || normalized.contains('cebo')) {
       return 'CONTROL DE ROEDORES';
     }
+    
+    // 3. Rastreros
     if (normalized.contains('lamina') && (normalized.contains('rastreros') || normalized.contains('pegante') || normalized.contains('adhesiva'))) {
       return 'CONTROL DE INSECTOS RASTREROS';
     }
+
     return 'CONTROL DE ROEDORES';
   }
 
   bool _isRastrerosSection(String tipoSeccion, String titulo) {
+    if (tipoSeccion == 'rastreros_lamina') return true;
     final normalized = _normalizeText('$tipoSeccion $titulo');
     if (_isCajaCebaderaSection(tipoSeccion, titulo)) {
       return false;
@@ -269,7 +323,7 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
   String _codePrefixForType(String tipoSeccion, String titulo, bool isRastreros) {
     final normalized = _normalizeText('$tipoSeccion $titulo');
     if (normalized.contains('trampa') && normalized.contains('luz')) {
-      return 'T';
+      return 'TL';
     }
     if (isRastreros) {
       return 'L';
@@ -489,16 +543,22 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
 
   Map<String, dynamic> _buildPayload(List<_DispositivoGroup> groups) {
     final sections = <Map<String, dynamic>>[];
+    // Mantener un contador global por prefijo para asegurar consecutividad (ej: C-01...C-10)
+    final prefixSequences = <String, int>{};
 
     for (final group in groups) {
       final tipo = _sectionTypeFor(group.tipoSeccion);
       final items = <Map<String, dynamic>>[];
+      final prefix = group.codePrefix;
+      
+      // Inicializar el contador para este prefijo si no existe
+      prefixSequences[prefix] ??= 1;
 
       if (group.isRastreros) {
-        var laminaSequence = 1;
         for (final location in group.rastreroLocations) {
           final quantity = location.cantidad;
           for (final lamina in location.laminas.take(quantity)) {
+            final currentSeq = prefixSequences[prefix]!;
             final conteoEstadio = <String, Map<String, int>>{
               for (final estadio in _estadioLabels)
                 estadio: <String, int>{
@@ -508,7 +568,7 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
             };
 
             items.add({
-              'codigo_caja': '${group.codePrefix}-${laminaSequence.toString().padLeft(2, '0')}',
+              'codigo_caja': '$prefix-${currentSeq.toString().padLeft(2, '0')}',
               'ubicacion': location.ubicacionController.text.trim(),
               'estado_dispositivo': _valueOrDash(lamina.verdaderaEstadoLamina),
               'estado_dispositivo_verdadera': _valueOrDash(lamina.verdaderaEstadoLamina),
@@ -519,14 +579,14 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
               'estadio': 'MULTIPLE',
               'conteo_estadio': conteoEstadio,
             });
-            laminaSequence++;
+            prefixSequences[prefix] = currentSeq + 1;
           }
         }
       } else {
-        var unitSequence = 1;
         for (final unit in group.units) {
+          final currentSeq = prefixSequences[prefix]!;
           final item = <String, dynamic>{
-            'codigo_caja': '${group.codePrefix}-${unitSequence.toString().padLeft(2, '0')}',
+            'codigo_caja': '$prefix-${currentSeq.toString().padLeft(2, '0')}',
             'ubicacion': unit.ubicacionController.text.trim(),
             'estado_dispositivo': unit.estadoDispositivoVerdadera,
             'estado_dispositivo_verdadera': unit.estadoDispositivoVerdadera,
@@ -544,7 +604,7 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
           }
 
           items.add(item);
-          unitSequence++;
+          prefixSequences[prefix] = currentSeq + 1;
         }
       }
 

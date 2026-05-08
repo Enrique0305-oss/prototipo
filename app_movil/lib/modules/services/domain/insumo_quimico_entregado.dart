@@ -27,4 +27,15 @@ class InsumoQuimicoEntregado {
       cantidadEntregada: (json['cantidad_entregada'] as num?)?.toInt() ?? 0,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id_producto': idProducto,
+      'producto': producto,
+      'lote': lote,
+      'fecha_vencimiento': fechaVencimiento,
+      'unidad': unidad,
+      'cantidad_entregada': cantidadEntregada,
+    };
+  }
 }

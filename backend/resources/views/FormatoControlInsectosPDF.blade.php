@@ -117,7 +117,7 @@
     @php
         $allItems = [];
         foreach ($secciones as $seccion) {
-            if (in_array($seccion['tipo'], ['lamina', 'trampa_luz', 'trampa-luz'])) {
+            if (in_array($seccion['tipo'], ['lamina', 'rastreros_lamina', 'roedores_lamina', 'trampa_luz', 'trampa-luz'])) {
                 $allItems = array_merge($allItems, $seccion['items']);
             }
         }
@@ -207,9 +207,13 @@
                                             
                                             if ($matchKey && isset($dataArray[$matchKey])) {
                                                 $entry = $dataArray[$matchKey];
-                                                $conteo = ($fieldCount === 'auditiva') 
-                                                    ? ($entry['auditiva'] ?? $entry['falsa'] ?? $entry['audit'] ?? 0) 
-                                                    : ($entry['verdadera'] ?? $entry['real'] ?? 0);
+                                                if (is_numeric($entry)) {
+                                                    $conteo = ($fieldCount === 'auditiva') ? 0 : (int)$entry;
+                                                } else {
+                                                    $conteo = ($fieldCount === 'auditiva') 
+                                                        ? ($entry['auditiva'] ?? $entry['falsa'] ?? $entry['audit'] ?? 0) 
+                                                        : ($entry['verdadera'] ?? $entry['real'] ?? 0);
+                                                }
                                             }
                                         @endphp
                                         <tr>
@@ -289,9 +293,13 @@
                                                 
                                                 if ($matchKey && isset($dataArray[$matchKey])) {
                                                     $entry = $dataArray[$matchKey];
-                                                    $conteo = ($fieldCount === 'auditiva') 
-                                                        ? ($entry['auditiva'] ?? $entry['falsa'] ?? $entry['audit'] ?? 0) 
-                                                        : ($entry['verdadera'] ?? $entry['real'] ?? 0);
+                                                    if (is_numeric($entry)) {
+                                                        $conteo = ($fieldCount === 'auditiva') ? 0 : (int)$entry;
+                                                    } else {
+                                                        $conteo = ($fieldCount === 'auditiva') 
+                                                            ? ($entry['auditiva'] ?? $entry['falsa'] ?? $entry['audit'] ?? 0) 
+                                                            : ($entry['verdadera'] ?? $entry['real'] ?? 0);
+                                                    }
                                                 }
                                             @endphp
                                             <tr>
