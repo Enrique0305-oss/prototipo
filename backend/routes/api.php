@@ -307,7 +307,11 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('proyecciones', [ProyeccionesController::class, 'store']);
     Route::get('proyecciones/pendientes', [ProyeccionesController::class, 'obtenerOrdenesPendientes']);
     Route::get('proyecciones/buscar-orden/{tipo}/{id}', [ProyeccionesController::class, 'obtenerDatosOrden']);
-
+    Route::get('proyecciones/{id}', [ProyeccionesController::class, 'show']);
+    Route::put('proyecciones/{id}', [ProyeccionesController::class, 'update']);
+    Route::delete('proyecciones/{id}', [ProyeccionesController::class, 'destroy']);
+    Route::get('empresas', [ProyeccionesController::class, 'obtenerEmpresas']);
+    
     // Para los servicios :v
     Route::get('/servicios/estadisticas/resumen', [ServicioController::class, 'estadisticas']);
     Route::get('/servicios', [ServicioController::class, 'index']);
