@@ -9,6 +9,7 @@ let ordenesData: any[] = [];
 let cotizacionesDisponibles: any[] = [];
 let exponentesData: Exponente[] = [];
 let selectedExponentes: { id: number; nombre: string }[] = [];
+let ordenActualId: number = 0; // Para almacenar el id_cotizacion durante edición
 
 function logApiError(contexto: string, error: unknown) {
   console.error(contexto, getApiErrorDebugInfo(error));
@@ -73,6 +74,7 @@ function limpiarFormulario() {
   (document.getElementById('oa-edit-id') as HTMLInputElement).value = '';
   (document.getElementById('oa-numero-orden') as HTMLInputElement).value = '';
   (document.getElementById('oa-cotizacion-ref') as HTMLSelectElement).value = '';
+  (document.getElementById('oa-cotizacion-ref') as HTMLSelectElement).disabled = false;
   (document.getElementById('oa-cliente-nombre') as HTMLInputElement).value = '';
   (document.getElementById('oa-cliente-id') as HTMLInputElement).value = '';
   (document.getElementById('oa-cliente-ruc') as HTMLInputElement).value = '';
@@ -88,6 +90,7 @@ function limpiarFormulario() {
   (document.getElementById('oa-costo') as HTMLInputElement).value = '0.00';
   (document.getElementById('oa-observaciones') as HTMLTextAreaElement).value = '';
   selectedExponentes = [];
+  ordenActualId = 0; // Resetear al limpiar
   renderTagsExponentes();
   actualizarSelectorExponentes();
   calcularDesglose();
@@ -107,16 +110,35 @@ async function cargarEstadisticas() {
   }
 }
 
-async function cargarCotizaciones() {
+async function cargarCotizaciones(idCotizacionActual?: number) {
   const select = document.getElementById('oa-cotizacion-ref') as HTMLSelectElement | null;
   if (!select) return;
   try {
     const res = await ordenAuditoriaService.getCotizacionesDisponibles();
     const raw = (res as any).data || res;
-    cotizacionesDisponibles = Array.isArray((raw as any).data || raw) ? ((raw as any).data || raw) : [];
-    select.innerHTML = '<option value="">Seleccione una cotización...</option>' + cotizacionesDisponibles.map((c) =>
-      `<option value="${c.id}">${c.numero_cotizacion} - ${c.cliente?.nombre_empresa || c.cliente_nombre || ''} (S/ ${Number(c.total || 0).toFixed(2)})</option>`
-    ).join('');
+    let cotizaciones = Array.isArray((raw as any).data || raw) ? ((raw as any).data || raw) : [];
+    
+    // Si estamos en modo edición y hay una cotización actual, agregarla si no está en la lista
+    if (idCotizacionActual) {
+      const existe = cotizaciones.find((c: any) => c.id === idCotizacionActual);
+      if (!existe) {
+        // Si no existe en las "disponibles", la buscamos individualmente para que aparezca en el combo
+        const resIndividual = await ordenAuditoriaService.getCotizacionById(idCotizacionActual);
+        const cotIndividual = (resIndividual as any).data || resIndividual;
+        if (cotIndividual) cotizaciones.push(cotIndividual);
+      }
+    }
+
+    cotizacionesDisponibles = cotizaciones;
+    
+    // Llenar el select
+    select.innerHTML = '<option value="">Seleccione una cotización...</option>' + 
+      cotizaciones.map((c: any) => `<option value="${c.id}">${c.numero_cotizacion}</option>`).join('');
+
+    // Si enviamos el ID, lo seleccionamos inmediatamente después de llenar el HTML
+    if (idCotizacionActual) {
+      select.value = String(idCotizacionActual);
+    }
   } catch (error) {
     logApiError('Error cargando cotizaciones auditoría:', error);
     select.innerHTML = '<option value="">Error al cargar</option>';
@@ -260,8 +282,12 @@ async function cargarDesdeCotizacion(cotizacionId: number) {
   }
 }
 
-function abrirNueva() {
+async function abrirNueva() {
   limpiarFormulario();
+  // Recargar solo cotizaciones DISPONIBLES (sin parámetro de cotización actual)
+  // Esto asegura que no muestre cotizaciones que ya tienen orden
+  await cargarCotizaciones();
+  
   const userRaw = sessionStorage.getItem('qsci_user');
   if (userRaw) {
     const user = JSON.parse(userRaw);
@@ -282,20 +308,38 @@ function abrirNueva() {
 async function abrirEditar(id: number) {
   try {
     limpiarFormulario();
-    await Promise.all([cargarCotizaciones(), cargarExponentes()]);
     const res = await ordenAuditoriaService.getById(id);
     const raw = (res as any).data || res;
     const orden = (raw as any).data || raw;
+
+    await Promise.all([
+      cargarCotizaciones(orden.id_cotizacion), // <--- Pasar ID aquí
+      cargarExponentes()
+    ]);
     (document.getElementById('oa-modal-title') as HTMLElement).textContent = 'Ver / Editar Orden de Auditoría';
     (document.getElementById('oa-edit-id') as HTMLInputElement).value = String(orden.id);
     (document.getElementById('oa-numero-orden') as HTMLInputElement).value = orden.numero_orden || '';
-    (document.getElementById('oa-cotizacion-ref') as HTMLSelectElement).value = String(orden.id_cotizacion || '');
-    (document.getElementById('oa-cotizacion-ref') as HTMLSelectElement).disabled = true;
+    
+    // Llenar cotización de referencia DESPUÉS de cargarCotizaciones
+    const cotizacionSelect = document.getElementById('oa-cotizacion-ref') as HTMLSelectElement;
+    if (orden.id_cotizacion) {
+      cotizacionSelect.value = String(orden.id_cotizacion); // Ahora sí encontrará el valor
+        cotizacionSelect.disabled = true;
+        ordenActualId = orden.id_cotizacion;
+        await cargarDesdeCotizacion(orden.id_cotizacion);
+    }
+    
     (document.getElementById('oa-cliente-nombre') as HTMLInputElement).value = orden.cliente?.nombre_empresa || '';
     (document.getElementById('oa-cliente-id') as HTMLInputElement).value = String(orden.id_cliente || '');
     (document.getElementById('oa-cliente-ruc') as HTMLInputElement).value = orden.cliente?.ruc || '';
-    (document.getElementById('oa-servicio-nombre') as HTMLInputElement).value = orden.servicio?.nombre || '';
-    (document.getElementById('oa-servicio-id') as HTMLInputElement).value = String(orden.id_servicio || '');
+    
+    // Si aún no hay servicio, intentar desde la relación servicio de la orden
+    const servicioNombre = (document.getElementById('oa-servicio-nombre') as HTMLInputElement).value;
+    if (!servicioNombre && orden.servicio) {
+      (document.getElementById('oa-servicio-nombre') as HTMLInputElement).value = orden.servicio?.nombre || '';
+      (document.getElementById('oa-servicio-id') as HTMLInputElement).value = String(orden.servicio?.id || '');
+    }
+    
     (document.getElementById('oa-fecha-servicio') as HTMLInputElement).value = (orden.fecha_servicio || '').split('T')[0] || '';
     (document.getElementById('oa-fecha-aceptacion') as HTMLInputElement).value = (orden.fecha_aceptacion || '').split('T')[0] || '';
     (document.getElementById('oa-hora-servicio') as HTMLInputElement).value = orden.hora_servicio || '';
@@ -318,8 +362,12 @@ async function abrirEditar(id: number) {
 
 async function guardar() {
   const editId = Number((document.getElementById('oa-edit-id') as HTMLInputElement).value || 0);
+  
+  // En modo edición, usar el id_cotizacion guardado; en modo nuevo, del select
+  let idCotizacion = editId > 0 ? ordenActualId : Number((document.getElementById('oa-cotizacion-ref') as HTMLSelectElement).value || 0);
+  
   const payload = {
-    id_cotizacion: Number((document.getElementById('oa-cotizacion-ref') as HTMLSelectElement).value || 0),
+    id_cotizacion: idCotizacion,
     id_servicio: (document.getElementById('oa-servicio-id') as HTMLInputElement).value ? Number((document.getElementById('oa-servicio-id') as HTMLInputElement).value) : null,
     exponentes: selectedExponentes.map((e) => e.id),
     fecha_servicio: (document.getElementById('oa-fecha-servicio') as HTMLInputElement).value,
@@ -356,7 +404,7 @@ async function guardar() {
 }
 
 function bindEvents() {
-  document.getElementById('oa-btn-nueva')?.addEventListener('click', abrirNueva);
+  document.getElementById('oa-btn-nueva')?.addEventListener('click', () => abrirNueva());
   document.getElementById('oa-modal-close')?.addEventListener('click', () => ((document.getElementById('oa-modal') as HTMLElement).style.display = 'none'));
   document.getElementById('oa-modal-cancel')?.addEventListener('click', () => ((document.getElementById('oa-modal') as HTMLElement).style.display = 'none'));
   document.getElementById('oa-save')?.addEventListener('click', guardar);
@@ -368,7 +416,7 @@ function bindEvents() {
     } catch (error: any) {
       mostrarToast('error', 'Error', error?.data?.message || 'No se pudo cargar la cotización');
     }
-  });
+  }); 
   document.getElementById('oa-exponente-selector')?.addEventListener('change', async (e) => {
     const value = (e.target as HTMLSelectElement).value;
     if (!value) return;

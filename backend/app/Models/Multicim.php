@@ -24,6 +24,6 @@ class Multicim extends Model
 
     public function proyecciones()
     {
-        return $this->hasMany(Proyecciones::class, 'id_multicim');
+        return $this->hasMany(Proyeccion::class, 'id_multicim');
     }
 }

@@ -374,6 +374,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
 
             DB::commit();
 
+            // Crear proyección automática
+            \Log::info('Llamando a crearProyeccionAutomaticaCapacitacion después de DB::commit', ['orden_id' => $orden->id]);
+            ProyeccionesController::crearProyeccionAutomaticaCapacitacion($orden);
+
             // IMPORTANTE: Cargamos 'materiales' y 'equipos' en la respuesta
             $orden->load(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'servicio', 'cotizacion', 'materiales', 'equipos']);
 
@@ -523,6 +527,19 @@ class OrdenCapacitacionAuditoriaController extends Controller
             $orden->update($validated);
 
             DB::commit();
+
+            // Actualizar proyección automática si existe
+            \Log::info('Actualizando proyección de capacitación', ['orden_id' => $orden->id]);
+            $proyeccion = \App\Models\Proyeccion::where('id_orden_capacitacion_auditoria', $orden->id)
+                ->first();
+            
+            if ($proyeccion) {
+                \Log::info('Proyección encontrada, actualizando', ['proyeccion_id' => $proyeccion->id]);
+                ProyeccionesController::actualizarProyeccionCapacitacion($proyeccion, $orden);
+            } else {
+                \Log::info('No se encontró proyección, creando nueva', ['orden_id' => $orden->id]);
+                ProyeccionesController::crearProyeccionAutomaticaCapacitacion($orden);
+            }
 
             // Cargamos todas las relaciones incluyendo las nuevas de detalles
             $orden->load(['cliente', 'ponente', 'ponentes', 'exponente', 'exponentes', 'servicio', 'cotizacion', 'materiales', 'equipos']);

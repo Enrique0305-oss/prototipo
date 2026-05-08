@@ -278,6 +278,10 @@ class OrdenAuditoriaController extends Controller
 
             $orden->load(['cliente', 'cotizacion', 'servicio', 'exponente', 'exponentes', 'emisor']);
 
+            // Crear proyección automática para auditoría
+            \Log::info('Llamando a crearProyeccionAutomaticaAuditoria después de DB::commit', ['orden_id' => $orden->id]);
+            ProyeccionesController::crearProyeccionAutomaticaAuditoria($orden);
+
             return response()->json(['success' => true, 'message' => 'Orden de auditoría creada exitosamente', 'data' => $orden], 201);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -343,6 +347,19 @@ class OrdenAuditoriaController extends Controller
             DB::commit();
 
             $orden->load(['cliente', 'cotizacion', 'servicio', 'exponente', 'exponentes', 'emisor']);
+
+            // Actualizar proyección si existe
+            \Log::info('Actualizando proyección de auditoría', ['orden_id' => $orden->id]);
+            $proyeccion = \App\Models\Proyeccion::where('tipo_orden', 'auditoria')
+                ->where('id_referencia', $orden->id)
+                ->first();
+            if ($proyeccion) {
+                \Log::info('Proyección encontrada, actualizando', ['proyeccion_id' => $proyeccion->id]);
+                ProyeccionesController::actualizarProyeccionAuditoria($proyeccion, $orden);
+            } else {
+                \Log::info('No se encontró proyección, creando nueva', ['orden_id' => $orden->id]);
+                ProyeccionesController::crearProyeccionAutomaticaAuditoria($orden);
+            }
 
             return response()->json(['success' => true, 'message' => 'Orden de auditoría actualizada exitosamente', 'data' => $orden]);
         } catch (\Throwable $e) {

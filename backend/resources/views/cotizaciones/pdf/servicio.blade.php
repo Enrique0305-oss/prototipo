@@ -329,10 +329,10 @@
                             <th>PRODUCTOS</th>
                             <td style="text-align: center;">{{ $productosFosfina }}</td>
                         </tr>
-                        <tr>
+                        /* <tr>
                             <th>VOLUMEN</th>
                             <td style="text-align: center;">{{ $medidaTanqueFosfina !== '' ? $medidaTanqueFosfina . ' m³ ' : '—' }}</td>
-                        </tr>
+                        </tr> */
                     </tbody>
                 </table>
 

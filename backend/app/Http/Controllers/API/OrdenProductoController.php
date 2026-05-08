@@ -257,6 +257,10 @@ class OrdenProductoController extends Controller
             // Cargar relaciones para respuesta
             $orden->load(['cliente', 'emisor', 'detalles.producto', 'cotizacion']);
 
+            // Crear proyección automática para producto
+            \Log::info('Llamando a crearProyeccionAutomaticaProducto después de DB::commit', ['orden_id' => $orden->id]);
+            ProyeccionesController::crearProyeccionAutomaticaProducto($orden);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Orden de producto creada exitosamente',

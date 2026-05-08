@@ -363,6 +363,9 @@ class OrdenAsesoriaController extends Controller
 
             $orden->load(['cliente', 'cotizacion', 'servicio', 'exponente', 'exponentes', 'detalles']);
 
+            \Log::info('Llamando a crearProyeccionAutomaticaAsesoria después de DB::commit', ['orden_id' => $orden->id]);
+            ProyeccionesController::crearProyeccionAutomaticaAsesoria($orden);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Orden de asesoria creada exitosamente',
@@ -456,6 +459,17 @@ class OrdenAsesoriaController extends Controller
             DB::commit();
 
             $orden->load(['cliente', 'cotizacion', 'servicio', 'exponente', 'exponentes', 'detalles']);
+
+            \Log::info('Actualizando proyección de asesoría', ['orden_id' => $orden->id]);
+            $proyeccion = \App\Models\Proyeccion::where('tipo_orden', 'asesoria')
+                ->where('id_referencia', $orden->id)
+                ->first();
+
+            if ($proyeccion) {
+                ProyeccionesController::actualizarProyeccionAsesoria($proyeccion, $orden);
+            } else {
+                ProyeccionesController::crearProyeccionAutomaticaAsesoria($orden);
+            }
 
             return response()->json([
                 'success' => true,

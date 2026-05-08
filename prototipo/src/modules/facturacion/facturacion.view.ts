@@ -465,7 +465,7 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
         <tbody>
         ${proyecciones.map(p => {
           // Obtenemos la referencia de la orden (servicio, producto o capacitación)
-          const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || {};
+          const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || p.orden_auditoria || p.orden_asesoria || {};
           
           const clienteNombre = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : 'Sin cliente';
 
@@ -623,13 +623,28 @@ export function renderEstadoCobranzaTab() {
 }
 
 // --- VISTA PRINCIPAL ---
-export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: any[] = []) {
+export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: any[] = [], empresas: any[] = []) {
+  const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const mesActual = new Date().getMonth();
+  const anioActual = new Date().getFullYear();
+  
   return `
     <div class="page-header">
       <div>
         <h1>Facturación y Cobranza</h1>
       </div>
-      <button id="btn-nueva-factura" class="btn-primary"> + Nueva Proyección</button>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <select id="selector-mes" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; font-weight: 600; color: #1e293b;">
+          ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `
+            <option value="${i + 1}" ${i === mesActual ? 'selected' : ''}>${meses[i]} ${anioActual}</option>
+          `).join('')}
+        </select>
+        <select id="selector-empresa" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; font-weight: 600; color: #1e293b;">
+          <option value="">Todas las Empresas</option>
+          ${empresas.map((e: any) => `<option value="${e.id}">${e.alias_empresa}</option>`).join('')}
+        </select>
+        <button id="btn-nueva-factura" class="btn-primary"> + Nueva Proyección</button>
+      </div>
     </div>
 
     ${renderAlertaOrdenesPendientes(ordenesPendientes)}
@@ -669,7 +684,62 @@ interface OrdenReferencia {
   total_final: number;
 }
 
-export function initFacturacionEvents(proyecciones: any[] = []) {       
+export function initFacturacionEvents(proyecciones: any[] = []) {
+  // --- FUNCIÓN AUXILIAR: Cargar proyecciones con filtros ---
+  const cargarProyecciones = async () => {
+    const mesSeleccionado = (document.getElementById('selector-mes') as HTMLSelectElement)?.value || (window as any).mesActual;
+    const empresaSeleccionada = (document.getElementById('selector-empresa') as HTMLSelectElement)?.value;
+    
+    try {
+      const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
+      let url = `http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesSeleccionado}&anio=${(window as any).anioActual}`;
+      
+      // Agregar filtro de empresa si está seleccionada
+      if (empresaSeleccionada) {
+        url += `&id_multicim=${empresaSeleccionada}`;
+      }
+      
+      const respuesta = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+      const result = await respuesta.json();
+      const rawData = result.data || result;
+      const nuevasProyecciones = Array.isArray(rawData) ? rawData : [];
+      
+      // Actualizar variable global de proyecciones
+      (window as any).misProyecciones = nuevasProyecciones;
+      
+      // Actualizar la tabla sin recargar la página
+      const tabContent = document.getElementById('facturacion-tab-content');
+      if (tabContent) {
+        tabContent.innerHTML = renderOrdenesProyectadasTab(nuevasProyecciones);
+        initFacturacionTableEvents(nuevasProyecciones);
+      }
+      
+      console.log(`Proyecciones filtradas cargadas (mes=${mesSeleccionado}, empresa=${empresaSeleccionada || 'todas'}):`, nuevasProyecciones);
+    } catch (error) {
+      console.error("Error cargando proyecciones:", error);
+      alert('Error al cargar proyecciones');
+    }
+  };
+
+  // --- SELECTOR DE MES ---
+  const selectorMes = document.getElementById('selector-mes') as HTMLSelectElement;
+  selectorMes?.addEventListener('change', async (e) => {
+    const mesSeleccionado = parseInt((e.target as HTMLSelectElement).value);
+    (window as any).mesActual = mesSeleccionado;
+    await cargarProyecciones();
+  });
+
+  // --- SELECTOR DE EMPRESA ---
+  const selectorEmpresa = document.getElementById('selector-empresa') as HTMLSelectElement;
+  selectorEmpresa?.addEventListener('change', async (e) => {
+    await cargarProyecciones();
+  });
+       
   const modalTipo = document.getElementById('modal-tipo-orden') as HTMLSelectElement;
   const selectOrden = document.getElementById('modal-select-orden') as HTMLSelectElement;
   const form = document.getElementById('form-nueva-factura') as HTMLFormElement;
@@ -884,38 +954,56 @@ form?.addEventListener('submit', async (e) => {
     }
 });
 
-// --- 6. MANEJADORES DE ACCIONES (VER, EDITAR, ELIMINAR) ---
-document.addEventListener('click', async (e) => {
-    const target = e.target as HTMLElement;
+  // Llamar a attachModalHandlers para los modales
+  attachModalHandlers();
 
-    // --- BOTÓN VER ---
-    if (target.classList.contains('btn-accion-ver')) {
-        const id = target.getAttribute('data-id');
-        if (!id) return;
+    // Inicializar acciones de la tabla desde la primera carga
+    initFacturacionTableEvents(proyecciones);
+}
 
-        try {
-            const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
-                headers: getAuthHeaders()
-            });
-            const result = await resp.json();
+// --- FUNCIÓN PARA INICIALIZAR EVENTOS DE TABLA (LLAMADO CUANDO CAMBIA MES) ---
+export function initFacturacionTableEvents(proyecciones: any[] = []) {
+    const container = document.querySelector('.table-container') || document.getElementById('facturacion-tab-content');
+    
+    if (!container) return;
 
-            if (result.success) {
-                const p = result.data;
-                const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || {};
-                const empresaNombre = p.multicim_emisora ? p.multicim_emisora.alias_empresa : '---';
-                const clienteNombre = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : '---';
+    const containerEl = container as HTMLElement;
+    if (containerEl.dataset.facturacionActionsBound === '1') {
+      return;
+    }
+    containerEl.dataset.facturacionActionsBound = '1';
+    
+    // Delegación de eventos - captura clics en botones de acción
+    container.addEventListener('click', async (e) => {
+        const target = e.target as HTMLElement;
+        const actionButton = target.closest('.btn-accion-ver, .btn-accion-editar, .btn-accion-eliminar') as HTMLElement | null;
+        if (!actionButton) return;
+        
+        // BOTÓN VER
+        if (actionButton.classList.contains('btn-accion-ver')) {
+            const id = actionButton.getAttribute('data-id');
+            if (!id) return;
 
-                // Llenar modal de vista
-                (document.getElementById('vista-actividad') as HTMLElement).innerText = p.actividad || '---';
-                (document.getElementById('vista-empresa') as HTMLElement).innerText = empresaNombre;
-                (document.getElementById('vista-cliente') as HTMLElement).innerText = clienteNombre;
-                
-                // Llenar tabla de servicios
-                const serviciosTabla = document.getElementById('vista-servicios-tabla') as HTMLTableSectionElement;
-                if (serviciosTabla) {
-                    const servicios = p.servicios_detallados || [];
-                    if (servicios.length > 0) {
-                        serviciosTabla.innerHTML = servicios.map((s: any, idx: number) => `
+            try {
+                const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                    headers: getAuthHeaders()
+                });
+                const result = await resp.json();
+
+                if (result.success) {
+                    const p = result.data;
+                    const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || p.orden_auditoria || p.orden_asesoria || {};
+                    const empresaNombre = p.multicim_emisora ? p.multicim_emisora.alias_empresa : '---';
+                    const clienteNombre = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : '---';
+
+                    (document.getElementById('vista-actividad') as HTMLElement).innerText = p.actividad || '---';
+                    (document.getElementById('vista-empresa') as HTMLElement).innerText = empresaNombre;
+                    (document.getElementById('vista-cliente') as HTMLElement).innerText = clienteNombre;
+                    
+                    const serviciosTabla = document.getElementById('vista-servicios-tabla') as HTMLTableSectionElement;
+                    if (serviciosTabla) {
+                        const servicios = p.servicios_detallados || [];
+                        serviciosTabla.innerHTML = servicios.length > 0 ? servicios.map((s: any, idx: number) => `
                             <tr style="${idx % 2 === 0 ? 'background:#ffffff' : 'background:#f9fafb;'} border-bottom:1px solid #e5e7eb;">
                                 <td style="padding:10px 12px; font-size:12px; color:#1f2937;">${s.nombre || '---'}</td>
                                 <td style="padding:10px 12px; text-align:center;">
@@ -924,62 +1012,54 @@ document.addEventListener('click', async (e) => {
                                     </span>
                                 </td>
                             </tr>
-                        `).join('');
-                    } else {
-                        serviciosTabla.innerHTML = '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Sin servicios</td></tr>';
+                        `).join('') : '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Sin servicios</td></tr>';
                     }
+
+                    (document.getElementById('vista-subtotal') as HTMLElement).innerText = `S/ ${Number(ref.subtotal || 0).toFixed(2)}`;
+                    (document.getElementById('vista-igv') as HTMLElement).innerText = `S/ ${Number(ref.igv || 0).toFixed(2)}`;
+                    (document.getElementById('vista-total-os') as HTMLElement).innerText = `S/ ${Number(ref.precio_total_os || ref.total_costo || 0).toFixed(2)}`;
+                    (document.getElementById('vista-detrax') as HTMLElement).innerText = `S/ ${Number(p.monto_detrax || 0).toFixed(2)}`;
+                    (document.getElementById('vista-neto') as HTMLElement).innerText = `S/ ${Number(p.total_final || 0).toFixed(2)}`;
+                    
+                    (document.getElementById('vista-fecha-ejecucion') as HTMLElement).innerText = p.fecha_ejecucion ? p.fecha_ejecucion.split('T')[0] : '---';
+                    (document.getElementById('vista-num-factura') as HTMLElement).innerText = p.n_factura || '---';
+                    (document.getElementById('vista-fecha-factura') as HTMLElement).innerText = p.fecha_factura ? p.fecha_factura.split('T')[0] : '---';
+                    (document.getElementById('vista-dias-credito') as HTMLElement).innerText = p.dias_credito || '0';
+                    (document.getElementById('vista-fecha-vcto') as HTMLElement).innerText = p.fecha_vcto ? p.fecha_vcto.split('T')[0] : '---';
+                    (document.getElementById('vista-dias-vencer') as HTMLElement).innerText = p.dia_vencer || '0';
+                    (document.getElementById('vista-fecha-pago') as HTMLElement).innerText = p.fecha_pago ? p.fecha_pago.split('T')[0] : '---';
+
+                    const modalVista = document.getElementById('modal-vista');
+                    if (modalVista) modalVista.style.display = 'block';
                 }
-
-                // Llenar importes y totales
-                (document.getElementById('vista-subtotal') as HTMLElement).innerText = `S/ ${Number(ref.subtotal || 0).toFixed(2)}`;
-                (document.getElementById('vista-igv') as HTMLElement).innerText = `S/ ${Number(ref.igv || 0).toFixed(2)}`;
-                (document.getElementById('vista-total-os') as HTMLElement).innerText = `S/ ${Number(ref.precio_total_os || ref.total_costo || 0).toFixed(2)}`;
-                (document.getElementById('vista-detrax') as HTMLElement).innerText = `S/ ${Number(p.monto_detrax || 0).toFixed(2)}`;
-                (document.getElementById('vista-neto') as HTMLElement).innerText = `S/ ${Number(p.total_final || 0).toFixed(2)}`;
-                
-                // Llenar datos de facturación
-                (document.getElementById('vista-fecha-ejecucion') as HTMLElement).innerText = p.fecha_ejecucion ? p.fecha_ejecucion.split('T')[0] : '---';
-                (document.getElementById('vista-num-factura') as HTMLElement).innerText = p.n_factura || '---';
-                (document.getElementById('vista-fecha-factura') as HTMLElement).innerText = p.fecha_factura ? p.fecha_factura.split('T')[0] : '---';
-                (document.getElementById('vista-dias-credito') as HTMLElement).innerText = p.dias_credito || '0';
-                (document.getElementById('vista-fecha-vcto') as HTMLElement).innerText = p.fecha_vcto ? p.fecha_vcto.split('T')[0] : '---';
-                (document.getElementById('vista-dias-vencer') as HTMLElement).innerText = p.dia_vencer || '0';
-                (document.getElementById('vista-fecha-pago') as HTMLElement).innerText = p.fecha_pago ? p.fecha_pago.split('T')[0] : '---';
-
-                const modalVista = document.getElementById('modal-vista');
-                if (modalVista) modalVista.style.display = 'block';
+            } catch (error) {
+                console.error("Error al obtener detalles:", error);
             }
-        } catch (error) {
-            console.error("Error al obtener detalles:", error);
         }
-    }
+        
+        // BOTÓN EDITAR
+        if (actionButton.classList.contains('btn-accion-editar')) {
+            const id = actionButton.getAttribute('data-id');
+            if (!id) return;
 
-    // --- BOTÓN EDITAR ---
-    if (target.classList.contains('btn-accion-editar')) {
-        const id = target.getAttribute('data-id');
-        if (!id) return;
+            try {
+                const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                    headers: getAuthHeaders()
+                });
+                const result = await resp.json();
 
-        try {
-            const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
-                headers: getAuthHeaders()
-            });
-            const result = await resp.json();
+                if (result.success) {
+                    const p = result.data;
+                    const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || p.orden_auditoria || p.orden_asesoria || {};
 
-            if (result.success) {
-                const p = result.data;
-                const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || {};
-
-                // Llenar modal de edición
-                (document.getElementById('edit-actividad') as HTMLInputElement).value = p.actividad || '';
-                (document.getElementById('edit-alias') as HTMLSelectElement).value = String(p.id_multicim || 1);
-                (document.getElementById('edit-cliente') as HTMLInputElement).value = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : '---';
-                
-                // Llenar tabla de servicios en modal de edición
-                const serviciosTablaEdit = document.getElementById('edit-servicios-tabla') as HTMLTableSectionElement;
-                if (serviciosTablaEdit) {
-                    const servicios = p.servicios_detallados || [];
-                    if (servicios.length > 0) {
-                        serviciosTablaEdit.innerHTML = servicios.map((s: any, idx: number) => `
+                    (document.getElementById('edit-actividad') as HTMLInputElement).value = p.actividad || '';
+                    (document.getElementById('edit-alias') as HTMLSelectElement).value = String(p.id_multicim || 1);
+                    (document.getElementById('edit-cliente') as HTMLInputElement).value = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : '---';
+                    
+                    const serviciosTablaEdit = document.getElementById('edit-servicios-tabla') as HTMLTableSectionElement;
+                    if (serviciosTablaEdit) {
+                        const servicios = p.servicios_detallados || [];
+                        serviciosTablaEdit.innerHTML = servicios.length > 0 ? servicios.map((s: any, idx: number) => `
                             <tr style="${idx % 2 === 0 ? 'background:#ffffff' : 'background:#f9fafb;'} border-bottom:1px solid #e5e7eb;">
                                 <td style="padding:10px 12px; font-size:12px; color:#1f2937;">${s.nombre || '---'}</td>
                                 <td style="padding:10px 12px; text-align:center;">
@@ -988,99 +1068,102 @@ document.addEventListener('click', async (e) => {
                                     </span>
                                 </td>
                             </tr>
-                        `).join('');
-                    } else {
-                        serviciosTablaEdit.innerHTML = '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Sin servicios</td></tr>';
+                        `).join('') : '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Sin servicios</td></tr>';
                     }
-                }
-                
-                // Llenar importes y totales
-                (document.getElementById('edit-subtotal') as HTMLElement).innerText = `S/ ${Number(ref.subtotal || 0).toFixed(2)}`;
-                (document.getElementById('edit-igv') as HTMLElement).innerText = `S/ ${Number(ref.igv || 0).toFixed(2)}`;
-                (document.getElementById('edit-total-os') as HTMLElement).innerText = `S/ ${Number(ref.precio_total_os || ref.total_costo || 0).toFixed(2)}`;
-                (document.getElementById('edit-detrax') as HTMLElement).innerText = `S/ ${Number(p.monto_detrax || 0).toFixed(2)}`;
-                (document.getElementById('edit-neto') as HTMLElement).innerText = `S/ ${Number(p.total_final || 0).toFixed(2)}`;
-                
-                // Función para convertir YYYY-MM-DD a DD/MM/YYYY para display en la tabla
-                const formatDateForDisplay = (dateStr: string) => {
-                    if (!dateStr) return '---';
-                    try {
-                        const [year, month, day] = dateStr.split('T')[0].split('-');
-                        return `${day}/${month}/${year}`;
-                    } catch {
-                        return '---';
-                    }
-                };
-                
-                // Para los inputs type="date", mantener formato YYYY-MM-DD
-                (document.getElementById('edit-fecha-ejecucion') as HTMLInputElement).value = p.fecha_ejecucion ? p.fecha_ejecucion.split('T')[0] : '';
-                (document.getElementById('edit-num-factura') as HTMLInputElement).value = p.n_factura || '';
-                (document.getElementById('edit-fecha-factura') as HTMLInputElement).value = p.fecha_factura ? p.fecha_factura.split('T')[0] : '';
-                (document.getElementById('edit-dias-credito') as HTMLInputElement).value = p.dias_credito ? String(p.dias_credito) : '';
-                (document.getElementById('edit-fecha-vcto') as HTMLInputElement).value = p.fecha_vcto ? p.fecha_vcto.split('T')[0] : '';
-                (document.getElementById('edit-dias-vencer') as HTMLInputElement).value = p.dia_vencer ? String(p.dia_vencer) : '';
-                (document.getElementById('edit-fecha-pago') as HTMLInputElement).value = p.fecha_pago ? p.fecha_pago.split('T')[0] : '';
+                    
+                    (document.getElementById('edit-subtotal') as HTMLElement).innerText = `S/ ${Number(ref.subtotal || 0).toFixed(2)}`;
+                    (document.getElementById('edit-igv') as HTMLElement).innerText = `S/ ${Number(ref.igv || 0).toFixed(2)}`;
+                    (document.getElementById('edit-total-os') as HTMLElement).innerText = `S/ ${Number(ref.precio_total_os || ref.total_costo || 0).toFixed(2)}`;
+                    (document.getElementById('edit-detrax') as HTMLElement).innerText = `S/ ${Number(p.monto_detrax || 0).toFixed(2)}`;
+                    (document.getElementById('edit-neto') as HTMLElement).innerText = `S/ ${Number(p.total_final || 0).toFixed(2)}`;
+                    
+                    (document.getElementById('edit-fecha-ejecucion') as HTMLInputElement).value = p.fecha_ejecucion ? p.fecha_ejecucion.split('T')[0] : '';
+                    (document.getElementById('edit-num-factura') as HTMLInputElement).value = p.n_factura || '';
+                    (document.getElementById('edit-fecha-factura') as HTMLInputElement).value = p.fecha_factura ? p.fecha_factura.split('T')[0] : '';
+                    (document.getElementById('edit-dias-credito') as HTMLInputElement).value = p.dias_credito ? String(p.dias_credito) : '';
+                    (document.getElementById('edit-fecha-vcto') as HTMLInputElement).value = p.fecha_vcto ? p.fecha_vcto.split('T')[0] : '';
+                    (document.getElementById('edit-dias-vencer') as HTMLInputElement).value = p.dia_vencer ? String(p.dia_vencer) : '';
+                    (document.getElementById('edit-fecha-pago') as HTMLInputElement).value = p.fecha_pago ? p.fecha_pago.split('T')[0] : '';
 
-                // Guardar el ID en el formulario
-                const formEditar = document.getElementById('form-editar-factura') as HTMLFormElement;
-                if (formEditar) formEditar.dataset.idProyeccion = String(id);
+                    const formEditar = document.getElementById('form-editar-factura') as HTMLFormElement;
+                    if (formEditar) formEditar.dataset.idProyeccion = String(id);
 
-                const modalEdicion = document.getElementById('modal-edicion');
-                if (modalEdicion) modalEdicion.style.display = 'block';
-            }
-        } catch (error) {
-            console.error("Error al cargar datos para edición:", error);
-        }
-    }
-
-    // --- BOTÓN ELIMINAR ---
-    if (target.classList.contains('btn-accion-eliminar')) {
-        const id = target.getAttribute('data-id');
-        if (!id) return;
-
-        if (confirm('¿Está seguro de que desea eliminar esta proyección?')) {
-            try {
-                const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
-                    method: 'DELETE',
-                    headers: getAuthHeaders()
-                });
-
-                const result = await resp.json();
-
-                if (resp.ok && result.success) {
-                    alert('Proyección eliminada con éxito');
-                    window.location.reload();
-                } else {
-                    alert('Error al eliminar: ' + (result.message || 'Error desconocido'));
+                    const modalEdicion = document.getElementById('modal-edicion');
+                    if (modalEdicion) modalEdicion.style.display = 'block';
                 }
             } catch (error) {
-                console.error("Error al eliminar:", error);
-                alert('Error de conexión');
+                console.error("Error al cargar datos para edición:", error);
             }
         }
-    }
-});
+        
+        // BOTÓN ELIMINAR
+        if (actionButton.classList.contains('btn-accion-eliminar')) {
+            const id = actionButton.getAttribute('data-id');
+            if (!id) return;
 
-// --- 7. MANEJADORES DE MODALES DE VISTA Y EDICIÓN ---
-const modalVista = document.getElementById('modal-vista');
-const btnCerrarVista = document.getElementById('btn-cerrar-vista');
-const btnCerrarVistaBtn = document.getElementById('btn-cerrar-vista-btn');
+            if (confirm('¿Está seguro de que desea eliminar esta proyección?')) {
+                try {
+                    const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                        method: 'DELETE',
+                        headers: getAuthHeaders()
+                    });
 
-btnCerrarVista?.addEventListener('click', () => { if (modalVista) modalVista.style.display = 'none'; });
-btnCerrarVistaBtn?.addEventListener('click', () => { if (modalVista) modalVista.style.display = 'none'; });
-modalVista?.addEventListener('click', (e) => { if (e.target === modalVista) modalVista.style.display = 'none'; });
+                    const result = await resp.json();
 
-const modalEdicion = document.getElementById('modal-edicion');
-const btnCerrarEdicion = document.getElementById('btn-cerrar-edicion');
-const btnCancelarEdicion = document.getElementById('btn-cancelar-edicion');
-const formEditar = document.getElementById('form-editar-factura') as HTMLFormElement;
+                    if (resp.ok && result.success) {
+                        alert('Proyección eliminada con éxito');
+                        // Recargar proyecciones del mes actual
+                        const mesActual = (window as any).mesActual || new Date().getMonth() + 1;
+                        const anioActual = (window as any).anioActual || new Date().getFullYear();
+                        const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
+                        const respuesta = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, {
+                            headers: {
+                                'Accept': 'application/json',
+                                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                            },
+                        });
+                        const resultData = await respuesta.json();
+                        const rawData = resultData.data || resultData;
+                        const nuevasProyecciones = Array.isArray(rawData) ? rawData : [];
+                        
+                        const tabContent = document.getElementById('facturacion-tab-content');
+                        if (tabContent) {
+                            tabContent.innerHTML = renderOrdenesProyectadasTab(nuevasProyecciones);
+                            initFacturacionTableEvents(nuevasProyecciones);
+                        }
+                    } else {
+                        alert('Error al eliminar: ' + (result.message || 'Error desconocido'));
+                    }
+                } catch (error) {
+                    console.error("Error al eliminar:", error);
+                    alert('Error de conexión');
+                }
+            }
+        }
+    }, { once: false });
+}
 
-btnCerrarEdicion?.addEventListener('click', () => { if (modalEdicion) modalEdicion.style.display = 'none'; });
-btnCancelarEdicion?.addEventListener('click', () => { if (modalEdicion) modalEdicion.style.display = 'none'; });
-modalEdicion?.addEventListener('click', (e) => { if (e.target === modalEdicion) modalEdicion.style.display = 'none'; });
+// --- 6. MANEJADORES DE MODALES DE VISTA Y EDICIÓN ---
+export function attachModalHandlers() {
+  const modalVista = document.getElementById('modal-vista');
+  const btnCerrarVista = document.getElementById('btn-cerrar-vista');
+  const btnCerrarVistaBtn = document.getElementById('btn-cerrar-vista-btn');
 
-// --- 8. SUBMIT DEL FORMULARIO DE EDICIÓN ---
-formEditar?.addEventListener('submit', async (e) => {
+  btnCerrarVista?.addEventListener('click', () => { if (modalVista) modalVista.style.display = 'none'; });
+  btnCerrarVistaBtn?.addEventListener('click', () => { if (modalVista) modalVista.style.display = 'none'; });
+  modalVista?.addEventListener('click', (e) => { if (e.target === modalVista) modalVista.style.display = 'none'; });
+
+  const modalEdicion = document.getElementById('modal-edicion');
+  const btnCerrarEdicion = document.getElementById('btn-cerrar-edicion');
+  const btnCancelarEdicion = document.getElementById('btn-cancelar-edicion');
+  const formEditar = document.getElementById('form-editar-factura') as HTMLFormElement;
+
+  btnCerrarEdicion?.addEventListener('click', () => { if (modalEdicion) modalEdicion.style.display = 'none'; });
+  btnCancelarEdicion?.addEventListener('click', () => { if (modalEdicion) modalEdicion.style.display = 'none'; });
+  modalEdicion?.addEventListener('click', (e) => { if (e.target === modalEdicion) modalEdicion.style.display = 'none'; });
+
+  // --- SUBMIT DEL FORMULARIO DE EDICIÓN ---
+  formEditar?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const idProyeccion = formEditar.dataset.idProyeccion;
@@ -1128,7 +1211,26 @@ formEditar?.addEventListener('submit', async (e) => {
         if (resp.ok && result.success) {
             alert('¡Cambios guardados con éxito!');
             if (modalEdicion) modalEdicion.style.display = 'none';
-            window.location.reload();
+            
+            // Recargar proyecciones del mes actual sin hacer reload de página
+            const mesActual = (window as any).mesActual || new Date().getMonth() + 1;
+            const anioActual = (window as any).anioActual || new Date().getFullYear();
+            const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
+            const respuesta = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+            });
+            const resultData = await respuesta.json();
+            const rawData = resultData.data || resultData;
+            const nuevasProyecciones = Array.isArray(rawData) ? rawData : [];
+            
+            const tabContent = document.getElementById('facturacion-tab-content');
+            if (tabContent) {
+                tabContent.innerHTML = renderOrdenesProyectadasTab(nuevasProyecciones);
+                initFacturacionTableEvents(nuevasProyecciones);
+            }
         } else {
             const msg = result.errors ? JSON.stringify(result.errors) : (result.message || 'Error desconocido');
             alert('Error al guardar: ' + msg);
@@ -1137,5 +1239,5 @@ formEditar?.addEventListener('submit', async (e) => {
         console.error("Error en actualización:", error);
         alert('Error de conexión con el servidor');
     }
-});
+  });
 }

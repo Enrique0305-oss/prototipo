@@ -17,6 +17,8 @@ class Proyeccion extends Model
     protected $fillable = [
         'actividad',
         'id_multicim',
+        'tipo_orden',
+        'id_referencia',
         'id_orden_servicio',
         'id_orden_producto',
         'id_orden_capacitacion_auditoria',
@@ -65,5 +67,15 @@ class Proyeccion extends Model
     public function ordenCapacitacion()
     {
         return $this->belongsTo(OrdenCapacitacionAuditoria::class, 'id_orden_capacitacion_auditoria');
+    }
+
+    public function ordenAuditoria()
+    {
+        return $this->belongsTo(OrdenAuditoria::class, 'id_referencia');
+    }
+
+    public function ordenAsesoria()
+    {
+        return $this->belongsTo(OrdenAsesoria::class, 'id_referencia');
     }
 }

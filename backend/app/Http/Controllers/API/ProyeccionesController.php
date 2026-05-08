@@ -152,7 +152,7 @@ class ProyeccionesController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'id_multicim'   => 'required|exists:multicim,id',
-            'tipo_orden'    => 'required|in:servicio,producto,capacitacion',
+            'tipo_orden'    => 'required|in:servicio,producto,capacitacion,asesoria,auditoria',
             'id_referencia' => 'required|integer',
             'actividad'     => 'nullable|string',
             'monto_detrax'  => 'required|numeric',
@@ -210,6 +210,9 @@ class ProyeccionesController extends Controller
         if ($request->tipo_orden === 'servicio') $data['id_orden_servicio'] = $request->id_referencia;
         if ($request->tipo_orden === 'producto') $data['id_orden_producto'] = $request->id_referencia;
         if ($request->tipo_orden === 'capacitacion') $data['id_orden_capacitacion_auditoria'] = $request->id_referencia;
+        
+        $data['tipo_orden'] = $request->tipo_orden;
+        $data['id_referencia'] = $request->id_referencia;
 
         $proyeccion = Proyeccion::create($data);
         return response()->json(['success' => true, 'data' => $proyeccion]);
@@ -217,17 +220,34 @@ class ProyeccionesController extends Controller
 
     /**
      * Listar todas las Proyecciones (Para la tabla principal)
+     * GET /api/v1/proyecciones?mes=5&anio=2026&id_multicim=1
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $proyecciones = Proyeccion::with([
+        $mes = $request->query('mes', Carbon::now()->month);
+        $anio = $request->query('anio', Carbon::now()->year);
+        $idMulticim = $request->query('id_multicim'); // Nuevo filtro opcional
+        
+        $inicioMes = Carbon::createFromDate($anio, $mes, 1)->startOfMonth();
+        $finMes = Carbon::createFromDate($anio, $mes, 1)->endOfMonth();
+
+        $query = Proyeccion::with([
             'multicimEmisora', 
             'ordenServicio.cliente', 
             'ordenServicio.detalles.servicio',
             'ordenProducto.cliente', 
-            'ordenCapacitacion.cliente'
+            'ordenCapacitacion.cliente',
+            'ordenAuditoria.cliente',
+            'ordenAsesoria.cliente'
         ])
-        ->orderBy('fecha_vcto', 'asc')
+        ->whereBetween('fecha_ejecucion', [$inicioMes, $finMes]);
+
+        // Agregar filtro por empresa si se proporciona
+        if ($idMulticim) {
+            $query->where('id_multicim', $idMulticim);
+        }
+
+        $proyecciones = $query->orderBy('fecha_ejecucion', 'asc')
         ->get()
         ->map(function($p) {
             $detallesRelacionados = [];
@@ -256,7 +276,7 @@ class ProyeccionesController extends Controller
             return $p;
         });
         
-        return response()->json(['success' => true, 'data' => $proyecciones]);
+        return response()->json(['success' => true, 'data' => $proyecciones, 'mes' => $mes, 'anio' => $anio, 'id_multicim' => $idMulticim]);
     }
 
     /**
@@ -270,7 +290,9 @@ class ProyeccionesController extends Controller
             'ordenServicio.cliente', 
             'ordenServicio.detalles.servicio',
             'ordenProducto.cliente', 
-            'ordenCapacitacion.cliente'
+            'ordenCapacitacion.cliente',
+            'ordenAuditoria.cliente',
+            'ordenAsesoria.cliente'
         ])->find($id);
 
         if (!$proyeccion) {
@@ -396,11 +418,7 @@ class ProyeccionesController extends Controller
 
             // Órdenes de producto sin proyección
             $ordenesProducto = OrdenProducto::with('cliente')
-                ->whereNotIn('id', function($query) {
-                    $query->select('id_referencia')
-                        ->from('proyecciones')
-                        ->where('tipo_orden', 'producto');
-                })
+                ->whereDoesntHave('proyecciones')
                 ->where('estado', '!=', 'cancelada')
                 ->get();
 
@@ -415,11 +433,7 @@ class ProyeccionesController extends Controller
 
             // Órdenes de capacitación sin proyección
             $ordenesCapacitacion = OrdenCapacitacionAuditoria::with('cliente')
-                ->whereNotIn('id', function($query) {
-                    $query->select('id_referencia')
-                        ->from('proyecciones')
-                        ->where('tipo_orden', 'capacitacion');
-                })
+                ->whereDoesntHave('proyecciones')
                 ->where('estado', '!=', 'cancelada')
                 ->get();
 
@@ -448,18 +462,37 @@ class ProyeccionesController extends Controller
     }
 
     /**
+     * Obtener lista de empresas (Multicim)
+     * GET /api/v1/empresas
+     */
+    public function obtenerEmpresas(): JsonResponse
+    {
+        try {
+            $empresas = Multicim::select('id', 'alias_empresa')->get();
+            return response()->json(['success' => true, 'data' => $empresas]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener empresas: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Crear automáticamente una proyección para una orden de servicio
      * Llamado desde OrdenServicioController en create/update
      */
     public static function crearProyeccionAutomaticaServicio($ordenServicio, $multicimId = null)
     {
         try {
+            \Log::info('Iniciando creación automática de proyección de servicio', ['orden_id' => $ordenServicio->id]);
+            
             // Verificar si ya existe proyección para esta orden
-            $proyeccionExistente = Proyeccion::where('tipo_orden', 'servicio')
-                ->where('id_referencia', $ordenServicio->id)
+            $proyeccionExistente = Proyeccion::where('id_orden_servicio', $ordenServicio->id)
                 ->first();
 
             if ($proyeccionExistente) {
+                \Log::info('Proyección de servicio ya existe, actualizando', ['proyeccion_id' => $proyeccionExistente->id]);
                 // Si existe, actualizar datos relevantes
                 return self::actualizarProyeccionServicio($proyeccionExistente, $ordenServicio);
             }
@@ -470,11 +503,17 @@ class ProyeccionesController extends Controller
                 $multicimId = $primerMulticim ? $primerMulticim->id : 1;
             }
 
+            \Log::info('Creando nueva proyección de servicio', [
+                'monto' => $ordenServicio->total_costo,
+                'multicim' => $multicimId
+            ]);
+
             // Crear nueva proyección
             $proyeccion = Proyeccion::create([
-                'id_multicim' => $multicimId,
                 'tipo_orden' => 'servicio',
                 'id_referencia' => $ordenServicio->id,
+                'id_multicim' => $multicimId,
+                'id_orden_servicio' => $ordenServicio->id,
                 'actividad' => null, // Se completa al editar
                 'n_factura' => null,
                 'dias_credito' => null,
@@ -487,9 +526,13 @@ class ProyeccionesController extends Controller
                 'total_final' => $ordenServicio->total_costo - (($ordenServicio->total_costo > 700) ? ($ordenServicio->total_costo * 0.12) : 0),
             ]);
 
+            \Log::info('Proyección de servicio creada exitosamente', ['proyeccion_id' => $proyeccion->id]);
             return $proyeccion;
         } catch (\Exception $e) {
-            \Log::error('Error creando proyección automática: ' . $e->getMessage());
+            \Log::error('Error creando proyección automática de servicio: ' . $e->getMessage(), [
+                'exception' => $e,
+                'orden_id' => $ordenServicio->id ?? 'unknown'
+            ]);
             return null;
         }
     }
@@ -509,6 +552,349 @@ class ProyeccionesController extends Controller
             return $proyeccion;
         } catch (\Exception $e) {
             \Log::error('Error actualizando proyección: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Crear automáticamente una proyección de auditoría
+     */
+    public static function crearProyeccionAutomaticaAuditoria($ordenAuditoria)
+    {
+        try {
+            \Log::info('Iniciando creación automática de proyección de auditoría', ['orden_id' => $ordenAuditoria->id]);
+            
+            $multicimId = $ordenAuditoria->id_multicim ?? null;
+            if (!$multicimId) {
+                $primerMulticim = Multicim::first();
+                $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+            }
+            
+            \Log::info('Multicim ID para proyección', ['id' => $multicimId]);
+
+            // Verificar por tipo + referencia para no depender de FK de capacitación
+            $existente = Proyeccion::where('tipo_orden', 'auditoria')
+                ->where('id_referencia', $ordenAuditoria->id)
+                ->first();
+            
+            if ($existente) {
+                \Log::info('Proyección de auditoría ya existe', ['proyeccion_id' => $existente->id]);
+                return $existente;
+            }
+
+            // Crear nueva proyección
+            $monto = $ordenAuditoria->subtotal ?? $ordenAuditoria->costo ?? 0;
+            \Log::info('Datos para crear proyección', [
+                'monto' => $monto,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'fecha_ejecucion' => $ordenAuditoria->fecha_servicio
+            ]);
+            
+            $proyeccion = Proyeccion::create([
+                'tipo_orden' => 'auditoria',
+                'id_referencia' => $ordenAuditoria->id,
+                'id_multicim' => $multicimId,
+                'actividad' => null,
+                'n_factura' => null,
+                'dias_credito' => null,
+                'fecha_factura' => null,
+                'fecha_pago' => null,
+                'fecha_ejecucion' => $ordenAuditoria->fecha_servicio,
+                'fecha_vcto' => null,
+                'dia_vencer' => null,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+            ]);
+            
+            \Log::info('Proyección de auditoría creada exitosamente', ['proyeccion_id' => $proyeccion->id]);
+            return $proyeccion;
+        } catch (\Exception $e) {
+            \Log::error('Error creando proyección automática de auditoría: ' . $e->getMessage(), [
+                'exception' => $e,
+                'orden_id' => $ordenAuditoria->id ?? 'unknown'
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Crear automáticamente una proyección de capacitación/asesoría
+     */
+    public static function crearProyeccionAutomaticaCapacitacion($ordenCapacitacion)
+    {
+        try {
+            \Log::info('Iniciando creación automática de proyección de capacitación', ['orden_id' => $ordenCapacitacion->id]);
+            
+            $multicimId = $ordenCapacitacion->id_multicim ?? null;
+            if (!$multicimId) {
+                $primerMulticim = Multicim::first();
+                $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+            }
+            
+            \Log::info('Multicim ID para proyección de capacitación', ['id' => $multicimId]);
+
+            // Verificar que no exista una proyección para esta orden
+            $existente = Proyeccion::where('id_orden_capacitacion_auditoria', $ordenCapacitacion->id)
+                ->first();
+            
+            if ($existente) {
+                \Log::info('Proyección de capacitación ya existe', ['proyeccion_id' => $existente->id]);
+                return $existente;
+            }
+
+            // Crear nueva proyección
+            $monto = $ordenCapacitacion->subtotal ?? $ordenCapacitacion->costo ?? 0;
+            \Log::info('Datos para crear proyección de capacitación', [
+                'monto' => $monto,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'fecha_ejecucion' => $ordenCapacitacion->fecha_servicio
+            ]);
+            
+            $ordenCapacitacion->loadMissing('cotizacion');
+            $tipoCotizacion = strtolower((string) optional($ordenCapacitacion->cotizacion)->tipo_cotizacion);
+            $tipoOrden = in_array($tipoCotizacion, ['asesoria', 'asesoría'], true) ? 'asesoria' : 'capacitacion';
+
+            $proyeccion = Proyeccion::create([
+                'tipo_orden' => $tipoOrden,
+                'id_referencia' => $ordenCapacitacion->id,
+                'id_multicim' => $multicimId,
+                'id_orden_capacitacion_auditoria' => $ordenCapacitacion->id,
+                'actividad' => null,
+                'n_factura' => null,
+                'dias_credito' => null,
+                'fecha_factura' => null,
+                'fecha_pago' => null,
+                'fecha_ejecucion' => $ordenCapacitacion->fecha_servicio,
+                'fecha_vcto' => null,
+                'dia_vencer' => null,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+            ]);
+            
+            \Log::info('Proyección de capacitación creada exitosamente', ['proyeccion_id' => $proyeccion->id]);
+            return $proyeccion;
+        } catch (\Exception $e) {
+            \Log::error('Error creando proyección automática de capacitación: ' . $e->getMessage(), [
+                'exception' => $e,
+                'orden_id' => $ordenCapacitacion->id ?? 'unknown'
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Actualizar proyección de auditoría
+     */
+    public static function actualizarProyeccionAuditoria($proyeccion, $ordenAuditoria)
+    {
+        try {
+            if (!$proyeccion) {
+                return null;
+            }
+
+            $monto = $ordenAuditoria->subtotal ?? $ordenAuditoria->costo ?? 0;
+            $proyeccion->update([
+                'tipo_orden' => 'auditoria',
+                'id_referencia' => $ordenAuditoria->id,
+                'fecha_ejecucion' => $ordenAuditoria->fecha_servicio,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+            ]);
+
+            return $proyeccion;
+        } catch (\Exception $e) {
+            \Log::error('Error actualizando proyección de auditoría: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Actualizar proyección de capacitación
+     */
+    public static function actualizarProyeccionCapacitacion($proyeccion, $ordenCapacitacion)
+    {
+        try {
+            if (!$proyeccion) {
+                return null;
+            }
+
+            $ordenCapacitacion->loadMissing('cotizacion');
+            $tipoCotizacion = strtolower((string) optional($ordenCapacitacion->cotizacion)->tipo_cotizacion);
+            $tipoOrden = in_array($tipoCotizacion, ['asesoria', 'asesoría'], true) ? 'asesoria' : 'capacitacion';
+
+            $monto = $ordenCapacitacion->subtotal ?? $ordenCapacitacion->costo ?? 0;
+            $proyeccion->update([
+                'tipo_orden' => $tipoOrden,
+                'id_referencia' => $ordenCapacitacion->id,
+                'fecha_ejecucion' => $ordenCapacitacion->fecha_servicio,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+                'id_orden_capacitacion_auditoria' => $ordenCapacitacion->id,
+            ]);
+
+            return $proyeccion;
+        } catch (\Exception $e) {
+            \Log::error('Error actualizando proyección de capacitación: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Crear automáticamente una proyección de asesoría
+     */
+    public static function crearProyeccionAutomaticaAsesoria($ordenAsesoria)
+    {
+        try {
+            \Log::info('Iniciando creación automática de proyección de asesoría', ['orden_id' => $ordenAsesoria->id]);
+
+            $multicimId = $ordenAsesoria->id_multicim ?? null;
+            if (!$multicimId) {
+                $primerMulticim = Multicim::first();
+                $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+            }
+
+            $existente = Proyeccion::where('tipo_orden', 'asesoria')
+                ->where('id_referencia', $ordenAsesoria->id)
+                ->first();
+
+            if ($existente) {
+                \Log::info('Proyección de asesoría ya existe', ['proyeccion_id' => $existente->id]);
+                return $existente;
+            }
+
+            $monto = $ordenAsesoria->subtotal ?? $ordenAsesoria->costo ?? 0;
+
+            $proyeccion = Proyeccion::create([
+                'tipo_orden' => 'asesoria',
+                'id_referencia' => $ordenAsesoria->id,
+                'id_multicim' => $multicimId,
+                'actividad' => null,
+                'n_factura' => null,
+                'dias_credito' => null,
+                'fecha_factura' => null,
+                'fecha_pago' => null,
+                'fecha_ejecucion' => $ordenAsesoria->fecha_servicio,
+                'fecha_vcto' => null,
+                'dia_vencer' => null,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+            ]);
+
+            \Log::info('Proyección de asesoría creada exitosamente', ['proyeccion_id' => $proyeccion->id]);
+            return $proyeccion;
+        } catch (\Exception $e) {
+            \Log::error('Error creando proyección automática de asesoría: ' . $e->getMessage(), [
+                'exception' => $e,
+                'orden_id' => $ordenAsesoria->id ?? 'unknown',
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Actualizar proyección de asesoría
+     */
+    public static function actualizarProyeccionAsesoria($proyeccion, $ordenAsesoria)
+    {
+        try {
+            if (!$proyeccion) {
+                return null;
+            }
+
+            $monto = $ordenAsesoria->subtotal ?? $ordenAsesoria->costo ?? 0;
+            $proyeccion->update([
+                'tipo_orden' => 'asesoria',
+                'id_referencia' => $ordenAsesoria->id,
+                'fecha_ejecucion' => $ordenAsesoria->fecha_servicio,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+            ]);
+
+            return $proyeccion;
+        } catch (\Exception $e) {
+            \Log::error('Error actualizando proyección de asesoría: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Crear automáticamente una proyección de producto
+     */
+    public static function crearProyeccionAutomaticaProducto($ordenProducto)
+    {
+        try {
+            \Log::info('Iniciando creación automática de proyección de producto', ['orden_id' => $ordenProducto->id]);
+            
+            $multicimId = $ordenProducto->id_multicim ?? null;
+            if (!$multicimId) {
+                $primerMulticim = Multicim::first();
+                $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+            }
+            
+            \Log::info('Multicim ID para proyección de producto', ['id' => $multicimId]);
+
+            // Verificar que no exista una proyección para esta orden
+            $existente = Proyeccion::where('id_orden_producto', $ordenProducto->id)
+                ->first();
+            
+            if ($existente) {
+                \Log::info('Proyección de producto ya existe', ['proyeccion_id' => $existente->id]);
+                return $existente;
+            }
+
+            // Crear nueva proyección
+            $monto = $ordenProducto->total ?? 0;
+            \Log::info('Datos para crear proyección de producto', [
+                'monto' => $monto,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'fecha_ejecucion' => $ordenProducto->fecha_envio
+            ]);
+            
+            $proyeccion = Proyeccion::create([
+                'tipo_orden' => 'producto',
+                'id_referencia' => $ordenProducto->id,
+                'id_multicim' => $multicimId,
+                'id_orden_producto' => $ordenProducto->id,
+                'actividad' => null,
+                'n_factura' => null,
+                'dias_credito' => null,
+                'fecha_factura' => null,
+                'fecha_pago' => null,
+                'fecha_ejecucion' => $ordenProducto->fecha_envio,
+                'fecha_vcto' => null,
+                'dia_vencer' => null,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+            ]);
+            
+            \Log::info('Proyección de producto creada exitosamente', ['proyeccion_id' => $proyeccion->id]);
+            return $proyeccion;
+        } catch (\Exception $e) {
+            \Log::error('Error creando proyección automática de producto: ' . $e->getMessage(), [
+                'exception' => $e,
+                'orden_id' => $ordenProducto->id ?? 'unknown'
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Actualizar proyección de producto
+     */
+    public static function actualizarProyeccionProducto($proyeccion, $ordenProducto)
+    {
+        try {
+            $monto = $ordenProducto->total ?? 0;
+            $proyeccion->update([
+                'fecha_ejecucion' => $ordenProducto->fecha_envio,
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+                'id_orden_producto' => $ordenProducto->id,
+            ]);
+
+            return $proyeccion;
+        } catch (\Exception $e) {
+            \Log::error('Error actualizando proyección de producto: ' . $e->getMessage());
             return null;
         }
     }
