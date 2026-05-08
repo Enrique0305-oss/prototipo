@@ -1,24 +1,49 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/connectivity_service.dart';
+import '../../../core/sync/sync_queue_entry.dart';
 import '../../auth/data/auth_repository.dart';
 import '../domain/formato_operacional_dispositivo.dart';
 import '../domain/insumo_quimico_entregado.dart';
 import '../domain/service_task.dart';
 import '../domain/ficha_operacional.dart';
+import 'local/ficha_local_dao.dart';
+import 'local/services_local_dao.dart';
+import 'local/sync_queue_dao.dart';
 
 class ServicesRepository {
   ServicesRepository({
     required AuthRepository authRepository,
     ApiClient? apiClient,
+    ConnectivityService? connectivity,
+    ServicesLocalDao? localDao,
+    FichaLocalDao? fichaDao,
+    SyncQueueDao? syncQueueDao,
   })  : _authRepository = authRepository,
-        _apiClient = apiClient ?? ApiClient(baseUrl: AppConfig.apiBaseUrl);
+        _apiClient = apiClient ?? ApiClient(baseUrl: AppConfig.apiBaseUrl),
+        _connectivity = connectivity ?? ConnectivityService(),
+        _localDao = localDao ?? const ServicesLocalDao(),
+        _fichaDao = fichaDao ?? const FichaLocalDao(),
+        _syncQueueDao = syncQueueDao ?? const SyncQueueDao();
 
   final AuthRepository _authRepository;
   final ApiClient _apiClient;
+  final ConnectivityService _connectivity;
+  final ServicesLocalDao _localDao;
+  final FichaLocalDao _fichaDao;
+  final SyncQueueDao _syncQueueDao;
+
+  /// Expone el cliente HTTP configurado para que SyncWorker pueda reutilizarlo.
+  ApiClient get apiClient => _apiClient;
+
   static final List<ServiceTask> _mockServices = <ServiceTask>[
     ServiceTask(
       id: 9001,
@@ -85,6 +110,14 @@ class ServicesRepository {
       throw ApiException('No hay sesion activa', 401, const {});
     }
 
+    // ─── OFFLINE: devolver caché local si no hay red ───────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      final technicianId = await _authRepository.getTechnicianId() ?? AppConfig.technicianId;
+      return _localDao.getServicesByDateRange(start, end, technicianId);
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     final query = <String, String>{};
     if (start == end) {
       query['fecha'] = DateFormat('yyyy-MM-dd').format(start);
@@ -107,10 +140,17 @@ class ServicesRepository {
       return <ServiceTask>[];
     }
 
-    return data
+    final services = data
         .whereType<Map<String, dynamic>>()
         .map(ServiceTask.fromJson)
         .toList(growable: false);
+
+    // ─── Guardar en caché local ─────────────────────────────────────────────
+    final tid = technicianId ?? AppConfig.technicianId;
+    unawaited(_localDao.upsertServices(services, tid));
+    // ───────────────────────────────────────────────────────────────────────
+
+    return services;
   }
 
   Future<ServiceTask> getServiceById(int id) async {
@@ -127,6 +167,15 @@ class ServicesRepository {
     if (token == null || token.isEmpty) {
       throw ApiException('No hay sesion activa', 401, const {});
     }
+
+    // ─── OFFLINE ────────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      final cached = await _localDao.getServiceById(id);
+      if (cached != null) return cached;
+      throw ApiException('Sin conexión y el servicio no está en caché', 0, const {});
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     final response = await _apiClient.get('/v1/programacion-servicio/$id', token: token);
     final data = response['data'] as Map<String, dynamic>?;
@@ -166,6 +215,35 @@ class ServicesRepository {
     if (durationMinutes != null) {
       body['duracion_real'] = durationMinutes;
     }
+
+    // ─── OFFLINE ─────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      // Copiar fotos al almacenamiento local para que no se pierdan
+      final localPhotoPaths = await _copyPhotosToLocalStorage(
+        evidencePhotos,
+        serviceId: id,
+      );
+
+      final operationId = _generateOperationId('complete_service', id);
+      await _syncQueueDao.enqueue(
+        SyncQueueEntry(
+          operationId: operationId,
+          entityType: 'complete_service',
+          entityId: id,
+          method: evidencePhotos.isEmpty ? 'PATCH' : 'MULTIPART',
+          endpoint: '/v1/programacion-servicio/$id/completar',
+          payloadJson: jsonEncode(body),
+          photoPathsJson:
+              localPhotoPaths.isEmpty ? null : jsonEncode(localPhotoPaths),
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+
+      await _localDao.updateServiceStatus(id, 'Realizado (pendiente sync)');
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     if (evidencePhotos.isEmpty) {
       await _apiClient.patch(
@@ -217,6 +295,14 @@ class ServicesRepository {
     if (token == null || token.isEmpty) {
       throw ApiException('No hay sesion activa', 401, const {});
     }
+
+    // ─── OFFLINE ───────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      // Registramos el inicio localmente para el cronómetro
+      return DateTime.now();
+    }
+    // ───────────────────────────────────────────────────────────────────────
 
     final response = await _apiClient.patch(
       '/v1/programacion-servicio/$id/iniciar',
@@ -380,6 +466,21 @@ class ServicesRepository {
       throw ApiException('No hay sesión activa', 401, const {});
     }
 
+    // ─── OFFLINE ───────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      final cached = await _fichaDao.getFicha(programacionId, 'calculo_formato');
+      if (cached != null) {
+        return cached;
+      }
+      // Fallback mínimo para no romper la UI si no hay caché
+      return <String, dynamic>{
+        'formatos_aplicados': <String>[],
+        'secciones': <Map<String, dynamic>>[],
+      };
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     final ids = idsProgramaciones
         .map((e) => e)
         .where((e) => e > 0)
@@ -398,6 +499,9 @@ class ServicesRepository {
     if (data == null) {
       throw ApiException('No se pudo calcular el formato operacional', 500, response);
     }
+
+    // Guardar en caché para uso offline posterior
+    unawaited(_fichaDao.upsertFicha(programacionId, 'calculo_formato', data));
 
     return data;
   }
@@ -420,6 +524,20 @@ class ServicesRepository {
     if (token == null || token.isEmpty) {
       throw ApiException('No hay sesión activa', 401, const {});
     }
+
+    // ─── OFFLINE ───────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      final cached = await _fichaDao.getFicha(programacionId, 'insumos_entregados');
+      if (cached != null && cached['items'] is List) {
+        final list = cached['items'] as List;
+        return list
+            .map((e) => InsumoQuimicoEntregado.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+      return const [];
+    }
+    // ───────────────────────────────────────────────────────────────────────
 
     List<Map<String, dynamic>> insumosMaps = <Map<String, dynamic>>[];
 
@@ -499,6 +617,13 @@ class ServicesRepository {
       );
     }
 
+    // Guardar en caché para uso offline posterior
+    if (result.isNotEmpty) {
+      unawaited(_fichaDao.upsertFicha(programacionId, 'insumos_entregados', {
+        'items': result.map((e) => e.toJson()).toList(),
+      }));
+    }
+
     return result;
   }
 
@@ -510,6 +635,17 @@ class ServicesRepository {
     if (token == null || token.isEmpty) {
       throw ApiException('No hay sesión activa', 401, const {});
     }
+
+    // ─── OFFLINE ───────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      final draft = await _fichaDao.getFicha(programacionId, 'ficha');
+      if (draft != null) {
+        return FichaOperacional.fromJson(draft);
+      }
+      return null;
+    }
+    // ───────────────────────────────────────────────────────────────────────
 
     try {
       final response = await _apiClient.get(
@@ -542,6 +678,34 @@ class ServicesRepository {
       throw ApiException('No hay sesión activa', 401, const {});
     }
 
+    // ─── OFFLINE ─────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      await _fichaDao.saveLocalDraft(programacionId, 'ficha', formData);
+
+      final operationId = _generateOperationId('ficha', programacionId);
+      await _syncQueueDao.enqueue(
+        SyncQueueEntry(
+          operationId: operationId,
+          entityType: 'ficha',
+          entityId: programacionId,
+          method: 'POST',
+          endpoint: '/v1/programacion-servicio/$programacionId/ficha',
+          payloadJson: jsonEncode(formData),
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+
+      // Devolver ficha temporal para no romper la UI
+      return FichaOperacional.fromJson(<String, dynamic>{
+        ...formData,
+        'id': 0,
+        'estado': 'borrador_local',
+        'id_programacion_servicio': programacionId,
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     final response = await _apiClient.post(
       '/v1/programacion-servicio/$programacionId/ficha',
       token: token,
@@ -552,6 +716,9 @@ class ServicesRepository {
     if (data == null) {
       throw ApiException('Error al guardar ficha', 500, response);
     }
+
+    // Actualizar caché local con la respuesta del servidor
+    unawaited(_fichaDao.upsertFicha(programacionId, 'ficha', data));
 
     return FichaOperacional.fromJson(data);
   }
@@ -611,6 +778,13 @@ class ServicesRepository {
       throw ApiException('No hay sesión activa', 401, const {});
     }
 
+    // ─── OFFLINE ───────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      return _fichaDao.getFicha(programacionId, 'formato');
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     try {
       final response = await _apiClient.get(
         '/v1/programacion-servicio/$programacionId/formato-operacional',
@@ -660,6 +834,33 @@ class ServicesRepository {
       throw ApiException('No hay sesión activa', 401, const {});
     }
 
+    // ─── OFFLINE ─────────────────────────────────────────────────────────
+    final isOnline = await _connectivity.isOnline;
+    if (!isOnline) {
+      await _fichaDao.saveLocalDraft(programacionId, 'formato', formData);
+
+      final operationId = _generateOperationId('formato', programacionId);
+      await _syncQueueDao.enqueue(
+        SyncQueueEntry(
+          operationId: operationId,
+          entityType: 'formato',
+          entityId: programacionId,
+          method: 'POST',
+          endpoint: '/v1/programacion-servicio/$programacionId/formato-operacional',
+          payloadJson: jsonEncode(formData),
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+
+      return <String, dynamic>{
+        ...formData,
+        'id': 0,
+        'estado': 'borrador_local',
+        'id_programacion_servicio': programacionId,
+      };
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     final response = await _apiClient.post(
       '/v1/programacion-servicio/$programacionId/formato-operacional',
       token: token,
@@ -670,6 +871,9 @@ class ServicesRepository {
     if (data == null) {
       throw ApiException('Error al guardar formato operacional', 500, response);
     }
+
+    // Actualizar caché local con la respuesta del servidor
+    unawaited(_fichaDao.upsertFicha(programacionId, 'formato', data));
 
     return data;
   }
@@ -756,4 +960,49 @@ class ServicesRepository {
 
     return response;
   }
+
+  // ─── Helpers offline ─────────────────────────────────────────────────────
+
+  /// Genera un ID de operación único y determinista para evitar duplicados
+  /// al reintentar la misma operación offline.
+  String _generateOperationId(String type, int entityId) {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    return '${type}_${entityId}_$ts';
+  }
+
+  /// Copia fotos al almacenamiento local de la app para que no dependan
+  /// de la galería del usuario. Retorna la lista de rutas locales.
+  Future<List<String>> _copyPhotosToLocalStorage(
+    List<ServiceEvidenceUpload> photos, {
+    required int serviceId,
+  }) async {
+    if (photos.isEmpty) return <String>[];
+
+    final dbPath = await getDatabasesPath();
+    final offlineDir = Directory(p.join(dbPath, '..', 'offline_photos'));
+    if (!offlineDir.existsSync()) {
+      offlineDir.createSync(recursive: true);
+    }
+
+    final localPaths = <String>[];
+    for (final photo in photos) {
+      try {
+        final source = File(photo.path);
+        if (!source.existsSync()) continue;
+
+        final ext = p.extension(photo.name).isNotEmpty ? p.extension(photo.name) : '.jpg';
+        final destName = '${serviceId}_${DateTime.now().microsecondsSinceEpoch}$ext';
+        final dest = File(p.join(offlineDir.path, destName));
+        await source.copy(dest.path);
+        localPaths.add(dest.path);
+      } catch (_) {
+        // Si falla la copia, omitir esa foto
+      }
+    }
+
+    return localPaths;
+  }
+
+  /// Cantidad de operaciones pendientes de sincronización.
+  Future<int> getPendingSyncCount() => _syncQueueDao.getPendingCount();
 }

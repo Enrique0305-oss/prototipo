@@ -106,6 +106,6 @@ export const entregaEppService = {
   },
 
   getPdfUrl: (id: number) => {
-    return `http://backend.qsci-system.com/api/v1/entrega-epp/${id}/pdf`;
+    return `http://pruebabackend.qsci-system.com/api/v1/entrega-epp/${id}/pdf`;
   },
 };

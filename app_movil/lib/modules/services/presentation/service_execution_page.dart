@@ -140,20 +140,31 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
       _elapsedSeconds = now.difference(startedAt).inSeconds;
       if (_elapsedSeconds < 0) _elapsedSeconds = 0;
 
-      _timer?.cancel();
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (!mounted || _startedAt == null) return;
-        setState(() {
-          _elapsedSeconds = DateTime.now().difference(_startedAt!).inSeconds;
-          if (_elapsedSeconds < 0) _elapsedSeconds = 0;
-        });
-      });
+      _startTimer();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      // Fallback: usar hora actual local para que el cronómetro funcione
+      _startedAt = DateTime.now();
+      _elapsedSeconds = 0;
+      _startTimer();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sin conexión al servidor. Usando hora local para el cronómetro.')),
+      );
     } finally {
       if (mounted) setState(() => _starting = false);
     }
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _startedAt == null) return;
+      setState(() {
+        _elapsedSeconds = DateTime.now().difference(_startedAt!).inSeconds;
+        if (_elapsedSeconds < 0) _elapsedSeconds = 0;
+      });
+    });
   }
 
   @override

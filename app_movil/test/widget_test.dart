@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 
-import 'package:app_movil/main.dart';
+import 'package:qsci/main.dart';
 
 void main() {
   testWidgets('Renderiza pantalla de inicio', (WidgetTester tester) async {

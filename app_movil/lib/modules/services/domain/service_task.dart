@@ -74,6 +74,35 @@ class ServiceTask {
     );
   }
 
+  /// Serializa el objeto a un Map JSON plano para almacenar en SQLite.
+  /// Se usa una estructura simple (no la del backend) para evitar dependencias
+  /// de la forma exacta de la respuesta de la API.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      // Wrappers mínimos para que fromJson() los encuentre
+      'servicio': <String, dynamic>{'nombre': title},
+      'orden_servicio': <String, dynamic>{
+        'cliente': <String, dynamic>{'nombre_empresa': client},
+      },
+      'planta': <String, dynamic>{},
+      'fecha_programada': date,
+      'estado_ejecucion': status,
+      'direccion_completa': address ?? '',
+      'observaciones': observations ?? '',
+      'hora_inicio': startTime ?? '',
+      'hora_fin': endTime ?? '',
+      'duracion_real': durationMinutes,
+      'id_grupo_programacion': groupId,
+      'latitud': latitude,
+      'longitud': longitude,
+      'fotos_evidencia': evidencePhotos,
+      'fecha_ejecucion_real': completedAt ?? '',
+      'areas': areaNames.map((n) => <String, dynamic>{'nombre': n}).toList(),
+      'formatos_fichas': formatosFichas,
+    };
+  }
+
   factory ServiceTask.fromJson(Map<String, dynamic> json) {
     final service = json['servicio'] as Map<String, dynamic>? ?? <String, dynamic>{};
     final order = json['orden_servicio'] as Map<String, dynamic>? ?? <String, dynamic>{};

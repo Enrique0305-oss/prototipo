@@ -24,12 +24,59 @@ class CalculoFormatoOperacionalService
         }
 
         $programaciones = ProgramacionServicio::query()
+            ->with(['ordenServicio', 'planta'])
             ->whereIn('id', $ids)
             ->get();
 
         if ($programaciones->isEmpty()) {
             throw new \Exception('No se encontraron programaciones para calcular el Formato Operacional');
         }
+
+        $mainProg = $programaciones->firstWhere('id', $idProgramacion) ?? $programaciones->first();
+
+        // ─── LÓGICA DE MEMORIA TÉCNICA (HISTORIAL) ──────────────────────────
+        // Buscamos el último formato operacional ya guardado para la misma
+        // orden de servicio y planta. Esto permite que cuando un técnico
+        // completa el formato del 1-May, el del 5-May ya traiga los códigos
+        // y ubicaciones que se registraron la primera vez.
+        $historialDetalles = collect();
+        $ultimoFormato = null;
+
+        if ($mainProg->id_orden_servicio) {
+            $ultimoFormato = FormatoOperacional::query()
+                ->where('id_programacion_servicio', '!=', $mainProg->id)
+                ->whereHas('programacionServicio', function ($q) use ($mainProg) {
+                    $q->where('id_orden_servicio', $mainProg->id_orden_servicio)
+                      ->where('id_cliente_planta', $mainProg->id_cliente_planta);
+                })
+                ->whereIn('estado', ['completada', 'borrador'])
+                ->orderByRaw("FIELD(estado, 'completada', 'borrador')")
+                ->orderBy('fecha', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+        }
+
+        // Si no encontramos por orden de servicio, intentar por planta solamente
+        if (!$ultimoFormato && $mainProg->id_cliente_planta) {
+            $ultimoFormato = FormatoOperacional::query()
+                ->where('id_programacion_servicio', '!=', $mainProg->id)
+                ->whereHas('programacionServicio', function ($q) use ($mainProg) {
+                    $q->where('id_cliente_planta', $mainProg->id_cliente_planta);
+                })
+                ->whereIn('estado', ['completada', 'borrador'])
+                ->orderByRaw("FIELD(estado, 'completada', 'borrador')")
+                ->orderBy('fecha', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+        }
+
+        if ($ultimoFormato) {
+            $historialDetalles = $ultimoFormato->detalles()
+                ->orderBy('orden_caja', 'asc')
+                ->get()
+                ->groupBy('tipo_seccion');
+        }
+        // ───────────────────────────────────────────────────────────────────
 
         $formatos = [];
         foreach ($programaciones as $programacion) {
@@ -65,28 +112,66 @@ class CalculoFormatoOperacionalService
             'trampas_luz' => $inventario['totales']['trampas_luz'],
         ];
 
+        // ─── CONSTRUIR SECCIONES POR PRIORIDAD ──────────────────────────────
+        // Forzamos un orden de prioridad para evitar que un formato se lleve 
+        // insumos que otro necesita (ej: láminas para cajas cebaderas).
         $secciones = [];
-        foreach ($formatos as $formato) {
-            $codigoFormato = $formato['codigo'];
-            if ($codigoFormato === 'roedores') {
-                $secciones = array_merge($secciones, $this->construirSeccionesRoedores($restante));
-                continue;
-            }
+        $codigosPresentes = array_column($formatos, 'codigo');
 
-            if ($codigoFormato === 'rastreros') {
-                $secciones = array_merge($secciones, $this->construirSeccionesRastreros($restante));
-                continue;
-            }
+        // 1. Prioridad: Roedores (usa cajas, cebos y láminas)
+        if (in_array('roedores', $codigosPresentes)) {
+            $secciones = array_merge($secciones, $this->construirSeccionesRoedores($restante));
+        }
 
-            if ($codigoFormato === 'voladores') {
-                $secciones = array_merge($secciones, $this->construirSeccionesVoladores($restante));
+        // 2. Prioridad: Rastreros (usa láminas restantes)
+        if (in_array('rastreros', $codigosPresentes)) {
+            $secciones = array_merge($secciones, $this->construirSeccionesRastreros($restante));
+        }
+
+        // 3. Prioridad: Voladores (usa trampas de luz)
+        if (in_array('voladores', $codigosPresentes)) {
+            $secciones = array_merge($secciones, $this->construirSeccionesVoladores($restante));
+        }
+
+        // ─── INTEGRAR MEMORIA TÉCNICA EN LAS SECCIONES ─────────────────────
+        foreach ($secciones as &$seccion) {
+            $tipoSeccion = $seccion['tipo_seccion'];
+            
+            // Intentar obtener historial por el tipo actual (ENUM: cebo, lamina, trampa_luz)
+            $historial = $historialDetalles->get($tipoSeccion);
+
+            // Si hay historial, pero el tipo es 'lamina', filtramos por descripción
+            // para no mezclar láminas de Rastreros con láminas de Roedores.
+            if ($historial && $historial->isNotEmpty() && $tipoSeccion === 'lamina') {
+                $tituloNormalizado = strtolower(trim($seccion['titulo']));
+                $historial = $historial->filter(function($d) use ($tituloNormalizado) {
+                    $descH = strtolower(trim($d->descripcion));
+                    // Si la sección actual es Rastreros, buscamos descripciones de Rastreros
+                    if (str_contains($tituloNormalizado, 'rastrero')) {
+                        return str_contains($descH, 'rastrero') || $descH === 'láminas pegantes';
+                    }
+                    // Si es Roedores, buscamos descripciones de Roedores
+                    return str_contains($descH, 'cebadera') || str_contains($descH, 'roedor');
+                });
+            }
+            
+            if ($historial && $historial->isNotEmpty()) {
+                $seccion['historial_dispositivos'] = $historial->map(fn($d) => [
+                    'codigo_caja' => $d->codigo_caja,
+                    'ubicacion' => $d->ubicacion,
+                    'orden_caja' => $d->orden_caja,
+                ])->values()->all();
+            } else {
+                $seccion['historial_dispositivos'] = [];
             }
         }
+        // ───────────────────────────────────────────────────────────────────
 
         return [
             'formatos_aplicados' => array_map(static fn (array $item) => $item['etiqueta'], $formatos),
             'dispositivos' => $inventario,
             'secciones' => $secciones,
+            'ultimo_formato_id' => $ultimoFormato?->id,
             'resumen' => [
                 'total_secciones' => count($secciones),
                 'total_items' => array_sum(array_map(static fn (array $section) => (int) $section['cantidad_asignada'], $secciones)),

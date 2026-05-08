@@ -2,7 +2,7 @@ import './style.css'
 import './additional-styles.css'
 import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
-const LOGO_URL = "http://backend.qsci-system.com/images/menu.png";
+const LOGO_URL = "http://pruebabackend.qsci-system.com/images/menu.png";
 
 // Inicializar guard de autenticación
 initAuthGuard();
@@ -49,6 +49,9 @@ import {
   renderHistorialInformesTab,
   mapServiciosRealizadosCards,
   renderServiciosRealizadosCards,
+  mapServiciosPorClienteMes,
+  renderServiciosPorClienteMes,
+  renderVisitaDetail,
   renderServicioImagenesModal,
   renderFichaOperacionalModal,
   renderFormatoOperacionalModal,
@@ -73,11 +76,23 @@ let activeInventoryTab = 'productos'; // Estado para el tab de inventario
 let activeLogisticaTab = 'clientes'; // Estado para el tab de Servicios - Clientes
 let activeFinanzasTab = 'dashboard'; // Estado para el tab de finanzas
 let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
+let mesActual = new Date().getMonth() + 1; // 1-12 (mayo = 5)
+let anioActual = new Date().getFullYear(); // 2026
 let activeRecursosTab = 'asistencia'; // Estado para el tab de recursos humanos
 let activeOperacionesTab = 'servicios'; // Estado para el tab de operaciones
 let misProyecciones: any[] = []; // Lista de proyecciones para facturación
+let misEmpresas: any[] = []; // Lista de empresas para facturación
+let misOrdenesPendientes: any[] = []; // Órdenes pendientes para facturación
+
+// Exponer variables globales para acceso desde otros módulos
+(window as any).mesActual = mesActual;
+(window as any).anioActual = anioActual;
+(window as any).misProyecciones = [];
+(window as any).misEmpresas = [];
+(window as any).misOrdenesPendientes = [];
 let sidebarForceCollapsed = false;
 let operacionesRealizadosCardsCache = new Map<string, ServicioRealizadoCardViewModel>();
+let operacionesGroupsCache: any[] = [];
 
 type FichaOperacionalApiData = {
   estado?: string | null;
@@ -148,17 +163,17 @@ declare global {
  * 'dashboard' y 'marcar-asistencia' son accesibles para todos.
  */
 const MENU_PERMISOS: Record<string, string[]> = {
-  'Dashboard':         ['dashboard'],
-  'Almacén':           ['inventario', 'entradas-salidas'],
-  'Servicios - Clientes':         ['logistica'],
-  'Programaciones':    ['programaciones'],
-  'Comercial':         ['prospectos', 'cotizaciones', 'ods', 'odp', 'servicios'],
-  'Finanzas':          ['cotizaciones'],  // Finanzas ve cotizaciones
-  'Facturación':       ['cotizaciones'],
-  'Recursos Humanos':  ['rrhh-asistencia', 'rrhh-tecnicos', 'rrhh-reportes', 'marcar-asistencia'],
-  'Operaciones':       ['ods', 'odp', 'servicios'],
-  'Reportes':          ['dashboard'],  // Todos con dashboard ven reportes
-  'Usuarios':          ['usuarios'],
+  'Dashboard': ['dashboard'],
+  'Almacén': ['inventario', 'entradas-salidas'],
+  'Servicios - Clientes': ['logistica'],
+  'Programaciones': ['programaciones'],
+  'Comercial': ['prospectos', 'cotizaciones', 'ods', 'odp', 'servicios'],
+  'Finanzas': ['cotizaciones'],  // Finanzas ve cotizaciones
+  'Facturación': ['cotizaciones'],
+  'Recursos Humanos': ['rrhh-asistencia', 'rrhh-tecnicos', 'rrhh-reportes', 'marcar-asistencia'],
+  'Operaciones': ['ods', 'odp', 'servicios'],
+  'Reportes': ['dashboard'],  // Todos con dashboard ven reportes
+  'Usuarios': ['usuarios'],
 };
 
 const SUBMENU_PERMISOS: Record<string, string[]> = {
@@ -386,7 +401,7 @@ function getMainContent() {
     if (activeSubMenu === 'Contratos') return renderContratosFijosTab();
     if (activeSubMenu === 'Cobranza') return renderEstadoCobranzaTab();
     // Por defecto muestra la tabla con los datos
-    return renderFacturacion(misProyecciones);
+    return renderFacturacion(misProyecciones, misOrdenesPendientes, misEmpresas);
   } else if (activeMenu === 'Recursos Humanos') {
     return renderRecursosHumanos();
   } else if (activeMenu === 'Operaciones') {
@@ -503,9 +518,9 @@ function renderApp() {
     </div>
   `;
   // Al final de tu función renderApp() o donde inicializas otros eventos:
-if (activeMenu === 'Facturación') {
-  initFacturacionEvents(misProyecciones);
-}
+  if (activeMenu === 'Facturación') {
+    initFacturacionEvents(misProyecciones);
+  }
 
   // Sidebar: colapsar submenús al retirar el cursor
   const sidebarEl = document.querySelector('.sidebar');
@@ -524,64 +539,132 @@ if (activeMenu === 'Facturación') {
     });
   }
 
+  if (menuName === 'Facturación') {
+    try {
+      const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
+
+      // Cargar proyecciones
+      const respuesta = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, {
+        headers: {
+          'Accept': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+      const result = await respuesta.json();
+      const rawData = result.data || result;
+      misProyecciones = Array.isArray(rawData) ? rawData : [];
+
+      // Cargar empresas
+      const respuestaEmpresas = await fetch(`http://backend.qsci-system.com/api/v1/empresas`, {
+        headers: {
+          'Accept': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+      const resultEmpresas = await respuestaEmpresas.json();
+      misEmpresas = resultEmpresas.data || [];
+
+      // Cargar órdenes pendientes
+      const respuestaPendientes = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/pendientes`, {
+        headers: {
+          'Accept': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+      const resultPendientes = await respuestaPendientes.json();
+      misOrdenesPendientes = resultPendientes.data || [];
+
+      console.log(`Proyecciones ${mesActual}/${anioActual} cargadas:`, misProyecciones);
+      console.log('Empresas cargadas:', misEmpresas);
+      console.log('Órdenes pendientes:', misOrdenesPendientes);
+    } catch (error) {
+      console.error("Error cargando datos de facturación:", error);
+      misProyecciones = [];
+      misEmpresas = [];
+      misOrdenesPendientes = [];
+    }
+  }
+
+  ----------------------------------------------------
+    let activeMenu = 'Dashboard';
+  let activeSubMenu = '';
+  let expandedMenu = ''; // Controla qué menú con submenús está expandido (sin navegar)
+  let activeInventoryTab = 'productos'; // Estado para el tab de inventario
+  let activeLogisticaTab = 'clientes'; // Estado para el tab de Servicios - Clientes
+  let activeFinanzasTab = 'dashboard'; // Estado para el tab de finanzas
+  let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
+  let mesActual = new Date().getMonth() + 1; // 1-12 (mayo = 5)
+  let anioActual = new Date().getFullYear(); // 2026
+  let activeRecursosTab = 'asistencia'; // Estado para el tab de recursos humanos
+  let activeOperacionesTab = 'servicios'; // Estado para el tab de operaciones
+  let misProyecciones: any[] = []; // Lista de proyecciones para facturación
+  let misEmpresas: any[] = []; // Lista de empresas para facturación
+  let misOrdenesPendientes: any[] = []; // Órdenes pendientes para facturación
+
+  // Exponer variables globales para acceso desde otros módulos
+  (window as any).mesActual = mesActual;
+  (window as any).anioActual = anioActual;
+  (window as any).misProyecciones = [];
+  (window as any).misEmpresas = [];
+  (window as any).misOrdenesPendientes = [];
 
   document.querySelectorAll('.nav-item').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    const target = e.currentTarget as HTMLButtonElement;
-    const menuName = target.dataset.menu || 'Dashboard';
-    const hasSubmenu = target.dataset.hasSubmenu === 'true';
+    btn.addEventListener('click', async (e) => {
+      const target = e.currentTarget as HTMLButtonElement;
+      const menuName = target.dataset.menu || 'Dashboard';
+      const hasSubmenu = target.dataset.hasSubmenu === 'true';
 
-    // Si tiene submenú, solo expandir/colapsar sin navegar
-    if (hasSubmenu) {
+      // Si tiene submenú, solo expandir/colapsar sin navegar
+      if (hasSubmenu) {
+        sidebarForceCollapsed = false;
+        if (expandedMenu === menuName) {
+          // Ya está expandido → colapsar
+          expandedMenu = '';
+        } else {
+          // Expandir este menú
+          expandedMenu = menuName;
+        }
+        renderApp();
+        return;
+      }
+
+      // Menús sin submenú → navegar directamente
+      activeMenu = menuName;
+      activeSubMenu = '';
+      expandedMenu = '';
       sidebarForceCollapsed = false;
-      if (expandedMenu === menuName) {
-        // Ya está expandido → colapsar
-        expandedMenu = '';
-      } else {
-        // Expandir este menú
-        expandedMenu = menuName;
+
+      if (menuName === 'Dashboard' && !esUsuarioGerencia()) {
+        const ruta = getRutaInicialPorPerfil();
+        activeMenu = ruta.menu;
+        activeSubMenu = ruta.subMenu;
       }
+
+      // SOLO si es Facturación, traemos la data real
+      if (menuName === 'Facturación') {
+        try {
+          const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
+          const respuesta = await fetch('http://pruebabackend.qsci-system.com/api/v1/proyecciones', {
+            headers: {
+              'Accept': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            },
+          });
+          const result = await respuesta.json();
+
+          const rawData = result.data || result;
+          misProyecciones = Array.isArray(rawData) ? rawData : [];
+
+          console.log("Proyecciones reales cargadas:", misProyecciones);
+        } catch (error) {
+          console.error("Error cargando proyecciones:", error);
+          misProyecciones = [];
+        }
+      }
+
       renderApp();
-      return;
-    }
-
-    // Menús sin submenú → navegar directamente
-    activeMenu = menuName;
-    activeSubMenu = '';
-    expandedMenu = '';
-    sidebarForceCollapsed = false;
-
-    if (menuName === 'Dashboard' && !esUsuarioGerencia()) {
-      const ruta = getRutaInicialPorPerfil();
-      activeMenu = ruta.menu;
-      activeSubMenu = ruta.subMenu;
-    }
-
-    // SOLO si es Facturación, traemos la data real
-    if (menuName === 'Facturación') {
-      try {
-        const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
-        const respuesta = await fetch('http://backend.qsci-system.com/api/v1/proyecciones', {
-          headers: {
-            'Accept': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-        }); 
-        const result = await respuesta.json();
-        
-        const rawData = result.data || result; 
-        misProyecciones = Array.isArray(rawData) ? rawData : [];
-        
-        console.log("Proyecciones reales cargadas:", misProyecciones);
-      } catch (error) {
-        console.error("Error cargando proyecciones:", error);
-        misProyecciones = [];
-      }
-    }
-
-    renderApp();
+    });
   });
-});
 
 
   document.querySelectorAll('.submenu-item').forEach(btn => {
@@ -879,7 +962,7 @@ function updateRecursosTabContent() {
     default:
       tabContent.innerHTML = tieneAccesoCompletoRecursosHumanos() ? renderAsistenciaTab() : renderAsistenciaPersonalTab();
   }
-  
+
   // Inicializar event listeners para Marcar Asistencia
   if (activeRecursosTab === 'marcar') {
     cargarMarcarAsistencia();
@@ -950,11 +1033,121 @@ async function cargarServiciosRealizadosOperaciones() {
     const realizados = lista
       .filter((item): item is Programacion => Boolean(item))
       .filter((item) => item.estado_ejecucion === 'Realizado');
-    const cards = mapServiciosRealizadosCards(realizados);
+    // Agrupar por cliente y mes y renderizar
+    const groups = mapServiciosPorClienteMes(realizados);
 
-    operacionesRealizadosCardsCache = new Map(cards.map((card) => [card.key, card]));
-    container.innerHTML = renderServiciosRealizadosCards(cards);
+    // Construir cache de visitas para handlers con datos completos de cada visita
+    operacionesRealizadosCardsCache = new Map();
+    groups.forEach((group) => {
+      group.visitas.forEach((visita) => {
+        operacionesRealizadosCardsCache.set(visita.key, {
+          key: visita.key,
+          serviceId: visita.serviceId,
+          groupId: null, // las visitas individuales no tienen groupId por defecto
+          titulo: visita.titulo,
+          fechaLabel: visita.fechaLabel,
+          tecnicosLabel: visita.tecnicosLabel,
+          previewImages: visita.previewImages,
+          extraCount: visita.extraCount,
+          secciones: visita.secciones,
+        } as any);
+      });
+    });
+
+    container.innerHTML = renderServiciosPorClienteMes(groups);
+    // guardar groups en caché para handlers
+    operacionesGroupsCache = groups;
     initOperacionesImagenesHandlers(container);
+
+    // Toggle para mostrar/ocultar el cuerpo del grupo (círculos + detalle)
+    container.querySelectorAll('.group-toggle-btn').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        const b = e.currentTarget as HTMLButtonElement;
+        const gi = Number(b.dataset.groupIdx || '0');
+        const groupEl = b.closest('.cliente-mes-group') as HTMLElement | null;
+        if (!groupEl) return;
+        const body = groupEl.querySelector('.group-body') as HTMLElement | null;
+        if (!body) return;
+        const isOpen = body.style.display && body.style.display !== 'none';
+        body.style.display = isOpen ? 'none' : 'block';
+        b.textContent = isOpen ? '▶' : '▼';
+
+        // si se abre, intentar cargar formato del grupo y propagar dispositivos a las visitas
+        if (!isOpen) {
+          const group = operacionesGroupsCache[gi];
+          try {
+            if (group && (group.visitas || []).length > 0 && group.visitas[0].serviceId && (group as any).groupId) {
+              const groupId = (group as any).groupId;
+              if (groupId && groupId > 0) {
+                // crear un card mínimo para pasar a la función de carga
+                const tempCard = { serviceId: group.visitas[0].serviceId, groupId } as any;
+                try {
+                  const formato = await cargarFormatoOperacional(tempCard);
+                  // extraer dispositivos (codigo, ubicacion) desde el formato
+                  const devices: Array<{ codigo: string; ubicacion: string }> = [];
+                  if (Array.isArray((formato as any).secciones)) {
+                    for (const s of (formato as any).secciones) {
+                      if (Array.isArray(s.items)) {
+                        for (const it of s.items) {
+                          const codigo = String((it as any).codigoCaja ?? (it as any).codigo_caja ?? (it as any).codigo ?? '').trim();
+                          const ubicacion = String((it as any).ubicacion ?? '').trim();
+                          if (codigo) devices.push({ codigo, ubicacion });
+                        }
+                      }
+                    }
+                  }
+
+                  // asignar devices a cada visita del grupo
+                  if (devices.length > 0) {
+                    group.visitas.forEach((v: any) => {
+                      v.devices = devices;
+                    });
+                  }
+                } catch (err) {
+                  // si no existe formato del grupo o falla, no hacer nada
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('No se pudo cargar formato del grupo al abrirlo', err);
+          }
+
+          const firstCircle = body.querySelector('.visit-circle') as HTMLButtonElement | null;
+          if (firstCircle) firstCircle.click();
+        }
+      });
+    });
+
+    // inicializar listeners de círculos de visitas: al hacer click renderiza solo la visita seleccionada
+    container.querySelectorAll('.visit-circle').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const b = e.currentTarget as HTMLButtonElement;
+        const gi = Number(b.dataset.groupIdx || '0');
+        const vi = Number(b.dataset.visitIdx || '0');
+        const group = operacionesGroupsCache[gi];
+        if (!group) return;
+        const visita = group.visitas && group.visitas[vi];
+        if (!visita) return;
+
+        const groupEl = b.closest('.cliente-mes-group') as HTMLElement | null;
+        if (!groupEl) return;
+        const details = groupEl.querySelector('.group-visit-details') as HTMLElement | null;
+        if (!details) return;
+
+        // Renderizar solo el detalle de la visita seleccionada
+        details.innerHTML = renderVisitaDetail(visita);
+
+        // enganchar handlers dentro del detalle (ficha, formato, imagenes)
+        initOperacionesImagenesHandlers(details);
+
+        // marcar circulo activo visualmente
+        const parent = b.closest('.visit-circles');
+        if (parent) {
+          parent.querySelectorAll('.visit-circle').forEach((c) => c.classList.remove('active'));
+          b.classList.add('active');
+        }
+      });
+    });
   } catch (error) {
     console.error('No se pudieron cargar servicios realizados en Operaciones:', error);
     container.innerHTML = '<p style="color:#b91c1c; margin:0;">No se pudieron cargar los servicios realizados.</p>';
@@ -1116,44 +1309,44 @@ async function cargarFichaOperacional(card: ServicioRealizadoCardViewModel): Pro
 function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalViewModel {
   const secciones = Array.isArray(data.secciones)
     ? data.secciones.map((section) => ({
-        tipo: String(section.tipo ?? '').trim(),
-        titulo: String(section.titulo ?? '').trim(),
-        cantidad: Number(section.cantidad ?? 0) || 0,
-        items: Array.isArray(section.items)
-          ? section.items.map((item) => {
-              const itemAny = item as any;
-              return {
-                codigoCaja: String(itemAny.codigo_caja ?? '').trim(),
-                ubicacion: String(itemAny.ubicacion ?? '').trim(),
-                estadoDispositivoVerdadera: String(itemAny.estado_dispositivo_verdadera ?? itemAny.estado_dispositivo ?? '').trim(),
-                estadoDispositivoAuditiva: String(itemAny.estado_dispositivo_auditiva ?? itemAny.estado_dispositivo ?? '').trim(),
-                hallazgoVerdadera: String(itemAny.hallazgo_verdadera ?? itemAny.hallazgo ?? '-').trim(),
-                hallazgoAuditiva: String(itemAny.hallazgo_auditiva ?? itemAny.hallazgo ?? '-').trim(),
-                senalesPresenciaVerdadera: String(itemAny.senales_presencia_verdadera ?? itemAny.senales_presencia ?? '-').trim(),
-                senalesPresenciaAuditiva: String(itemAny.senales_presencia_auditiva ?? itemAny.senales_presencia ?? '-').trim(),
-                conteoInsectos: itemAny.conteo_insectos && typeof itemAny.conteo_insectos === 'object'
-                  ? Object.fromEntries(
-                      Object.entries(itemAny.conteo_insectos).map(([key, value]) => [
-                        key,
-                        {
-                          verdadera: Number((value as any)?.verdadera ?? 0) || 0,
-                          auditiva: Number((value as any)?.auditiva ?? 0) || 0,
-                        },
-                      ]),
-                    )
-                  : null,
-                estadoLamina: String(itemAny.estado_lamina ?? '').trim() || null,
-                estadio: String(itemAny.estadio ?? '').trim() || null,
-                conteoEstadio: itemAny.conteo_estadio && typeof itemAny.conteo_estadio === 'object'
-                  ? itemAny.conteo_estadio
-                  : null,
-                conteoEstadioVerdadera: Number(itemAny.conteo_estadio_verdadera ?? 0) || 0,
-                conteoEstadioFalsa: Number(itemAny.conteo_estadio_falsa ?? 0) || 0,
-                numeroLote: String(itemAny.numero_lote ?? '').trim(),
-              };
-            })
-          : [],
-      }))
+      tipo: String(section.tipo ?? '').trim(),
+      titulo: String(section.titulo ?? '').trim(),
+      cantidad: Number(section.cantidad ?? 0) || 0,
+      items: Array.isArray(section.items)
+        ? section.items.map((item) => {
+          const itemAny = item as any;
+          return {
+            codigoCaja: String(itemAny.codigo_caja ?? '').trim(),
+            ubicacion: String(itemAny.ubicacion ?? '').trim(),
+            estadoDispositivoVerdadera: String(itemAny.estado_dispositivo_verdadera ?? itemAny.estado_dispositivo ?? '').trim(),
+            estadoDispositivoAuditiva: String(itemAny.estado_dispositivo_auditiva ?? itemAny.estado_dispositivo ?? '').trim(),
+            hallazgoVerdadera: String(itemAny.hallazgo_verdadera ?? itemAny.hallazgo ?? '-').trim(),
+            hallazgoAuditiva: String(itemAny.hallazgo_auditiva ?? itemAny.hallazgo ?? '-').trim(),
+            senalesPresenciaVerdadera: String(itemAny.senales_presencia_verdadera ?? itemAny.senales_presencia ?? '-').trim(),
+            senalesPresenciaAuditiva: String(itemAny.senales_presencia_auditiva ?? itemAny.senales_presencia ?? '-').trim(),
+            conteoInsectos: itemAny.conteo_insectos && typeof itemAny.conteo_insectos === 'object'
+              ? Object.fromEntries(
+                Object.entries(itemAny.conteo_insectos).map(([key, value]) => [
+                  key,
+                  {
+                    verdadera: Number((value as any)?.verdadera ?? 0) || 0,
+                    auditiva: Number((value as any)?.auditiva ?? 0) || 0,
+                  },
+                ]),
+              )
+              : null,
+            estadoLamina: String(itemAny.estado_lamina ?? '').trim() || null,
+            estadio: String(itemAny.estadio ?? '').trim() || null,
+            conteoEstadio: itemAny.conteo_estadio && typeof itemAny.conteo_estadio === 'object'
+              ? itemAny.conteo_estadio
+              : null,
+            conteoEstadioVerdadera: Number(itemAny.conteo_estadio_verdadera ?? 0) || 0,
+            conteoEstadioFalsa: Number(itemAny.conteo_estadio_falsa ?? 0) || 0,
+            numeroLote: String(itemAny.numero_lote ?? '').trim(),
+          };
+        })
+        : [],
+    }))
     : [];
 
   return {
@@ -1166,7 +1359,8 @@ function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalVi
     horaInicio: String(data.hora_inicio ?? '').trim(),
     horaFinal: String(data.hora_final ?? '').trim(),
     observaciones: String(data.observaciones ?? '').trim(),
-    secciones,
+    formatos_fichas: (data as any).formatos_fichas || [],
+    secciones: secciones,
   };
 }
 
@@ -1272,16 +1466,13 @@ function abrirModalFormatoOperacional(card: ServicioRealizadoCardViewModel, form
   host.querySelectorAll('.js-download-formato-pdf').forEach((button) => {
     button.addEventListener('click', async () => {
       const btn = button as HTMLButtonElement;
-      const groupId = btn.dataset.groupId ? parseInt(btn.dataset.groupId, 10) : null;
       const serviceId = parseInt(btn.dataset.serviceId || '0', 10);
 
-      // Obtener el tipo seleccionado del selector
+      // Obtener el tipo seleccionado del selector (Verdadera/Falsa)
       const selector = host.querySelector('.js-tipo-pdf-selector') as HTMLSelectElement | null;
       const tipoPdf = selector ? selector.value : 'verdadera';
-      // Obtener el formato seleccionado (si aplica)
-      const formatoSelectorEl = host.querySelector('.js-formato-view-selector') as HTMLSelectElement | null;
-      const formatoSeleccionado = formatoSelectorEl ? formatoSelectorEl.value : 'all';
-      const queryParams = `?tipo_pdf=${tipoPdf}` + (formatoSeleccionado && formatoSeleccionado !== 'all' ? `&formato=${encodeURIComponent(formatoSeleccionado)}` : '');
+
+      const queryParams = `?tipo_pdf=${tipoPdf}`;
 
       const originalText = btn.innerHTML;
       btn.disabled = true;
@@ -1293,11 +1484,10 @@ function abrirModalFormatoOperacional(card: ServicioRealizadoCardViewModel, form
         const labelTipo = tipoPdf === 'falsa' ? '_Falsa' : '_Verdadera';
         const filename = `Formato_Operacional_${clienteSafe}${labelTipo}.pdf`;
 
-        if (groupId && groupId > 0) {
-          await apiClient.downloadFile(`/programacion-servicio/grupos/${groupId}/formato-operacional/pdf${queryParams}`, filename);
-        } else {
-          await apiClient.downloadFile(`/programacion-servicio/${serviceId}/formato-operacional/pdf${queryParams}`, filename);
-        }
+        // SIEMPRE usar el endpoint de serviceId para aprovechar el "Filtrado Inteligente" del backend
+        // que detecta si debe filtrar por Roedores, Rastreros o Voladores según el servicio.
+        await apiClient.downloadFile(`/programacion-servicio/${serviceId}/formato-operacional/pdf${queryParams}`, filename);
+
       } catch (error) {
         console.error('Error descargando PDF del formato operacional:', error);
         alert('No se pudo descargar el PDF. Verifique que el formato esté guardado.');
@@ -1307,27 +1497,6 @@ function abrirModalFormatoOperacional(card: ServicioRealizadoCardViewModel, form
       }
     });
   });
-
-  // Selector para filtrar por formato (roedores/rastreros/voladores/all)
-  const formatoSelector = host.querySelector('.js-formato-view-selector') as HTMLSelectElement | null;
-  if (formatoSelector) {
-    const updateVisibility = () => {
-      const val = formatoSelector.value;
-      host.querySelectorAll('.formato-seccion').forEach((el) => {
-        const htmlEl = el as HTMLElement;
-        const elFormat = htmlEl.getAttribute('data-formato');
-        if (val === 'all' || !elFormat) {
-          htmlEl.style.display = '';
-        } else {
-          htmlEl.style.display = elFormat === val ? '' : 'none';
-        }
-      });
-    };
-
-    formatoSelector.addEventListener('change', updateVisibility);
-    // inicializar visibilidad según selección por defecto
-    updateVisibility();
-  }
 
   document.addEventListener('keydown', function onEsc(event) {
     if (event.key !== 'Escape') return;

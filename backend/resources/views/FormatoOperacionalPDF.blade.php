@@ -108,82 +108,29 @@
         </table>
     @endif
 
-    @if($usaFormatoLamina)
-        @foreach($secciones as $seccion)
-            <table style="margin-top: 8px;">
-                <tr>
-                    <td class="section-header">{{ strtoupper($seccion['titulo']) }}</td>
-                </tr>
-            </table>
-            <table style="margin-top: -1px;">
-                <tr>
-                    <th class="bg-header" style="width: 28%;">Ubicación</th>
-                    <th class="bg-header" style="width: 10%;">N°</th>
-                    <th class="bg-header" style="width: 12%;">Estadio</th>
-                    <th class="bg-header" style="width: 12%;">Conteo</th>
-                    <th class="bg-header" style="width: 20%;">Estado de lámina</th>
-                </tr>
-                @foreach($seccion['items'] as $item)
-                    @php
-                        $conteoEstadio = is_array($item['conteo_estadio'] ?? null) ? $item['conteo_estadio'] : [];
-                        $estadios = ['ADULTO', 'NINFA', 'OOTECA'];
-                        $estadiosConDatos = array_values(array_filter($estadios, fn ($estadio) => array_key_exists($estadio, $conteoEstadio)));
-                        $estadoLamina = $item['estado_lamina_verdadera'] ?? $item['estado_lamina'] ?? '---';
-                        $conteoFallback = (int) (($item['conteo_estadio_verdadera'] ?? $item['conteo_estadio_falsa'] ?? 0) ?: 0);
-                    @endphp
+    @php
+        $mostroLeyendaRoedores = false;
+        $mostroLeyendaInsectos = false;
+    @endphp
 
-                    @if(count($estadiosConDatos) > 0)
-                        @foreach($estadiosConDatos as $idx => $estadio)
-                            <tr>
-                                @if($idx === 0)
-                                    <td rowspan="{{ count($estadiosConDatos) }}">{{ $item['ubicacion'] ?? '---' }}</td>
-                                    <td rowspan="{{ count($estadiosConDatos) }}" class="text-center">{{ $item['codigo_caja'] ?? '---' }}</td>
-                                @endif
-                                <td>{{ $estadio }}</td>
-                                <td class="text-center">
-                                    {{ (int) ($conteoEstadio[$estadio]['verdadera'] ?? $conteoEstadio[$estadio]['auditiva'] ?? 0) }}
-                                </td>
-                                @if($idx === 0)
-                                    <td rowspan="{{ count($estadiosConDatos) }}" class="text-center">{{ $estadoLamina }}</td>
-                                @endif
-                            </tr>
-                        @endforeach
-                    @else
-                        <tr>
-                            <td>{{ $item['ubicacion'] ?? '---' }}</td>
-                            <td class="text-center">{{ $item['codigo_caja'] ?? '---' }}</td>
-                            <td>{{ $item['estadio'] ?? '---' }}</td>
-                            <td class="text-center">{{ $conteoFallback }}</td>
-                            <td class="text-center">{{ $estadoLamina }}</td>
-                        </tr>
-                    @endif
-                @endforeach
-            </table>
-        @endforeach
+    @foreach($secciones as $seccion)
+        @php
+            $tipoSeccion = $seccion['tipo'] ?? '';
+            // Clasificar la sección para elegir el diseño de tabla
+            $esDisposicionRoedores = in_array($tipoSeccion, ['roedores_cebo', 'roedores_lamina', 'jaula']);
+            $esDisposicionInsectos = in_array($tipoSeccion, ['rastreros_lamina', 'trampa_luz']);
+            
+            if ($esDisposicionRoedores) $mostroLeyendaRoedores = true;
+            if ($esDisposicionInsectos) $mostroLeyendaInsectos = true;
+        @endphp
 
-        <table style="margin-top: 10px; max-width: 360px; margin-left: auto; margin-right: auto;">
-            <tr>
-                <td class="section-header" colspan="2">LEYENDA DE ESTADO DE LÁMINA</td>
-            </tr>
-            <tr>
-                <td class="label">LÁMINA DESPRENDIDA</td>
-                <td class="text-center">D</td>
-            </tr>
-            <tr>
-                <td class="label">LÁMINA MOJADA</td>
-                <td class="text-center">M</td>
-            </tr>
-            <tr>
-                <td class="label">LÁMINA EN BUEN ESTADO</td>
-                <td class="text-center">B</td>
-            </tr>
-        </table>
-    @elseif($isRoedores)
-        @foreach($secciones as $seccion)
+        {{-- DISEÑO 1: TABLA TIPO ROEDORES (Estado, Hallazgo, Señales) --}}
+        @if($esDisposicionRoedores)
             @php
-                $itemCount = count($seccion['items'] ?? []);
+                $items = $seccion['items'] ?? [];
+                $itemCount = count($items);
                 $chunkSize = $itemCount > 0 ? ceil($itemCount / 2) : 1;
-                $chunks = array_chunk($seccion['items'] ?? [], $chunkSize);
+                $chunks = array_chunk($items, $chunkSize);
                 $leftItems = $chunks[0] ?? [];
                 $rightItems = $chunks[1] ?? [];
             @endphp
@@ -191,7 +138,7 @@
             <table style="margin-top: 8px; width: 100%; table-layout: fixed;">
                 <thead>
                     <tr>
-                        <th class="section-header" colspan="10">{{ strtoupper($seccion['titulo']) }}</th>
+                        <th class="section-header" colspan="10">{{ strtoupper($seccion['titulo']) }} ({{ $itemCount }})</th>
                     </tr>
                     <tr>
                         <th class="bg-header" style="width: 5%; font-size: 7px;">N°</th>
@@ -209,52 +156,133 @@
                 </thead>
                 <tbody>
                     @for($i = 0; $i < max(count($leftItems), 1); $i++)
-                        @if(!isset($leftItems[$i]) && !isset($rightItems[$i])) 
-                            @continue 
-                        @endif
                         @php
                             $left = $leftItems[$i] ?? null;
                             $right = $rightItems[$i] ?? null;
-                            
-                            $l_estado = $left ? (($fieldCount === 'auditiva') ? ($left['estado_dispositivo_auditiva'] ?? $left['estado_dispositivo'] ?? '-') : ($left['estado_dispositivo_verdadera'] ?? $left['estado_dispositivo'] ?? '-')) : '';
-                            $l_hallazgo = $left ? (($fieldCount === 'auditiva') ? ($left['hallazgo_auditiva'] ?? $left['hallazgo'] ?? '-') : ($left['hallazgo_verdadera'] ?? $left['hallazgo'] ?? '-')) : '';
-                            $l_senales = $left ? (($fieldCount === 'auditiva') ? ($left['senales_presencia_auditiva'] ?? $left['senales_presencia'] ?? '-') : ($left['senales_presencia_verdadera'] ?? $left['senales_presencia'] ?? '-')) : '';
-                            $l_codigo = $left['codigo_caja'] ?? '-';
-                            if (empty(trim($l_codigo))) $l_codigo = '-';
-                            
-                            $r_estado = $right ? (($fieldCount === 'auditiva') ? ($right['estado_dispositivo_auditiva'] ?? $right['estado_dispositivo'] ?? '-') : ($right['estado_dispositivo_verdadera'] ?? $right['estado_dispositivo'] ?? '-')) : '';
-                            $r_hallazgo = $right ? (($fieldCount === 'auditiva') ? ($right['hallazgo_auditiva'] ?? $right['hallazgo'] ?? '-') : ($right['hallazgo_verdadera'] ?? $right['hallazgo'] ?? '-')) : '';
-                            $r_senales = $right ? (($fieldCount === 'auditiva') ? ($right['senales_presencia_auditiva'] ?? $right['senales_presencia'] ?? '-') : ($right['senales_presencia_verdadera'] ?? $right['senales_presencia'] ?? '-')) : '';
-                            $r_codigo = $right['codigo_caja'] ?? '-';
-                            if (empty(trim($r_codigo))) $r_codigo = '-';
                         @endphp
                         <tr>
+                            {{-- Lado Izquierdo --}}
                             @if($left)
-                                <td class="text-center" style="font-size: 7px;">{{ $l_codigo }}</td>
+                                @php
+                                    $l_estado = ($fieldCount === 'auditiva') ? ($left['estado_dispositivo_auditiva'] ?? $left['estado_dispositivo'] ?? '-') : ($left['estado_dispositivo_verdadera'] ?? $left['estado_dispositivo'] ?? '-');
+                                    $l_hallazgo = ($fieldCount === 'auditiva') ? ($left['hallazgo_auditiva'] ?? $left['hallazgo'] ?? '-') : ($left['hallazgo_verdadera'] ?? $left['hallazgo'] ?? '-');
+                                    $l_senales = ($fieldCount === 'auditiva') ? ($left['senales_presencia_auditiva'] ?? $left['senales_presencia'] ?? '-') : ($left['senales_presencia_verdadera'] ?? $left['senales_presencia'] ?? '-');
+                                @endphp
+                                <td class="text-center" style="font-size: 7px;">{{ $left['codigo_caja'] ?? '-' }}</td>
                                 <td style="font-size: 7px; text-transform: uppercase;">{{ $left['ubicacion'] ?? '-' }}</td>
                                 <td class="text-center" style="font-size: 7.5px; font-weight: bold;">{{ $l_estado ?: '-' }}</td>
                                 <td class="text-center" style="font-size: 7.5px; font-weight: bold;">{{ $l_hallazgo ?: '-' }}</td>
                                 <td class="text-center" style="font-size: 7.5px; font-weight: bold;">{{ $l_senales ?: '-' }}</td>
                             @else
-                                <td></td><td></td><td></td><td></td><td></td>
+                                <td colspan="5" style="border: none;"></td>
                             @endif
                             
+                            {{-- Lado Derecho --}}
                             @if($right)
-                                <td class="text-center" style="font-size: 7px;">{{ $r_codigo }}</td>
+                                @php
+                                    $r_estado = ($fieldCount === 'auditiva') ? ($right['estado_dispositivo_auditiva'] ?? $right['estado_dispositivo'] ?? '-') : ($right['estado_dispositivo_verdadera'] ?? $right['estado_dispositivo'] ?? '-');
+                                    $r_hallazgo = ($fieldCount === 'auditiva') ? ($right['hallazgo_auditiva'] ?? $right['hallazgo'] ?? '-') : ($right['hallazgo_verdadera'] ?? $right['hallazgo'] ?? '-');
+                                    $r_senales = ($fieldCount === 'auditiva') ? ($right['senales_presencia_auditiva'] ?? $right['senales_presencia'] ?? '-') : ($right['senales_presencia_verdadera'] ?? $right['senales_presencia'] ?? '-');
+                                @endphp
+                                <td class="text-center" style="font-size: 7px;">{{ $right['codigo_caja'] ?? '-' }}</td>
                                 <td style="font-size: 7px; text-transform: uppercase;">{{ $right['ubicacion'] ?? '-' }}</td>
                                 <td class="text-center" style="font-size: 7.5px; font-weight: bold;">{{ $r_estado ?: '-' }}</td>
                                 <td class="text-center" style="font-size: 7.5px; font-weight: bold;">{{ $r_hallazgo ?: '-' }}</td>
                                 <td class="text-center" style="font-size: 7.5px; font-weight: bold;">{{ $r_senales ?: '-' }}</td>
                             @else
-                                <td></td><td></td><td></td><td></td><td></td>
+                                <td colspan="5" style="border: none;"></td>
                             @endif
                         </tr>
                     @endfor
                 </tbody>
             </table>
-        @endforeach
 
-        {{-- LEYENDAS ROEDORES --}}
+        {{-- DISEÑO 2: TABLA TIPO INSECTOS (Estadio, Conteo, Estado Lámina) --}}
+        @elseif($esDisposicionInsectos)
+            <table style="margin-top: 8px;">
+                <tr>
+                    <td class="section-header">{{ strtoupper($seccion['titulo']) }} ({{ count($seccion['items']) }})</td>
+                </tr>
+            </table>
+            <table style="margin-top: -1px;">
+                <thead>
+                    <tr>
+                        <th class="bg-header" style="width: 28%;">Ubicación</th>
+                        <th class="bg-header" style="width: 10%;">N°</th>
+                        <th class="bg-header" style="width: 12%;">Estadio</th>
+                        <th class="bg-header" style="width: 12%;">Conteo</th>
+                        <th class="bg-header" style="width: 20%;">Estado de lámina</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($seccion['items'] as $item)
+                        @php
+                            $conteoEstadio = is_array($item['conteo_estadio'] ?? null) ? $item['conteo_estadio'] : [];
+                            $estadios = ['ADULTO', 'NINFA', 'OOTECA'];
+                            $estadiosConDatos = array_values(array_filter($estadios, fn ($estadio) => array_key_exists($estadio, $conteoEstadio)));
+                            $estadoLamina = ($fieldCount === 'auditiva') ? ($item['estado_lamina_auditiva'] ?? $item['estado_lamina'] ?? '---') : ($item['estado_lamina_verdadera'] ?? $item['estado_lamina'] ?? '---');
+                            $conteoFallback = (int) (($fieldCount === 'auditiva') ? ($item['conteo_estadio_falsa'] ?? 0) : ($item['conteo_estadio_verdadera'] ?? 0));
+                        @endphp
+
+                        @if(count($estadiosConDatos) > 0)
+                            @foreach($estadiosConDatos as $idx => $estadio)
+                                <tr>
+                                    @if($idx === 0)
+                                        <td rowspan="{{ count($estadiosConDatos) }}">{{ $item['ubicacion'] ?? '---' }}</td>
+                                        <td rowspan="{{ count($estadiosConDatos) }}" class="text-center">{{ $item['codigo_caja'] ?? '---' }}</td>
+                                    @endif
+                                    <td>{{ $estadio }}</td>
+                                    <td class="text-center">
+                                        {{ (int) ($conteoEstadio[$estadio][$fieldCount] ?? 0) }}
+                                    </td>
+                                    @if($idx === 0)
+                                        <td rowspan="{{ count($estadiosConDatos) }}" class="text-center">{{ $estadoLamina }}</td>
+                                    @endif
+                                </tr>
+                            @endforeach
+                        @else
+                            <tr>
+                                <td>{{ $item['ubicacion'] ?? '---' }}</td>
+                                <td class="text-center">{{ $item['codigo_caja'] ?? '---' }}</td>
+                                <td>{{ $item['estadio'] ?? '---' }}</td>
+                                <td class="text-center">{{ $conteoFallback }}</td>
+                                <td class="text-center">{{ $estadoLamina }}</td>
+                            </tr>
+                        @endif
+                    @endforeach
+                </tbody>
+            </table>
+
+        {{-- DISEÑO 3: TABLA SIMPLE (Fallback) --}}
+        @else
+            <table style="margin-top: 8px;">
+                <tr>
+                    <td class="section-header">{{ strtoupper($seccion['titulo']) }}</td>
+                </tr>
+            </table>
+            <table style="margin-top: -1px;">
+                <tr>
+                    <th class="bg-header" style="width: 11%;">N°</th>
+                    <th class="bg-header" style="width: 31%;">Ubicación</th>
+                    <th class="bg-header" style="width: 16%;">Estado</th>
+                    <th class="bg-header" style="width: 16%;">Hallazgo</th>
+                    <th class="bg-header" style="width: 16%;">Señales</th>
+                </tr>
+                @foreach($seccion['items'] as $item)
+                    <tr>
+                        <td class="text-center">{{ $item['codigo_caja'] ?? '---' }}</td>
+                        <td>{{ $item['ubicacion'] ?? '---' }}</td>
+                        <td class="text-center">{{ $item['estado_dispositivo'] ?? '---' }}</td>
+                        <td class="text-center">{{ $item['hallazgo'] ?? '---' }}</td>
+                        <td class="text-center">{{ $item['senales_presencia'] ?? '---' }}</td>
+                    </tr>
+                @endforeach
+            </table>
+        @endif
+    @endforeach
+
+    {{-- LEYENDAS CONDICIONALES --}}
+    @if($mostroLeyendaRoedores)
         <table style="border: none; width: 100%; margin-top: 15px; table-layout: fixed;">
             <tr>
                 <td style="width: 32%; border: none; padding: 0; vertical-align: top;">
@@ -291,32 +319,26 @@
                 </td>
             </tr>
         </table>
-    @else
-        @foreach($secciones as $seccion)
-            <table style="margin-top: 8px;">
-                <tr>
-                    <td class="section-header">{{ strtoupper($seccion['titulo']) }}</td>
-                </tr>
-            </table>
-            <table style="margin-top: -1px;">
-                <tr>
-                    <th class="bg-header" style="width: 11%;">N°</th>
-                    <th class="bg-header" style="width: 31%;">Ubicación</th>
-                    <th class="bg-header" style="width: 16%;">Estado</th>
-                    <th class="bg-header" style="width: 16%;">Hallazgo</th>
-                    <th class="bg-header" style="width: 16%;">Señales</th>
-                </tr>
-                @foreach($seccion['items'] as $item)
-                    <tr>
-                        <td class="text-center">{{ $item['codigo_caja'] ?? '---' }}</td>
-                        <td>{{ $item['ubicacion'] ?? '---' }}</td>
-                        <td class="text-center">{{ $item['estado_dispositivo'] ?? '---' }}</td>
-                        <td class="text-center">{{ $item['hallazgo'] ?? '---' }}</td>
-                        <td class="text-center">{{ $item['senales_presencia'] ?? '---' }}</td>
-                    </tr>
-                @endforeach
-            </table>
-        @endforeach
+    @endif
+
+    @if($mostroLeyendaInsectos)
+        <table style="margin-top: 10px; max-width: 360px; margin-left: auto; margin-right: auto;">
+            <tr>
+                <td class="section-header" colspan="2">LEYENDA DE ESTADO DE LÁMINA</td>
+            </tr>
+            <tr>
+                <td class="label">LÁMINA DESPRENDIDA</td>
+                <td class="text-center">D</td>
+            </tr>
+            <tr>
+                <td class="label">LÁMINA MOJADA</td>
+                <td class="text-center">M</td>
+            </tr>
+            <tr>
+                <td class="label">LÁMINA EN BUEN ESTADO</td>
+                <td class="text-center">B</td>
+            </tr>
+        </table>
     @endif
 
     <div style="margin-top: 20px;">

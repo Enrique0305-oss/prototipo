@@ -11,8 +11,8 @@ class Proyeccion extends Model
 
     protected $table = 'proyecciones';
 
-    // Desactivamos timestamps si no los agregaste en el script SQL
-    public $timestamps = false;
+    // Activamos timestamps (agregados por migración si faltan)
+    public $timestamps = true;
 
     protected $fillable = [
         'actividad',
@@ -43,6 +43,8 @@ class Proyeccion extends Model
         'fecha_pago' => 'date',
         'dias_credito' => 'integer',
         'dia_vencer' => 'integer',
+        'id_referencia' => 'integer',
+        'tipo_orden' => 'string',
     ];
 
     /*

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'core/database/app_database.dart';
+import 'core/sync/background_sync_handler.dart';
 import 'core/theme/app_theme.dart';
 import 'modules/auth/data/auth_repository.dart';
 import 'modules/auth/domain/user_session.dart';
@@ -7,7 +9,12 @@ import 'modules/auth/presentation/login_page.dart';
 import 'modules/services/data/services_repository.dart';
 import 'modules/services/presentation/services_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar base de datos SQLite local (modo offline)
+  await AppDatabase.instance.database;
+
   runApp(const AppMovil());
 }
 
@@ -40,6 +47,8 @@ class _AppMovilState extends State<AppMovil> {
 
   void _onLoggedIn(UserSession session) {
     setState(() => _session = session);
+    // Registrar tarea periódica de background sync con el token actual
+    registerBackgroundSync(token: session.token);
   }
 
   void _onLoggedOut() {

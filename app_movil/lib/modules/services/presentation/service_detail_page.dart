@@ -415,6 +415,20 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     super.initState();
     _loadPosition();
     _loadFichaOperacional();
+    _preFetchFormatoCalculo();
+  }
+
+  Future<void> _preFetchFormatoCalculo() async {
+    // Intentar descargar el cálculo del formato para que esté en caché si se quedan sin internet luego
+    try {
+      final serviceIds = _effectiveServices.map((s) => s.id).toSet().toList(growable: false);
+      await widget.repository.getFormatoOperacionalCalculo(
+        programacionId: _representativeService.id,
+        idsProgramaciones: serviceIds,
+      );
+    } catch (_) {
+      // Fallo silencioso, es solo para caché
+    }
   }
 
   Future<void> _loadFichaOperacional() async {
