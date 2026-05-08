@@ -387,6 +387,14 @@ class OrdenProductoController extends Controller
 
             $orden->load(['cliente', 'emisor', 'detalles.producto', 'cotizacion']);
 
+            // Actualizar automáticamente proyección para producto
+            $proyeccion = \App\Models\Proyeccion::where('id_orden_producto', $orden->id)->first();
+            if ($proyeccion) {
+                ProyeccionesController::actualizarProyeccionProducto($proyeccion, $orden);
+            } else {
+                ProyeccionesController::crearProyeccionAutomaticaProducto($orden);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Orden de producto actualizada exitosamente',

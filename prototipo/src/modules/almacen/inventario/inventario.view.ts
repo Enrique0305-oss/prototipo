@@ -40,7 +40,7 @@ let loteEditandoIndex: number | null = null; // Rastrear cual lote está siendo 
 let loteNuevoEditandoIndex: number | null = null; // Rastrear cual lote está siendo editado (nuevo)
 
 function getBackendOrigin(): string {
-  const fallback = 'https://pruebabackend.qsci-system.com';
+  const fallback = 'https://backend.qsci-system.com';
   const apiBase = (import.meta.env.VITE_API_URL || `${fallback}/api/v1`).trim();
 
   try {
@@ -778,10 +778,10 @@ function renderProductosAjusteInventario(searchText = '') {
   const filtrados = !term
     ? ajusteInvProductos
     : ajusteInvProductos.filter((p) => {
-        const sku = (p.sku || '').toLowerCase();
-        const desc = (p.descripcion || '').toLowerCase();
-        return sku.includes(term) || desc.includes(term);
-      });
+      const sku = (p.sku || '').toLowerCase();
+      const desc = (p.descripcion || '').toLowerCase();
+      return sku.includes(term) || desc.includes(term);
+    });
 
   if (!filtrados.length) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:28px; color:#64748b;">No se encontraron productos para ajustar</td></tr>';
@@ -1325,17 +1325,17 @@ function confirmarEliminarCategoria(id: number) {
           </div>
           <p style="font-size: 15px; color: #334155; margin-bottom: 8px;">¿Estás seguro de eliminar esta categoría?</p>
           <p style="font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">${cat.nombre}</p>
-          ${totalProductos > 0 
-            ? `<p style="font-size: 13px; color: #dc2626; margin-top: 12px; background: #fef2f2; padding: 8px 12px; border-radius: 6px;">⚠️ Esta categoría tiene ${totalProductos} producto(s) asociado(s). No se puede eliminar.</p>`
-            : `<p style="font-size: 13px; color: #94a3b8; margin-top: 12px;">La categoría será desactivada.</p>`
-          }
+          ${totalProductos > 0
+      ? `<p style="font-size: 13px; color: #dc2626; margin-top: 12px; background: #fef2f2; padding: 8px 12px; border-radius: 6px;">⚠️ Esta categoría tiene ${totalProductos} producto(s) asociado(s). No se puede eliminar.</p>`
+      : `<p style="font-size: 13px; color: #94a3b8; margin-top: 12px;">La categoría será desactivada.</p>`
+    }
         </div>
         <div class="modal-footer" style="display: flex; gap: 12px; justify-content: center; padding: 20px 24px; border-top: 1px solid #e2e8f0;">
           <button class="btn-secondary" id="btn-cancelar-eliminar-cat">Cancelar</button>
-          ${totalProductos === 0 
-            ? `<button class="btn-primary" id="btn-confirmar-eliminar-cat" style="background: #dc2626; border-color: #dc2626;">Eliminar</button>`
-            : ''
-          }
+          ${totalProductos === 0
+      ? `<button class="btn-primary" id="btn-confirmar-eliminar-cat" style="background: #dc2626; border-color: #dc2626;">Eliminar</button>`
+      : ''
+    }
         </div>
       </div>
     </div>
@@ -1435,10 +1435,10 @@ function actualizarEstadisticas() {
   if (!statsContainer || !estadisticasData) return;
 
   // Calcular total de stock y valor
-  const totalStock = productosData.reduce((sum, p) => 
+  const totalStock = productosData.reduce((sum, p) =>
     sum + (p.inventario?.cantidad_disponible || 0), 0
   );
-  
+
   const valorTotal = productosData.reduce((sum, p) => {
     const stock = p.inventario?.cantidad_disponible || 0;
     const precio = Number(p.precio_unitario ?? 0);
@@ -1486,21 +1486,21 @@ function actualizarEstadisticas() {
 async function cargarProductos() {
   try {
     const filters: any = {};
-    
+
     if (currentFilters.search) {
       filters.search = currentFilters.search;
     }
-    
+
     if (currentFilters.estado) {
       filters.estado = currentFilters.estado;
     }
-    
+
     if (currentFilters.id_categoria) {
       filters.id_categoria = currentFilters.id_categoria;
     }
 
     const response = await productoService.getAll(filters);
-    
+
     if (response.success && response.data) {
       productosData = response.data;
       renderizarTablaProductos();
@@ -2116,7 +2116,7 @@ function abrirModalNuevoProducto() {
   function mostrarModal() {
     // Verificar si el modal ya existe
     let modal = document.getElementById('modal-nuevo-producto');
-    
+
     if (!modal) {
       // Crear el modal
       const modalHTML = renderModalNuevoProducto();
@@ -2133,7 +2133,7 @@ function abrirModalNuevoProducto() {
     // Mostrar modal
     if (modal) {
       modal.style.display = 'flex';
-      
+
       // Event listener para el formulario
       const form = document.getElementById('form-nuevo-producto') as HTMLFormElement;
       if (form) {
@@ -2227,17 +2227,17 @@ function cerrarModalNuevoProducto() {
 
 async function handleSubmitNuevoProducto(e: Event) {
   e.preventDefault();
-  
+
   const form = e.target as HTMLFormElement;
   const formData = new FormData(form);
-  
+
   // Validar que la categoría esté seleccionada
   const idCategoriaStr = formData.get('id_categoria') as string;
   if (!idCategoriaStr || idCategoriaStr === '') {
     mostrarToast('warning', 'Campo requerido', 'Por favor selecciona una categoría');
     return;
   }
-  
+
   const data: any = {
     descripcion: formData.get('descripcion') as string,
     id_categoria: Number(idCategoriaStr),
@@ -2323,7 +2323,7 @@ async function handleSubmitNuevoProducto(e: Event) {
     }
 
     const response = await productoService.create(data);
-    
+
     if (response.success) {
       // Subir imagen si se seleccionó una
       const inputImagen = document.getElementById('producto-imagen') as HTMLInputElement;
@@ -2339,10 +2339,10 @@ async function handleSubmitNuevoProducto(e: Event) {
 
       // Cerrar modal
       cerrarModalNuevoProducto();
-      
+
       // Mostrar notificación de éxito
       mostrarToast('success', 'Producto creado', `SKU: ${response.data.sku} — ${response.data.descripcion}`);
-      
+
       // Recargar productos
       await cargarProductos();
       await cargarEstadisticas();
@@ -2350,9 +2350,9 @@ async function handleSubmitNuevoProducto(e: Event) {
   } catch (error: any) {
     console.error('Error creando producto:', error);
     console.error('Error data:', error.data);
-    
+
     let errorMessage = 'Error al crear el producto. Por favor, intente nuevamente.';
-    
+
     if (error.data?.errors) {
       const errors = Object.entries(error.data.errors).map(([field, messages]: [string, any]) => {
         return `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`;
@@ -2361,10 +2361,10 @@ async function handleSubmitNuevoProducto(e: Event) {
     } else if (error.data?.message) {
       errorMessage = error.data.message;
     }
-    
+
     console.log('Mensaje de error:', errorMessage);
     mostrarToast('error', 'Error al crear producto', errorMessage);
-    
+
     // Rehabilitar botón
     const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     if (submitBtn) {
@@ -2630,7 +2630,7 @@ async function abrirModalEditarProducto(id: number) {
     loteEditandoIndex = null;
     modal.remove();
   });
-  modal.addEventListener('click', (e) => { 
+  modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       loteEditandoIndex = null;
       modal.remove();
@@ -3008,9 +3008,9 @@ function actualizarListaLotes() {
       </thead>
       <tbody>
         ${lotesDraftNuevo.map((lote, idx) => {
-          const estaEditando = loteNuevoEditandoIndex === idx;
-          if (estaEditando) {
-            return `
+    const estaEditando = loteNuevoEditandoIndex === idx;
+    if (estaEditando) {
+      return `
               <tr style="border-bottom: 1px solid #e5e7eb; background: #f0fdf4;">
                 <td style="padding: 12px 16px;"><input type="text" value="${lote.numero_lote}" disabled 
                     style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: #f3f4f6; color: #9ca3af; font-size: 12px;"></td>
@@ -3030,8 +3030,8 @@ function actualizarListaLotes() {
                 </td>
               </tr>
             `;
-          } else {
-            return `
+    } else {
+      return `
               <tr style="border-bottom: 1px solid #e5e7eb; hover { background: #f9fafb; }">
                 <td style="padding: 12px 16px;">${lote.numero_lote}</td>
                 <td style="padding: 12px 16px;">${lote.fecha_vencimiento?.split('T')[0] || lote.fecha_vencimiento}</td>
@@ -3048,8 +3048,8 @@ function actualizarListaLotes() {
                 </td>
               </tr>
             `;
-          }
-        }).join('')}
+    }
+  }).join('')}
       </tbody>
     </table>
   `;
@@ -3070,7 +3070,7 @@ function actualizarListaLotes() {
     btn.addEventListener('click', (e) => {
       const idx = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
       const nuevaFecha = (document.getElementById(`fecha-nuevo-${idx}`) as HTMLInputElement).value;
-      
+
       if (!nuevaFecha) {
         mostrarToast('warning', 'Campo requerido', 'Por favor selecciona una fecha de vencimiento');
         return;
@@ -3167,9 +3167,9 @@ function actualizarListaLotesEditar() {
       </thead>
       <tbody>
         ${lotesDraftEditar.map((lote, idx) => {
-          const estaEditando = loteEditandoIndex === idx;
-          if (estaEditando) {
-            return `
+    const estaEditando = loteEditandoIndex === idx;
+    if (estaEditando) {
+      return `
               <tr style="border-bottom: 1px solid #e5e7eb; background: #f0fdf4;">
                 <td style="padding: 12px 16px;"><input type="text" value="${lote.numero_lote}" disabled 
                     style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: #f3f4f6; color: #9ca3af; font-size: 12px;"></td>
@@ -3189,8 +3189,8 @@ function actualizarListaLotesEditar() {
                 </td>
               </tr>
             `;
-          } else {
-            return `
+    } else {
+      return `
               <tr style="border-bottom: 1px solid #e5e7eb; hover { background: #f9fafb; }">
                 <td style="padding: 12px 16px;">${lote.numero_lote}</td>
                 <td style="padding: 12px 16px;">${lote.fecha_vencimiento?.split('T')[0] || 'N/A'}</td>
@@ -3207,8 +3207,8 @@ function actualizarListaLotesEditar() {
                 </td>
               </tr>
             `;
-          }
-        }).join('')}
+    }
+  }).join('')}
       </tbody>
     </table>
   `;
@@ -3229,7 +3229,7 @@ function actualizarListaLotesEditar() {
     btn.addEventListener('click', (e) => {
       const idx = parseInt((e.target as HTMLElement).getAttribute('data-index') || '0');
       const nuevaFecha = (document.getElementById(`fecha-edit-${idx}`) as HTMLInputElement).value;
-      
+
       if (!nuevaFecha) {
         mostrarToast('warning', 'Campo requerido', 'Por favor selecciona una fecha de vencimiento');
         return;

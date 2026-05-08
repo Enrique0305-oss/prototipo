@@ -1,5 +1,5 @@
 export const API_CONFIG = {
-  baseURL: import.meta.env.VITE_API_URL || 'http://pruebabackend.qsci-system.com/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || 'http://backend.qsci-system.com/api/v1',
   timeout: 30000, // 30 segundos
   headers: {
     'Content-Type': 'application/json',
@@ -10,23 +10,23 @@ export const API_CONFIG = {
 export const API_ENDPOINTS = {
   // Dashboard
   dashboard: '/dashboard',
-  
+
   // Programaciones
   programaciones: '/programaciones',
   tecnicos: '/tecnicos',
-  
+
   // Recursos Humanos
   asistencias: '/asistencias',
   empleados: '/empleados',
   horarios: '/horarios',
   reportes_rrhh: '/reportes/rrhh',
-  
+
   // Comercial
   cotizaciones: '/cotizaciones',
   ordenes: '/ordenes',
   prospectos: '/prospectos',
   conversiones: '/conversiones',
-  
+
   // Almacén
   almacen: {
     productos: '/almacen/productos',
@@ -38,7 +38,7 @@ export const API_ENDPOINTS = {
 
   // Kardex
   kardex: '/kardex',
-  
+
   // Logística
   logistica: {
     clientes: '/logistica/clientes',
@@ -46,7 +46,7 @@ export const API_ENDPOINTS = {
     vehiculos: '/logistica/vehiculos',
     conductores: '/logistica/conductores',
   },
-  
+
   // Finanzas
   finanzas: {
     movimientos: '/finanzas/movimientos',
@@ -57,17 +57,17 @@ export const API_ENDPOINTS = {
     balance: '/finanzas/balance',
     flujoCaja: '/finanzas/flujo-caja',
   },
-  
+
   // Facturación
   facturacion: '/facturas',
   cobranza: '/cobranza',
-  
+
   // Operaciones
   operaciones: '/operaciones',
-  
+
   // Reportes
   reportes: '/reportes',
-  
+
   // Auth
   login: '/auth/login',
   logout: '/auth/logout',

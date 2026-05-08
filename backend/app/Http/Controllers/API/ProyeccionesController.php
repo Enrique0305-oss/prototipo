@@ -91,47 +91,133 @@ class ProyeccionesController extends Controller
                 }
                 break;
             case 'producto':
-                $orden = OrdenProducto::with(['cliente'])->find($id);
+                $orden = OrdenProducto::with(['cliente', 'cotizacion', 'detalles.producto'])->find($id);
                 if ($orden) {
+                    $multicimId = $orden->cotizacion ? $orden->cotizacion->id_multicim : null;
+                    if (!$multicimId) {
+                        $primerMulticim = Multicim::first();
+                        $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+                    }
+
                     $dataRespuesta = [
                         'id_referencia' => $orden->id,
+                        'id_multicim'   => $multicimId,
                         'numero_orden'  => $orden->numero_orden,
-                        'nombre_cliente'=> $orden->cliente->nombre_comercial ?? 'S/N',
+                        'nombre_cliente'=> $orden->cliente->nombre_empresa ?? $orden->cliente->nombre_comercial ?? 'S/N',
+                        'subtotal'      => $orden->subtotal,
+                        'igv'           => $orden->igv,
+                        'precio_total_os'=> $orden->total,
                         'monto_detrax'  => 0,
                         'total_final'   => $orden->total,
                         'servicio'      => 'Orden de Producto',
                         'frecuencia'    => 'Única',
-                        'servicios_detallados' => [
-                            [
-                                'nombre' => 'Orden de Producto',
-                                'frecuencia' => 'Única'
-                            ]
-                        ],
-                        'actividad'     => "Venta de Producto - " . ($orden->cliente->nombre_comercial ?? '')
+                        'servicios_detallados' => $orden->detalles->map(fn($d) => [
+                            'nombre' => $d->producto->descripcion ?? 'Producto',
+                            'frecuencia' => 'Cant: ' . $d->cantidad
+                        ]),
+                        'actividad'     => null
                     ];
                 }
                 break;
 
             case 'capacitacion':
-                $orden = OrdenCapacitacionAuditoria::with(['cliente'])->find($id);
+                $orden = OrdenCapacitacionAuditoria::with(['cliente', 'cotizacion'])->find($id);
                 if ($orden) {
                     $montoOriginal = $orden->costo;
                     $montoDetrax = ($montoOriginal > 700) ? ($montoOriginal * 0.12) : 0;
+                    $multicimId = $orden->cotizacion ? $orden->cotizacion->id_multicim : null;
+                    if (!$multicimId) {
+                        $primerMulticim = Multicim::first();
+                        $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+                    }
+
                     $dataRespuesta = [
                         'id_referencia' => $orden->id,
+                        'id_multicim'   => $multicimId,
                         'numero_orden'  => $orden->numero_orden,
-                        'nombre_cliente'=> $orden->cliente->nombre_comercial ?? 'S/N',
+                        'nombre_cliente'=> $orden->cliente->nombre_empresa ?? $orden->cliente->nombre_comercial ?? 'S/N',
+                        'subtotal'      => $orden->subtotal,
+                        'igv'           => $orden->igv,
+                        'precio_total_os'=> $orden->costo,
                         'monto_detrax'  => round($montoDetrax, 2),
                         'total_final'   => round($montoOriginal - $montoDetrax, 2),
                         'servicio'      => 'Orden de Capacitación',
                         'frecuencia'    => 'Única',
                         'servicios_detallados' => [
                             [
-                                'nombre' => 'Orden de Capacitación',
-                                'frecuencia' => 'Única'
+                                'nombre' => 'Servicio de Capacitación',
+                                'frecuencia' => $orden->modalidad
                             ]
                         ],
-                        'actividad'     => "Capacitación - " . ($orden->cliente->nombre_comercial ?? '')
+                        'actividad'     => "Capacitación - " . $orden->numero_orden
+                    ];
+                }
+                break;
+
+            case 'auditoria':
+                $orden = \App\Models\OrdenAuditoria::with(['cliente', 'cotizacion', 'servicio'])->find($id);
+                if ($orden) {
+                    $montoOriginal = $orden->costo;
+                    $montoDetrax = ($montoOriginal > 700) ? ($montoOriginal * 0.12) : 0;
+                    $multicimId = $orden->cotizacion ? $orden->cotizacion->id_multicim : null;
+                    if (!$multicimId) {
+                        $primerMulticim = Multicim::first();
+                        $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+                    }
+
+                    $dataRespuesta = [
+                        'id_referencia' => $orden->id,
+                        'id_multicim'   => $multicimId,
+                        'numero_orden'  => $orden->numero_orden,
+                        'nombre_cliente'=> $orden->cliente->nombre_empresa ?? $orden->cliente->nombre_comercial ?? 'S/N',
+                        'subtotal'      => $orden->subtotal,
+                        'igv'           => $orden->igv,
+                        'precio_total_os'=> $orden->costo,
+                        'monto_detrax'  => round($montoDetrax, 2),
+                        'total_final'   => round($montoOriginal - $montoDetrax, 2),
+                        'servicio'      => 'Orden de Auditoría',
+                        'frecuencia'    => 'Única',
+                        'servicios_detallados' => [
+                            [
+                                'nombre' => $orden->servicio->nombre ?? 'Servicio de Auditoría',
+                                'frecuencia' => $orden->modalidad
+                            ]
+                        ],
+                        'actividad'     => "Auditoría - " . $orden->numero_orden
+                    ];
+                }
+                break;
+
+            case 'asesoria':
+                $orden = \App\Models\OrdenAsesoria::with(['cliente', 'cotizacion', 'servicio'])->find($id);
+                if ($orden) {
+                    $montoOriginal = $orden->costo;
+                    $montoDetrax = ($montoOriginal > 700) ? ($montoOriginal * 0.12) : 0;
+                    $multicimId = $orden->cotizacion ? $orden->cotizacion->id_multicim : null;
+                    if (!$multicimId) {
+                        $primerMulticim = Multicim::first();
+                        $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+                    }
+
+                    $dataRespuesta = [
+                        'id_referencia' => $orden->id,
+                        'id_multicim'   => $multicimId,
+                        'numero_orden'  => $orden->numero_orden,
+                        'nombre_cliente'=> $orden->cliente->nombre_empresa ?? $orden->cliente->nombre_comercial ?? 'S/N',
+                        'subtotal'      => $orden->subtotal,
+                        'igv'           => $orden->igv,
+                        'precio_total_os'=> $orden->costo,
+                        'monto_detrax'  => round($montoDetrax, 2),
+                        'total_final'   => round($montoOriginal - $montoDetrax, 2),
+                        'servicio'      => 'Orden de Asesoría',
+                        'frecuencia'    => 'Única',
+                        'servicios_detallados' => [
+                            [
+                                'nombre' => $orden->servicio->nombre ?? 'Servicio de Asesoría',
+                                'frecuencia' => $orden->modalidad
+                            ]
+                        ],
+                        'actividad'     => "Asesoría - " . $orden->numero_orden
                     ];
                 }
                 break;
@@ -236,9 +322,19 @@ class ProyeccionesController extends Controller
             'ordenServicio.cliente', 
             'ordenServicio.detalles.servicio',
             'ordenProducto.cliente', 
+            'ordenProducto.detalles.producto',
             'ordenCapacitacion.cliente',
+            'ordenCapacitacion.servicio',
+            'ordenCapacitacion.cotizacion.detalles.catalogoCapAud',
+            'ordenCapacitacion.cotizacion.detalles.servicio',
             'ordenAuditoria.cliente',
-            'ordenAsesoria.cliente'
+            'ordenAuditoria.servicio',
+            'ordenAuditoria.cotizacion.detalles.catalogoCapAud',
+            'ordenAuditoria.cotizacion.detalles.servicio',
+            'ordenAsesoria.cliente',
+            'ordenAsesoria.servicio',
+            'ordenAsesoria.cotizacion.detalles.catalogoCapAud',
+            'ordenAsesoria.cotizacion.detalles.servicio'
         ])
         ->whereBetween('fecha_ejecucion', [$inicioMes, $finMes]);
 
@@ -250,28 +346,43 @@ class ProyeccionesController extends Controller
         $proyecciones = $query->orderBy('fecha_ejecucion', 'asc')
         ->get()
         ->map(function($p) {
-            $detallesRelacionados = [];
-            $serviciosUnicos = [];
-
-            if ($p->ordenServicio && $p->ordenServicio->detalles) {
-                foreach ($p->ordenServicio->detalles as $det) {
-                    $nombreServicio = $det->servicio ? $det->servicio->nombre : 'Servicio';
-                    $frecuencia = $det->frecuencia ?? 'S/N';
-                    $clave = $nombreServicio . '|' . $frecuencia;
-                    
-                    // Solo agregar si no existe esta combinación
-                    if (!isset($serviciosUnicos[$clave])) {
-                        $serviciosUnicos[$clave] = true;
-                        $detallesRelacionados[] = [
-                            'nombre' => $nombreServicio,
-                            'frecuencia' => $frecuencia
-                        ];
+            if (empty($p->servicios_detallados)) {
+                $detallesRelacionados = [];
+                if ($p->ordenServicio && $p->ordenServicio->detalles) {
+                    $serviciosUnicos = [];
+                    foreach ($p->ordenServicio->detalles as $det) {
+                        $nombreServicio = $det->servicio ? $det->servicio->nombre : 'Servicio';
+                        $frecuencia = $det->frecuencia ?? 'S/N';
+                        $clave = $nombreServicio . '|' . $frecuencia;
+                        if (!isset($serviciosUnicos[$clave])) {
+                            $serviciosUnicos[$clave] = true;
+                            $detallesRelacionados[] = ['nombre' => $nombreServicio, 'frecuencia' => $frecuencia];
+                        }
                     }
+                } elseif ($p->ordenProducto && $p->ordenProducto->detalles) {
+                    $detallesRelacionados = $p->ordenProducto->detalles->map(fn($d) => [
+                        'nombre' => $d->producto->descripcion ?? 'Producto',
+                        'frecuencia' => 'Cant: ' . $d->cantidad
+                    ]);
+                    $p->ordenProducto->precio_total_os = $p->ordenProducto->total;
+                } elseif ($p->ordenCapacitacion) {
+                    $det = $p->ordenCapacitacion->cotizacion ? $p->ordenCapacitacion->cotizacion->detalles->first() : null;
+                    $nombre = $det ? ($det->catalogoCapAud->nombre ?? $det->servicio->nombre ?? $det->descripcion_manual ?? 'Capacitación') : ($p->ordenCapacitacion->servicio->nombre ?? 'Capacitación');
+                    $detallesRelacionados = [['nombre' => $nombre, 'frecuencia' => $p->ordenCapacitacion->modalidad ?? 'Única']];
+                    $p->ordenCapacitacion->precio_total_os = $p->ordenCapacitacion->costo;
+                } elseif ($p->ordenAuditoria) {
+                    $det = $p->ordenAuditoria->cotizacion ? $p->ordenAuditoria->cotizacion->detalles->first() : null;
+                    $nombre = $det ? ($det->catalogoCapAud->nombre ?? $det->servicio->nombre ?? $det->descripcion_manual ?? 'Auditoría') : ($p->ordenAuditoria->servicio->nombre ?? 'Auditoría');
+                    $detallesRelacionados = [['nombre' => $nombre, 'frecuencia' => $p->ordenAuditoria->modalidad ?? 'Única']];
+                    $p->ordenAuditoria->precio_total_os = $p->ordenAuditoria->costo;
+                } elseif ($p->ordenAsesoria) {
+                    $det = $p->ordenAsesoria->cotizacion ? $p->ordenAsesoria->cotizacion->detalles->first() : null;
+                    $nombre = $det ? ($det->catalogoCapAud->nombre ?? $det->servicio->nombre ?? $det->descripcion_manual ?? 'Asesoría') : ($p->ordenAsesoria->servicio->nombre ?? 'Asesoría');
+                    $detallesRelacionados = [['nombre' => $nombre, 'frecuencia' => $p->ordenAsesoria->modalidad ?? 'Única']];
+                    $p->ordenAsesoria->precio_total_os = $p->ordenAsesoria->costo;
                 }
+                $p->servicios_detallados = $detallesRelacionados;
             }
-
-            // Enviamos el array de objetos directamente
-            $p->servicios_detallados = $detallesRelacionados;
             
             return $p;
         });
@@ -290,36 +401,67 @@ class ProyeccionesController extends Controller
             'ordenServicio.cliente', 
             'ordenServicio.detalles.servicio',
             'ordenProducto.cliente', 
+            'ordenProducto.detalles.producto',
             'ordenCapacitacion.cliente',
+            'ordenCapacitacion.servicio',
+            'ordenCapacitacion.cotizacion.detalles.catalogoCapAud',
+            'ordenCapacitacion.cotizacion.detalles.servicio',
             'ordenAuditoria.cliente',
-            'ordenAsesoria.cliente'
+            'ordenAuditoria.servicio',
+            'ordenAuditoria.cotizacion.detalles.catalogoCapAud',
+            'ordenAuditoria.cotizacion.detalles.servicio',
+            'ordenAsesoria.cliente',
+            'ordenAsesoria.servicio',
+            'ordenAsesoria.cotizacion.detalles.catalogoCapAud',
+            'ordenAsesoria.cotizacion.detalles.servicio'
         ])->find($id);
 
         if (!$proyeccion) {
             return response()->json(['success' => false, 'message' => 'Proyección no encontrada'], 404);
         }
 
-        // Construir servicios_detallados si es orden de servicio (agrupados por servicio único)
-        $detallesRelacionados = [];
-        $serviciosUnicos = [];
-        
-        if ($proyeccion->ordenServicio && $proyeccion->ordenServicio->detalles) {
-            foreach ($proyeccion->ordenServicio->detalles as $det) {
-                $nombreServicio = $det->servicio ? $det->servicio->nombre : 'Servicio';
-                $frecuencia = $det->frecuencia ?? 'S/N';
-                $clave = $nombreServicio . '|' . $frecuencia;
-                
-                // Solo agregar si no existe esta combinación
-                if (!isset($serviciosUnicos[$clave])) {
-                    $serviciosUnicos[$clave] = true;
-                    $detallesRelacionados[] = [
-                        'nombre' => $nombreServicio,
-                        'frecuencia' => $frecuencia
-                    ];
+        if (empty($proyeccion->servicios_detallados)) {
+            $detallesRelacionados = [];
+            if ($proyeccion->ordenServicio && $proyeccion->ordenServicio->detalles) {
+                $serviciosUnicos = [];
+                foreach ($proyeccion->ordenServicio->detalles as $det) {
+                    $nombreServicio = $det->servicio ? $det->servicio->nombre : 'Servicio';
+                    $frecuencia = $det->frecuencia ?? 'S/N';
+                    $clave = $nombreServicio . '|' . $frecuencia;
+                    
+                    // Solo agregar si no existe esta combinación
+                    if (!isset($serviciosUnicos[$clave])) {
+                        $serviciosUnicos[$clave] = true;
+                        $detallesRelacionados[] = [
+                            'nombre' => $nombreServicio,
+                            'frecuencia' => $frecuencia
+                        ];
+                    }
                 }
+            } elseif ($proyeccion->ordenProducto && $proyeccion->ordenProducto->detalles) {
+                $detallesRelacionados = $proyeccion->ordenProducto->detalles->map(fn($d) => [
+                    'nombre' => $d->producto->descripcion ?? 'Producto',
+                    'frecuencia' => 'Cant: ' . $d->cantidad
+                ]);
+                $proyeccion->ordenProducto->precio_total_os = $proyeccion->ordenProducto->total;
+            } elseif ($proyeccion->ordenCapacitacion) {
+                $det = $proyeccion->ordenCapacitacion->cotizacion ? $proyeccion->ordenCapacitacion->cotizacion->detalles->first() : null;
+                $nombre = $det ? ($det->catalogoCapAud->nombre ?? $det->servicio->nombre ?? $det->descripcion_manual ?? 'Capacitación') : ($proyeccion->ordenCapacitacion->servicio->nombre ?? 'Capacitación');
+                $detallesRelacionados = [['nombre' => $nombre, 'frecuencia' => $proyeccion->ordenCapacitacion->modalidad ?? 'Única']];
+                $proyeccion->ordenCapacitacion->precio_total_os = $proyeccion->ordenCapacitacion->costo;
+            } elseif ($proyeccion->ordenAuditoria) {
+                $det = $proyeccion->ordenAuditoria->cotizacion ? $proyeccion->ordenAuditoria->cotizacion->detalles->first() : null;
+                $nombre = $det ? ($det->catalogoCapAud->nombre ?? $det->servicio->nombre ?? $det->descripcion_manual ?? 'Auditoría') : ($proyeccion->ordenAuditoria->servicio->nombre ?? 'Auditoría');
+                $detallesRelacionados = [['nombre' => $nombre, 'frecuencia' => $proyeccion->ordenAuditoria->modalidad ?? 'Única']];
+                $proyeccion->ordenAuditoria->precio_total_os = $proyeccion->ordenAuditoria->costo;
+            } elseif ($proyeccion->ordenAsesoria) {
+                $det = $proyeccion->ordenAsesoria->cotizacion ? $proyeccion->ordenAsesoria->cotizacion->detalles->first() : null;
+                $nombre = $det ? ($det->catalogoCapAud->nombre ?? $det->servicio->nombre ?? $det->descripcion_manual ?? 'Asesoría') : ($proyeccion->ordenAsesoria->servicio->nombre ?? 'Asesoría');
+                $detallesRelacionados = [['nombre' => $nombre, 'frecuencia' => $proyeccion->ordenAsesoria->modalidad ?? 'Única']];
+                $proyeccion->ordenAsesoria->precio_total_os = $proyeccion->ordenAsesoria->costo;
             }
+            $proyeccion->servicios_detallados = $detallesRelacionados;
         }
-        $proyeccion->servicios_detallados = $detallesRelacionados;
 
         return response()->json(['success' => true, 'data' => $proyeccion]);
     }
@@ -413,6 +555,8 @@ class ProyeccionesController extends Controller
             $pendientes = [
                 'productos' => [],
                 'capacitaciones' => [],
+                'auditorias' => [],
+                'asesorias' => [],
                 'total' => 0
             ];
 
@@ -426,8 +570,8 @@ class ProyeccionesController extends Controller
                 $pendientes['productos'][] = [
                     'id' => $op->id,
                     'cliente' => $op->cliente ? $op->cliente->nombre_empresa : '---',
-                    'total_costo' => $op->total_costo,
-                    'fecha_creacion' => $op->fecha_inicio ?? $op->created_at
+                    'total_costo' => $op->total_costo ?? $op->total,
+                    'fecha_creacion' => $op->fecha_envio ?? $op->created_at
                 ];
             }
 
@@ -441,13 +585,45 @@ class ProyeccionesController extends Controller
                 $pendientes['capacitaciones'][] = [
                     'id' => $oc->id,
                     'cliente' => $oc->cliente ? $oc->cliente->nombre_empresa : '---',
-                    'total_costo' => $oc->total_costo,
-                    'fecha_creacion' => $oc->fecha_inicio ?? $oc->created_at
+                    'total_costo' => $oc->total_costo ?? $oc->costo,
+                    'fecha_creacion' => $oc->fecha_servicio ?? $oc->created_at
+                ];
+            }
+
+            // Órdenes de auditoría sin proyección
+            $ordenesAuditoria = \App\Models\OrdenAuditoria::with('cliente')
+                ->whereDoesntHave('proyecciones')
+                ->where('estado', '!=', 'cancelada')
+                ->get();
+
+            foreach ($ordenesAuditoria as $oa) {
+                $pendientes['auditorias'][] = [
+                    'id' => $oa->id,
+                    'cliente' => $oa->cliente ? $oa->cliente->nombre_empresa : '---',
+                    'total_costo' => $oa->costo,
+                    'fecha_creacion' => $oa->fecha_servicio ?? $oa->created_at
+                ];
+            }
+
+            // Órdenes de asesoría sin proyección
+            $ordenesAsesoria = \App\Models\OrdenAsesoria::with('cliente')
+                ->whereDoesntHave('proyecciones')
+                ->where('estado', '!=', 'cancelada')
+                ->get();
+
+            foreach ($ordenesAsesoria as $oas) {
+                $pendientes['asesorias'][] = [
+                    'id' => $oas->id,
+                    'cliente' => $oas->cliente ? $oas->cliente->nombre_empresa : '---',
+                    'total_costo' => $oas->costo,
+                    'fecha_creacion' => $oas->fecha_servicio ?? $oas->created_at
                 ];
             }
 
             $pendientes['total'] = count($pendientes['productos']) + 
-                                   count($pendientes['capacitaciones']);
+                                   count($pendientes['capacitaciones']) +
+                                   count($pendientes['auditorias']) +
+                                   count($pendientes['asesorias']);
 
             return response()->json([
                 'success' => true,
@@ -499,8 +675,11 @@ class ProyeccionesController extends Controller
 
             // Obtener primera empresa multicim si no se proporciona
             if (!$multicimId) {
-                $primerMulticim = Multicim::first();
-                $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+                $multicimId = $ordenServicio->id_multicim ?? ($ordenServicio->cotizacion ? $ordenServicio->cotizacion->id_multicim : null);
+                if (!$multicimId) {
+                    $primerMulticim = Multicim::first();
+                    $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+                }
             }
 
             \Log::info('Creando nueva proyección de servicio', [
@@ -508,13 +687,29 @@ class ProyeccionesController extends Controller
                 'multicim' => $multicimId
             ]);
 
+            $serviciosDetallados = [];
+            $serviciosUnicos = [];
+            foreach ($ordenServicio->detalles as $det) {
+                $nombreServicio = $det->servicio ? $det->servicio->nombre : 'Servicio';
+                $frecuencia = $det->frecuencia ?? 'S/N';
+                $clave = $nombreServicio . '|' . $frecuencia;
+                if (!isset($serviciosUnicos[$clave])) {
+                    $serviciosUnicos[$clave] = true;
+                    $serviciosDetallados[] = [
+                        'nombre' => $nombreServicio,
+                        'frecuencia' => $frecuencia
+                    ];
+                }
+            }
+
             // Crear nueva proyección
             $proyeccion = Proyeccion::create([
                 'tipo_orden' => 'servicio',
                 'id_referencia' => $ordenServicio->id,
                 'id_multicim' => $multicimId,
                 'id_orden_servicio' => $ordenServicio->id,
-                'actividad' => null, // Se completa al editar
+                'actividad' => null,
+                'servicios_detallados' => $serviciosDetallados,
                 'n_factura' => null,
                 'dias_credito' => null,
                 'fecha_factura' => null,
@@ -543,10 +738,28 @@ class ProyeccionesController extends Controller
     public static function actualizarProyeccionServicio($proyeccion, $ordenServicio)
     {
         try {
+            $serviciosDetallados = [];
+            $serviciosUnicos = [];
+            foreach ($ordenServicio->detalles as $det) {
+                $nombreServicio = $det->servicio ? $det->servicio->nombre : 'Servicio';
+                $frecuencia = $det->frecuencia ?? 'S/N';
+                $clave = $nombreServicio . '|' . $frecuencia;
+                if (!isset($serviciosUnicos[$clave])) {
+                    $serviciosUnicos[$clave] = true;
+                    $serviciosDetallados[] = [
+                        'nombre' => $nombreServicio,
+                        'frecuencia' => $frecuencia
+                    ];
+                }
+            }
+
+            $monto = $ordenServicio->total_costo;
             $proyeccion->update([
                 'fecha_ejecucion' => $ordenServicio->fecha_tentativa,
-                'monto_detrax' => ($ordenServicio->total_costo > 700) ? ($ordenServicio->total_costo * 0.12) : 0,
-                'total_final' => $ordenServicio->total_costo - (($ordenServicio->total_costo > 700) ? ($ordenServicio->total_costo * 0.12) : 0),
+                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
+                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+                'actividad' => $proyeccion->actividad,
+                'servicios_detallados' => $serviciosDetallados,
             ]);
 
             return $proyeccion;
@@ -564,7 +777,7 @@ class ProyeccionesController extends Controller
         try {
             \Log::info('Iniciando creación automática de proyección de auditoría', ['orden_id' => $ordenAuditoria->id]);
             
-            $multicimId = $ordenAuditoria->id_multicim ?? null;
+            $multicimId = $ordenAuditoria->id_multicim ?? ($ordenAuditoria->cotizacion ? $ordenAuditoria->cotizacion->id_multicim : null);
             if (!$multicimId) {
                 $primerMulticim = Multicim::first();
                 $multicimId = $primerMulticim ? $primerMulticim->id : 1;
@@ -590,11 +803,19 @@ class ProyeccionesController extends Controller
                 'fecha_ejecucion' => $ordenAuditoria->fecha_servicio
             ]);
             
+            $serviciosDetallados = [
+                [
+                    'nombre' => $ordenAuditoria->servicio->nombre ?? 'Servicio de Auditoría',
+                    'frecuencia' => $ordenAuditoria->modalidad ?? 'Única'
+                ]
+            ];
+
             $proyeccion = Proyeccion::create([
                 'tipo_orden' => 'auditoria',
                 'id_referencia' => $ordenAuditoria->id,
                 'id_multicim' => $multicimId,
                 'actividad' => null,
+                'servicios_detallados' => $serviciosDetallados,
                 'n_factura' => null,
                 'dias_credito' => null,
                 'fecha_factura' => null,
@@ -604,6 +825,7 @@ class ProyeccionesController extends Controller
                 'dia_vencer' => null,
                 'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
                 'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+                'id_orden_auditoria' => $ordenAuditoria->id,
             ]);
             
             \Log::info('Proyección de auditoría creada exitosamente', ['proyeccion_id' => $proyeccion->id]);
@@ -625,7 +847,7 @@ class ProyeccionesController extends Controller
         try {
             \Log::info('Iniciando creación automática de proyección de capacitación', ['orden_id' => $ordenCapacitacion->id]);
             
-            $multicimId = $ordenCapacitacion->id_multicim ?? null;
+            $multicimId = $ordenCapacitacion->id_multicim ?? ($ordenCapacitacion->cotizacion ? $ordenCapacitacion->id_multicim : null);
             if (!$multicimId) {
                 $primerMulticim = Multicim::first();
                 $multicimId = $primerMulticim ? $primerMulticim->id : 1;
@@ -654,12 +876,22 @@ class ProyeccionesController extends Controller
             $tipoCotizacion = strtolower((string) optional($ordenCapacitacion->cotizacion)->tipo_cotizacion);
             $tipoOrden = in_array($tipoCotizacion, ['asesoria', 'asesoría'], true) ? 'asesoria' : 'capacitacion';
 
+            $labelActividad = ($tipoOrden === 'asesoria') ? 'Asesoría' : 'Capacitación';
+            
+            $serviciosDetallados = [
+                [
+                    'nombre' => "Servicio de $labelActividad",
+                    'frecuencia' => $ordenCapacitacion->modalidad ?? 'Única'
+                ]
+            ];
+
             $proyeccion = Proyeccion::create([
                 'tipo_orden' => $tipoOrden,
                 'id_referencia' => $ordenCapacitacion->id,
                 'id_multicim' => $multicimId,
                 'id_orden_capacitacion_auditoria' => $ordenCapacitacion->id,
                 'actividad' => null,
+                'servicios_detallados' => $serviciosDetallados,
                 'n_factura' => null,
                 'dias_credito' => null,
                 'fecha_factura' => null,
@@ -692,6 +924,13 @@ class ProyeccionesController extends Controller
                 return null;
             }
 
+            $serviciosDetallados = [
+                [
+                    'nombre' => $ordenAuditoria->servicio->nombre ?? 'Servicio de Auditoría',
+                    'frecuencia' => $ordenAuditoria->modalidad ?? 'Única'
+                ]
+            ];
+
             $monto = $ordenAuditoria->subtotal ?? $ordenAuditoria->costo ?? 0;
             $proyeccion->update([
                 'tipo_orden' => 'auditoria',
@@ -699,6 +938,8 @@ class ProyeccionesController extends Controller
                 'fecha_ejecucion' => $ordenAuditoria->fecha_servicio,
                 'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
                 'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+                'actividad' => $proyeccion->actividad,
+                'servicios_detallados' => $serviciosDetallados,
             ]);
 
             return $proyeccion;
@@ -722,6 +963,14 @@ class ProyeccionesController extends Controller
             $tipoCotizacion = strtolower((string) optional($ordenCapacitacion->cotizacion)->tipo_cotizacion);
             $tipoOrden = in_array($tipoCotizacion, ['asesoria', 'asesoría'], true) ? 'asesoria' : 'capacitacion';
 
+            $labelActividad = ($tipoOrden === 'asesoria') ? 'Asesoría' : 'Capacitación';
+            $serviciosDetallados = [
+                [
+                    'nombre' => "Servicio de $labelActividad",
+                    'frecuencia' => $ordenCapacitacion->modalidad ?? 'Única'
+                ]
+            ];
+
             $monto = $ordenCapacitacion->subtotal ?? $ordenCapacitacion->costo ?? 0;
             $proyeccion->update([
                 'tipo_orden' => $tipoOrden,
@@ -730,6 +979,8 @@ class ProyeccionesController extends Controller
                 'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
                 'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
                 'id_orden_capacitacion_auditoria' => $ordenCapacitacion->id,
+                'actividad' => $proyeccion->actividad,
+                'servicios_detallados' => $serviciosDetallados,
             ]);
 
             return $proyeccion;
@@ -747,7 +998,7 @@ class ProyeccionesController extends Controller
         try {
             \Log::info('Iniciando creación automática de proyección de asesoría', ['orden_id' => $ordenAsesoria->id]);
 
-            $multicimId = $ordenAsesoria->id_multicim ?? null;
+            $multicimId = $ordenAsesoria->id_multicim ?? ($ordenAsesoria->cotizacion ? $ordenAsesoria->cotizacion->id_multicim : null);
             if (!$multicimId) {
                 $primerMulticim = Multicim::first();
                 $multicimId = $primerMulticim ? $primerMulticim->id : 1;
@@ -764,11 +1015,19 @@ class ProyeccionesController extends Controller
 
             $monto = $ordenAsesoria->subtotal ?? $ordenAsesoria->costo ?? 0;
 
+            $serviciosDetallados = [
+                [
+                    'nombre' => $ordenAsesoria->servicio->nombre ?? 'Servicio de Asesoría',
+                    'frecuencia' => $ordenAsesoria->modalidad ?? 'Única'
+                ]
+            ];
+
             $proyeccion = Proyeccion::create([
                 'tipo_orden' => 'asesoria',
                 'id_referencia' => $ordenAsesoria->id,
                 'id_multicim' => $multicimId,
                 'actividad' => null,
+                'servicios_detallados' => $serviciosDetallados,
                 'n_factura' => null,
                 'dias_credito' => null,
                 'fecha_factura' => null,
@@ -801,6 +1060,13 @@ class ProyeccionesController extends Controller
                 return null;
             }
 
+            $serviciosDetallados = [
+                [
+                    'nombre' => $ordenAsesoria->servicio->nombre ?? 'Servicio de Asesoría',
+                    'frecuencia' => $ordenAsesoria->modalidad ?? 'Única'
+                ]
+            ];
+
             $monto = $ordenAsesoria->subtotal ?? $ordenAsesoria->costo ?? 0;
             $proyeccion->update([
                 'tipo_orden' => 'asesoria',
@@ -808,6 +1074,8 @@ class ProyeccionesController extends Controller
                 'fecha_ejecucion' => $ordenAsesoria->fecha_servicio,
                 'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
                 'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
+                'actividad' => $proyeccion->actividad,
+                'servicios_detallados' => $serviciosDetallados,
             ]);
 
             return $proyeccion;
@@ -825,7 +1093,7 @@ class ProyeccionesController extends Controller
         try {
             \Log::info('Iniciando creación automática de proyección de producto', ['orden_id' => $ordenProducto->id]);
             
-            $multicimId = $ordenProducto->id_multicim ?? null;
+            $multicimId = $ordenProducto->id_multicim ?? ($ordenProducto->cotizacion ? $ordenProducto->cotizacion->id_multicim : null);
             if (!$multicimId) {
                 $primerMulticim = Multicim::first();
                 $multicimId = $primerMulticim ? $primerMulticim->id : 1;
@@ -856,6 +1124,10 @@ class ProyeccionesController extends Controller
                 'id_multicim' => $multicimId,
                 'id_orden_producto' => $ordenProducto->id,
                 'actividad' => null,
+                'servicios_detallados' => $ordenProducto->detalles->map(fn($d) => [
+                    'nombre' => $d->producto->descripcion ?? 'Producto',
+                    'frecuencia' => 'Cant: ' . $d->cantidad
+                ]),
                 'n_factura' => null,
                 'dias_credito' => null,
                 'fecha_factura' => null,
@@ -890,6 +1162,11 @@ class ProyeccionesController extends Controller
                 'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
                 'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
                 'id_orden_producto' => $ordenProducto->id,
+                'actividad' => $proyeccion->actividad,
+                'servicios_detallados' => $ordenProducto->detalles->map(fn($d) => [
+                    'nombre' => $d->producto->descripcion ?? 'Producto',
+                    'frecuencia' => 'Cant: ' . $d->cantidad
+                ]),
             ]);
 
             return $proyeccion;

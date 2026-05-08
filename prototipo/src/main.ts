@@ -2,7 +2,7 @@ import './style.css'
 import './additional-styles.css'
 import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
-const LOGO_URL = "http://pruebabackend.qsci-system.com/images/menu.png";
+const LOGO_URL = "http://backend.qsci-system.com/images/menu.png";
 
 // Inicializar guard de autenticación
 initAuthGuard();
@@ -539,74 +539,9 @@ function renderApp() {
     });
   }
 
-  if (menuName === 'Facturación') {
-    try {
-      const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
 
-      // Cargar proyecciones
-      const respuesta = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, {
-        headers: {
-          'Accept': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-      });
-      const result = await respuesta.json();
-      const rawData = result.data || result;
-      misProyecciones = Array.isArray(rawData) ? rawData : [];
 
-      // Cargar empresas
-      const respuestaEmpresas = await fetch(`http://backend.qsci-system.com/api/v1/empresas`, {
-        headers: {
-          'Accept': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-      });
-      const resultEmpresas = await respuestaEmpresas.json();
-      misEmpresas = resultEmpresas.data || [];
 
-      // Cargar órdenes pendientes
-      const respuestaPendientes = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/pendientes`, {
-        headers: {
-          'Accept': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-      });
-      const resultPendientes = await respuestaPendientes.json();
-      misOrdenesPendientes = resultPendientes.data || [];
-
-      console.log(`Proyecciones ${mesActual}/${anioActual} cargadas:`, misProyecciones);
-      console.log('Empresas cargadas:', misEmpresas);
-      console.log('Órdenes pendientes:', misOrdenesPendientes);
-    } catch (error) {
-      console.error("Error cargando datos de facturación:", error);
-      misProyecciones = [];
-      misEmpresas = [];
-      misOrdenesPendientes = [];
-    }
-  }
-
-  ----------------------------------------------------
-    let activeMenu = 'Dashboard';
-  let activeSubMenu = '';
-  let expandedMenu = ''; // Controla qué menú con submenús está expandido (sin navegar)
-  let activeInventoryTab = 'productos'; // Estado para el tab de inventario
-  let activeLogisticaTab = 'clientes'; // Estado para el tab de Servicios - Clientes
-  let activeFinanzasTab = 'dashboard'; // Estado para el tab de finanzas
-  let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
-  let mesActual = new Date().getMonth() + 1; // 1-12 (mayo = 5)
-  let anioActual = new Date().getFullYear(); // 2026
-  let activeRecursosTab = 'asistencia'; // Estado para el tab de recursos humanos
-  let activeOperacionesTab = 'servicios'; // Estado para el tab de operaciones
-  let misProyecciones: any[] = []; // Lista de proyecciones para facturación
-  let misEmpresas: any[] = []; // Lista de empresas para facturación
-  let misOrdenesPendientes: any[] = []; // Órdenes pendientes para facturación
-
-  // Exponer variables globales para acceso desde otros módulos
-  (window as any).mesActual = mesActual;
-  (window as any).anioActual = anioActual;
-  (window as any).misProyecciones = [];
-  (window as any).misEmpresas = [];
-  (window as any).misOrdenesPendientes = [];
 
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -644,21 +579,30 @@ function renderApp() {
       if (menuName === 'Facturación') {
         try {
           const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
-          const respuesta = await fetch('http://pruebabackend.qsci-system.com/api/v1/proyecciones', {
-            headers: {
-              'Accept': 'application/json',
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-            },
-          });
-          const result = await respuesta.json();
+          const headers = {
+            'Accept': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          };
 
-          const rawData = result.data || result;
-          misProyecciones = Array.isArray(rawData) ? rawData : [];
+          // Cargar proyecciones
+          const resProy = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, { headers });
+          const resultProy = await resProy.json();
+          const rawDataProy = resultProy.data || resultProy;
+          misProyecciones = Array.isArray(rawDataProy) ? rawDataProy : [];
 
-          console.log("Proyecciones reales cargadas:", misProyecciones);
+          // Cargar empresas
+          const resEmp = await fetch(`http://backend.qsci-system.com/api/v1/empresas`, { headers });
+          const resultEmp = await resEmp.json();
+          misEmpresas = resultEmp.data || [];
+
+          // Cargar órdenes pendientes
+          const resPend = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/pendientes`, { headers });
+          const resultPend = await resPend.json();
+          misOrdenesPendientes = resultPend.data || [];
+
+          console.log("Datos de facturación cargados:", { misProyecciones, misEmpresas, misOrdenesPendientes });
         } catch (error) {
-          console.error("Error cargando proyecciones:", error);
-          misProyecciones = [];
+          console.error("Error cargando datos de facturación:", error);
         }
       }
 

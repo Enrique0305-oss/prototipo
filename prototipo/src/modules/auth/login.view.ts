@@ -1,7 +1,7 @@
 import './login.css';
 import { authService } from './auth.service';
 import type { Credenciales, LoginError } from './auth.types';
-const LOGO_URL = "http://pruebabackend.qsci-system.com/images/menu.png";
+const LOGO_URL = "http://backend.qsci-system.com/images/menu.png";
 
 export function renderLogin() {
   return `
@@ -151,7 +151,7 @@ export function initLoginEvents() {
   // Manejar submit del formulario
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     // Limpiar errores previos
     clearAllErrors();
 
@@ -190,7 +190,7 @@ export function initLoginEvents() {
     } catch (error) {
       // Manejar error de login
       const loginError = error as LoginError;
-      
+
       if (loginError.field) {
         showError(loginError.field, loginError.message);
       } else {
