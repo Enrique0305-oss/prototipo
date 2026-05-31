@@ -216,38 +216,118 @@ function renderTablaCargos() {
   });
 
   tbody.querySelectorAll('.btn-toggle-cargo').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
       const id = parseInt((btn as HTMLElement).dataset.id || '0');
       if (!id) return;
       const cargo = cargosData.find((c: any) => c.id === id);
-      const accion = cargo?.estado === 'activo' ? 'desactivar' : 'activar';
+      if (!cargo) return;
+
+      const accion = cargo.estado === 'activo' ? 'desactivar' : 'activar';
+      const accionCapitalized = accion.charAt(0).toUpperCase() + accion.slice(1);
+      const colorPrincipal = accion === 'activar' ? '#16a34a' : '#dc2626';
+      const colorFondo = accion === 'activar' ? '#dcfce7' : '#fee2e2';
       
-      if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} cargo ${cargo?.nombre}?`)) return;
-      
-      try {
-        await cargoService.update(id, { estado: accion === 'activar' ? 'activo' : 'inactivo' });
-        mostrarToast('success', 'Éxito', `Cargo ${accion === 'activar' ? 'activado' : 'desactivado'}`);
-        await cargarCargos();
-      } catch {
-        mostrarToast('error', 'Error', `No se pudo ${accion} el cargo`);
-      }
+      const overlay = document.createElement('div');
+      overlay.id = 'modal-confirm-toggle-cargo';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+      overlay.innerHTML = `
+        <div style="background:#fff;border-radius:12px;width:95%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+            <h2 style="margin:0;font-size:18px;font-weight:700;color:#1e293b;">Confirmar Acción</h2>
+            <button id="btn-cerrar-toggle-cargo" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:22px;line-height:1;">&times;</button>
+          </div>
+          <div style="padding:32px 24px;text-align:center;">
+            <div style="width:56px;height:56px;border-radius:50%;background:${colorFondo};color:${colorPrincipal};display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+              ${accion === 'activar' 
+                ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+                : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>'}
+            </div>
+            <p style="font-size:15px;color:#334155;margin-bottom:8px;">¿Estás seguro de ${accion} el cargo?</p>
+            <p style="font-size:16px;font-weight:600;color:#1e293b;">${escHtml(cargo.nombre)}</p>
+          </div>
+          <div style="display:flex;justify-content:center;gap:12px;padding:20px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;border-radius:0 0 12px 12px;">
+            <button id="btn-cancelar-toggle-cargo" style="padding:10px 20px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#475569;">Cancelar</button>
+            <button id="btn-confirmar-toggle-cargo" style="padding:10px 20px;background:${colorPrincipal};color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.1);">${accionCapitalized}</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      document.getElementById('btn-cerrar-toggle-cargo')?.addEventListener('click', () => overlay.remove());
+      document.getElementById('btn-cancelar-toggle-cargo')?.addEventListener('click', () => overlay.remove());
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+      document.getElementById('btn-confirmar-toggle-cargo')?.addEventListener('click', async () => {
+        const btnConfirm = document.getElementById('btn-confirmar-toggle-cargo') as HTMLButtonElement;
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = 'Procesando...';
+        
+        try {
+          await cargoService.update(id, { estado: accion === 'activar' ? 'activo' : 'inactivo' });
+          mostrarToast('success', 'Éxito', `Cargo ${accion === 'activar' ? 'activado' : 'desactivado'}`);
+          overlay.remove();
+          await cargarCargos();
+        } catch {
+          mostrarToast('error', 'Error', `No se pudo ${accion} el cargo`);
+          btnConfirm.disabled = false;
+          btnConfirm.textContent = accionCapitalized;
+        }
+      });
     });
   });
 
   tbody.querySelectorAll('.btn-delete-cargo').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
       const id = parseInt((btn as HTMLElement).dataset.id || '0');
       const nombre = (btn as HTMLElement).dataset.nombre || '';
       
-      if (!confirm(`¿Eliminar cargo "${nombre}"? Esta acción no se puede deshacer.`)) return;
-      
-      try {
-        await cargoService.delete(id);
-        mostrarToast('success', 'Éxito', 'Cargo eliminado');
-        await cargarCargos();
-      } catch {
-        mostrarToast('error', 'Error', 'No se pudo eliminar el cargo');
-      }
+      const overlay = document.createElement('div');
+      overlay.id = 'modal-confirm-delete-cargo';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+      overlay.innerHTML = `
+        <div style="background:#fff;border-radius:12px;width:95%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+            <h2 style="margin:0;font-size:18px;font-weight:700;color:#1e293b;">Confirmar Eliminación</h2>
+            <button id="btn-cerrar-delete-cargo" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:22px;line-height:1;">&times;</button>
+          </div>
+          <div style="padding:32px 24px;text-align:center;">
+            <div style="width:56px;height:56px;border-radius:50%;background:#fee2e2;color:#dc2626;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </div>
+            <p style="font-size:15px;color:#334155;margin-bottom:8px;">¿Estás seguro de eliminar el cargo?</p>
+            <p style="font-size:16px;font-weight:600;color:#1e293b;">${escHtml(nombre)}</p>
+            <p style="font-size:13px;color:#dc2626;margin-top:12px;font-weight:500;">Esta acción no se puede deshacer.</p>
+          </div>
+          <div style="display:flex;justify-content:center;gap:12px;padding:20px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;border-radius:0 0 12px 12px;">
+            <button id="btn-cancelar-delete-cargo" style="padding:10px 20px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#475569;">Cancelar</button>
+            <button id="btn-confirmar-delete-cargo" style="padding:10px 20px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.1);">Eliminar</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      document.getElementById('btn-cerrar-delete-cargo')?.addEventListener('click', () => overlay.remove());
+      document.getElementById('btn-cancelar-delete-cargo')?.addEventListener('click', () => overlay.remove());
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+      document.getElementById('btn-confirmar-delete-cargo')?.addEventListener('click', async () => {
+        const btnConfirm = document.getElementById('btn-confirmar-delete-cargo') as HTMLButtonElement;
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = 'Procesando...';
+        
+        try {
+          await cargoService.delete(id);
+          mostrarToast('success', 'Éxito', 'Cargo eliminado');
+          overlay.remove();
+          await cargarCargos();
+        } catch {
+          mostrarToast('error', 'Error', 'No se pudo eliminar el cargo');
+          btnConfirm.disabled = false;
+          btnConfirm.textContent = 'Eliminar';
+        }
+      });
     });
   });
 }

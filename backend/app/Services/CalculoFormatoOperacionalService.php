@@ -35,8 +35,8 @@ class CalculoFormatoOperacionalService
         $mainProg = $programaciones->firstWhere('id', $idProgramacion) ?? $programaciones->first();
 
         // ─── LÓGICA DE MEMORIA TÉCNICA (HISTORIAL) ──────────────────────────
-        // Buscamos el último formato operacional ya guardado para la misma
-        // orden de servicio y planta. Esto permite que cuando un técnico
+        // Buscamos el último formato operacional ya guardado para el mismo
+        // servicio, orden de servicio y planta. Esto permite que cuando un técnico
         // completa el formato del 1-May, el del 5-May ya traiga los códigos
         // y ubicaciones que se registraron la primera vez.
         $historialDetalles = collect();
@@ -47,6 +47,7 @@ class CalculoFormatoOperacionalService
                 ->where('id_programacion_servicio', '!=', $mainProg->id)
                 ->whereHas('programacionServicio', function ($q) use ($mainProg) {
                     $q->where('id_orden_servicio', $mainProg->id_orden_servicio)
+                      ->where('id_servicio', $mainProg->id_servicio)
                       ->where('id_cliente_planta', $mainProg->id_cliente_planta);
                 })
                 ->whereIn('estado', ['completada', 'borrador'])
@@ -56,12 +57,21 @@ class CalculoFormatoOperacionalService
                 ->first();
         }
 
-        // Si no encontramos por orden de servicio, intentar por planta solamente
+        // Si no encontramos por orden de servicio, intentar por planta y nombre de servicio (flexibilidad total)
         if (!$ultimoFormato && $mainProg->id_cliente_planta) {
+            $nombreServicio = $mainProg->servicio?->nombre;
             $ultimoFormato = FormatoOperacional::query()
                 ->where('id_programacion_servicio', '!=', $mainProg->id)
-                ->whereHas('programacionServicio', function ($q) use ($mainProg) {
-                    $q->where('id_cliente_planta', $mainProg->id_cliente_planta);
+                ->whereHas('programacionServicio', function ($q) use ($mainProg, $nombreServicio) {
+                    $q->where('id_cliente_planta', $mainProg->id_cliente_planta)
+                      ->where(function($sub) use ($mainProg, $nombreServicio) {
+                          $sub->where('id_servicio', $mainProg->id_servicio);
+                          if ($nombreServicio) {
+                              $sub->orWhereHas('servicio', function($s) use ($nombreServicio) {
+                                  $s->where('nombre', $nombreServicio);
+                              });
+                          }
+                      });
                 })
                 ->whereIn('estado', ['completada', 'borrador'])
                 ->orderByRaw("FIELD(estado, 'completada', 'borrador')")
@@ -85,8 +95,18 @@ class CalculoFormatoOperacionalService
 
         $formatos = $this->deduplicarFormatos($formatos);
 
+        // Si no hay formatos seleccionados, retornar respuesta vacía (Formato Operacional es opcional)
         if ($formatos === []) {
-            throw new \Exception('La programación no tiene formatos de fichas seleccionados');
+            return [
+                'formatos_aplicados' => [],
+                'dispositivos' => [],
+                'secciones' => [],
+                'ultimo_formato_id' => null,
+                'resumen' => [
+                    'total_secciones' => 0,
+                    'total_items' => 0,
+                ],
+            ];
         }
 
         $insumos = collect();
@@ -106,6 +126,7 @@ class CalculoFormatoOperacionalService
         $inventario = $this->clasificarInventario($insumos);
         $restante = [
             'cajas_cebaderas' => $inventario['totales']['cajas_cebaderas'],
+            'tubos_cebaderos' => $inventario['totales']['tubos_cebaderos'] ?? 0,
             'jaulas' => $inventario['totales']['jaulas'],
             'cebos' => $inventario['totales']['cebos'],
             'laminas' => $inventario['totales']['laminas'],
@@ -118,7 +139,7 @@ class CalculoFormatoOperacionalService
         $secciones = [];
         $codigosPresentes = array_column($formatos, 'codigo');
 
-        // 1. Prioridad: Roedores (usa cajas, cebos y láminas)
+        // 1. Prioridad: Roedores (usa cajas, tubos, cebos y láminas)
         if (in_array('roedores', $codigosPresentes)) {
             $secciones = array_merge($secciones, $this->construirSeccionesRoedores($restante));
         }
@@ -136,26 +157,78 @@ class CalculoFormatoOperacionalService
         // ─── INTEGRAR MEMORIA TÉCNICA EN LAS SECCIONES ─────────────────────
         foreach ($secciones as &$seccion) {
             $tipoSeccion = $seccion['tipo_seccion'];
+            $cantidadOriginal = $seccion['cantidad_disponible'];
             
-            // Intentar obtener historial por el tipo actual (ENUM: cebo, lamina, trampa_luz)
+            // Intentar obtener historial por el tipo actual (ENUM: cebo, lamina, trampa_luz, jaula)
             $historial = $historialDetalles->get($tipoSeccion);
 
-            // Si hay historial, pero el tipo es 'lamina', filtramos por descripción
-            // para no mezclar láminas de Rastreros con láminas de Roedores.
-            if ($historial && $historial->isNotEmpty() && $tipoSeccion === 'lamina') {
-                $tituloNormalizado = strtolower(trim($seccion['titulo']));
-                $historial = $historial->filter(function($d) use ($tituloNormalizado) {
-                    $descH = strtolower(trim($d->descripcion));
-                    // Si la sección actual es Rastreros, buscamos descripciones de Rastreros
-                    if (str_contains($tituloNormalizado, 'rastrero')) {
-                        return str_contains($descH, 'rastrero') || $descH === 'láminas pegantes';
+            // COMPATIBILIDAD: Si es tipo jaula o tubo_cebadero, buscar también en 'otros' o 'cebo' por si hay registros antiguos
+            if ($tipoSeccion === 'jaula' || $tipoSeccion === 'tubo_cebadero') {
+                $otros = $historialDetalles->get('otros');
+                $cebos = $historialDetalles->get('cebo'); // Los tubos podrían estar en 'cebo' históricamente
+
+                if ($tipoSeccion === 'jaula' && $otros && $otros->isNotEmpty()) {
+                    $jaulasAntiguas = $otros->filter(fn($d) => str_starts_with(strtoupper((string)$d->codigo_caja), 'J-'));
+                    if ($jaulasAntiguas->isNotEmpty()) {
+                        $historial = $historial ? $historial->merge($jaulasAntiguas) : $jaulasAntiguas;
                     }
-                    // Si es Roedores, buscamos descripciones de Roedores
-                    return str_contains($descH, 'cebadera') || str_contains($descH, 'roedor');
+                }
+
+                if ($tipoSeccion === 'tubo_cebadero' && $cebos && $cebos->isNotEmpty()) {
+                    $tubosAntiguos = $cebos->filter(fn($d) => str_contains($this->normalizeText((string)$d->descripcion), 'tubo'));
+                    if ($tubosAntiguos->isNotEmpty()) {
+                        $historial = $historial ? $historial->merge($tubosAntiguos) : $tubosAntiguos;
+                    }
+                }
+            }
+
+            // Si hay historial, pero el tipo es 'lamina', 'cebo' o 'tubo_cebadero', filtramos por descripción
+            // para no mezclar equipos (Cajas vs Tubos vs Rastreros).
+            if ($historial && $historial->isNotEmpty() && ($tipoSeccion === 'lamina' || $tipoSeccion === 'cebo' || $tipoSeccion === 'tubo_cebadero')) {
+                $claveNormalizada = strtolower(trim($seccion['clave']));
+                $historial = $historial->filter(function($d) use ($claveNormalizada) {
+                    $descH = $this->normalizeText((string) ($d->descripcion ?? ''));
+                    // 1. Caso Rastreros
+                    if (str_contains($claveNormalizada, 'rastrero')) {
+                        return str_contains($descH, 'rastrero') || str_contains($descH, 'lamina') || str_contains($descH, 'insecto');
+                    }
+                    // 2. Caso Tubos Cebaderos
+                    if (str_contains($claveNormalizada, 'tubo')) {
+                        return str_contains($descH, 'tubo');
+                    }
+                    // 3. Caso Cajas Cebaderas (Cebo o Lámina)
+                    return (str_contains($descH, 'cebadera') || str_contains($descH, 'cebadora') || str_contains($descH, 'roedor') || str_contains($descH, 'cebo')) 
+                           && !str_contains($descH, 'tubo');
                 });
             }
             
             if ($historial && $historial->isNotEmpty()) {
+                $countH = $historial->count();
+                $claveLower = strtolower($seccion['clave']);
+
+                // Heredar cantidad para Rastreros, Voladores y Jaulas basándose en el historial
+                // pero SOLO si la sección no tiene una cantidad ya asignada por el cálculo (insumos actuales).
+                if (str_contains($claveLower, 'rastrero') || str_contains($claveLower, 'volador') || str_contains($claveLower, 'jaula')) {
+                    if ($seccion['cantidad_asignada'] <= 0) {
+                        // REGLA DE ORO: Si el inventario actual es 0, no forzar asignación positiva para Jaulas
+                        if ($cantidadOriginal > 0 || !str_contains($claveLower, 'jaula')) {
+                            $seccion['cantidad_asignada'] = $countH;
+                            $seccion['cantidad_disponible'] = $countH;
+                        }
+                    }
+                    
+                    // Para Rastreros/Voladores/Jaulas, heredamos también la ubicación a nivel de sección si es común
+                    $seccion['ubicacion'] = $historial->first()->ubicacion ?? '';
+                }
+                
+                // Para Tubos Cebaderos y Cajas Cebaderas (Roedores), NUNCA sobrescribimos la cantidad calculada
+                // pero sí heredamos la ubicación si no tiene una.
+                if (str_contains($claveLower, 'tubo') || str_contains($claveLower, 'roedor')) {
+                    if (empty($seccion['ubicacion'])) {
+                        $seccion['ubicacion'] = $historial->first()->ubicacion ?? '';
+                    }
+                }
+
                 $seccion['historial_dispositivos'] = $historial->map(fn($d) => [
                     'codigo_caja' => $d->codigo_caja,
                     'ubicacion' => $d->ubicacion,
@@ -242,6 +315,7 @@ class CalculoFormatoOperacionalService
     {
         $categorias = [
             'cajas_cebaderas' => [],
+            'tubos_cebaderos' => [],
             'jaulas' => [],
             'cebos' => [],
             'laminas' => [],
@@ -261,6 +335,11 @@ class CalculoFormatoOperacionalService
 
             if ($this->esTrampaDeLuz($descripcion)) {
                 $categorias['trampas_luz'][] = $item;
+                continue;
+            }
+
+            if ($this->esTuboCebadero($descripcion)) {
+                $categorias['tubos_cebaderos'][] = $item;
                 continue;
             }
 
@@ -290,6 +369,7 @@ class CalculoFormatoOperacionalService
         return [
             'totales' => [
                 'cajas_cebaderas' => collect($categorias['cajas_cebaderas'])->sum('cantidad'),
+                'tubos_cebaderos' => collect($categorias['tubos_cebaderos'])->sum('cantidad'),
                 'jaulas' => collect($categorias['jaulas'])->sum('cantidad'),
                 'cebos' => collect($categorias['cebos'])->sum('cantidad'),
                 'laminas' => collect($categorias['laminas'])->sum('cantidad'),
@@ -304,6 +384,24 @@ class CalculoFormatoOperacionalService
     {
         $secciones = [];
 
+        // 1. Tubos cebaderos (Prioridad sobre Cajas)
+        $tubosConCebo = min($restante['tubos_cebaderos'] ?? 0, $restante['cebos']);
+        $secciones[] = $this->crearSeccion(
+            clave: 'roedores_tubos_cebo',
+            formato: self::FORMATO_ROEDORES,
+            titulo: 'Tubos cebaderos con cebo',
+            tipoSeccion: 'tubo_cebadero',
+            tipoContenido: 'cebo',
+            disponibles: $tubosConCebo,
+            asignadas: $tubosConCebo,
+            nota: 'Prioridad para Tubos Cebaderos.'
+        );
+        $restante['cebos'] -= $tubosConCebo;
+        if (isset($restante['tubos_cebaderos'])) {
+            $restante['tubos_cebaderos'] -= $tubosConCebo;
+        }
+
+        // 2. Cajas cebaderas con cebo
         $cajasConCebo = min($restante['cajas_cebaderas'], $restante['cebos']);
         $secciones[] = $this->crearSeccion(
             clave: 'roedores_cajas_cebo',
@@ -318,6 +416,7 @@ class CalculoFormatoOperacionalService
         $restante['cajas_cebaderas'] -= $cajasConCebo;
         $restante['cebos'] -= $cajasConCebo;
 
+        // 3. Cajas cebaderas con lámina pegante
         $cajasConLamina = min($restante['cajas_cebaderas'], $restante['laminas']);
         $secciones[] = $this->crearSeccion(
             clave: 'roedores_cajas_lamina',
@@ -332,13 +431,13 @@ class CalculoFormatoOperacionalService
         $restante['cajas_cebaderas'] -= $cajasConLamina;
         $restante['laminas'] -= $cajasConLamina;
 
-        // Mostrar todas las jaulas disponibles (sin filtrar por láminas)
+        // 4. Jaulas (Solo si hay en inventario actual)
         $totalJaulas = $restante['jaulas'];
         $secciones[] = $this->crearSeccion(
             clave: 'roedores_jaulas',
             formato: self::FORMATO_ROEDORES,
             titulo: 'Jaulas',
-            tipoSeccion: 'otros',
+            tipoSeccion: 'jaula',
             tipoContenido: 'jaula',
             disponibles: $totalJaulas,
             asignadas: $totalJaulas,
@@ -411,22 +510,31 @@ class CalculoFormatoOperacionalService
     private function crearDetallesDesdeSecciones(int $idFormato, array $secciones): array
     {
         $detalles = [];
-        $ordenCaja = 1;
+        $ordenCajaGlobal = 1;
 
         foreach ($secciones as $seccion) {
             $cantidad = max(0, (int) ($seccion['cantidad_asignada'] ?? 0));
             $titulo = (string) ($seccion['titulo'] ?? $seccion['descripcion'] ?? 'Sección');
             $tipoSeccion = (string) ($seccion['tipo_seccion'] ?? 'otros');
             $prefix = $this->prefixFromSection($seccion);
+            $ubicacionSeccion = (string) ($seccion['ubicacion'] ?? '');
+            
+            $historial = $seccion['historial_dispositivos'] ?? [];
 
             for ($i = 0; $i < $cantidad; $i++) {
+                $itemH = $historial[$i] ?? null;
+                
+                // Priorizar datos del historial (Código y Ubicación)
+                $codigo = $itemH['codigo_caja'] ?? sprintf('%s-%02d', $prefix, $ordenCajaGlobal);
+                $ubicacion = $itemH['ubicacion'] ?? $ubicacionSeccion;
+
                 $detalles[] = FormatoOperacionalDetalle::create([
                     'id_formato_operacional' => $idFormato,
                     'tipo_seccion' => $tipoSeccion,
-                    'codigo_caja' => sprintf('%s-%02d', $prefix, $ordenCaja),
-                    'orden_caja' => $ordenCaja,
+                    'codigo_caja' => $codigo,
+                    'orden_caja' => $itemH['orden_caja'] ?? $ordenCajaGlobal,
                     'descripcion' => $titulo,
-                    'ubicacion' => '',
+                    'ubicacion' => $ubicacion,
                     'estado_dispositivo' => 'No visitada',
                     'estado_dispositivo_verdadera' => 'No visitada',
                     'estado_dispositivo_auditiva' => 'No visitada',
@@ -438,7 +546,19 @@ class CalculoFormatoOperacionalService
                     'senales_presencia_auditiva' => '-',
                     'numero_lote' => null,
                 ]);
-                $ordenCaja++;
+                
+                if (!$itemH) {
+                    $ordenCajaGlobal++;
+                }
+            }
+            
+            // Si procesamos ítems con historial, nos aseguramos de que el contador global 
+            // no choque con los siguientes si no hay historial en la siguiente sección
+            if (!empty($historial)) {
+                $maxOrden = collect($historial)->max('orden_caja');
+                if ($maxOrden >= $ordenCajaGlobal) {
+                    $ordenCajaGlobal = $maxOrden + 1;
+                }
             }
         }
 
@@ -450,6 +570,9 @@ class CalculoFormatoOperacionalService
         $key = $this->normalizeText((string) ($section['clave'] ?? $section['formato'] ?? $section['titulo'] ?? ''));
 
         if (str_contains($key, 'roedores')) {
+            if (str_contains($key, 'tubo')) {
+                return 'TB';
+            }
             if (str_contains($key, 'cebo')) {
                 return 'C';
             }
@@ -588,15 +711,46 @@ class CalculoFormatoOperacionalService
                 continue;
             }
 
+            $tipoSeccion = trim((string) ($section['tipo_seccion'] ?? $section['tipo'] ?? 'otros'));
+            $descripcion = trim((string) ($section['descripcion'] ?? $titulo));
+
+            // RE-CLASIFICACIÓN DE SEGURIDAD: Si viene como 'otros' pero el título o descripción sugiere un equipo conocido, lo corregimos.
+            if ($tipoSeccion === 'otros' || $tipoSeccion === '') {
+                $normalizado = $this->normalizeText($titulo . ' ' . $descripcion);
+                if (str_contains($normalizado, 'tubo')) {
+                    $tipoSeccion = 'tubo_cebadero';
+                    if ($descripcion === 'Otros' || $descripcion === 'otros' || $descripcion === '') {
+                        $descripcion = 'Tubo cebadero con cebo';
+                    }
+                } elseif (str_contains($normalizado, 'jaula')) {
+                    $tipoSeccion = 'jaula';
+                    if ($descripcion === 'Otros' || $descripcion === 'otros' || $descripcion === '') {
+                        $descripcion = 'Jaulas de captura';
+                    }
+                } elseif (str_contains($normalizado, 'cebadera') || str_contains($normalizado, 'cebo')) {
+                    $tipoSeccion = 'cebo';
+                    if ($descripcion === 'Otros' || $descripcion === 'otros' || $descripcion === '') {
+                        $descripcion = 'Caja cebadera con cebo';
+                    }
+                } elseif (str_contains($normalizado, 'lamina') || str_contains($normalizado, 'pegante') || str_contains($normalizado, 'adhesiva')) {
+                    $tipoSeccion = 'lamina';
+                    if ($descripcion === 'Otros' || $descripcion === 'otros' || $descripcion === '') {
+                        $descripcion = 'Caja cebadera con lámina pegante';
+                    }
+                }
+            }
+
             $secciones[] = [
                 'clave' => trim((string) ($section['clave'] ?? $section['formato'] ?? $titulo)),
                 'formato' => trim((string) ($section['formato'] ?? '')),
                 'titulo' => $titulo,
-                'tipo_seccion' => trim((string) ($section['tipo_seccion'] ?? 'otros')),
+                'tipo_seccion' => $tipoSeccion,
                 'tipo_contenido' => trim((string) ($section['tipo_contenido'] ?? 'otros')),
                 'cantidad_disponible' => max(0, (int) ($section['cantidad_disponible'] ?? $cantidad)),
                 'cantidad_asignada' => max(0, $cantidad),
-                'descripcion' => trim((string) ($section['descripcion'] ?? $titulo)),
+                'descripcion' => $descripcion,
+                'ubicacion' => trim((string) ($section['ubicacion'] ?? '')),
+                'historial_dispositivos' => $section['historial_dispositivos'] ?? [],
                 'nota' => trim((string) ($section['nota'] ?? '')),
             ];
         }
@@ -609,6 +763,11 @@ class CalculoFormatoOperacionalService
         return str_contains($desc, 'caja cebadera') || str_contains($desc, 'caja cebadora');
     }
 
+    private function esTuboCebadero(string $desc): bool
+    {
+        return str_contains($desc, 'tubo');
+    }
+
     private function esCebo(string $desc): bool
     {
         return str_contains($desc, 'cebo') || str_contains($desc, 'final blox');
@@ -616,12 +775,12 @@ class CalculoFormatoOperacionalService
 
     private function esLaminaPegante(string $desc): bool
     {
-        return str_contains($desc, 'lamina') || str_contains($desc, 'adhesiva') || str_contains($desc, 'pegante');
+        return str_contains($desc, 'lamina') || str_contains($desc, 'adhesiva') || str_contains($desc, 'pegante') || str_contains($desc, 'pegajosa');
     }
 
     private function esJaula(string $desc): bool
     {
-        return str_contains($desc, 'jaula') || str_contains($desc, 'trampa');
+        return str_contains($desc, 'jaula');
     }
 
     private function esTrampaDeLuz(string $desc): bool

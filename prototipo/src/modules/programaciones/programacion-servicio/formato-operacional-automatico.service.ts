@@ -23,6 +23,7 @@ export interface FormatoOperacionalAsignacionSeccion {
 export interface FormatoOperacionalCalculoDispositivos {
   totales: {
     cajas_cebaderas: number;
+    tubos_cebaderos: number;
     jaulas: number;
     cebos: number;
     laminas: number;
@@ -31,6 +32,7 @@ export interface FormatoOperacionalCalculoDispositivos {
   };
   dispositivos: {
     cajas_cebaderas: FormatoOperacionalDispositivoDisponible[];
+    tubos_cebaderos: FormatoOperacionalDispositivoDisponible[];
     jaulas: FormatoOperacionalDispositivoDisponible[];
     cebos: FormatoOperacionalDispositivoDisponible[];
     laminas: FormatoOperacionalDispositivoDisponible[];

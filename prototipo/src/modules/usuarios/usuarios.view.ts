@@ -7,7 +7,7 @@ import { renderCargos, initCargosEvents } from './cargos.view';
 let usuariosData: any[] = [];
 let areasData: any[] = [];
 let filtroSearch = '';
-let filtroEstado = '';
+let filtroEstado = 'Activo';
 let filtroArea = '';
 let tecnicosData: any[] = [];
 
@@ -72,7 +72,7 @@ export function renderUsuarios(): string {
         </div>
         <select id="filtro-estado-usuarios" style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;min-width:150px;">
           <option value="">Todos los estados</option>
-          <option value="Activo">Activo</option>
+          <option value="Activo" selected>Activo</option>
           <option value="Inactivo">Inactivo</option>
         </select>
         <select id="filtro-area-usuarios" style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;min-width:150px;">
@@ -106,6 +106,10 @@ export function renderUsuarios(): string {
 }
 
 export function initUsuariosEvents() {
+  filtroEstado = 'Activo';
+  filtroSearch = '';
+  filtroArea = '';
+  
   cargarAreas();
   cargarUsuarios();
 
@@ -304,19 +308,64 @@ function renderTabla() {
   });
 
   tbody.querySelectorAll('.btn-toggle-usuario').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
       const id = parseInt((btn as HTMLElement).dataset.id || '0');
       if (!id) return;
       const user = usuariosData.find((u: any) => u.id === id);
-      const accion = user?.estado === 'Activo' ? 'desactivar' : 'activar';
-      if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} a ${user?.nombre} ${user?.apellidos}?`)) return;
-      try {
-        await personalService.toggleEstado(id);
-        mostrarToast('success', 'Éxito', `Usuario ${accion === 'activar' ? 'activado' : 'desactivado'}`);
-        await cargarUsuarios();
-      } catch {
-        mostrarToast('error', 'Error', `No se pudo ${accion} el usuario`);
-      }
+      if (!user) return;
+      
+      const accion = user.estado === 'Activo' ? 'desactivar' : 'activar';
+      const accionCapitalized = accion.charAt(0).toUpperCase() + accion.slice(1);
+      const colorPrincipal = accion === 'activar' ? '#16a34a' : '#dc2626';
+      const colorFondo = accion === 'activar' ? '#dcfce7' : '#fee2e2';
+      
+      const overlay = document.createElement('div');
+      overlay.id = 'modal-confirm-toggle';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+      overlay.innerHTML = `
+        <div style="background:#fff;border-radius:12px;width:95%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+            <h2 style="margin:0;font-size:18px;font-weight:700;color:#1e293b;">Confirmar Acción</h2>
+            <button id="btn-cerrar-toggle" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:22px;line-height:1;">&times;</button>
+          </div>
+          <div style="padding:32px 24px;text-align:center;">
+            <div style="width:56px;height:56px;border-radius:50%;background:${colorFondo};color:${colorPrincipal};display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+              ${accion === 'activar' 
+                ? '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+                : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>'}
+            </div>
+            <p style="font-size:15px;color:#334155;margin-bottom:8px;">¿Estás seguro de ${accion} a este usuario?</p>
+            <p style="font-size:16px;font-weight:600;color:#1e293b;">${escHtml(user.nombre)} ${escHtml(user.apellidos)}</p>
+          </div>
+          <div style="display:flex;justify-content:center;gap:12px;padding:20px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;border-radius:0 0 12px 12px;">
+            <button id="btn-cancelar-toggle" style="padding:10px 20px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#475569;">Cancelar</button>
+            <button id="btn-confirmar-toggle" style="padding:10px 20px;background:${colorPrincipal};color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.1);">${accionCapitalized}</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      document.getElementById('btn-cerrar-toggle')?.addEventListener('click', () => overlay.remove());
+      document.getElementById('btn-cancelar-toggle')?.addEventListener('click', () => overlay.remove());
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+      document.getElementById('btn-confirmar-toggle')?.addEventListener('click', async () => {
+        const btnConfirm = document.getElementById('btn-confirmar-toggle') as HTMLButtonElement;
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = 'Procesando...';
+        
+        try {
+          await personalService.toggleEstado(id);
+          mostrarToast('success', 'Éxito', `Usuario ${accion === 'activar' ? 'activado' : 'desactivado'}`);
+          overlay.remove();
+          await cargarUsuarios();
+        } catch {
+          mostrarToast('error', 'Error', `No se pudo ${accion} el usuario`);
+          btnConfirm.disabled = false;
+          btnConfirm.textContent = accionCapitalized;
+        }
+      });
     });
   });
 

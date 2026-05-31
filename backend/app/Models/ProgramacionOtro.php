@@ -24,6 +24,9 @@ class ProgramacionOtro extends Model
         'ubicacion_manual',
         'estado_ejecucion',
         'observaciones',
+        'fotos_evidencia',
+        'fecha_inicio_real',
+        'fecha_fin_real',
         'creado_por',
     ];
 
@@ -33,6 +36,9 @@ class ProgramacionOtro extends Model
         'hora_fin' => 'datetime:H:i',
         'tecnicos_ids' => 'array',
         'id_supervisor' => 'array',
+        'fotos_evidencia' => 'array',
+        'fecha_inicio_real' => 'datetime',
+        'fecha_fin_real' => 'datetime',
     ];
 
     public function tecnico()

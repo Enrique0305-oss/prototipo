@@ -416,6 +416,7 @@
 
 .prog-event.blue { background: linear-gradient(135deg, #3B82F6, #2563EB); }
 .prog-event.green { background: linear-gradient(135deg, #10B981, #059669); }
+.prog-event.gradient-ejecucion { background: linear-gradient(135deg, #3B82F6, #10B981); }
 .prog-event.orange { background: linear-gradient(135deg, #F59E0B, #D97706); }
 .prog-event.purple { background: linear-gradient(135deg, #8B5CF6, #7C3AED); }
 .prog-event.cyan { background: linear-gradient(135deg, #06B6D4, #0891B2); }
@@ -542,6 +543,7 @@
 
 .prog-week-card-blue   { border-left-color: #3B82F6; background: #EFF6FF; }
 .prog-week-card-green  { border-left-color: #10B981; background: #ECFDF5; }
+.prog-week-card-gradient-ejecucion { border-left-color: #3B82F6; background: linear-gradient(90deg, #EFF6FF, #ECFDF5); }
 .prog-week-card-orange { border-left-color: #F59E0B; background: #FFFBEB; }
 .prog-week-card-purple { border-left-color: #8B5CF6; background: #F5F3FF; }
 .prog-week-card-cyan   { border-left-color: #06B6D4; background: #ECFEFF; }
@@ -586,6 +588,7 @@
 
 .prog-week-card-blue .prog-week-card-badge   { background: #DBEAFE; color: #1E40AF; }
 .prog-week-card-green .prog-week-card-badge  { background: #D1FAE5; color: #065F46; }
+.prog-week-card-gradient-ejecucion .prog-week-card-badge { background: linear-gradient(90deg, #DBEAFE, #D1FAE5); color: #1E40AF; }
 .prog-week-card-orange .prog-week-card-badge { background: #FEF3C7; color: #92400E; }
 .prog-week-card-purple .prog-week-card-badge { background: #EDE9FE; color: #5B21B6; }
 .prog-week-card-cyan .prog-week-card-badge   { background: #CFFAFE; color: #155E75; }
@@ -703,8 +706,8 @@
 }
 
 .prog-status-badge.En.Ejecución {
-  background: #FEF3C7;
-  color: #92400E;
+  background: linear-gradient(90deg, #DBEAFE, #D1FAE5);
+  color: #1E40AF;
 }
 
 .prog-status-badge.Realizado {

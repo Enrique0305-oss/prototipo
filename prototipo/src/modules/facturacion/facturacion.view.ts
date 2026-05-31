@@ -1,9 +1,210 @@
+import * as ExcelJS from 'exceljs';
+
 function getAuthHeaders(): Record<string, string> {
     const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
     return {
         'Accept': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     };
+}
+
+function descargarExcelBuffer(buffer: ArrayBuffer, nombreArchivo: string): void {
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = nombreArchivo;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    URL.revokeObjectURL(url);
+}
+
+function formatearFechaExcel(fecha: string | null | undefined): string {
+    if (!fecha) return '---';
+
+    const texto = String(fecha).trim();
+    if (!texto) return '---';
+
+    const base = texto.split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(base)) {
+        const [anio, mes, dia] = base.split('-');
+        return `${dia}/${mes}/${anio}`;
+    }
+
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(base)) {
+        return base;
+    }
+
+    return base;
+}
+
+function formatearMontoExcel(valor: any): string {
+    return `S/ ${Number(valor || 0).toFixed(2)}`;
+}
+
+function obtenerServiciosExportacion(proyeccion: any): Array<{ nombre: string; frecuencia: string }> {
+    const servicios = Array.isArray(proyeccion?.servicios_detallados) ? proyeccion.servicios_detallados : [];
+
+    if (servicios.length > 0) {
+        return servicios.map((servicio: any) => ({
+            nombre: servicio?.nombre || '---',
+            frecuencia: servicio?.frecuencia || '---',
+        }));
+    }
+
+    const referencia = proyeccion?.orden_servicio || proyeccion?.orden_producto || proyeccion?.orden_capacitacion || proyeccion?.orden_auditoria || proyeccion?.orden_asesoria || {};
+    const nombreServicio = referencia?.servicio?.nombre || referencia?.servicio || '---';
+    const frecuencia = referencia?.frecuencia || referencia?.modalidad || '---';
+
+    return [{ nombre: nombreServicio, frecuencia }];
+}
+
+function crearNombreArchivoExcelProyecciones(mes: string, anio: string, empresa: string): string {
+    const empresaLimpia = (empresa || 'todas').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
+    return `proyecciones_${anio}_${String(mes).padStart(2, '0')}_${empresaLimpia}.xlsx`;
+}
+
+function aplicarEstiloEncabezadoExcel(row: ExcelJS.Row): void {
+    row.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2C4A7C' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+            top: { style: 'thin', color: { argb: 'CBD5E1' } },
+            left: { style: 'thin', color: { argb: 'CBD5E1' } },
+            bottom: { style: 'thin', color: { argb: 'CBD5E1' } },
+            right: { style: 'thin', color: { argb: 'CBD5E1' } },
+        };
+    });
+}
+
+async function exportarProyeccionesExcel(proyecciones: any[] = []): Promise<void> {
+    if (!Array.isArray(proyecciones) || proyecciones.length === 0) {
+        alert('No hay proyecciones para exportar');
+        return;
+    }
+
+    const mesSeleccionado = (document.getElementById('selector-mes') as HTMLSelectElement | null)?.value || String((window as any).mesActual || new Date().getMonth() + 1);
+    const empresaSeleccionada = (document.getElementById('selector-empresa') as HTMLSelectElement | null)?.selectedOptions?.[0]?.text || 'todas';
+
+    const filas = proyecciones.flatMap((proyeccion) => {
+        const referencia = proyeccion?.orden_servicio || proyeccion?.orden_producto || proyeccion?.orden_capacitacion || proyeccion?.orden_auditoria || proyeccion?.orden_asesoria || {};
+        const servicios = obtenerServiciosExportacion(proyeccion);
+
+        return servicios.map((servicio) => ({
+            actividad: proyeccion?.actividad || '---',
+            empresa: proyeccion?.multicim_emisora?.alias_empresa || '---',
+            cliente: referencia?.cliente?.nombre_empresa || referencia?.cliente?.nombre_comercial || '---',
+            servicio: servicio.nombre,
+            frecuencia: servicio.frecuencia,
+            fechaEjecucion: formatearFechaExcel(proyeccion?.fecha_ejecucion),
+            subtotal: formatearMontoExcel(referencia?.subtotal),
+            igv: formatearMontoExcel(referencia?.igv),
+            totalOs: formatearMontoExcel(referencia?.precio_total_os || referencia?.total_costo || referencia?.total),
+            nFactura: proyeccion?.n_factura || '---',
+            detraccion: formatearMontoExcel(proyeccion?.monto_detrax),
+            totalNeto: formatearMontoExcel(proyeccion?.total_final),
+            fechaFactura: formatearFechaExcel(proyeccion?.fecha_factura),
+            diasCredito: proyeccion?.dias_credito ?? 0,
+            fechaVcto: formatearFechaExcel(proyeccion?.fecha_vcto),
+            diasVencer: proyeccion?.dia_vencer ?? 0,
+            fechaPago: formatearFechaExcel(proyeccion?.fecha_pago),
+        }));
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'QSCI Group';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Proyecciones');
+    sheet.addRow(['REPORTE DE PROYECCIONES']);
+    sheet.mergeCells(1, 1, 1, 17);
+    const titulo = sheet.getRow(1);
+    titulo.height = 24;
+    titulo.font = { bold: true, color: { argb: 'FFFFFF' }, size: 13 };
+    titulo.alignment = { horizontal: 'center', vertical: 'middle' };
+    titulo.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1F4E78' } };
+
+    sheet.addRow(['Periodo', mesSeleccionado]);
+    sheet.addRow(['Empresa', empresaSeleccionada]);
+    sheet.addRow(['Total de registros', filas.length]);
+    sheet.addRow([]);
+
+    const encabezado = sheet.addRow([
+        'ACTIVIDAD',
+        'EMPRESA',
+        'CLIENTE',
+        'SERVICIO',
+        'FRECUENCIA',
+        'FECHA EJECUCION',
+        'SUBTOTAL',
+        'IGV',
+        'TOTAL OS',
+        'N° FACTURA',
+        'DETRACCION',
+        'TOTAL NETO',
+        'FECHA FACTURA',
+        'DIAS CREDITO',
+        'FECHA VCTO FACTURA',
+        'DIAS VENCER',
+        'FECHA PAGO',
+    ]);
+    aplicarEstiloEncabezadoExcel(encabezado);
+
+    filas.forEach((fila) => {
+        const row = sheet.addRow([
+            fila.actividad,
+            fila.empresa,
+            fila.cliente,
+            fila.servicio,
+            fila.frecuencia,
+            fila.fechaEjecucion,
+            fila.subtotal,
+            fila.igv,
+            fila.totalOs,
+            fila.nFactura,
+            fila.detraccion,
+            fila.totalNeto,
+            fila.fechaFactura,
+            fila.diasCredito,
+            fila.fechaVcto,
+            fila.diasVencer,
+            fila.fechaPago,
+        ]);
+
+        row.eachCell((cell) => {
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'D1D5DB' } },
+                left: { style: 'thin', color: { argb: 'D1D5DB' } },
+                bottom: { style: 'thin', color: { argb: 'D1D5DB' } },
+                right: { style: 'thin', color: { argb: 'D1D5DB' } },
+            };
+            cell.alignment = { vertical: 'middle', wrapText: true };
+        });
+    });
+
+    sheet.getColumn(1).width = 20;
+    sheet.getColumn(2).width = 18;
+    sheet.getColumn(3).width = 28;
+    sheet.getColumn(4).width = 28;
+    sheet.getColumn(5).width = 18;
+    sheet.getColumn(6).width = 16;
+    sheet.getColumn(7).width = 12;
+    sheet.getColumn(8).width = 12;
+    sheet.getColumn(9).width = 14;
+    sheet.getColumn(10).width = 16;
+    sheet.getColumn(11).width = 14;
+    sheet.getColumn(12).width = 14;
+    sheet.getColumn(13).width = 16;
+    sheet.getColumn(14).width = 12;
+    sheet.getColumn(15).width = 18;
+    sheet.getColumn(16).width = 12;
+    sheet.getColumn(17).width = 14;
+    sheet.views = [{ state: 'frozen', ySplit: 5 }];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    descargarExcelBuffer(buffer as ArrayBuffer, crearNombreArchivoExcelProyecciones(mesSeleccionado, String((window as any).anioActual || new Date().getFullYear()), empresaSeleccionada));
 }
 
 // --- ALERTA DE ÓRDENES PENDIENTES ---
@@ -448,8 +649,8 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
     };
 
     return `
-    <div class="table-container" style="overflow-x: auto;">
-      <table class="data-table" style="min-width: 1400px; width: 100%; border-collapse: collapse;">
+    <div class="table-container">
+      <table class="data-table" style="width: 100%; border-collapse: collapse;">
         <thead>
           <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
             <th style="padding: 12px; text-align: left;">ACTIVIDAD</th>
@@ -657,7 +858,7 @@ export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: a
           <option value="">Todas las Empresas</option>
           ${empresas.map((e: any) => `<option value="${e.id}">${e.alias_empresa}</option>`).join('')}
         </select>
-        <button id="btn-nueva-factura" class="btn-primary"> + Nueva Proyección</button>
+        <button id="btn-exportar-proyecciones" class="btn-secondary" type="button">Exportar Excel</button>
       </div>
     </div>
 
@@ -711,6 +912,20 @@ interface OrdenReferencia {
 }
 
 export function initFacturacionEvents(proyecciones: any[] = []) {
+    const btnExportar = document.getElementById('btn-exportar-proyecciones') as HTMLButtonElement | null;
+    btnExportar?.addEventListener('click', async () => {
+        const proyeccionesActuales = Array.isArray((window as any).misProyecciones) && (window as any).misProyecciones.length > 0
+            ? (window as any).misProyecciones
+            : proyecciones;
+
+        try {
+            await exportarProyeccionesExcel(proyeccionesActuales);
+        } catch (error) {
+            console.error('Error exportando proyecciones:', error);
+            alert('No se pudo exportar el Excel de proyecciones');
+        }
+    });
+
     // --- FUNCIÓN AUXILIAR: Cargar proyecciones con filtros ---
     const cargarProyecciones = async () => {
         const mesSeleccionado = (document.getElementById('selector-mes') as HTMLSelectElement)?.value || (window as any).mesActual;
@@ -1148,7 +1363,40 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
             const id = actionButton.getAttribute('data-id');
             if (!id) return;
 
-            if (confirm('¿Está seguro de que desea eliminar esta proyección?')) {
+            const overlay = document.createElement('div');
+            overlay.id = 'modal-confirm-delete-proyeccion';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+            overlay.innerHTML = `
+                <div style="background:#fff;border-radius:12px;width:95%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+                <div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+                    <h2 style="margin:0;font-size:18px;font-weight:700;color:#1e293b;">Confirmar Eliminación</h2>
+                    <button id="btn-cerrar-delete-proy" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:22px;line-height:1;">&times;</button>
+                </div>
+                <div style="padding:32px 24px;text-align:center;">
+                    <div style="width:56px;height:56px;border-radius:50%;background:#fee2e2;color:#dc2626;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </div>
+                    <p style="font-size:15px;color:#334155;margin-bottom:8px;">¿Está seguro de que desea eliminar esta proyección?</p>
+                    <p style="font-size:13px;color:#dc2626;margin-top:12px;font-weight:500;">Esta acción no se puede deshacer.</p>
+                </div>
+                <div style="display:flex;justify-content:center;gap:12px;padding:20px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;border-radius:0 0 12px 12px;">
+                    <button id="btn-cancelar-delete-proy" style="padding:10px 20px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#475569;">Cancelar</button>
+                    <button id="btn-confirmar-delete-proy" style="padding:10px 20px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.1);">Eliminar</button>
+                </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            document.getElementById('btn-cerrar-delete-proy')?.addEventListener('click', () => overlay.remove());
+            document.getElementById('btn-cancelar-delete-proy')?.addEventListener('click', () => overlay.remove());
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+            document.getElementById('btn-confirmar-delete-proy')?.addEventListener('click', async () => {
+                const btnConfirm = document.getElementById('btn-confirmar-delete-proy') as HTMLButtonElement;
+                btnConfirm.disabled = true;
+                btnConfirm.textContent = 'Procesando...';
+                
                 try {
                     const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
                         method: 'DELETE',
@@ -1159,6 +1407,7 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
 
                     if (resp.ok && result.success) {
                         alert('Proyección eliminada con éxito');
+                        overlay.remove();
                         // Recargar proyecciones del mes actual
                         const mesActual = (window as any).mesActual || new Date().getMonth() + 1;
                         const anioActual = (window as any).anioActual || new Date().getFullYear();
@@ -1180,12 +1429,16 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
                         }
                     } else {
                         alert('Error al eliminar: ' + (result.message || 'Error desconocido'));
+                        btnConfirm.disabled = false;
+                        btnConfirm.textContent = 'Eliminar';
                     }
                 } catch (error) {
                     console.error("Error al eliminar:", error);
                     alert('Error de conexión');
+                    btnConfirm.disabled = false;
+                    btnConfirm.textContent = 'Eliminar';
                 }
-            }
+            });
         }
     }, { once: false });
 }

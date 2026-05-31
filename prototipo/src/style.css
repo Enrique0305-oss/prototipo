@@ -616,6 +616,27 @@ body {
   color: #d97706;
 }
 
+.btn-dark-blue {
+  background: linear-gradient(135deg, #2c4a7c 0%, #1e3a5f 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(44, 74, 124, 0.2);
+}
+
+.btn-dark-blue:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(44, 74, 124, 0.3);
+}
+
 .action-btn {
   background: none;
   border: none;

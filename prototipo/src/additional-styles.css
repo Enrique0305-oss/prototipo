@@ -1406,8 +1406,8 @@
 }
 
 .visit-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: stretch;
 }
@@ -1419,6 +1419,8 @@
   overflow: hidden;
   background: #f8fafc;
   min-height: 110px;
+  width: 120px;
+  flex: 0 0 auto;
 }
 
 .visit-gallery-item img {

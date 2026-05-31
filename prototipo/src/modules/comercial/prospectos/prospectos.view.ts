@@ -13,10 +13,10 @@ let filtros = {
 
 export function renderComercialProspectos() {
   return `
-    <div class="page-header">
-      <h1>Clientes Potenciales</h1>
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+      <h1 style="margin:0;font-size:26px;font-weight:700;color:#1a2332;">Clientes Potenciales</h1>
       <div class="header-actions">
-        <button class="btn-primary" id="btn-nuevo-prospecto">
+        <button class="btn-dark-blue" id="btn-nuevo-prospecto">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>

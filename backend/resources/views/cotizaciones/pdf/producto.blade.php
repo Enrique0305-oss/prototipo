@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cotización #{{ $cotizacion->numero_cotizacion }}</title>
+    <title>{{ $titulo_pdf ?? 'Propuesta Comercial' }}</title>
     <style>
 @include('cotizaciones.pdf.partials.styles-common')
 
@@ -146,7 +146,7 @@
             <div style="margin-top: 15px; padding: 12px 16px; border: 2px solid {{ $cotizacion->incluye_igv ? '#6CB52D' : '#dc3545' }}; border-radius: 4px; background-color: {{ $cotizacion->incluye_igv ? '#f0f9e8' : '#fff3f3' }};">
                 <strong style="color: {{ $cotizacion->incluye_igv ? '#2E4A7C' : '#dc3545' }}; font-size: 12px;">
                     @if($cotizacion->incluye_igv)
-                        Esta cotizaciÃ³n INCLUYE IGV (18%)
+                        Esta cotización INCLUYE IGV (18%)
                     @else
                         Esta cotización NO incluye IGV
                     @endif

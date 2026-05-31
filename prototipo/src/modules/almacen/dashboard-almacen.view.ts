@@ -879,7 +879,7 @@ export function renderAlmacenDashboard() {
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"></path><path d="M12 3v18"></path></svg>
           </div>
           <div class="stat-box-content">
-            <div class="stat-box-label">Stock Total</div>
+            <div class="stat-box-label">Productos en Catálogo</div>
             <div class="stat-box-value" id="almacen-stat-stock-total">0</div>
           </div>
         </div>

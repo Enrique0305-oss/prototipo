@@ -159,6 +159,41 @@ export interface RrhhReporteDashboardResponse {
   };
 }
 
+export interface RrhhReporteServiciosTecnicosResponse {
+  success: boolean;
+  data: {
+    filtros: {
+      fecha: string;
+      area: string;
+    };
+    resumen: {
+      total_servicios: number;
+      total_minutos: number;
+      total_horas: number;
+      promedio_servicio_min: number;
+      tecnicos_con_servicios: number;
+    };
+    por_tecnico: Array<{
+      id_tecnico: number;
+      tecnico: string;
+      area: string;
+      servicios: number;
+      minutos: number;
+      horas: number;
+      promedio_servicio_min: number;
+      primer_inicio: string | null;
+      ultimo_fin: string | null;
+      detalles?: Array<{
+        servicio: string;
+        cliente: string;
+        inicio: string | null;
+        fin: string | null;
+        minutos: number;
+      }>;
+    }>;
+  };
+}
+
 // === Horarios ===
 
 export interface EmpleadoHorarioResumen {
@@ -244,6 +279,14 @@ export const rrhhService = {
       params.area = area;
     }
     return apiClient.get<RrhhReporteDashboardResponse>('/asistencia/reporte-dashboard', params);
+  },
+
+  getReporteServiciosTecnicos: async (fecha: string, area?: string): Promise<RrhhReporteServiciosTecnicosResponse> => {
+    const params: Record<string, string> = { fecha };
+    if (area && area.trim() !== '' && area !== 'Todos') {
+      params.area = area;
+    }
+    return apiClient.get<RrhhReporteServiciosTecnicosResponse>('/asistencia/reporte-servicios-tecnicos', params);
   },
 
   asignarHorasExtra: async (idAsistencia: number, asignar: boolean, horaInicioExtra?: string, observaciones?: string): Promise<MarcarResponse> => {

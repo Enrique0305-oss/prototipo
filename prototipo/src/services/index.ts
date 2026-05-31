@@ -16,6 +16,7 @@ export { inventarioAjusteService } from './inventarioAjusteService';
 // Servicios Recursos Humanos y Logística
 export { vehiculoService } from './vehiculoService';
 export { tecnicoService } from './tecnicoService';
+export { informeTecnicoService } from './informeTecnicoService';
 export { areaService } from './areaService';
 export { cargoService } from './cargoService';
 export { rrhhService } from './rrhhService';

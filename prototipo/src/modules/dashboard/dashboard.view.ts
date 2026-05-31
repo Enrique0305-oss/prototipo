@@ -395,7 +395,19 @@ export function renderDashboard(data?: DashboardData) {
           <span class="stat-box-note">Solo áreas activas</span>
         </div>
         <div class="stats-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
-          <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"></path><path d="M12 3v18"></path></svg></span><span class="stat-change positive">Actual</span></div><div class="stat-label">Stock total</div><div class="stat-value" id="dashboard-almacen-stock-total">0 <span class="stat-unit">unidades</span></div></div>
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12h18"></path>
+                  <path d="M12 3v18"></path>
+                </svg>
+              </span>
+              <span class="stat-change positive">Actual</span>
+            </div>
+            <div class="stat-label">Productos en Catálogo</div>
+            <div class="stat-value" id="dashboard-almacen-stock-total">0 <span class="stat-unit">ítems</span></div>
+          </div>
           <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></span><span class="stat-change positive">Actual</span></div><div class="stat-label">Valor inventario</div><div class="stat-value" id="dashboard-almacen-valor-total">S/ 0.00</div></div>
           <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></span><span class="stat-change urgent">Atención</span></div><div class="stat-label">Bajo stock</div><div class="stat-value" id="dashboard-almacen-bajo-stock">0</div></div>
           <div class="stat-card"><div class="stat-header"><span class="stat-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect></svg></span><span class="stat-change urgent">Mantenimiento</span></div><div class="stat-label">Vencidos</div><div class="stat-value" id="dashboard-almacen-vencidos">0</div></div>

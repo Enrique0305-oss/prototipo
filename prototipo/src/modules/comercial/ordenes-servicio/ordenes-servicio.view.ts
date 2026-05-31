@@ -1,4 +1,4 @@
-﻿// Comercial - Ordenes de Servicio (Conectado al Backend)
+// Comercial - Ordenes de Servicio (Conectado al Backend)
 import './ordenes-servicio.css';
 import { ordenServicioService } from '../../../services/ordenServicioService';
 import { servicioService } from '../../../services/servicioService';
@@ -296,10 +296,10 @@ export function renderComercialOrdenesServicio() {
   <div class="os-form-container">
 
     <!-- HEADER -->
-    <div class="page-header">
-      <h1>Ordenes de Servicio</h1>
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+      <h1 style="margin:0;font-size:26px;font-weight:700;color:#1a2332;">Ordenes de Servicio</h1>
       <div class="header-actions">
-        <button class="btn-primary" id="btn-nueva-ods">
+        <button class="btn-dark-blue" id="btn-nueva-ods">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -1884,13 +1884,39 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
     // NUEVA LÓGICA DE BLOQUEO (SOLO LECTURA)
     // ==========================================
     
+    // Si la orden ya está en ejecución (programada, parcial, o completada), bloqueamos servicios y datos generales, pero NO insumos/equipos.
+    // OJO: "Aprobado" no se bloquea porque recién aprobado aún puede ser modificado antes de programarse.
+    const bloqueoServicios = (orden.estado === 'Programado' || orden.estado === 'Parcial' || orden.estado === 'Completado');
+
     // Bloquear todos los inputs y selects del modal
     const inputs = document.querySelectorAll('#modal-ods .os-input, #modal-ods select, #modal-ods input');
     inputs.forEach(input => {
       const el = input as HTMLInputElement;
-      // Si es soloLectura, bloqueamos. Si es Editar, habilitamos (excepto cotización que ya es disabled arriba)
-      if (el.id !== 'ods-cotizacion-ref' && el.id !== 'ods-numero-orden' && el.id !== 'ods-cliente-nombre' && el.id !== 'ods-cliente-ruc') {
-          el.disabled = soloLectura;
+      
+      // Si es soloLectura, bloqueamos TODO.
+      if (soloLectura) {
+        if (el.id !== 'ods-cotizacion-ref' && el.id !== 'ods-numero-orden' && el.id !== 'ods-cliente-nombre' && el.id !== 'ods-cliente-ruc') {
+            el.disabled = true;
+        }
+      } else if (bloqueoServicios) {
+        // Si está bloqueada parcialmente, deshabilitamos campos generales y la tabla de detalles (que está en #ods-detalle-body)
+        const isGeneral = ['ods-fecha-aceptacion', 'ods-fecha-tentativa', 'ods-igv'].includes(el.id);
+        const isObservacion = el.id === 'oc-observaciones';
+        const isDetalle = el.closest('#ods-detalle-body') !== null;
+        
+        if (isGeneral || isObservacion || isDetalle) {
+          el.disabled = true;
+        } else {
+          // Dejamos habilitados Insumos y Equipos (y otros que no caigan arriba)
+          if (el.id !== 'ods-cotizacion-ref' && el.id !== 'ods-numero-orden' && el.id !== 'ods-cliente-nombre' && el.id !== 'ods-cliente-ruc') {
+            el.disabled = false;
+          }
+        }
+      } else {
+        // Modo edición normal
+        if (el.id !== 'ods-cotizacion-ref' && el.id !== 'ods-numero-orden' && el.id !== 'ods-cliente-nombre' && el.id !== 'ods-cliente-ruc') {
+            el.disabled = false;
+        }
       }
     });
 
@@ -1912,6 +1938,20 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
           document.querySelectorAll('.btn-eliminar-linea').forEach(b => (b as HTMLElement).style.display = 'none');
           document.querySelectorAll('.ods-prod-remove').forEach(b => (b as HTMLElement).style.display = 'none');
           document.querySelectorAll('.ods-equipo-remove').forEach(b => (b as HTMLElement).style.display = 'none');
+      }, 150);
+    } else if (bloqueoServicios) {
+      btnGuardar.style.display = 'flex';
+      btnGuardar.textContent = 'Actualizar Insumos';
+      btnCancelar.textContent = 'Cancelar';
+      
+      if (btnAgregarSrv) btnAgregarSrv.style.display = 'none'; // No se pueden agregar nuevos servicios
+      if (btnAgregarProd) btnAgregarProd.style.display = 'flex'; // Sí se pueden agregar insumos
+      if (btnAgregarEquipo) btnAgregarEquipo.style.display = 'flex';
+      
+      // Bloquear botones de eliminar líneas de la tabla de servicios
+      setTimeout(() => {
+          document.querySelectorAll('.btn-eliminar-linea').forEach(b => (b as HTMLElement).style.display = 'none');
+          // No bloqueamos los botones de eliminar insumos ni equipos
       }, 150);
     } else {
       btnGuardar.style.display = 'flex';           // Mostramos Guardar

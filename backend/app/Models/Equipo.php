@@ -22,6 +22,13 @@ class Equipo extends Model
         'imagen'
     ];
 
+    protected $appends = ['imagen_url'];
+
+    public function getImagenUrlAttribute()
+    {
+        return $this->imagen ? url('media/' . ltrim($this->imagen, '/')) : null;
+    }
+
     // Relaciones
     public function mantenimientos()
     {

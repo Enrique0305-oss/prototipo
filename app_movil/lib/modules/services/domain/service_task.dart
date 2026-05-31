@@ -20,6 +20,9 @@ class ServiceTask {
     this.completedAt,
     this.areaNames = const <String>[],
     this.formatosFichas = const <String>[],
+    this.startTimeReal,
+    this.tecnicoPrincipalId,
+    this.tipoProgramacion = 'Servicio',
   });
 
   final int id;
@@ -40,6 +43,9 @@ class ServiceTask {
   final String? completedAt;
   final List<String> areaNames;
   final List<String> formatosFichas;
+  final String? startTimeReal;
+  final int? tecnicoPrincipalId;
+  final String tipoProgramacion;
 
   bool get isCompleted {
     final normalized = status.toLowerCase();
@@ -51,6 +57,9 @@ class ServiceTask {
     String? observations,
     List<String>? areaNames,
     List<String>? formatosFichas,
+    String? startTimeReal,
+    int? tecnicoPrincipalId,
+    String? tipoProgramacion,
   }) {
     return ServiceTask(
       id: id,
@@ -71,6 +80,9 @@ class ServiceTask {
       completedAt: completedAt ?? this.completedAt,
       areaNames: areaNames ?? this.areaNames,
       formatosFichas: formatosFichas ?? this.formatosFichas,
+      startTimeReal: startTimeReal ?? this.startTimeReal,
+      tecnicoPrincipalId: tecnicoPrincipalId ?? this.tecnicoPrincipalId,
+      tipoProgramacion: tipoProgramacion ?? this.tipoProgramacion,
     );
   }
 
@@ -96,10 +108,18 @@ class ServiceTask {
       'id_grupo_programacion': groupId,
       'latitud': latitude,
       'longitud': longitude,
-      'fotos_evidencia': evidencePhotos,
+      'fotos_evidencia': evidenceItems.map((e) => <String, dynamic>{
+        'path': e.path,
+        'service_id': e.serviceId,
+        'service_title': e.serviceTitle,
+        if (e.description != null) 'description': e.description,
+      }).toList(),
       'fecha_ejecucion_real': completedAt ?? '',
+      'fecha_inicio_real': startTimeReal ?? '',
       'areas': areaNames.map((n) => <String, dynamic>{'nombre': n}).toList(),
       'formatos_fichas': formatosFichas,
+      'id_tecnico_asignado': tecnicoPrincipalId,
+      'tipo_programacion': tipoProgramacion,
     };
   }
 
@@ -123,12 +143,34 @@ class ServiceTask {
       json['formatos_fichas'] ?? (json['programacion_servicio'] is Map ? (json['programacion_servicio'] as Map)['formatos_fichas'] : null),
     );
 
+    final completadoPorMi = json['completado_por_mi'] == true;
+
+    final tipo = (json['tipo_programacion'] ?? 'Servicio').toString();
+    
+    String finalTitle = 'Servicio';
+    String finalClient = 'Cliente sin nombre';
+
+    if (tipo == 'Servicio') {
+      finalTitle = (service['nombre'] ?? 'Servicio').toString();
+      finalClient = (clientMap['nombre_empresa'] ?? 'Cliente sin nombre').toString();
+    } else if (tipo == 'Visita') {
+      finalTitle = (json['tipo_visita'] ?? 'Visita').toString();
+      final clientObj = json['cliente'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      finalClient = (clientObj['nombre_empresa'] ?? 'Cliente sin nombre').toString();
+    } else if (tipo == 'Fabricacion') {
+      finalTitle = (json['motivo_fabricacion'] ?? 'Fabricación').toString();
+      finalClient = 'Producción Interna';
+    } else if (tipo == 'Otro') {
+      finalTitle = (json['motivo'] ?? 'Otro').toString();
+      finalClient = 'Otros';
+    }
+
     return ServiceTask(
       id: (json['id'] ?? 0) as int,
-      title: (service['nombre'] ?? 'Servicio').toString(),
-      client: (clientMap['nombre_empresa'] ?? 'Cliente sin nombre').toString(),
+      title: finalTitle,
+      client: finalClient,
       date: (json['fecha_programada'] ?? '').toString(),
-      status: (json['estado_ejecucion'] ?? 'Programado').toString(),
+      status: completadoPorMi ? 'Realizado' : (json['estado_ejecucion'] ?? 'Programado').toString(),
       address: (json['direccion_completa'] ?? '').toString(),
       observations: (json['observaciones'] ?? '').toString(),
       startTime: (json['hora_inicio'] ?? '').toString(),
@@ -142,6 +184,9 @@ class ServiceTask {
       completedAt: (json['fecha_ejecucion_real'] ?? '').toString(),
       areaNames: parsedAreaNames,
       formatosFichas: formatosFichas,
+      startTimeReal: (json['fecha_inicio_real'] ?? '').toString(),
+      tecnicoPrincipalId: _parseIntOrNull(json['id_tecnico_asignado']),
+      tipoProgramacion: (json['tipo_programacion'] ?? 'Servicio').toString(),
     );
   }
 
@@ -150,7 +195,7 @@ class ServiceTask {
       return null;
     }
     final value = int.tryParse(raw.toString());
-    if (value == null || value <= 0) {
+    if (value == null) {
       return null;
     }
     return value;
@@ -353,11 +398,13 @@ class ServiceEvidence {
     required this.path,
     this.serviceId,
     this.serviceTitle,
+    this.description,
   });
 
   final String path;
   final int? serviceId;
   final String? serviceTitle;
+  final String? description;
 
   factory ServiceEvidence.fromJson(Map<String, dynamic> json) {
     return ServiceEvidence(
@@ -366,6 +413,9 @@ class ServiceEvidence {
       serviceTitle: (json['service_title'] ?? json['servicio'] ?? json['title'] ?? '').toString().trim().isEmpty
           ? null
           : (json['service_title'] ?? json['servicio'] ?? json['title']).toString(),
+      description: (json['description'] ?? json['descripcion'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['description'] ?? json['descripcion']).toString(),
     );
   }
 }
@@ -376,10 +426,12 @@ class ServiceEvidenceUpload {
     required this.name,
     required this.serviceId,
     required this.serviceTitle,
+    this.description,
   });
 
   final String path;
   final String name;
   final int serviceId;
   final String serviceTitle;
+  final String? description;
 }

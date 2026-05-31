@@ -37,6 +37,10 @@ class AuthController extends Controller
             return ['*'];
         }
 
+        if (in_array($areaNombre, ['investigacion', 'investigación'], true)) {
+            return ['dashboard', 'marcar-asistencia', 'operaciones'];
+        }
+
         // Área Programación - Cargo: Programación Servicio
         // Acceso únicamente al módulo de Programaciones (servicio + dashboard) y marcado de asistencia.
         if (in_array($cargoNombre, ['programacion servicio', 'programación servicio'], true)) {

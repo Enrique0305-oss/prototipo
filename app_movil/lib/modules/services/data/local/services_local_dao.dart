@@ -51,8 +51,14 @@ class ServicesLocalDao {
     });
   }
 
-  /// Actualiza el estado de un servicio en el caché local.
-  Future<void> updateServiceStatus(int serviceId, String status) async {
+  /// Actualiza el estado de un servicio en el caché local, incluyendo detalles de finalización si se proveen.
+  Future<void> updateServiceStatus(
+    int serviceId, 
+    String status, {
+    String? observations,
+    int? durationMinutes,
+    List<String>? evidencePhotos,
+  }) async {
     final db = await AppDatabase.instance.database;
 
     final row = await db.query(
@@ -66,7 +72,46 @@ class ServicesLocalDao {
 
     final current = jsonDecode(row.first[DbConstants.colSvcDataJson] as String)
         as Map<String, dynamic>;
-    current['estado'] = status;
+    current['estado_ejecucion'] = status; // In toJson() status is mapped as 'estado_ejecucion'
+    current['estado'] = status; // Some old references might use 'estado'
+    
+    if (observations != null) {
+      current['observaciones'] = observations;
+    }
+    if (durationMinutes != null) {
+      current['duracion_real'] = durationMinutes;
+    }
+    if (evidencePhotos != null && evidencePhotos.isNotEmpty) {
+      // Store list of simple paths or list of objects, we use simple paths offline
+      current['fotos_evidencia'] = evidencePhotos;
+    }
+
+    await db.update(
+      DbConstants.tblServices,
+      <String, dynamic>{
+        DbConstants.colSvcDataJson: jsonEncode(current),
+      },
+      where: '${DbConstants.colSvcId} = ?',
+      whereArgs: <Object>[serviceId],
+    );
+  }
+
+  /// Actualiza solo la hora de inicio de un servicio en caché.
+  Future<void> updateServiceStartTime(int serviceId, DateTime startTime) async {
+    final db = await AppDatabase.instance.database;
+
+    final row = await db.query(
+      DbConstants.tblServices,
+      where: '${DbConstants.colSvcId} = ?',
+      whereArgs: <Object>[serviceId],
+      limit: 1,
+    );
+
+    if (row.isEmpty) return;
+
+    final current = jsonDecode(row.first[DbConstants.colSvcDataJson] as String)
+        as Map<String, dynamic>;
+    current['fecha_inicio_real'] = startTime.toIso8601String();
 
     await db.update(
       DbConstants.tblServices,

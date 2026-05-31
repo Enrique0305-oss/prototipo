@@ -72,7 +72,7 @@
                 <table style="margin: 0;">
                     <tr>
                         <td class="label" style="width: 40%;">Código</td>
-                        <td class="text-center" style="width: 60%;">FO-OP-001</td>
+                        <td class="text-center" style="width: 60%;">{{ $ficha->correlativo ?? 'FO-0000' }}</td>
                     </tr>
                     <tr>
                         <td class="label">Fecha</td>
@@ -231,14 +231,25 @@
         </tr>
         @if(is_array($ficha->insumos_utilizados) && count($ficha->insumos_utilizados) > 0)
             @foreach($ficha->insumos_utilizados as $insumo)
+                @php
+                    $venc = $insumo['vencimiento'] ?? ($insumo['fecha_vencimiento'] ?? ($insumo['fechaVencimiento'] ?? ($insumo['fechaVencim'] ?? '---')));
+                    if ($venc !== '---' && strpos($venc, 'T') !== false) {
+                        $venc = explode('T', $venc)[0];
+                    }
+                    if ($venc !== '---' && strlen($venc) > 10) {
+                        try {
+                            $venc = \Carbon\Carbon::parse($venc)->format('Y-m-d');
+                        } catch(\Exception $e) {}
+                    }
+                @endphp
                 <tr>
                     <td>{{ $insumo['producto'] ?? '---' }}</td>
                     <td>{{ $insumo['metodo'] ?? '---' }}</td>
                     <td>{{ $insumo['lote'] ?? '---' }}</td>
-                    <td class="text-center">{{ $insumo['fecha_vencimiento'] ?? ($insumo['fechaVencimiento'] ?? ($insumo['vencimiento'] ?? ($insumo['fechaVencim'] ?? '---'))) }}</td>
-                    <td class="text-center">{{ $insumo['unidad_medida'] ?? ($insumo['unidad'] ?? '---') }}</td>
+                    <td class="text-center">{{ $venc }}</td>
+                    <td class="text-center">{{ $insumo['unidad'] ?? ($insumo['unidad_medida'] ?? '---') }}</td>
                     <td class="text-center">{{ $insumo['concentracion'] ?? '---' }}</td>
-                    <td class="text-center">{{ $insumo['cantidad_usada'] ?? ($insumo['cantidad'] ?? '---') }}</td>
+                    <td class="text-center">{{ $insumo['cantidad'] ?? ($insumo['cantidad_usada'] ?? '---') }}</td>
                 </tr>
             @endforeach
         @else

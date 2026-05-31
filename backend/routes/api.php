@@ -51,6 +51,7 @@ use App\Http\Controllers\API\InventarioAjusteController;
 use App\Http\Controllers\API\FichaOperacionalController;
 use App\Http\Controllers\API\FormatoOperacionalController;
 use App\Http\Controllers\API\LoteController;
+use App\Http\Controllers\API\InformeTecnicoController;
 use App\Http\Middleware\CacheJsonGetResponses;
 
 // Rutas PÚBLICAS (sin autenticación)
@@ -342,6 +343,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/asistencia/mi-estado', [AsistenciaController::class, 'miEstado']);
     Route::get('/asistencia/lista', [AsistenciaController::class, 'listaAdmin']);
     Route::get('/asistencia/reporte-dashboard', [AsistenciaController::class, 'reporteDashboard']);
+    Route::get('/asistencia/reporte-servicios-tecnicos', [AsistenciaController::class, 'reporteServiciosTecnicos']);
     Route::post('/asistencia/marcar-entrada', [AsistenciaController::class, 'marcarEntrada']);
     Route::post('/asistencia/marcar-salida', [AsistenciaController::class, 'marcarSalida']);
     Route::post('/asistencia/marcar-inicio-almuerzo', [AsistenciaController::class, 'marcarInicioAlmuerzo']);
@@ -409,11 +411,22 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/programacion-servicio/grupos/{idGrupo}/formato-operacional', [FormatoOperacionalController::class, 'showByGrupo']);
     Route::get('/programacion-servicio/grupos/{idGrupo}/formato-operacional/pdf', [FormatoOperacionalController::class, 'generarPDFByGrupo']);
 
+    // Informes Técnicos :v
+    Route::get('/informes-tecnicos/proximo-correlativo', [InformeTecnicoController::class, 'proximoCorrelativo']);
+    Route::get('/informes-tecnicos', [InformeTecnicoController::class, 'index']);
+    Route::get('/informes-tecnicos/{id}/pdf', [InformeTecnicoController::class, 'generarPDF']);
+    Route::get('/informes-tecnicos/{id}', [InformeTecnicoController::class, 'show']);
+    Route::post('/informes-tecnicos', [InformeTecnicoController::class, 'store']);
+    Route::put('/informes-tecnicos/{id}', [InformeTecnicoController::class, 'update']);
+    Route::delete('/informes-tecnicos/{id}', [InformeTecnicoController::class, 'destroy']);
+
     // Programación de Visitas (independiente)
     Route::get('/programacion-visita', [ProgramacionVisitaController::class, 'index']);
     Route::get('/programacion-visita/{id}', [ProgramacionVisitaController::class, 'show']);
     Route::post('/programacion-visita', [ProgramacionVisitaController::class, 'store']);
     Route::put('/programacion-visita/{id}', [ProgramacionVisitaController::class, 'update']);
+    Route::patch('/programacion-visita/{id}/iniciar', [ProgramacionVisitaController::class, 'iniciar']);
+    Route::patch('/programacion-visita/{id}/completar', [ProgramacionVisitaController::class, 'completar']);
     Route::delete('/programacion-visita/{id}', [ProgramacionVisitaController::class, 'destroy']);
 
     // Programación de Fabricación (independiente)
@@ -422,6 +435,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/programacion-fabricacion/{id}', [ProgramacionFabricacionController::class, 'show']);
     Route::post('/programacion-fabricacion', [ProgramacionFabricacionController::class, 'store']);
     Route::put('/programacion-fabricacion/{id}', [ProgramacionFabricacionController::class, 'update']);
+    Route::patch('/programacion-fabricacion/{id}/iniciar', [ProgramacionFabricacionController::class, 'iniciar']);
+    Route::patch('/programacion-fabricacion/{id}/completar', [ProgramacionFabricacionController::class, 'completar']);
     Route::delete('/programacion-fabricacion/{id}', [ProgramacionFabricacionController::class, 'destroy']);
 
     // Programación de Otros (independiente, sin cliente)
@@ -429,6 +444,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/programacion-otros/{id}', [ProgramacionOtroController::class, 'show']);
     Route::post('/programacion-otros', [ProgramacionOtroController::class, 'store']);
     Route::put('/programacion-otros/{id}', [ProgramacionOtroController::class, 'update']);
+    Route::patch('/programacion-otros/{id}/iniciar', [ProgramacionOtroController::class, 'iniciar']);
+    Route::patch('/programacion-otros/{id}/completar', [ProgramacionOtroController::class, 'completar']);
     Route::delete('/programacion-otros/{id}', [ProgramacionOtroController::class, 'destroy']);
 
     // Almacén - Órdenes de Fabricación
@@ -457,6 +474,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/programacion-asesoria/{id}', [ProgramacionAsesoriaController::class, 'update']);
 
     // Almacén - Salidas por Programación
+    Route::get('/almacen/salidas-programacion/previsualizacion', [SalidaProgramacionController::class, 'getPrevisualizacionMateriales']);
     Route::get('/almacen/salidas-programacion/pendientes', [SalidaProgramacionController::class, 'getPendientes']);
     Route::get('/almacen/salidas-programacion/historial', [SalidaProgramacionController::class, 'getHistorial']);
     Route::get('/almacen/salidas-programacion/{id}', [SalidaProgramacionController::class, 'getDetalle']);

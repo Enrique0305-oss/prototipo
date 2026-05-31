@@ -137,7 +137,7 @@ class AlmacenService {
 
     const categorias = new Set(productos.map((p) => p.categoria).filter(Boolean));
     return {
-      stock_total: productos.reduce((sum, p) => sum + Number(p.stock || 0), 0),
+      stock_total: productos.length, // Usado ahora como Productos en Catálogo
       valor_total: productos.reduce((sum, p) => sum + Number(p.valor_total || 0), 0),
       productos_bajo_stock: productos.filter((p) => p.estado === 'Bajo Stock').length,
       categorias: categorias.size,

@@ -119,9 +119,31 @@ class ProgramacionServicioController extends Controller
                                 ->orderBy('hora_inicio', 'asc')
                                 ->get();
 
+        $idUsuario = (int) ($request->user()?->id ?? 0);
+        $idsProgramaciones = $programaciones->pluck('id')->toArray();
+        $completadosPorMi = [];
+        
+        if ($idUsuario > 0 && !empty($idsProgramaciones)) {
+            $idTecnicoActual = (int) (Tecnico::query()->where('id_personal', $idUsuario)->value('id') ?? 0);
+            if ($idTecnicoActual > 0) {
+                $completadosPorMi = DB::table('programacion_servicio_inicios')
+                    ->whereIn('id_programacion', $idsProgramaciones)
+                    ->where('id_tecnico', $idTecnicoActual)
+                    ->whereNotNull('fecha_fin')
+                    ->pluck('id_programacion')
+                    ->toArray();
+            }
+        }
+
+        $data = $programaciones->map(function ($prog) use ($completadosPorMi) {
+            $array = $prog->toArray();
+            $array['completado_por_mi'] = in_array($prog->id, $completadosPorMi);
+            return $array;
+        });
+
         return response()->json([
             'success' => true,
-            'data' => $programaciones,
+            'data' => $data,
         ]);
     }
 
@@ -148,16 +170,30 @@ class ProgramacionServicioController extends Controller
 
         $data = $prog->toArray();
 
+        $idUsuario = (int) (request()->user()?->id ?? 0);
+        $data['completado_por_mi'] = false;
+        if ($idUsuario > 0) {
+            $idTecnicoActual = (int) (Tecnico::query()->where('id_personal', $idUsuario)->value('id') ?? 0);
+            if ($idTecnicoActual > 0) {
+                $data['completado_por_mi'] = DB::table('programacion_servicio_inicios')
+                    ->where('id_programacion', $prog->id)
+                    ->where('id_tecnico', $idTecnicoActual)
+                    ->whereNotNull('fecha_fin')
+                    ->exists();
+            }
+        }
+
         // ─── INFORMACIÓN DE FORMATO OPERACIONAL PARA SERVICIOS RECURRENTES ─
         $data['formato_operacional_propio'] = $prog->formatoOperacional ? $prog->formatoOperacional->id : null;
 
-        // Buscar si existe un formato previo de otro servicio de la misma orden+planta
+        // Buscar si existe un formato previo del mismo servicio, orden y planta.
         $formatoPrevio = null;
         if ($prog->id_orden_servicio && $prog->id_cliente_planta) {
             $formatoPrevio = FormatoOperacional::query()
                 ->where('id_programacion_servicio', '!=', $prog->id)
                 ->whereHas('programacionServicio', function ($q) use ($prog) {
                     $q->where('id_orden_servicio', $prog->id_orden_servicio)
+                      ->where('id_servicio', $prog->id_servicio)
                       ->where('id_cliente_planta', $prog->id_cliente_planta);
                 })
                 ->whereIn('estado', ['completada', 'borrador'])
@@ -180,6 +216,7 @@ class ProgramacionServicioController extends Controller
             $existeAnterior = ProgramacionServicio::query()
                 ->where('id', '!=', $prog->id)
                 ->where('id_orden_servicio', $prog->id_orden_servicio)
+                ->where('id_servicio', $prog->id_servicio)
                 ->where('id_cliente_planta', $prog->id_cliente_planta)
                 ->where('fecha_programada', '<', $prog->fecha_programada)
                 ->exists();
@@ -280,11 +317,10 @@ class ProgramacionServicioController extends Controller
             // Asignar insumos desde la receta del servicio
             $this->asignarInsumosDesdeReceta($prog, $idUsuario);
 
-            // Cambiar estado de la ODS a "Programado" si estaba "Aprobado"
+            // Actualizar estado de la ODS (Parcial o Programado)
             $orden = OrdenServicio::find($validated['id_orden_servicio']);
-            if ($orden && $orden->estado === 'Aprobado') {
-                $orden->estado = 'Programado';
-                $orden->save();
+            if ($orden) {
+                $orden->actualizarEstadoProgramacion();
             }
 
             DB::commit();
@@ -433,11 +469,10 @@ class ProgramacionServicioController extends Controller
                 $creadas[] = $prog;
             }
 
-            // Cambiar estado de la ODS
+            // Actualizar estado de la ODS (Parcial o Programado)
             $orden = OrdenServicio::find($validated['id_orden_servicio']);
-            if ($orden && $orden->estado === 'Aprobado') {
-                $orden->estado = 'Programado';
-                $orden->save();
+            if ($orden) {
+                $orden->actualizarEstadoProgramacion();
             }
 
             DB::commit();
@@ -808,17 +843,96 @@ class ProgramacionServicioController extends Controller
                     if ($duracionMinutosRequest === null && $duracionSegundos > 0) {
                         $duracionMinutosRequest = (int) ceil($duracionSegundos / 60);
                     }
+                } elseif ($duracionMinutosRequest !== null || $request->has('fecha_inicio_real')) {
+                    // Generar un registro de inicio artificial para servicios completados offline
+                    $idTecnico = (int) (Tecnico::query()->where('id_personal', $idUsuario)->value('id') ?? 0);
+                    $idTecnico = $idTecnico > 0 ? $idTecnico : null;
+                    
+                    $fechaFinRequest = $request->input('fecha_fin_real');
+                    $fechaFin = $fechaFinRequest ? Carbon::parse($fechaFinRequest) : now();
+                    
+                    if ($request->has('fecha_inicio_real')) {
+                        $fechaInicio = Carbon::parse($request->input('fecha_inicio_real'));
+                        $duracionSegundos = max(0, $fechaInicio->diffInSeconds($fechaFin));
+                        if ($duracionSegundos >= 0 && $duracionMinutosRequest === null) {
+                            $duracionMinutosRequest = (int) ceil($duracionSegundos / 60);
+                        }
+                    } else {
+                        $duracionSegundos = (int) $duracionMinutosRequest * 60;
+                        $fechaInicio = $fechaFin->copy()->subSeconds($duracionSegundos);
+                    }
+                    
+                    DB::table('programacion_servicio_inicios')->insert([
+                        'id_programacion' => $prog->id,
+                        'id_usuario' => $idUsuario,
+                        'id_tecnico' => $idTecnico,
+                        'fecha_inicio' => $fechaInicio,
+                        'fecha_fin' => $fechaFin,
+                        'duracion_segundos' => $duracionSegundos,
+                        'created_at' => $fechaInicio,
+                        'updated_at' => $fechaFin,
+                    ]);
                 }
             }
 
-            $prog->update([
-                'estado_ejecucion' => 'Realizado',
-                'fecha_ejecucion_real' => now(),
-                'duracion_real' => $duracionMinutosRequest,
+            $fechaEjecucionReal = $request->has('fecha_fin_real') 
+                ? Carbon::parse($request->input('fecha_fin_real')) 
+                : now();
+
+            $idTecnicoActual = (int) (Tecnico::query()->where('id_personal', $idUsuario)->value('id') ?? 0);
+
+            // 1. Obtener todos los técnicos asignados a este servicio
+            $tecnicosAsignados = $prog->tecnicos()->pluck('tecnicos.id')->toArray();
+            if ($prog->id_tecnico_asignado) {
+                $tecnicosAsignados[] = $prog->id_tecnico_asignado;
+            }
+            $tecnicosAsignados = array_unique(array_map('intval', $tecnicosAsignados));
+
+            // 2. Obtener quiénes ya tienen un registro de cierre en la BD (fecha_fin IS NOT NULL)
+            $tecnicosQueFinalizaron = DB::table('programacion_servicio_inicios')
+                ->where('id_programacion', $prog->id)
+                ->whereNotNull('fecha_fin')
+                ->pluck('id_tecnico')
+                ->filter()
+                ->map('intval')
+                ->unique()
+                ->toArray();
+
+            // 3. Incluir al técnico actual porque su registro de cierre se acaba de insertar/actualizar arriba
+            if ($idTecnicoActual > 0 && !in_array($idTecnicoActual, $tecnicosQueFinalizaron)) {
+                $tecnicosQueFinalizaron[] = $idTecnicoActual;
+            }
+
+            // 4. Validar si faltan técnicos por terminar
+            $faltan = array_diff($tecnicosAsignados, $tecnicosQueFinalizaron);
+            $todosCompletaron = count($faltan) === 0;
+
+            $updateData = [
                 'fotos_evidencia' => $fotosEvidencia,
-                'observaciones' => $request->input('observaciones', $prog->observaciones),
                 'modificado_por' => $idUsuario > 0 ? $idUsuario : $request->user()?->id,
-            ]);
+            ];
+
+            // 5. Solo cambiar el estado a "Realizado" si todos finalizaron
+            if ($todosCompletaron) {
+                $updateData['estado_ejecucion'] = 'Realizado';
+                $updateData['fecha_ejecucion_real'] = $fechaEjecucionReal;
+                $updateData['duracion_real'] = $duracionMinutosRequest;
+            }
+
+            // 6. Concatenar observaciones (diferenciando si es el principal o no)
+            if ($request->filled('observaciones')) {
+                $nuevaObs = $request->input('observaciones');
+                $obsActual = $prog->observaciones;
+                $esPrincipal = ($idTecnicoActual > 0 && $prog->id_tecnico_asignado === $idTecnicoActual);
+                
+                if ($esPrincipal) {
+                    $updateData['observaciones'] = empty($obsActual) ? $nuevaObs : $nuevaObs . "\n---\n" . $obsActual;
+                } else {
+                    $updateData['observaciones'] = empty($obsActual) ? $nuevaObs : $obsActual . "\n[Secundario]: " . $nuevaObs;
+                }
+            }
+
+            $prog->update($updateData);
 
             // Actualizar insumos a "Utilizado"
             $prog->insumos()->update(['estado' => 'Utilizado']);
@@ -912,6 +1026,7 @@ class ProgramacionServicioController extends Controller
                 'path' => $ruta,
                 'service_id' => isset($metadato['service_id']) ? (int) $metadato['service_id'] : null,
                 'service_title' => isset($metadato['service_title']) ? trim((string) $metadato['service_title']) : null,
+                'description' => isset($metadato['description']) ? trim((string) $metadato['description']) : null,
             ];
         }
 
@@ -951,6 +1066,7 @@ class ProgramacionServicioController extends Controller
             $items[] = [
                 'service_id' => isset($entry['service_id']) ? (int) $entry['service_id'] : null,
                 'service_title' => isset($entry['service_title']) ? trim((string) $entry['service_title']) : null,
+                'description' => isset($entry['description']) ? trim((string) $entry['description']) : null,
             ];
         }
 
@@ -1025,15 +1141,10 @@ class ProgramacionServicioController extends Controller
             $prog->insumos()->delete();
             $prog->delete();
 
-            // Si la ODS ya no tiene programaciones activas, volver a Aprobado
             if ($prog->id_orden_servicio) {
-                $restantes = ProgramacionServicio::where('id_orden_servicio', $prog->id_orden_servicio)
-                    ->whereNotIn('estado_ejecucion', ['Cancelado'])
-                    ->count();
-
-                if ($restantes === 0) {
-                    OrdenServicio::where('id', $prog->id_orden_servicio)
-                        ->update(['estado' => 'Aprobado']);
+                $orden = OrdenServicio::find($prog->id_orden_servicio);
+                if ($orden) {
+                    $orden->actualizarEstadoProgramacion();
                 }
             }
 
@@ -1067,10 +1178,37 @@ class ProgramacionServicioController extends Controller
     public function getODSDisponibles()
     {
         $ordenes = OrdenServicio::with(['cliente', 'detalles.servicio'])
-            ->whereIn('estado', ['Aprobado', 'Programado'])
+            ->whereIn('estado', ['Aprobado', 'Parcial'])
             ->orderBy('id', 'desc')
             ->get()
             ->map(function ($orden) {
+                // Filtrar detalles que ya están programados completamente
+                $detallesPendientes = $orden->detalles->filter(function ($det) use ($orden) {
+                    $count = ProgramacionServicio::where('id_orden_servicio', $orden->id)
+                        ->where('id_servicio', $det->id_servicio)
+                        ->where('id_cliente_planta', $det->id_cliente_planta)
+                        ->where('estado_ejecucion', '!=', 'Cancelado')
+                        ->count();
+                    
+                    $frec = mb_strtolower(trim($det->frecuencia ?? ''));
+                    $expected = 1;
+                    if (str_contains($frec, 'semanal')) $expected = 52;
+                    elseif (str_contains($frec, 'quincenal')) $expected = 24;
+                    elseif (str_contains($frec, 'mensual')) $expected = 12;
+                    elseif (str_contains($frec, 'bimestral')) $expected = 6;
+                    elseif (str_contains($frec, 'trimestral')) $expected = 4;
+                    elseif (str_contains($frec, 'semestral')) $expected = 2;
+                    elseif (str_contains($frec, 'anual') || str_contains($frec, 'única') || str_contains($frec, 'unica')) $expected = 1;
+
+                    if ($count >= $expected) {
+                        return false; // Completado
+                    } elseif ($count > 1 && !in_array($frec, ['única', 'unica', 'anual'])) {
+                        return false; // Programado masivamente
+                    }
+
+                    return true;
+                })->values();
+
                 return [
                     'id' => $orden->id,
                     'numero_orden' => $orden->numero_orden,
@@ -1078,7 +1216,7 @@ class ProgramacionServicioController extends Controller
                     'id_cliente' => $orden->id_cliente,
                     'estado' => $orden->estado,
                     'fecha_tentativa' => $orden->fecha_tentativa,
-                    'detalles' => $orden->detalles->map(function ($det) {
+                    'detalles' => $detallesPendientes->map(function ($det) {
                         return [
                             'id' => $det->id,
                             'id_servicio' => $det->id_servicio,
@@ -1091,7 +1229,9 @@ class ProgramacionServicioController extends Controller
                         ];
                     }),
                 ];
-            });
+            })->filter(function ($o) {
+                return count($o['detalles']) > 0;
+            })->values();
 
         return response()->json([
             'success' => true,

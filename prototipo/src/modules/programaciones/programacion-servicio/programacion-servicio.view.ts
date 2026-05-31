@@ -2786,6 +2786,7 @@ async function completarProg(id: number) {
 function renderFormatoOperacionalAutomaticoModal(data: FormatoOperacionalCalculoRespuesta): string {
   const totales = data.dispositivos?.totales ?? {
     cajas_cebaderas: 0,
+    tubos_cebaderos: 0,
     jaulas: 0,
     cebos: 0,
     laminas: 0,
@@ -2804,10 +2805,14 @@ function renderFormatoOperacionalAutomaticoModal(data: FormatoOperacionalCalculo
 
   return `
     <div style="display:grid;gap:16px;">
-      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;">
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;">
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;">
           <div style="font-size:11px;color:#1d4ed8;font-weight:700;text-transform:uppercase;">Cajas cebaderas</div>
           <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.cajas_cebaderas ?? 0}</div>
+        </div>
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px;">
+          <div style="font-size:11px;color:#0369a1;font-weight:700;text-transform:uppercase;">Tubos cebaderos</div>
+          <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.tubos_cebaderos ?? 0}</div>
         </div>
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;">
           <div style="font-size:11px;color:#15803d;font-weight:700;text-transform:uppercase;">Cebos</div>
@@ -4884,7 +4889,7 @@ function getColorByState(estado: string): string {
     'Realizado': 'green',
     'Cancelado': 'red',
     'En Camino': 'cyan',
-    'En Ejecución': 'orange',
+    'En Ejecución': 'gradient-ejecucion',
     'Reprogramado': 'yellow',
   };
   return c[estado] || 'blue';

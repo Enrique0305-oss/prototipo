@@ -6,9 +6,30 @@ use Illuminate\Database\Eloquent\Model;
 
 class FormatoOperacional extends Model
 {
+    protected static function boot()
+    {
+        parent::boot();
+        static::creating(function ($model) {
+            if (!$model->correlativo) {
+                $lastRecord = static::whereNotNull('correlativo')
+                    ->where('correlativo', 'LIKE', 'FO-OP-%')
+                    ->orderBy('id', 'desc')
+                    ->first();
+                
+                $lastNumber = 0;
+                if ($lastRecord && preg_match('/FO-OP-(\d+)/', $lastRecord->correlativo, $matches)) {
+                    $lastNumber = (int) $matches[1];
+                }
+                
+                $model->correlativo = 'FO-OP-' . str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
+            }
+        });
+    }
+
     protected $table = 'formatos_operacionales';
 
     protected $fillable = [
+        'correlativo',
         'codigo_documento',
         'version',
         'id_programacion_servicio',

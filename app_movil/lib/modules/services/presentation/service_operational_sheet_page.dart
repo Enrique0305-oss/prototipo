@@ -190,6 +190,27 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
       _equiposSeleccionados.clear();
       _equiposSeleccionados.addAll(ficha.equipos!.cast<String>());
     }
+    
+    if (ficha.insumosUtilizados != null && ficha.insumosUtilizados!.isNotEmpty) {
+      _quimicos.clear();
+      _quimicosSeleccionados.clear();
+      for (final json in ficha.insumosUtilizados!) {
+        final rawId = json['id_producto'];
+        final idProducto = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+        final q = _ChemicalRowDraft(idProducto: idProducto);
+        q.productoController.text = json['producto']?.toString() ?? '';
+        q.metodoController.text = json['metodo']?.toString() ?? '';
+        q.loteController.text = json['lote']?.toString() ?? '';
+        q.vencimientoController.text = json['vencimiento']?.toString() ?? '';
+        q.unidadController.text = json['unidad']?.toString() ?? '';
+        q.concentracionController.text = json['concentracion']?.toString() ?? '';
+        q.cantidadController.text = json['cantidad']?.toString() ?? '';
+        _quimicos.add(q);
+        if (q.idProducto != null) {
+          _quimicosSeleccionados.add(q.idProducto!);
+        }
+      }
+    }
   }
 
   Future<void> _saveDraft() async {
@@ -224,22 +245,21 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
   Future<void> _finalizeFicha() async {
     if (!_formKey.currentState!.validate()) return;
 
-    await _saveDraft();
-
-    if (_fichaActual == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error: No se pudo guardar la ficha')),
-        );
-      }
-      return;
-    }
-
     setState(() => _isSaving = true);
     try {
-      await widget.servicesRepository.finalizeFicha(
-        fichaId: _fichaActual!.id!,
+      final formData = _buildFormData();
+      formData['finalizar_automaticamente'] = true;
+
+      // Al guardar, la librería interna la enviará con la orden de finalizar automáticamente,
+      // ya sea conectada (inmediatamente) o desconectada (enqueued).
+      final ficha = await widget.servicesRepository.saveFichaDraft(
+        programacionId: widget.representativeService.id,
+        formData: formData,
       );
+
+      setState(() {
+        _fichaActual = ficha;
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -351,7 +371,7 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
       );
     }
 
-    if (_quimicosDisponibles.isEmpty) {
+    if (_quimicosDisponibles.isEmpty && _quimicos.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(8),
         child: Text(
@@ -469,6 +489,45 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
     );
   }
 
+  Widget _buildDateField(String label, TextEditingController controller) {
+    return TextFormField(
+      controller: controller,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        suffixIcon: const Icon(Icons.calendar_today),
+      ),
+      onTap: () async {
+        final now = DateTime.now();
+        DateTime initialDate = now;
+        if (controller.text.isNotEmpty) {
+          final parts = controller.text.split('/');
+          if (parts.length == 3) {
+            final day = int.tryParse(parts[0]);
+            final month = int.tryParse(parts[1]);
+            final year = int.tryParse(parts[2]);
+            if (day != null && month != null && year != null) {
+              initialDate = DateTime(year, month, day);
+            }
+          }
+        }
+        final result = await showDatePicker(
+          context: context,
+          initialDate: initialDate,
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2100),
+        );
+        if (result != null) {
+          controller.text = _formatDate(result);
+        }
+      },
+      validator: (value) => null,
+    );
+  }
+
+
   Widget _buildManualField(String label, TextEditingController controller, {int maxLines = 1, bool readOnly = false}) {
     return TextFormField(
       controller: controller,
@@ -538,7 +597,7 @@ class _ServiceOperationalSheetPageState extends State<ServiceOperationalSheetPag
               title: 'Datos de Ejecución',
               child: Column(
                 children: [
-                  _buildManualField('Fecha', _fechaController),
+                  _buildDateField('Fecha', _fechaController),
                   const SizedBox(height: 8),
                   Row(
                     children: [
