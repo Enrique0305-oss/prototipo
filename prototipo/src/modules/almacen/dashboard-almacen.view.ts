@@ -830,6 +830,10 @@ export function renderAlmacenDashboard() {
       <div class="page-header-with-breadcrumb">
         <div class="breadcrumb">Dashboard del Área de Almacén</div>
         <div class="page-actions">
+          <a href="/manuales/manual_almacen.pdf" download="Manual_Almacen_QSCI.pdf" class="btn-primary" style="display:flex; align-items:center; gap:8px; text-decoration:none; padding:8px 16px; border-radius:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Descargar Manual
+          </a>
           <button class="btn-secondary" id="almacen-btn-refresh">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.34 5.66"></path><polyline points="20 3 20 11 12 11"></polyline></svg>
             Actualizar

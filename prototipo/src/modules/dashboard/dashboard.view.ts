@@ -380,9 +380,15 @@ export function renderDashboard(data?: DashboardData) {
     <!-- Banner de alerta de cotizaciones aceptadas sin orden -->
     <div id="cotizaciones-sin-orden-banner"></div>
 
-    <div class="page-header">
-      <h1>Panel de Control Multidisciplinario</h1>
-      <p>Resumen general de operaciones y gestión de QSCI Group.</p>
+    <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+      <div>
+        <h1 style="margin:0;">Panel de Control Multidisciplinario</h1>
+        <p style="margin:4px 0 0;">Resumen general de operaciones y gestión de QSCI Group.</p>
+      </div>
+      <a href="/manuales/manual_general.pdf" download="Manual_General_QSCI.pdf" class="btn-primary" style="display:flex; align-items:center; gap:8px; text-decoration:none; padding:8px 16px; border-radius:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        Descargar Manual
+      </a>
     </div>
 
     <div class="dashboard-dual-grid" style="display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:18px;margin-top:20px;">
