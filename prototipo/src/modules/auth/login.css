@@ -490,11 +490,11 @@ body {
   }
 
   .form-panel {
-    display: none;
+    display: flex;
   }
 
   .mobile-attendance-notice {
-    display: flex;
+    display: none;
     justify-content: center;
     align-items: center;
     padding: 16px;
