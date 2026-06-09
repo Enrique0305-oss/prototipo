@@ -105,12 +105,9 @@
                             $cantidad = $capacitacionesColeccion->count();
                             
                             // 2. logica de cuando se seleccione mas capacitaciones
-                            if ($cantidad > 3) {
-                                // Si hay más de 3, ponemos el nombre general
-                                $textoMostrar = "muchas capacitaciones";
-                            } elseif ($cantidad > 1) {
-                                // Si hay 2 o 3, ponemos el nombre general
-                                $textoMostrar = "servicio de Control de plagas";
+                            if ($cantidad > 2) {
+                                // Si hay más de 2, usamos el nombre general de este tipo de cotización
+                                $textoMostrar = "Plan de Capacitaciones";
                             } else {
                                 // Si hay 1, lo listamos
                                 $textoMostrar = $capacitacionesColeccion->implode(', ');

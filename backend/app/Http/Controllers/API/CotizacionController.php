@@ -374,7 +374,7 @@ class CotizacionController extends Controller
             $cotizacion->update([
                 'id_cliente' => $validated['id_cliente'],
                 'id_multicim' => $validated['id_multicim'],
-                'fecha_emision' => $validated['fecha_emision'] ?? $cotizacion->fecha_emision,
+                'fecha_emision' => now(),
                 'tipo_cotizacion' => $validated['tipo_cotizacion'],
                 'incluye_igv' => $incluyeIgv,
                 'subtotal' => $subtotal,
@@ -471,6 +471,7 @@ class CotizacionController extends Controller
 
         $cotizacion->update([
             'estado' => $nuevoEstado,
+            'fecha_emision' => now(),
             'fecha_estado_cotizacion' => $fechaEstado,
         ]);
 
@@ -761,7 +762,8 @@ class CotizacionController extends Controller
         }
 
         $cotizacion->update([
-            'receta_servicio' => $validated['receta_servicio']
+            'receta_servicio' => $validated['receta_servicio'],
+            'fecha_emision' => now(),
         ]);
 
         return response()->json([

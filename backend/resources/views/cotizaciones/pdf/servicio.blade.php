@@ -831,9 +831,19 @@
                         </tr>
                     @else
                         @foreach($cotizacion->detalles as $detalle)
+                        @php
+                            $areasDetalle = collect();
+                            if (method_exists($detalle, 'areas')) {
+                                $areasDetalle = $detalle->areas()->pluck('nombre')->filter()->values();
+                            }
+                            $areaTexto = $areasDetalle->count() > 0 ? $areasDetalle->implode(', ') : '';
+                        @endphp
                         <tr>
                             <td>
                                 <strong>{{ $detalle->servicio?->nombre ?? $detalle?->descripcion_manual ?? 'N/A' }}</strong>
+                                @if($areaTexto !== '')
+                                    <br><small style="display: block; margin-top: 2px; color: #6CB52D; font-size: 10px; line-height: 1.2;"><em>Área: {{ $areaTexto }}</em></small>
+                                @endif
                             </td>
                             @if(!$mostrarServicioFosfina)
                                 <td style="text-align: center;">
