@@ -90,8 +90,9 @@ export const programacionServicioService = {
 		);
 	},
 
-	delete: async (id: number) => {
-		return apiClient.delete<ApiResponse<null>>(`/programacion-servicio/${id}`);
+	delete: async (id: number, futuras: boolean = false) => {
+		const url = futuras ? `/programacion-servicio/${id}?futuras=true` : `/programacion-servicio/${id}`;
+		return apiClient.delete<ApiResponse<null>>(url);
 	},
 
 	previewAnual: async (data: { id_servicio: number; frecuencia: string; fecha_inicio: string; dias_semana?: string }) => {

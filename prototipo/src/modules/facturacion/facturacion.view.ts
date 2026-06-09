@@ -1,4 +1,5 @@
 import * as ExcelJS from 'exceljs';
+import { mostrarToast } from '../../shared/toast';
 
 function getAuthHeaders(): Record<string, string> {
     const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
@@ -81,7 +82,7 @@ function aplicarEstiloEncabezadoExcel(row: ExcelJS.Row): void {
 
 async function exportarProyeccionesExcel(proyecciones: any[] = []): Promise<void> {
     if (!Array.isArray(proyecciones) || proyecciones.length === 0) {
-        alert('No hay proyecciones para exportar');
+        mostrarToast('warning', 'Atención', 'No hay proyecciones para exportar');
         return;
     }
 
@@ -305,10 +306,23 @@ function renderModalFactura() {
                         <option value="1">CIM</option>
                     </select>
                 </div>
+                <div>
+                    <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Estado</label>
+                    <select id="in-estado" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-weight:bold; color:#1e293b;">
+                        <option value="Sin Factura">Sin Factura</option>
+                        <option value="Pendiente de pago">Pendiente de pago</option>
+                        <option value="Pagado">Pagado</option>
+                        <option value="Anulado">Anulado</option>
+                    </select>
+                </div>
 
                 <div>
                     <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Cliente</label>
                     <input type="text" id="res-cliente" readonly style="width:100%; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; color:#64748b;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Cotización / OC</label>
+                    <input type="text" id="in-cotizacion-oc" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
                 </div>
                 <div style="grid-column: 1 / -1;">
                     <label style="display:block; font-size:12px; font-weight:600; margin-bottom:8px;">Servicios/Productos y Frecuencias</label>
@@ -365,7 +379,7 @@ function renderModalFactura() {
 
                   <div style="display:flex; justify-content: space-between; gap:20px; margin-bottom:15px; padding:10px 20px; background:#f8fafc; border-radius:8px; border: 1px dashed #cbd5e1;">
                       <div style="text-align:left;">
-                          <span style="display:block; font-size:10px; color:#64748b; font-weight:700; text-transform:uppercase;">Subtotal OS</span>
+                          <span style="display:block; font-size:10px; color:#64748b; font-weight:700; text-transform:uppercase;">Base Imponible OS</span>
                           <span style="font-size:14px; font-weight:600; color:#334155;">S/ <span id="info-subtotal">0.00</span></span>
                       </div>
                       <div style="text-align:left;">
@@ -380,7 +394,9 @@ function renderModalFactura() {
 
                   <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; display: flex; justify-content: space-around; align-items: center;">
                         <div style="text-align:center;">
-                            <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Total OS</span> <span style="font-size:16px; font-weight:bold; color:#1e3a8a;">S/ <span id="res-subtotal">0.00</span></span> </div>
+                            <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Base Imponible</span>
+                            <input type="number" step="0.01" id="in-base-imponible" style="width:100%; max-width:120px; margin-top:5px; padding:8px; border:1px solid #bfdbfe; border-radius:6px; font-weight:bold; color:#1e3a8a; text-align:center;">
+                        </div>
                         <div style="text-align:center;">
                             <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Detracción (12%)</span>
                             <span style="font-size:16px; font-weight:bold; color:#dc2626;">- S/ <span id="res-detrax">0.00</span></span>
@@ -389,6 +405,17 @@ function renderModalFactura() {
                             <span style="display:block; font-size:11px; color:#1e40af; font-weight:700; text-transform:uppercase;">Neto a Cobrar</span>
                             <span style="font-size:20px; font-weight:900; color:#1e40af;">S/ <span id="res-neto">0.00</span></span>
                         </div>
+                  </div>
+                  
+                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:15px;">
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Pago Detracción</label>
+                          <input type="date" id="in-fecha-pago-detraccion" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div style="grid-column: 1 / -1;">
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Observaciones</label>
+                          <textarea id="in-observaciones" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px; min-height:60px;"></textarea>
+                      </div>
                   </div>
 
                   <div style="text-align:right; margin-top:30px; padding-top:20px; border-top: 1px solid #e2e8f0;">
@@ -532,6 +559,15 @@ function renderModalEdicion() {
                           <input type="text" id="edit-actividad" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
                       </div>
                       <div>
+                          <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Estado</label>
+                          <select id="edit-estado" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-weight:bold; color:#1e293b;">
+                              <option value="Sin Factura">Sin Factura</option>
+                              <option value="Pendiente de pago">Pendiente de pago</option>
+                              <option value="Pagado">Pagado</option>
+                              <option value="Anulado">Anulado</option>
+                          </select>
+                      </div>
+                      <div>
                           <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Empresa (Emisor)</label>
                           <select id="edit-alias" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-weight:bold; color:#1e293b;">
                               <option value="2">MULTI</option>
@@ -541,6 +577,10 @@ function renderModalEdicion() {
                       <div>
                           <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Cliente</label>
                           <input type="text" id="edit-cliente" readonly style="width:100%; padding:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px;">Cotización / OC</label>
+                          <input type="text" id="edit-cotizacion-oc" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
                       </div>
                       <div style="grid-column: 1 / -1;">
                           <label style="display:block; font-size:12px; font-weight:600; margin-bottom:8px;">Servicios/Productos y Frecuencias</label>
@@ -566,24 +606,24 @@ function renderModalEdicion() {
                   
                   <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:25px; padding:15px; border: 1px solid #8b5cf6; border-radius:8px; background:#faf5ff;">
                       <div>
-                          <label style="display:block; font-size:12px; font-weight:600; color:#6b21a8; margin-bottom:5px;">Subtotal</label>
-                          <p id="edit-subtotal" style="margin:0; padding:8px; background:#ffffff; border:1px solid #e9d5ff; border-radius:6px; color:#1f2937; font-weight:600;">S/ 0.00</p>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#6b21a8; margin-bottom:5px;">Base Imponible</label>
+                          <input type="number" step="0.01" id="edit-base-imponible" style="width:100%; padding:8px; border:1px solid #e9d5ff; border-radius:6px; font-weight:600; font-size:14px; text-align:right;">
                       </div>
                       <div>
                           <label style="display:block; font-size:12px; font-weight:600; color:#6b21a8; margin-bottom:5px;">IGV (18%)</label>
-                          <p id="edit-igv" style="margin:0; padding:8px; background:#ffffff; border:1px solid #e9d5ff; border-radius:6px; color:#1f2937; font-weight:600;">S/ 0.00</p>
+                          <p id="edit-igv" style="margin:0; padding:8px; background:#ffffff; border:1px solid #e9d5ff; border-radius:6px; color:#1f2937; font-weight:600; text-align:right;">S/ 0.00</p>
                       </div>
                       <div>
                           <label style="display:block; font-size:12px; font-weight:600; color:#6b21a8; margin-bottom:5px;">Total Orden</label>
-                          <p id="edit-total-os" style="margin:0; padding:8px; background:#ffffff; border:1px solid #e9d5ff; border-radius:6px; color:#1f2937; font-weight:600;">S/ 0.00</p>
+                          <p id="edit-total-os" style="margin:0; padding:8px; background:#ffffff; border:1px solid #e9d5ff; border-radius:6px; color:#1f2937; font-weight:600; text-align:right;">S/ 0.00</p>
                       </div>
                       <div>
                           <label style="display:block; font-size:12px; font-weight:600; color:#dc2626; margin-bottom:5px;">Detracción (12%)</label>
-                          <p id="edit-detrax" style="margin:0; padding:8px; background:#fff5f5; border:1px solid #fecaca; border-radius:6px; color:#991b1b; font-weight:600;">S/ 0.00</p>
+                          <p id="edit-detrax" style="margin:0; padding:8px; background:#fff5f5; border:1px solid #fecaca; border-radius:6px; color:#991b1b; font-weight:600; text-align:right;">S/ 0.00</p>
                       </div>
-                      <div style="grid-column: 1 / -1;">
+                      <div style="grid-column: 2 / -1;">
                           <label style="display:block; font-size:12px; font-weight:600; color:#10b981; margin-bottom:5px;">Total Neto</label>
-                          <p id="edit-neto" style="margin:0; padding:8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; color:#16a34a; font-weight:700; font-size:14px;">S/ 0.00</p>
+                          <p id="edit-neto" style="margin:0; padding:8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; color:#16a34a; font-weight:700; font-size:16px; text-align:right;">S/ 0.00</p>
                       </div>
                   </div>
 
@@ -617,6 +657,14 @@ function renderModalEdicion() {
                       <div>
                           <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Pago</label>
                           <input type="date" id="edit-fecha-pago" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div>
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Fecha Pago Detracción</label>
+                          <input type="date" id="edit-fecha-pago-detraccion" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px;">
+                      </div>
+                      <div style="grid-column: 1 / -1;">
+                          <label style="display:block; font-size:12px; font-weight:600; color:#065f46; margin-bottom:5px;">Observaciones</label>
+                          <textarea id="edit-observaciones" style="width:100%; padding:8px; border:1px solid #10b981; border-radius:6px; min-height:60px;"></textarea>
                       </div>
                   </div>
 
@@ -653,8 +701,10 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
       <table class="data-table" style="width: 100%; border-collapse: collapse;">
         <thead>
           <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+            <th class="col-chk" style="padding: 12px; text-align: center; display: none;"><input type="checkbox" id="chk-all-proyecciones"></th>
             <th style="padding: 12px; text-align: left;">ACTIVIDAD</th>
             <th style="padding: 12px; text-align: left;">EMPRESA</th>
+            <th style="padding: 12px; text-align: left;">ESTADO</th>
             <th style="padding: 12px; text-align: left;">CLIENTE</th>
             <th style="padding: 12px; text-align: left;">FECHA EJECUCION</th>
             <th style="padding: 12px; text-align: left;">IMPORTES (S/)</th>
@@ -675,21 +725,41 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
         const ref = p.orden_servicio || p.orden_producto || p.orden_capacitacion || p.orden_auditoria || p.orden_asesoria || {};
 
         const clienteNombre = ref.cliente ? (ref.cliente.nombre_empresa || ref.cliente.nombre_comercial) : 'Sin cliente';
+        
+        let colorEstado = '#64748b'; // Sin Factura (gris)
+        let bgEstado = '#f1f5f9';
+        if (p.estado === 'Pendiente de pago') {
+            colorEstado = '#d97706'; // naranja
+            bgEstado = '#fef3c7';
+        } else if (p.estado === 'Pagado') {
+            colorEstado = '#16a34a'; // verde
+            bgEstado = '#dcfce3';
+        } else if (p.estado === 'Anulado') {
+            colorEstado = '#dc2626'; // rojo
+            bgEstado = '#fee2e2';
+        }
 
         return `
           <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+              <td class="col-chk" style="padding: 10px; text-align: center; display: none;"><input type="checkbox" class="chk-proyeccion" value="${p.id}"></td>
               <td style="padding: 10px;">${p.actividad || '---'}</td>
               <td style="padding: 10px; font-weight: bold; color: #475569;">
                   ${p.multicim_emisora ? p.multicim_emisora.alias_empresa : '---'}
+              </td>
+              <td style="padding: 10px;">
+                  <span style="display:inline-block; padding:4px 8px; border-radius:4px; background:${bgEstado}; color:${colorEstado}; font-weight:700; font-size:10px; white-space:nowrap; text-align:center;">
+                      ${p.estado || 'Sin Factura'}
+                  </span>
+                  ${p.registrado_por ? `<div style="font-size:9px; color:#94a3b8; margin-top:3px; text-align:center;">Por: ${p.registrado_por}</div>` : ''}
               </td>
               <td style="padding: 10px; font-weight: 600;">${clienteNombre}</td>
 
               <td style="padding: 10px; text-align: center;">${fDate(p.fecha_ejecucion)}</td>
 
               <td style="padding: 10px; white-space: nowrap;">
-                  <div style="font-size: 12px; color: #94a3b8;">Sub: ${Number(ref.subtotal || 0).toFixed(2)}</div>
-                  <div style="font-size: 12px; color: #94a3b8;">Igv: ${Number(ref.igv || 0).toFixed(2)}</div>
-                  <div style="font-weight: 500;">Tot: ${Number(ref.precio_total_os || ref.total_costo || 0).toFixed(2)}</div>
+                  <div style="font-size: 12px; color: #94a3b8;">Sub: ${Number(p.base_imponible || ref.subtotal || 0).toFixed(2)}</div>
+                  <div style="font-size: 12px; color: #94a3b8;">Igv: ${Number(p.igv || ref.igv || 0).toFixed(2)}</div>
+                  <div style="font-weight: 500;">Tot: ${(Number(p.base_imponible || ref.subtotal || 0) + Number(p.igv || ref.igv || 0)).toFixed(2)}</div>
               </td>
 
               <td style="padding: 10px; font-family: monospace; font-weight: bold;">${p.n_factura || '---'}</td>
@@ -703,9 +773,17 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
               <td style="padding: 10px; text-align: center;">${p.dias_credito || 0}</td>
               <td style="padding: 10px; font-weight: 600;">${fDate(p.fecha_vcto)}</td>
               <td style="padding: 10px; text-align: center;">
-                  <span style="color: ${p.dia_vencer <= 5 ? '#ef4444' : '#1e293b'}; font-weight: bold;">
-                      ${p.dia_vencer || 0}
-                  </span>
+                  ${(() => {
+                      if (!p.fecha_vcto) return '<span style="color:#94a3b8; font-weight:bold;">-</span>';
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const [year, month, day] = p.fecha_vcto.split('T')[0].split('-');
+                      const vcto = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                      vcto.setHours(0, 0, 0, 0);
+                      const diffDays = Math.ceil((vcto.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                      const color = diffDays <= 5 ? '#ef4444' : '#1e293b';
+                      return `<span style="color: ${color}; font-weight: bold;">${diffDays}</span>`;
+                  })()}
               </td>
               <td style="padding: 10px; color: #6366f1; font-weight: 600;">${fDate(p.fecha_pago)}</td>
               <td style="padding: 10px; text-align: center;">
@@ -718,6 +796,9 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
                       </button>
                       <button class="btn-icon btn-accion-eliminar" data-id="${p.id}" title="Eliminar" style="display: inline-flex; align-items: center; justify-content: center; color: #ef4444;">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
+                      <button class="btn-icon btn-accion-duplicar" data-id="${p.id}" title="Duplicar Próximo Mes" style="display: inline-flex; align-items: center; justify-content: center; color: #8b5cf6;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                       </button>
                   </div>
               </td>
@@ -859,21 +940,17 @@ export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: a
           ${empresas.map((e: any) => `<option value="${e.id}">${e.alias_empresa}</option>`).join('')}
         </select>
         <button id="btn-exportar-proyecciones" class="btn-secondary" type="button">Exportar Excel</button>
+        <button id="btn-toggle-duplicar" class="btn-primary" type="button" style="background: #8b5cf6;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          Duplicar Mes
+        </button>
       </div>
     </div>
 
     ${renderAlertaOrdenesPendientes(ordenesPendientes)}
 
-    <div class="tabs-container">
-      <div class="tabs-header">
-        <button class="tab-btn active" data-tab="ordenes">Órdenes Proyectadas</button>
-        <button class="tab-btn" data-tab="contratos">Contratos Fijos</button>
-        <button class="tab-btn" data-tab="cobranza">Estado de Cobranza</button>
-      </div>
-      
-      <div id="facturacion-tab-content" class="tab-content">
+    <div id="facturacion-tab-content" style="max-width: 100%; min-width: 0; width: 100%;">
         ${renderOrdenesProyectadasTab(proyecciones)}
-      </div>
     </div>
 
     ${renderModalFactura()}
@@ -922,7 +999,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
             await exportarProyeccionesExcel(proyeccionesActuales);
         } catch (error) {
             console.error('Error exportando proyecciones:', error);
-            alert('No se pudo exportar el Excel de proyecciones');
+            mostrarToast('error', 'Error', 'No se pudo exportar el Excel de proyecciones');
         }
     });
 
@@ -963,7 +1040,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
             console.log(`Proyecciones filtradas cargadas (mes=${mesSeleccionado}, empresa=${empresaSeleccionada || 'todas'}):`, nuevasProyecciones);
         } catch (error) {
             console.error("Error cargando proyecciones:", error);
-            alert('Error al cargar proyecciones');
+            mostrarToast('error', 'Error', 'Error al cargar proyecciones');
         }
     };
 
@@ -1138,7 +1215,68 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
         }
     });
 
-    // --- 5. SUBMIT DEL FORMULARIO ---
+    // --- CÁLCULOS DINÁMICOS ---
+    const inBaseImponible = document.getElementById('in-base-imponible') as HTMLInputElement;
+    inBaseImponible?.addEventListener('input', () => {
+        const base = parseFloat(inBaseImponible.value || '0');
+        const igv = base * 0.18;
+        const total = base + igv;
+        const detrax = total > 700 ? total * 0.12 : 0;
+        const neto = total - detrax;
+
+        document.getElementById('info-igv')!.innerText = igv.toFixed(2);
+        document.getElementById('info-total-os')!.innerText = total.toFixed(2);
+        document.getElementById('res-subtotal')!.innerText = total.toFixed(2);
+        document.getElementById('res-detrax')!.innerText = detrax.toFixed(2);
+        document.getElementById('res-neto')!.innerText = neto.toFixed(2);
+    });
+
+    // --- 5. CÁLCULO DE FECHAS (FACTURACIÓN) ---
+    const calcFechas = (prefix: string) => {
+        const fechaFacturaInput = document.getElementById(`${prefix}-fecha-factura`) as HTMLInputElement;
+        const diasCreditoInput = document.getElementById(`${prefix}-dias-credito`) as HTMLInputElement;
+        const fechaVctoInput = document.getElementById(`${prefix}-fecha-vcto`) as HTMLInputElement;
+        const diasVencerInput = document.getElementById(`${prefix}-dias-vencer`) as HTMLInputElement;
+
+        const updateVcto = () => {
+            if (fechaFacturaInput?.value && diasCreditoInput?.value) {
+                // Asumimos UTC para evitar desfases por zona horaria
+                const [year, month, day] = fechaFacturaInput.value.split('-');
+                const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+                date.setUTCDate(date.getUTCDate() + parseInt(diasCreditoInput.value));
+                fechaVctoInput.value = date.toISOString().split('T')[0];
+                updateDiasVencer();
+            }
+        };
+
+        const updateDiasVencer = () => {
+            if (fechaVctoInput?.value && diasVencerInput) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                const [year, month, day] = fechaVctoInput.value.split('-');
+                const vcto = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                vcto.setHours(0, 0, 0, 0);
+                
+                const diffTime = vcto.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                diasVencerInput.value = String(diffDays);
+                
+                // Hacerlo visualmente de solo lectura (opcional, pero útil para UX)
+                diasVencerInput.readOnly = true;
+                diasVencerInput.style.backgroundColor = '#f1f5f9';
+            }
+        };
+
+        fechaFacturaInput?.addEventListener('input', updateVcto);
+        diasCreditoInput?.addEventListener('input', updateVcto);
+        fechaVctoInput?.addEventListener('input', updateDiasVencer);
+    };
+
+    calcFechas('in');
+    calcFechas('edit');
+
+    // --- 6. SUBMIT DEL FORMULARIO ---
     form?.addEventListener('submit', async (e) => {
         e.preventDefault();
 
@@ -1166,13 +1304,26 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
 
         const idMulticimReal = Number((document.getElementById('res-alias') as HTMLSelectElement).value);
 
+        const estado = (document.getElementById('in-estado') as HTMLSelectElement).value;
+        const baseImponible = parseFloat((document.getElementById('in-base-imponible') as HTMLInputElement)?.value || '0');
+        const cotizacionOc = (document.getElementById('in-cotizacion-oc') as HTMLInputElement).value || null;
+        const fechaPagoDetraccion = (document.getElementById('in-fecha-pago-detraccion') as HTMLInputElement).value || null;
+        const observaciones = (document.getElementById('in-observaciones') as HTMLInputElement).value || null;
+
         const payload = {
             id_multicim: idMulticimReal,
             tipo_orden: tipo,
             id_referencia: idRef,
             actividad: actividadManual || null,
+            base_imponible: baseImponible,
+            igv: igv,
+            porcentaje_detraccion: 12,
             monto_detrax: montoDetrax,
             total_final: totalFinal,
+            estado: estado,
+            cotizacion_oc: cotizacionOc,
+            observaciones: observaciones,
+            fecha_pago_detraccion: fechaPagoDetraccion,
             n_factura: numFactura,
             fecha_factura: fechaFactura,
             dias_credito: diasCredito,
@@ -1197,16 +1348,16 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
             const result = await resp.json();
 
             if (resp.ok && result.success) {
-                alert('¡Proyección registrada con éxito!');
+                mostrarToast('success', 'Éxito', '¡Proyección registrada con éxito!');
                 if (modal) modal.style.display = 'none';
                 window.location.reload();
             } else {
                 const msg = result.errors ? JSON.stringify(result.errors) : (result.message || 'Error desconocido');
-                alert('Error de validación: ' + msg);
+                mostrarToast('error', 'Error de validación', msg);
             }
         } catch (error) {
             console.error("Error en submit:", error);
-            alert('Error de conexión con el servidor');
+            mostrarToast('error', 'Error', 'Error de conexión con el servidor');
         }
     });
 
@@ -1229,10 +1380,105 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
     }
     containerEl.dataset.facturacionActionsBound = '1';
 
+    // Checkbox master (Seleccionar todos)
+    const chkAll = document.getElementById('chk-all-proyecciones') as HTMLInputElement;
+    if (chkAll) {
+        chkAll.addEventListener('change', (e) => {
+            const isChecked = (e.target as HTMLInputElement).checked;
+            const checkboxes = container.querySelectorAll('.chk-proyeccion') as NodeListOf<HTMLInputElement>;
+            checkboxes.forEach(chk => {
+                chk.checked = isChecked;
+            });
+        });
+    }
+
+    // Botón de Toggle Duplicar (Header)
+    const btnToggleDuplicar = document.getElementById('btn-toggle-duplicar');
+    if (btnToggleDuplicar && btnToggleDuplicar.dataset.bound !== '1') {
+        btnToggleDuplicar.dataset.bound = '1';
+        let modoDuplicar = false;
+
+        btnToggleDuplicar.addEventListener('click', async () => {
+            const chkCols = document.querySelectorAll('.col-chk') as NodeListOf<HTMLElement>;
+            
+            if (!modoDuplicar) {
+                // Activar modo duplicar: mostrar checkboxes
+                modoDuplicar = true;
+                chkCols.forEach(col => col.style.display = 'table-cell');
+                btnToggleDuplicar.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Confirmar Duplicación
+                `;
+                btnToggleDuplicar.style.background = '#10b981'; // verde
+            } else {
+                // Confirmar
+                const checkboxes = container.querySelectorAll('.chk-proyeccion:checked') as NodeListOf<HTMLInputElement>;
+                const ids = Array.from(checkboxes).map(chk => chk.value);
+
+                if (ids.length === 0) {
+                    // Si no seleccionó nada, simplemente cancelar
+                    cancelarModo();
+                    return;
+                }
+
+                btnToggleDuplicar.setAttribute('disabled', 'true');
+                btnToggleDuplicar.innerHTML = 'Procesando...';
+
+                await ejecutarDuplicacion(ids);
+
+                btnToggleDuplicar.removeAttribute('disabled');
+                cancelarModo();
+            }
+        });
+
+        function cancelarModo() {
+            modoDuplicar = false;
+            const chkCols = document.querySelectorAll('.col-chk') as NodeListOf<HTMLElement>;
+            chkCols.forEach(col => col.style.display = 'none');
+            
+            // Desmarcar todo
+            const allChks = document.querySelectorAll('.chk-proyeccion') as NodeListOf<HTMLInputElement>;
+            allChks.forEach(c => c.checked = false);
+            if (chkAll) chkAll.checked = false;
+
+            btnToggleDuplicar!.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                Duplicar Mes
+            `;
+            btnToggleDuplicar!.style.background = '#8b5cf6'; // morado original
+        }
+    }
+
+    // Función auxiliar para llamar al backend
+    async function ejecutarDuplicacion(ids: string[]) {
+        try {
+            const resp = await fetch('http://backend.qsci-system.com/api/v1/proyecciones/duplicar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({ ids })
+            });
+            const result = await resp.json();
+
+            if (resp.ok && result.success) {
+                mostrarToast('success', 'Éxito', result.message || 'Duplicación completada');
+                // Recargar proyecciones
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                mostrarToast('error', 'Error', result.message || 'Error al duplicar');
+            }
+        } catch (error) {
+            console.error("Error al duplicar:", error);
+            mostrarToast('error', 'Error', 'Error de conexión');
+        }
+    }
+
     // Delegación de eventos - captura clics en botones de acción
     container.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
-        const actionButton = target.closest('.btn-accion-ver, .btn-accion-editar, .btn-accion-eliminar') as HTMLElement | null;
+        const actionButton = target.closest('.btn-accion-ver, .btn-accion-editar, .btn-accion-eliminar, .btn-accion-duplicar') as HTMLElement | null;
         if (!actionButton) return;
 
         // BOTÓN VER
@@ -1296,6 +1542,15 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
             }
         }
 
+        // BOTÓN DUPLICAR (INDIVIDUAL)
+        if (actionButton.classList.contains('btn-accion-duplicar')) {
+            const id = actionButton.getAttribute('data-id');
+            if (!id) return;
+            
+            // Reutilizar la lógica de duplicación pasándole solo este ID
+            await ejecutarDuplicacion([id]);
+        }
+
         // BOTÓN EDITAR
         if (actionButton.classList.contains('btn-accion-editar')) {
             const id = actionButton.getAttribute('data-id');
@@ -1330,9 +1585,14 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
                         `).join('') : '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">Sin servicios</td></tr>';
                     }
 
-                    (document.getElementById('edit-subtotal') as HTMLElement).innerText = `S/ ${Number(ref.subtotal || 0).toFixed(2)}`;
-                    (document.getElementById('edit-igv') as HTMLElement).innerText = `S/ ${Number(ref.igv || 0).toFixed(2)}`;
-                    (document.getElementById('edit-total-os') as HTMLElement).innerText = `S/ ${Number(ref.precio_total_os || ref.total_costo || 0).toFixed(2)}`;
+                    (document.getElementById('edit-estado') as HTMLSelectElement).value = p.estado || 'Sin Factura';
+                    (document.getElementById('edit-base-imponible') as HTMLInputElement).value = p.base_imponible || ref.subtotal || '';
+                    (document.getElementById('edit-cotizacion-oc') as HTMLInputElement).value = p.cotizacion_oc || '';
+                    (document.getElementById('edit-observaciones') as HTMLTextAreaElement).value = p.observaciones || '';
+                    (document.getElementById('edit-fecha-pago-detraccion') as HTMLInputElement).value = p.fecha_pago_detraccion ? p.fecha_pago_detraccion.split('T')[0] : '';
+
+                    (document.getElementById('edit-igv') as HTMLElement).innerText = `S/ ${Number(p.igv || ref.igv || 0).toFixed(2)}`;
+                    (document.getElementById('edit-total-os') as HTMLElement).innerText = `S/ ${(Number(p.base_imponible || ref.subtotal || 0) + Number(p.igv || ref.igv || 0)).toFixed(2)}`;
                     (document.getElementById('edit-detrax') as HTMLElement).innerText = `S/ ${Number(p.monto_detrax || 0).toFixed(2)}`;
                     (document.getElementById('edit-neto') as HTMLElement).innerText = `S/ ${Number(p.total_final || 0).toFixed(2)}`;
 
@@ -1406,7 +1666,7 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
                     const result = await resp.json();
 
                     if (resp.ok && result.success) {
-                        alert('Proyección eliminada con éxito');
+                        mostrarToast('success', 'Éxito', 'Proyección eliminada con éxito');
                         overlay.remove();
                         // Recargar proyecciones del mes actual
                         const mesActual = (window as any).mesActual || new Date().getMonth() + 1;
@@ -1428,13 +1688,13 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
                             initFacturacionTableEvents(nuevasProyecciones);
                         }
                     } else {
-                        alert('Error al eliminar: ' + (result.message || 'Error desconocido'));
+                        mostrarToast('error', 'Error al eliminar', result.message || 'Error desconocido');
                         btnConfirm.disabled = false;
                         btnConfirm.textContent = 'Eliminar';
                     }
                 } catch (error) {
                     console.error("Error al eliminar:", error);
-                    alert('Error de conexión');
+                    mostrarToast('error', 'Error', 'Error de conexión');
                     btnConfirm.disabled = false;
                     btnConfirm.textContent = 'Eliminar';
                 }
@@ -1476,13 +1736,28 @@ export function attachModalHandlers() {
     btnCancelarEdicion?.addEventListener('click', cerrarEdicion);
     modalEdicion?.addEventListener('click', (e) => { if (e.target === modalEdicion) cerrarEdicion(); });
 
+    // --- CÁLCULOS DINÁMICOS EDICIÓN ---
+    const editBaseImponible = document.getElementById('edit-base-imponible') as HTMLInputElement;
+    editBaseImponible?.addEventListener('input', () => {
+        const base = parseFloat(editBaseImponible.value || '0');
+        const igv = base * 0.18;
+        const total = base + igv;
+        const detrax = total > 700 ? total * 0.12 : 0;
+        const neto = total - detrax;
+
+        document.getElementById('edit-igv')!.innerText = `S/ ${igv.toFixed(2)}`;
+        document.getElementById('edit-total-os')!.innerText = `S/ ${total.toFixed(2)}`;
+        document.getElementById('edit-detrax')!.innerText = `S/ ${detrax.toFixed(2)}`;
+        document.getElementById('edit-neto')!.innerText = `S/ ${neto.toFixed(2)}`;
+    });
+
     // --- SUBMIT DEL FORMULARIO DE EDICIÓN ---
     formEditar?.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const idProyeccion = formEditar.dataset.idProyeccion;
         if (!idProyeccion) {
-            alert('Error: ID no identificado');
+            mostrarToast('error', 'Error', 'ID no identificado');
             return;
         }
 
@@ -1498,9 +1773,30 @@ export function attachModalHandlers() {
 
         console.log('DEBUG - Enviando idMulticim:', idMulticim, 'select value:', (document.getElementById('edit-alias') as HTMLSelectElement).value);
 
+        const estado = (document.getElementById('edit-estado') as HTMLSelectElement).value;
+        const baseImponible = parseFloat((document.getElementById('edit-base-imponible') as HTMLInputElement).value || '0');
+        const cotizacionOc = (document.getElementById('edit-cotizacion-oc') as HTMLInputElement).value || null;
+        const fechaPagoDetraccion = (document.getElementById('edit-fecha-pago-detraccion') as HTMLInputElement).value || null;
+        const observaciones = (document.getElementById('edit-observaciones') as HTMLTextAreaElement).value || null;
+
+        const base = baseImponible;
+        const igv = base * 0.18;
+        const totalOS = base + igv;
+        const montoDetrax = totalOS > 700 ? totalOS * 0.12 : 0;
+        const totalFinal = totalOS - montoDetrax;
+
         const payload = {
             id_multicim: idMulticim,
             actividad: actividad,
+            estado: estado,
+            base_imponible: baseImponible,
+            igv: igv,
+            porcentaje_detraccion: 12,
+            monto_detrax: montoDetrax,
+            total_final: totalFinal,
+            cotizacion_oc: cotizacionOc,
+            observaciones: observaciones,
+            fecha_pago_detraccion: fechaPagoDetraccion,
             n_factura: numFactura,
             fecha_factura: fechaFactura,
             dias_credito: diasCredito,
@@ -1523,7 +1819,7 @@ export function attachModalHandlers() {
             const result = await resp.json();
 
             if (resp.ok && result.success) {
-                alert('¡Cambios guardados con éxito!');
+                mostrarToast('success', 'Éxito', '¡Cambios guardados con éxito!');
                 if (modalEdicion) modalEdicion.style.display = 'none';
 
                 // Recargar proyecciones del mes actual sin hacer reload de página
@@ -1547,11 +1843,11 @@ export function attachModalHandlers() {
                 }
             } else {
                 const msg = result.errors ? JSON.stringify(result.errors) : (result.message || 'Error desconocido');
-                alert('Error al guardar: ' + msg);
+                mostrarToast('error', 'Error al guardar', msg);
             }
         } catch (error) {
             console.error("Error en actualización:", error);
-            alert('Error de conexión con el servidor');
+            mostrarToast('error', 'Error', 'Error de conexión con el servidor');
         }
     });
 }

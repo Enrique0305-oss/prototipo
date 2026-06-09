@@ -35,56 +35,73 @@ class CalculoFormatoOperacionalService
         $mainProg = $programaciones->firstWhere('id', $idProgramacion) ?? $programaciones->first();
 
         // ─── LÓGICA DE MEMORIA TÉCNICA (HISTORIAL) ──────────────────────────
-        // Buscamos el último formato operacional ya guardado para el mismo
-        // servicio, orden de servicio y planta. Esto permite que cuando un técnico
-        // completa el formato del 1-May, el del 5-May ya traiga los códigos
-        // y ubicaciones que se registraron la primera vez.
+        // Buscamos el último formato operacional ya guardado para cada servicio
+        // Esto permite que si antes se hicieron individuales y ahora agrupados,
+        // se recupere la ubicación de todos.
         $historialDetalles = collect();
         $ultimoFormato = null;
 
-        if ($mainProg->id_orden_servicio) {
-            $ultimoFormato = FormatoOperacional::query()
-                ->where('id_programacion_servicio', '!=', $mainProg->id)
-                ->whereHas('programacionServicio', function ($q) use ($mainProg) {
-                    $q->where('id_orden_servicio', $mainProg->id_orden_servicio)
-                      ->where('id_servicio', $mainProg->id_servicio)
-                      ->where('id_cliente_planta', $mainProg->id_cliente_planta);
-                })
-                ->whereIn('estado', ['completada', 'borrador'])
-                ->orderByRaw("FIELD(estado, 'completada', 'borrador')")
-                ->orderBy('fecha', 'desc')
-                ->orderBy('id', 'desc')
-                ->first();
+        $serviciosUnicos = $programaciones->unique('id_servicio');
+
+        foreach ($serviciosUnicos as $progServicio) {
+            $ultimoFormatoServicio = null;
+
+            if ($progServicio->id_orden_servicio) {
+                $ultimoFormatoServicio = FormatoOperacional::query()
+                    ->whereNotIn('id_programacion_servicio', $ids)
+                    ->whereHas('programacionServicio', function ($q) use ($progServicio) {
+                        $q->where('id_orden_servicio', $progServicio->id_orden_servicio)
+                          ->where('id_servicio', $progServicio->id_servicio)
+                          ->where('id_cliente_planta', $progServicio->id_cliente_planta);
+                    })
+                    ->whereIn('estado', ['completada', 'borrador'])
+                    ->orderByRaw("FIELD(estado, 'completada', 'borrador')")
+                    ->orderBy('fecha', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+            }
+
+            // Si no encontramos por orden de servicio, intentar por planta y nombre de servicio
+            if (!$ultimoFormatoServicio && $progServicio->id_cliente_planta) {
+                $nombreServicio = $progServicio->servicio?->nombre;
+                $ultimoFormatoServicio = FormatoOperacional::query()
+                    ->whereNotIn('id_programacion_servicio', $ids)
+                    ->whereHas('programacionServicio', function ($q) use ($progServicio, $nombreServicio) {
+                        $q->where('id_cliente_planta', $progServicio->id_cliente_planta)
+                          ->where(function($sub) use ($progServicio, $nombreServicio) {
+                              $sub->where('id_servicio', $progServicio->id_servicio);
+                              if ($nombreServicio) {
+                                  $sub->orWhereHas('servicio', function($s) use ($nombreServicio) {
+                                      $s->where('nombre', $nombreServicio);
+                                  });
+                              }
+                          });
+                    })
+                    ->whereIn('estado', ['completada', 'borrador'])
+                    ->orderByRaw("FIELD(estado, 'completada', 'borrador')")
+                    ->orderBy('fecha', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+            }
+
+            if ($ultimoFormatoServicio) {
+                // Guardamos el primer formato encontrado como referencia general (para info de cabecera si se requiere)
+                if (!$ultimoFormato) {
+                    $ultimoFormato = $ultimoFormatoServicio;
+                }
+                
+                $detalles = $ultimoFormatoServicio->detalles()
+                    ->orderBy('orden_caja', 'asc')
+                    ->get();
+                $historialDetalles = $historialDetalles->merge($detalles);
+            }
         }
 
-        // Si no encontramos por orden de servicio, intentar por planta y nombre de servicio (flexibilidad total)
-        if (!$ultimoFormato && $mainProg->id_cliente_planta) {
-            $nombreServicio = $mainProg->servicio?->nombre;
-            $ultimoFormato = FormatoOperacional::query()
-                ->where('id_programacion_servicio', '!=', $mainProg->id)
-                ->whereHas('programacionServicio', function ($q) use ($mainProg, $nombreServicio) {
-                    $q->where('id_cliente_planta', $mainProg->id_cliente_planta)
-                      ->where(function($sub) use ($mainProg, $nombreServicio) {
-                          $sub->where('id_servicio', $mainProg->id_servicio);
-                          if ($nombreServicio) {
-                              $sub->orWhereHas('servicio', function($s) use ($nombreServicio) {
-                                  $s->where('nombre', $nombreServicio);
-                              });
-                          }
-                      });
-                })
-                ->whereIn('estado', ['completada', 'borrador'])
-                ->orderByRaw("FIELD(estado, 'completada', 'borrador')")
-                ->orderBy('fecha', 'desc')
-                ->orderBy('id', 'desc')
-                ->first();
-        }
-
-        if ($ultimoFormato) {
-            $historialDetalles = $ultimoFormato->detalles()
-                ->orderBy('orden_caja', 'asc')
-                ->get()
-                ->groupBy('tipo_seccion');
+        if ($historialDetalles->isNotEmpty()) {
+            // Agrupar por tipo de sección
+            $historialDetalles = $historialDetalles->groupBy('tipo_seccion');
+        } else {
+            $historialDetalles = collect();
         }
         // ───────────────────────────────────────────────────────────────────
 
@@ -510,7 +527,7 @@ class CalculoFormatoOperacionalService
     private function crearDetallesDesdeSecciones(int $idFormato, array $secciones): array
     {
         $detalles = [];
-        $ordenCajaGlobal = 1;
+        $contadoresGlobales = [];
 
         foreach ($secciones as $seccion) {
             $cantidad = max(0, (int) ($seccion['cantidad_asignada'] ?? 0));
@@ -521,18 +538,22 @@ class CalculoFormatoOperacionalService
             
             $historial = $seccion['historial_dispositivos'] ?? [];
 
+            if (!isset($contadoresGlobales[$prefix])) {
+                $contadoresGlobales[$prefix] = 1;
+            }
+
             for ($i = 0; $i < $cantidad; $i++) {
                 $itemH = $historial[$i] ?? null;
                 
                 // Priorizar datos del historial (Código y Ubicación)
-                $codigo = $itemH['codigo_caja'] ?? sprintf('%s-%02d', $prefix, $ordenCajaGlobal);
+                $codigo = $itemH['codigo_caja'] ?? sprintf('%s-%02d', $prefix, $contadoresGlobales[$prefix]);
                 $ubicacion = $itemH['ubicacion'] ?? $ubicacionSeccion;
 
                 $detalles[] = FormatoOperacionalDetalle::create([
                     'id_formato_operacional' => $idFormato,
                     'tipo_seccion' => $tipoSeccion,
                     'codigo_caja' => $codigo,
-                    'orden_caja' => $itemH['orden_caja'] ?? $ordenCajaGlobal,
+                    'orden_caja' => $itemH['orden_caja'] ?? $contadoresGlobales[$prefix],
                     'descripcion' => $titulo,
                     'ubicacion' => $ubicacion,
                     'estado_dispositivo' => 'No visitada',
@@ -548,7 +569,7 @@ class CalculoFormatoOperacionalService
                 ]);
                 
                 if (!$itemH) {
-                    $ordenCajaGlobal++;
+                    $contadoresGlobales[$prefix]++;
                 }
             }
             
@@ -556,8 +577,8 @@ class CalculoFormatoOperacionalService
             // no choque con los siguientes si no hay historial en la siguiente sección
             if (!empty($historial)) {
                 $maxOrden = collect($historial)->max('orden_caja');
-                if ($maxOrden >= $ordenCajaGlobal) {
-                    $ordenCajaGlobal = $maxOrden + 1;
+                if ($maxOrden >= $contadoresGlobales[$prefix]) {
+                    $contadoresGlobales[$prefix] = $maxOrden + 1;
                 }
             }
         }

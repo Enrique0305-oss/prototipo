@@ -52,6 +52,8 @@ use App\Http\Controllers\API\FichaOperacionalController;
 use App\Http\Controllers\API\FormatoOperacionalController;
 use App\Http\Controllers\API\LoteController;
 use App\Http\Controllers\API\InformeTecnicoController;
+use App\Http\Controllers\API\CajaChicaController;
+use App\Http\Controllers\API\EstadoCuentaController;
 use App\Http\Middleware\CacheJsonGetResponses;
 
 // Rutas PÚBLICAS (sin autenticación)
@@ -306,6 +308,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // para las proyecciones :v
     Route::get('proyecciones', [ProyeccionesController::class, 'index']);
     Route::post('proyecciones', [ProyeccionesController::class, 'store']);
+    Route::post('proyecciones/duplicar', [ProyeccionesController::class, 'duplicarMasivo']);
     Route::get('proyecciones/pendientes', [ProyeccionesController::class, 'obtenerOrdenesPendientes']);
     Route::get('proyecciones/buscar-orden/{tipo}/{id}', [ProyeccionesController::class, 'obtenerDatosOrden']);
     Route::get('proyecciones/{id}', [ProyeccionesController::class, 'show']);
@@ -524,4 +527,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::put('/personal/usuarios/{id}', [PersonalController::class, 'update']);
     Route::patch('/personal/usuarios/{id}/estado', [PersonalController::class, 'toggleEstado']);
     Route::patch('/personal/usuarios/{id}/reset-password', [PersonalController::class, 'resetPassword']);
+
+    // Finanzas - Caja Chica
+    Route::get('/caja-chica', [CajaChicaController::class, 'index']);
+    Route::post('/caja-chica', [CajaChicaController::class, 'store']);
+    Route::delete('/caja-chica/{id}', [CajaChicaController::class, 'destroy']);
+    
+    Route::get('/estado-cuenta', [EstadoCuentaController::class, 'index']);
+    Route::post('/estado-cuenta', [EstadoCuentaController::class, 'store']);
 });

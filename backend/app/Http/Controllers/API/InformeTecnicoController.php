@@ -1582,6 +1582,7 @@ class InformeTecnicoController extends Controller
             'conclusiones' => 'nullable',
             'insumos' => 'nullable|array',
             'estado' => 'nullable|string|max:50',
+            'estilo' => 'nullable|string|max:50',
         ]);
 
         $validated['conclusiones'] = $this->normalizarConclusiones($validated['conclusiones'] ?? null);
@@ -1634,6 +1635,7 @@ class InformeTecnicoController extends Controller
             'conclusiones' => 'nullable',
             'insumos' => 'nullable|array',
             'estado' => 'nullable|string|max:50',
+            'estilo' => 'nullable|string|max:50',
         ]);
 
         $validated['conclusiones'] = $this->normalizarConclusiones($validated['conclusiones'] ?? null);

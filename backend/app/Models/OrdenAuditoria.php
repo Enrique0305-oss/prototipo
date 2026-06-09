@@ -78,6 +78,11 @@ class OrdenAuditoria extends Model
         return $this->belongsToMany(Exponente::class, self::resolvePivotTable(), 'id_orden_auditoria', 'id_exponente');
     }
 
+    public function proyecciones()
+    {
+        return $this->hasMany(Proyeccion::class, 'id_referencia')->where('tipo_orden', 'auditoria');
+    }
+
     public function getTable()
     {
         return self::resolveMainTable();

@@ -56,12 +56,24 @@ class FinanzasService {
     return apiClient.patch<CajaChica>(`${API_ENDPOINTS.finanzas.cajaChica}/${id}/cerrar`, {});
   }
 
-  async getMovimientosCajaChica(idCaja: number): Promise<MovimientoCajaChica[]> {
-    return apiClient.get<MovimientoCajaChica[]>(`${API_ENDPOINTS.finanzas.cajaChica}/${idCaja}/movimientos`);
+  async getMovimientosCajaChica(): Promise<{ success: boolean; data: MovimientoCajaChica[]; saldo_actual: number }> {
+    return apiClient.get<{ success: boolean; data: MovimientoCajaChica[]; saldo_actual: number }>(API_ENDPOINTS.finanzas.cajaChica);
   }
 
-  async registrarMovimientoCajaChica(idCaja: number, data: Partial<MovimientoCajaChica>): Promise<MovimientoCajaChica> {
-    return apiClient.post<MovimientoCajaChica>(`${API_ENDPOINTS.finanzas.cajaChica}/${idCaja}/movimientos`, data);
+  async registrarMovimientoCajaChica(data: Partial<MovimientoCajaChica>): Promise<MovimientoCajaChica> {
+    const response = await apiClient.post<{ success: boolean; data: MovimientoCajaChica }>(API_ENDPOINTS.finanzas.cajaChica, data);
+    return response.data;
+  }
+
+  // estado cuenta
+  
+  async getEstadoCuenta(cuenta: 'Multi' | 'CIM'): Promise<{ success: boolean; data: any[]; saldo_actual: number }> {
+    return apiClient.get<{ success: boolean; data: any[]; saldo_actual: number }>(`/estado-cuenta?cuenta=${cuenta}`);
+  }
+
+  async registrarEstadoCuenta(data: any): Promise<any> {
+    const response = await apiClient.post<{ success: boolean; data: any }>('/estado-cuenta', data);
+    return response.data;
   }
 
   async getEstadisticasCajaChica(): Promise<EstadisticasCajaChica> {

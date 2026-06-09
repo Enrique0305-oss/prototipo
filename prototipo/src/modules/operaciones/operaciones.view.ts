@@ -259,18 +259,37 @@ async function cargarServiciosParaCrearInforme() {
       return;
     }
 
-    const todosLosGrupos = mapServiciosPorClienteMes(realizados);
-    
-    // Asignar banderas de qué hojas ya están creadas
-    todosLosGrupos.forEach(grupo => {
-      grupo.hasVerdadera = informesGuardados.some(inf => inf.id_cliente === grupo.idCliente && inf.mes_actividad === grupo.monthKey && inf.hoja_tipo === 'verdadera');
-      grupo.hasFalsa = informesGuardados.some(inf => inf.id_cliente === grupo.idCliente && inf.mes_actividad === grupo.monthKey && inf.hoja_tipo === 'falsa');
+    const usedIdsVerdadera = new Set<number>();
+    const usedIdsFalsa = new Set<number>();
+
+    informesGuardados.forEach(inf => {
+      const isVerdadera = inf.hoja_tipo === 'verdadera';
+      if (Array.isArray(inf.visitas)) {
+        inf.visitas.forEach(v => {
+          if (v.id_programacion) {
+            if (isVerdadera) usedIdsVerdadera.add(v.id_programacion);
+            else usedIdsFalsa.add(v.id_programacion);
+          }
+        });
+      }
     });
 
-    // Solo ocultamos el mes de la lista si YA TIENE AMBAS hojas creadas
-    const grupos = todosLosGrupos.filter(grupo => {
-      return !(grupo.hasVerdadera && grupo.hasFalsa);
+    const todosLosGrupos = mapServiciosPorClienteMes(realizados);
+    
+    // Asignar banderas de qué hojas ya están creadas por completo
+    todosLosGrupos.forEach(grupo => {
+      const pendingVerdadera = grupo.visitas.filter(v => !usedIdsVerdadera.has(v.serviceId));
+      const pendingFalsa = grupo.visitas.filter(v => !usedIdsFalsa.has(v.serviceId));
+      
+      grupo.hasVerdadera = pendingVerdadera.length === 0;
+      grupo.hasFalsa = pendingFalsa.length === 0;
+      
+      grupo.usedIdsVerdadera = Array.from(usedIdsVerdadera);
+      grupo.usedIdsFalsa = Array.from(usedIdsFalsa);
     });
+
+    // No ocultamos los grupos para que el usuario pueda generar informes adicionales o por separado si lo desea
+    const grupos = todosLosGrupos;
 
     if (grupos.length === 0) {
       container.innerHTML = '<p style="color:#64748b;font-size:13px;">Todos los informes de este periodo ya fueron generados.</p>';
@@ -321,6 +340,14 @@ async function cargarServiciosParaCrearInforme() {
       form.dataset.listenerBound = 'true';
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        
+        const checkedCheckboxes = Array.from(form.querySelectorAll('.js-visita-checkbox:checked')).map(cb => Number((cb as HTMLInputElement).dataset.serviceId));
+        
+        if (checkedCheckboxes.length === 0) {
+          mostrarToast('warning', 'Selección Requerida', 'Debes seleccionar al menos un servicio (visita) para generar el informe.');
+          return;
+        }
+        
         const data = new FormData(form);
         const payload: any = {};
         data.forEach((value, key) => { payload[key] = value; });
@@ -348,26 +375,33 @@ async function cargarServiciosParaCrearInforme() {
           const conclusionesVoladoresAnexo = !!(form.querySelector('.js-conclusiones-voladores-anexo') as HTMLInputElement | null)?.checked;
           const conclusionesVoladoresResultados = String((payload.conclusiones_voladores_resultados || '')).trim();
 
+          // Filtrar visitas por checkboxes
+          const visitasSeleccionadas = group.visitas.filter(v => checkedCheckboxes.includes(v.serviceId));
+
           // Construir visitas
-          const visitasPayload = group.visitas.map(v => {
+          const visitasPayload = visitasSeleccionadas.map(v => {
                const entry = formatosCache.get(v.serviceId);
                const fechaEditable = (form.querySelector(`.js-fecha-visita-editable[data-service-id="${v.serviceId}"]`) as HTMLInputElement | null)?.value || v.fechaRaw;
                const tipo = resolveTipoServicio(entry?.formato ?? null, entry?.visita?.serviceName || v.serviceName);
+               const estiloSelect = document.querySelector(`.js-estilo-servicio-select[data-tipo="${tipo}"]`) as HTMLSelectElement | null;
+               const estilo = estiloSelect ? estiloSelect.value : 'detallado';
+               
                return {
                  id_programacion: v.serviceId,
                  fecha: fechaEditable,
                  servicio: v.serviceName,
                  correlativo_ficha: (v as any).correlativoFicha || '-',
-                 tipo_servicio: tipo
+                 tipo_servicio: tipo,
+                 estilo: estilo
                };
             });
 
-          const tieneLimpieza = group.visitas.some(v => isLimpiezaFormato(formatosCache.get(v.serviceId)?.formato ?? null, v.serviceName));
+          const tieneLimpieza = visitasSeleccionadas.some(v => isLimpiezaFormato(formatosCache.get(v.serviceId)?.formato ?? null, v.serviceName));
 
-          // Insumos: extraer de formatos
+          // Insumos: extraer de formatos (solo los seleccionados)
           const insumosPayload = (() => {
                const allInsumos: any[] = [];
-               group.visitas.forEach(v => {
+               visitasSeleccionadas.forEach(v => {
                  const entry = formatosCache.get(v.serviceId);
                  if (entry?.ficha?.insumos_utilizados) {
                    allInsumos.push(...entry.ficha.insumos_utilizados);
@@ -376,8 +410,9 @@ async function cargarServiciosParaCrearInforme() {
                return allInsumos;
             })();
 
-          // Evidencias: unir hallazgos
-          const evidenciasBase: any[] = [...hallazgosRoedores, ...hallazgosVoladores, ...hallazgosRastreros, ...hallazgosLimpieza];
+          // Evidencias: unir hallazgos (y filtrar por checkboxes)
+          const evidenciasBase = [...hallazgosRoedores, ...hallazgosVoladores, ...hallazgosRastreros, ...hallazgosLimpieza]
+            .filter(e => checkedCheckboxes.includes(e.id_programacion));
 
           const createPayload: any = {
             id_cliente: Number(payload.id_cliente),
@@ -398,7 +433,8 @@ async function cargarServiciosParaCrearInforme() {
               voladores_anexo: conclusionesVoladoresAnexo,
               voladores_resultados: conclusionesVoladoresResultados
             },
-            estado: 'emitido'
+            estado: 'emitido',
+            estilo: 'detallado' // Ya no se usa a nivel global
           } as any;
 
           const res = await informeTecnicoService.create(createPayload);
@@ -785,12 +821,12 @@ function renderEvidenciasVisita(visita: ClienteVisitaViewModel): string {
   `;
 }
 
-function renderInformeVisitaCard(visita: ClienteVisitaViewModel, formato: FormatoOperacionalViewModel | null, tipoHoja: 'verdadera' | 'falsa', index: number, clienteName?: string): string {
+function renderInformeVisitaCard(visita: ClienteVisitaViewModel, formato: FormatoOperacionalViewModel | null, tipoHoja: 'verdadera' | 'falsa', index: number, clienteName?: string, isUsed: boolean = false): string {
   return `
-    <section style="border:1px solid #dbe7f2;border-radius:12px;background:#fff;overflow:hidden;display:grid;gap:12px;padding:14px;">
+    <section style="border:1px solid #dbe7f2;border-radius:12px;background:#fff;overflow:hidden;display:grid;gap:12px;padding:14px; ${isUsed ? 'opacity: 0.6;' : ''}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
-          <div style="font-size:14px;font-weight:800;color:#0f172a;">Visita ${index + 1}</div>
+          <div style="font-size:14px;font-weight:800;color:#0f172a;">Visita ${index + 1} ${isUsed ? '<span style="color:#ef4444;font-size:11px;font-weight:normal;">(Ya reportada)</span>' : ''}</div>
           <div style="font-size:13px;color:#475569;">${escapeHtml(visita.serviceName)} • ${escapeHtml(visita.fechaLabel)}</div>
         </div>
         <div style="font-size:12px;color:#64748b;">${escapeHtml(visita.tecnicosLabel)}</div>
@@ -809,7 +845,7 @@ function renderInformeVisitaCard(visita: ClienteVisitaViewModel, formato: Format
   `;
 }
 
-function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>) {
+function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>, tipoHoja: 'verdadera' | 'falsa' = 'verdadera') {
   const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
   if (!form) return;
 
@@ -845,16 +881,39 @@ function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?
       visitasAgrupadas.forEach((items, tipo) => {
         html += `
           <tr style="background-color: #f1f5f9;">
-            <td colspan="3" style="padding: 8px; font-weight: 800; color: #1e40af; text-transform: uppercase; font-size: 11px;">
-              ${escapeHtml(tipo)}
+            <td colspan="3" style="padding: 8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight: 800; color: #1e40af; text-transform: uppercase; font-size: 11px;">
+                  ${escapeHtml(tipo)}
+                </span>
+                <select class="js-estilo-servicio-select" data-tipo="${escapeHtml(tipo)}" style="padding:2px 6px; border:1px solid #cbd5e1; border-radius:4px; font-size:11px; outline:none; background-color:#fff;">
+                  <option value="detallado" selected>Detallado</option>
+                  <option value="mixto">Mixto</option>
+                  <option value="basico">Básico</option>
+                </select>
+              </div>
             </td>
           </tr>
         `;
         items.forEach((item: any, idx: number) => {
           const nFicha = item.entry?.ficha?.correlativo || item.entry?.formato?.correlativo || '-';
+          const isUsed = tipoHoja === 'verdadera' 
+            ? (group.usedIdsVerdadera?.includes(item.v.serviceId) ?? false)
+            : (group.usedIdsFalsa?.includes(item.v.serviceId) ?? false);
+            
+          const isChecked = !isUsed ? 'checked' : '';
+          const disabled = ''; // No bloqueamos la casilla para permitir que el usuario genere el reporte que desee
+          const tooltip = isUsed ? 'title="Este servicio ya fue incluido en un informe previo"' : '';
+          const opacity = isUsed ? 'opacity: 0.6;' : '';
+
           html += `
-            <tr>
-              <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: 700;">${String(idx + 1).padStart(2, '0')}</td>
+            <tr style="${opacity}">
+              <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: 700; white-space: nowrap;">
+                <label style="display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" class="js-visita-checkbox" data-service-id="${item.v.serviceId}" ${isChecked} ${disabled} ${tooltip} style="width: 16px; height: 16px; cursor: pointer;">
+                  ${String(idx + 1).padStart(2, '0')} ${isUsed ? '<span style="color:#ef4444;font-size:10px;margin-left:4px;">(Ya)</span>' : ''}
+                </label>
+              </td>
               <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center;">
                 <input
                   type="date"
@@ -895,6 +954,15 @@ function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?
   renderSelectorHallazgosVoladores(group, formatosPorVisita || []);
   renderSelectorHallazgosRastreros(group, formatosPorVisita || []);
   renderSelectorHallazgosLimpieza(group, formatosPorVisita || []);
+
+  // Sync initial state of evidence checkboxes with visita checkboxes
+  const formPrincipal = document.querySelector('#operaciones-crear-informe-form-principal');
+  if (formPrincipal) {
+    const visitaCheckboxes = formPrincipal.querySelectorAll('.js-visita-checkbox');
+    visitaCheckboxes.forEach(cb => {
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
 
   // Removed prefill logic for Insumos Limpieza since it's fully automatic in backend
 
@@ -958,7 +1026,7 @@ function renderSelectorHallazgosRoedores(
       </label>
       <img src="${escapeHtml(item.url)}" alt="Hallazgo roedores" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
       <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
-        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</div>
+        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
         <textarea class="js-hallazgo-desc" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
       </div>
     </div>
@@ -1014,7 +1082,7 @@ function renderSelectorHallazgosVoladores(
       </label>
       <img src="${escapeHtml(item.url)}" alt="Hallazgo voladores" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
       <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
-        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</div>
+        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
         <textarea class="js-hallazgo-desc-voladores" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
       </div>
     </div>
@@ -1118,7 +1186,7 @@ function renderSelectorHallazgosRastreros(
       </label>
       <img src="${escapeHtml(item.url)}" alt="Hallazgo rastreros" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
       <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
-        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</div>
+        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
         <textarea class="js-hallazgo-desc-rastreros" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
       </div>
     </div>
@@ -1198,7 +1266,7 @@ function renderSelectorHallazgosLimpieza(
       </label>
       <img src="${escapeHtml(item.url)}" alt="Evidencia Limpieza" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
       <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
-        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</div>
+        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
         <textarea class="js-hallazgo-desc-limpieza" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
       </div>
     </div>
@@ -1284,6 +1352,57 @@ document.addEventListener('change', (ev) => {
     const cont = document.querySelector('#operaciones-conclusiones-voladores-anexo-resultados') as HTMLElement | null;
     if (cont) cont.style.display = cb.checked ? 'block' : 'none';
   }
+
+  if ((target as Element).matches && (target as Element).matches('.js-fecha-visita-editable')) {
+    const input = target as HTMLInputElement;
+    const serviceId = input.dataset.serviceId;
+    if (!serviceId) return;
+    
+    // Format YYYY-MM-DD to DD/MM/YYYY
+    const parts = input.value.split('-');
+    let fechaLabel = '';
+    if (parts.length === 3) {
+      fechaLabel = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    
+    const hallazgos = document.querySelectorAll(`.js-hallazgo-item[data-service-id="${serviceId}"]`);
+    hallazgos.forEach(item => {
+      item.setAttribute('data-fecha', fechaLabel);
+      const labelSpan = item.querySelector('.js-hallazgo-fecha-label');
+      if (labelSpan) {
+        labelSpan.textContent = fechaLabel ? ` • ${fechaLabel}` : '';
+      }
+    });
+  }
+
+  if ((target as Element).matches && (target as Element).matches('.js-visita-checkbox')) {
+    const form = target.closest('form');
+    if (form) {
+      const checkedCount = form.querySelectorAll('.js-visita-checkbox:checked').length;
+      const inputNVisitas = form.querySelector('[name="n_visitas"]') as HTMLInputElement | null;
+      if (inputNVisitas) {
+        inputNVisitas.value = String(checkedCount);
+      }
+      
+      const input = target as HTMLInputElement;
+      const serviceId = input.dataset.serviceId;
+      const isChecked = input.checked;
+      
+      if (serviceId) {
+        // Toggle the corresponding evidence items to visually indicate they are excluded
+        const evidenciaItems = document.querySelectorAll(`.js-hallazgo-item[data-service-id="${serviceId}"]`);
+        evidenciaItems.forEach(item => {
+          const checkbox = item.querySelector('.js-hallazgo-check') as HTMLInputElement | null;
+          if (checkbox) {
+            checkbox.checked = isChecked;
+          }
+          const htmlItem = item as HTMLElement;
+          htmlItem.style.opacity = isChecked ? '1' : '0.4';
+          htmlItem.style.pointerEvents = isChecked ? 'auto' : 'none';
+        });
+      }
+    }
+  }
 });
 
 function renderListaCrearInformeGrupos(groups: ClienteMesGroup[]): string {
@@ -1322,18 +1441,31 @@ async function cargarDetalleGrupoInforme(group: ClienteMesGroup) {
     const optFalsa = hojaSelect.querySelector('option[value="falsa"]') as HTMLOptionElement | null;
     
     if (optVerdadera) {
-      optVerdadera.disabled = !!group.hasVerdadera;
-      optVerdadera.text = group.hasVerdadera ? "Hoja Verdadera (Ya Creada)" : "Hoja Verdadera";
+      optVerdadera.disabled = false;
+      optVerdadera.text = group.hasVerdadera ? "Hoja Verdadera (Todas reportadas)" : "Hoja Verdadera";
     }
     if (optFalsa) {
-      optFalsa.disabled = !!group.hasFalsa;
-      optFalsa.text = group.hasFalsa ? "Hoja Falsa (Ya Creada)" : "Hoja Falsa";
+      optFalsa.disabled = false;
+      optFalsa.text = group.hasFalsa ? "Hoja Falsa (Todas reportadas)" : "Hoja Falsa";
     }
 
     if (group.hasVerdadera && !group.hasFalsa) {
       hojaSelect.value = "falsa";
     } else if (!group.hasVerdadera && group.hasFalsa) {
       hojaSelect.value = "verdadera";
+    }
+    
+    // Add event listener to re-render checkboxes when type changes
+    if (!hojaSelect.dataset.listenerBoundGroup) {
+      hojaSelect.dataset.listenerBoundGroup = 'true';
+      hojaSelect.addEventListener('change', () => {
+        if (informeGrupoSeleccionadoKey) {
+          const activeGroup = informeGruposCache.find(g => g.key === informeGrupoSeleccionadoKey);
+          if (activeGroup) {
+            cargarDetalleGrupoInforme(activeGroup);
+          }
+        }
+      });
     }
   }
   const tipoHoja = hojaSelect && hojaSelect.value === 'falsa' ? 'falsa' : 'verdadera';
@@ -1369,10 +1501,15 @@ async function cargarDetalleGrupoInforme(group: ClienteMesGroup) {
     }
   }));
 
-  rellenarFormularioDesdeGrupo(group, formatosPorVisita);
+  rellenarFormularioDesdeGrupo(group, formatosPorVisita, tipoHoja);
   actualizarSeccionesConclusiones(formatosPorVisita);
 
-  const html = formatosPorVisita.map((entry, idx) => renderInformeVisitaCard(entry.visita, entry.formato, tipoHoja, idx, group.cliente)).join('');
+  const html = formatosPorVisita.map((entry, idx) => {
+    const isUsed = tipoHoja === 'verdadera' 
+      ? (group.usedIdsVerdadera?.includes(entry.visita.serviceId) ?? false)
+      : (group.usedIdsFalsa?.includes(entry.visita.serviceId) ?? false);
+    return renderInformeVisitaCard(entry.visita, entry.formato, tipoHoja, idx, group.cliente, isUsed);
+  }).join('');
   detalleContainer.innerHTML = html || '<div style="color:#64748b;font-size:13px;">No se encontraron detalles para este cliente.</div>';
 }
 
@@ -1530,6 +1667,8 @@ export type ClienteMesGroup = {
   visitas: ClienteVisitaViewModel[];
   hasVerdadera?: boolean;
   hasFalsa?: boolean;
+  usedIdsVerdadera?: number[];
+  usedIdsFalsa?: number[];
 }
 
 const INSECTOS_VOLADORES = [
@@ -2874,12 +3013,15 @@ export function renderCrearInformeTab(): string {
           <div style="border-bottom:1px solid #cbd5e1;padding-bottom:12px;">
             <h2 style="margin:0 0 4px 0;font-size:16px;font-weight:700;color:#0f172a;">Crear Informe Técnico Mensual</h2>
             <p style="margin:0;color:#475569;font-size:13px;">Selecciona un servicio para pre-llenar los datos</p>
-            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-              <label style="font-size:13px;color:#334155;font-weight:600;margin-right:6px;">Hoja:</label>
-              <select name="hoja_tipo" class="js-hoja-tipo-select" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
-                <option value="verdadera">Hoja Verdadera</option>
-                <option value="falsa">Hoja Falsa</option>
-              </select>
+            <div style="margin-top:8px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+              <div style="display:flex;gap:8px;align-items:center;">
+                <label style="font-size:13px;color:#334155;font-weight:600;">Hoja:</label>
+                <select name="hoja_tipo" class="js-hoja-tipo-select" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+                  <option value="verdadera">Hoja Verdadera</option>
+                  <option value="falsa">Hoja Falsa</option>
+                </select>
+              </div>
+
             </div>
           </div>
 
@@ -2948,7 +3090,7 @@ export function renderCrearInformeTab(): string {
             </div>
             <div>
               <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Nº de visitas</label>
-              <input name="n_visitas" type="number" min="0" value="1" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+              <input name="n_visitas" type="number" min="0" value="1" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background-color:#f1f5f9;cursor:not-allowed;" />
             </div>
           </div>
 

@@ -116,6 +116,7 @@
         <tr>
             <td style="width: 20%; text-align: center;">
                 @php
+                    $estilo = $informe->estilo ?? 'detallado';
                     $logoPath = public_path('images/logo-orden.png');
                     $logoBase64 = null;
                     if (file_exists($logoPath)) {
@@ -310,6 +311,7 @@
         @php
             $tipoUpper = strtoupper(trim($tipo));
             $tieneFormatoOperacional = (strpos($tipoUpper, 'ROEDORES') !== false || strpos($tipoUpper, 'RASTREROS') !== false || strpos($tipoUpper, 'VOLADORES') !== false);
+            $estilo = $visitasGrupo[0]['estilo'] ?? 'detallado';
         @endphp
 
         @if (!$tieneFormatoOperacional)
@@ -354,9 +356,14 @@
             </tbody>
         </table>
 
+        @php
+            $hasQuimicos = isset($extraData['datos_servicios'][$tipoUpper]['quimicos']) && count($extraData['datos_servicios'][$tipoUpper]['quimicos']) > 0;
+            $showSection1 = (strpos(strtoupper($tipo), 'ROEDORES') !== false) || $hasQuimicos;
+        @endphp
+
+        @if ($showSection1)
         {{-- 1. PRODUCTOS --}}
-        <div style="font-weight: bold; font-size: 11px; color: #003366; margin-bottom: 10px;">1. INFORMACIÓN DE
-            PRODUCTOS UTILIZADOS</div>
+        <div style="font-weight: bold; font-size: 11px; color: #003366; margin-bottom: 10px;">1. INFORMACIÓN DE PRODUCTOS UTILIZADOS</div>
         @if (strpos(strtoupper($tipo), 'ROEDORES') !== false)
             <table class="products-table" style="margin-bottom: 15px;">
                 <tr class="label-row">
@@ -421,11 +428,13 @@
                     <td>Kg</td>
                 </tr>
             </table>
-        @elseif (strpos(strtoupper($tipo), 'RASTREROS') !== false && isset($extraData['quimicos_rastreros']))
+        @elseif ($hasQuimicos)
             <div style="font-weight: bold; font-size: 10px; color: #003366; text-align: center; margin-bottom: 10px;">1.1. DESINSECTACIÓN QUÍMICA PROGRAMADA</div>
             
             @php
-                $qr = array_values($extraData['quimicos_rastreros']);
+                $qr = array_values($extraData['datos_servicios'][$tipoUpper]['quimicos']);
+                $areasAplicadasArr = $extraData['datos_servicios'][$tipoUpper]['areas_aplicadas'] ?? [];
+                $areasAplicadas = count($areasAplicadasArr) > 0 ? implode(', ', $areasAplicadasArr) : 'Sin áreas registradas';
             @endphp
             @if(count($qr) > 0)
                 @foreach($qr as $indexProducto => $q)
@@ -485,32 +494,11 @@
                 <table class="products-table text-center" style="margin-bottom: 20px;">
                     <tr>
                         <td style="background-color: #f2f2f2; font-weight: bold; width: 30%;">AREAS APLICADAS</td>
-                        <td>{{ $extraData['areas_aplicadas'] ?? 'Sin áreas registradas' }}</td>
+                        <td>{{ $areasAplicadas }}</td>
                     </tr>
                 </table>
-            @else
-                <div style="padding: 10px; border: 1px dashed #ccc; text-align: center; font-size: 9px; margin-bottom: 20px;">
-                    No hay información de productos químicos registrada.</div>
-            @endif
-        @else
-            <table class="content-table text-center" style="margin-bottom: 20px;">
-                <thead>
-                    <tr style="background-color: #f1f5f9;">
-                        <th>ITEM</th>
-                        <th>DESCRIPCIÓN</th>
-                        <th>UNIDAD</th>
-                        <th>CANTIDAD</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>01</td>
-                        <td class="text-left">Insumos varios control {{ $tipo }}</td>
-                        <td>---</td>
-                        <td>---</td>
-                    </tr>
-                </tbody>
-            </table>
+        @endif
+        @endif
         @endif
 
         {{-- 2. IMÁGENES DISPOSITIVOS --}}
@@ -557,7 +545,7 @@
             <div style="font-weight: bold; font-size: 11px; color: #003366; margin-top: 15px; margin-bottom: 10px;">3.
                 ANÁLISIS DE TENDENCIA DE ACTIVIDAD DE INSECTOS VOLADORES</div>
 
-            @if (isset($extraData['dispositivos_trampa_luz']) && count($extraData['dispositivos_trampa_luz']) > 0)
+            @if (isset($extraData['dispositivos_trampa_luz']) && count($extraData['dispositivos_trampa_luz']) > 0 && $estilo === 'detallado')
                 <div style="font-weight: bold; font-size: 9px; color: #003366; text-align: center; margin-bottom: 5px;">
                     3.1. TRAMPAS DE LUZ</div>
                 <table style="width: 75%; margin: 0 auto 10px auto;">
@@ -580,7 +568,7 @@
                 </table>
             @endif
 
-            @if (isset($extraData['chart_voladores_trampas_por_visita']))
+            @if (isset($extraData['chart_voladores_trampas_por_visita']) && $estilo !== 'basico')
                 <div style="font-weight: bold; font-size: 11px; color: #003366; margin-top: 15px; margin-bottom: 8px;">
                     3.2. REGISTRO DE TENDENCIA DE ACTIVIDAD DE INSECTOS – TRAMPA DE LUZ</div>
                 <div style="text-align: center; margin-bottom: 15px;">
@@ -589,7 +577,7 @@
                 </div>
             @endif
 
-            @if (isset($extraData['chart_voladores_anual']))
+            @if (isset($extraData['chart_voladores_anual']) && $estilo !== 'basico')
                 <div style="font-weight: bold; font-size: 11px; color: #003366; margin-top: 15px; margin-bottom: 8px;">
                     3.3. CONSOLIDADO ANUAL DE CAPTURA DE INSECTOS VOLADORES</div>
                 <div style="text-align: center; margin-bottom: 15px;">
@@ -598,7 +586,7 @@
                 </div>
             @endif
 
-            @if (isset($extraData['chart_voladores_ubicacion']))
+            @if (isset($extraData['chart_voladores_ubicacion']) && $estilo !== 'basico')
                 <div style="font-weight: bold; font-size: 11px; color: #003366; margin-top: 15px; margin-bottom: 8px;">
                     3.4. ABUNDANCIA DE FAMILIAS TAXONOMICAS POR UBICACIÓN</div>
                 <div style="text-align: center; margin-bottom: 15px;">
@@ -607,7 +595,7 @@
                 </div>
             @endif
 
-            @if (isset($extraData['chart_voladores_familias']))
+            @if (isset($extraData['chart_voladores_familias']) && $estilo !== 'basico')
                 <div style="font-weight: bold; font-size: 11px; color: #003366; margin-top: 15px; margin-bottom: 8px;">
                     3.5. ACTIVIDAD DETALLADA POR FAMILIA TAXONÓMICA</div>
                 <div style="text-align: center; margin-bottom: 15px;">
@@ -616,7 +604,7 @@
                 </div>
             @endif
 
-            @if (isset($extraData['charts_voladores_ubicaciones']) && count($extraData['charts_voladores_ubicaciones']) > 0)
+            @if (isset($extraData['charts_voladores_ubicaciones']) && count($extraData['charts_voladores_ubicaciones']) > 0 && $estilo !== 'basico')
                 <div style="font-weight: bold; font-size: 11px; color: #003366; margin-top: 15px; margin-bottom: 8px;">
                     3.6. ACTIVIDAD DETALLADA POR UBICACIÓN</div>
                 @foreach ($extraData['charts_voladores_ubicaciones'] as $cLoc)
@@ -629,7 +617,7 @@
                 @endforeach
             @endif
 
-            @if (isset($extraData['abundancia_familias_voladores']) && count($extraData['abundancia_familias_voladores']) > 0)
+            @if (isset($extraData['abundancia_familias_voladores']) && count($extraData['abundancia_familias_voladores']) > 0 && $estilo === 'detallado')
                 <div class="page-break"></div>
                 <div class="section-bar" style="background-color:#0a4a78; text-align: center; margin-bottom: 20px;">
                     ÍNDICE DE ABUNDANCIA EN RELACIÓN A LA ACTIVIDAD DE LAS FAMILIAS DE INSECTOS EN TRAMPAS DE LUZ UV – {{ strtoupper($informe->mes_actividad ?? '') }}
@@ -891,7 +879,7 @@
             <div style="font-weight: bold; font-size: 11px; color: #003366; margin-top: 15px; margin-bottom: 10px;">3.
                 ANÁLISIS DE TENDENCIA DE ACTIVIDAD DE ROEDORES</div>
 
-            @if (isset($extraData['dispositivos_cebo']) && count($extraData['dispositivos_cebo']) > 0)
+            @if (isset($extraData['dispositivos_cebo']) && count($extraData['dispositivos_cebo']) > 0 && $estilo === 'detallado')
                 <div
                     style="font-weight: bold; font-size: 9px; color: #003366; text-align: center; margin-bottom: 5px;">
                     3.1. CAJAS CEBADERAS (CEBO TÓXICO)</div>
@@ -915,7 +903,7 @@
                 </table>
             @endif
 
-            @if (isset($extraData['dispositivos_tubo_cebadero']) && count($extraData['dispositivos_tubo_cebadero']) > 0)
+            @if (isset($extraData['dispositivos_tubo_cebadero']) && count($extraData['dispositivos_tubo_cebadero']) > 0 && $estilo === 'detallado')
                 <div
                     style="font-weight: bold; font-size: 9px; color: #003366; text-align: center; margin-top: 15px; margin-bottom: 5px;">
                     3.2. TUBOS CEBADEROS (CEBO TÓXICO)</div>
@@ -939,7 +927,7 @@
                 </table>
             @endif
 
-            @if (isset($extraData['dispositivos_lamina']) && count($extraData['dispositivos_lamina']) > 0)
+            @if (isset($extraData['dispositivos_lamina']) && count($extraData['dispositivos_lamina']) > 0 && $estilo === 'detallado')
                 <div
                     style="font-weight: bold; font-size: 9px; color: #003366; text-align: center; margin-top: 15px; margin-bottom: 5px;">
                     3.3. LÁMINAS PEGANTES (CONTROL FÍSICO)</div>
@@ -963,15 +951,15 @@
                 </table>
             @endif
 
-            @if (isset($extraData['chart_url_roedores']))
+            @if (isset($extraData['chart_url_roedores']) && $estilo !== 'basico')
                 <div style="text-align: center; margin-bottom: 15px;"><img
                         src="{{ $extraData['chart_url_roedores'] }}" style="width: 70%;"></div>
             @endif
-            @if (isset($extraData['chart_url_anual']))
+            @if (isset($extraData['chart_url_anual']) && $estilo !== 'basico')
                 <div style="text-align: center; margin-bottom: 15px;"><img src="{{ $extraData['chart_url_anual'] }}"
                         style="width: 70%;"></div>
             @endif
-            @if (isset($extraData['chart_url_indice']))
+            @if (isset($extraData['chart_url_indice']) && $estilo !== 'basico')
                 <div style="text-align: center; margin-bottom: 10px;"><img src="{{ $extraData['chart_url_indice'] }}"
                         style="width: 70%;"></div>
                 <table style="width: 60%; margin: 0 auto 20px auto; font-size: 8px;">
@@ -996,7 +984,7 @@
                 </table>
             @endif
 
-            @if (isset($extraData['dispositivos_jaula']) && count($extraData['dispositivos_jaula']) > 0)
+            @if (isset($extraData['dispositivos_jaula']) && count($extraData['dispositivos_jaula']) > 0 && $estilo === 'detallado')
                 <div
                     style="font-weight: bold; font-size: 9px; color: #003366; text-align: center; margin-top: 15px; margin-bottom: 5px;">
                     3.4. JAULAS DE CAPTURA</div>
@@ -1018,15 +1006,15 @@
                         @endforeach
                     </tbody>
                 </table>
-                @if (isset($extraData['chart_url_jaulas']))
+                @if (isset($extraData['chart_url_jaulas']) && $estilo !== 'basico')
                     <div style="text-align: center; margin-bottom: 15px;"><img
                             src="{{ $extraData['chart_url_jaulas'] }}" style="width: 70%;"></div>
                 @endif
-                @if (isset($extraData['chart_url_anual_jaulas']))
+                @if (isset($extraData['chart_url_anual_jaulas']) && $estilo !== 'basico')
                     <div style="text-align: center; margin-bottom: 15px;"><img
                             src="{{ $extraData['chart_url_anual_jaulas'] }}" style="width: 70%;"></div>
                 @endif
-                @if (isset($extraData['chart_url_indice_jaulas']))
+                @if (isset($extraData['chart_url_indice_jaulas']) && $estilo !== 'basico')
                     <div style="text-align: center; margin-bottom: 10px;"><img
                             src="{{ $extraData['chart_url_indice_jaulas'] }}" style="width: 70%;"></div>
                     <table style="width: 60%; margin: 0 auto 20px auto; font-size: 8px;">
@@ -1169,7 +1157,7 @@
 
         {{-- 3. ANÁLISIS DE TENDENCIA (SOLO RASTREROS) --}}
         @if (strpos(strtoupper($tipo), 'RASTREROS') !== false)
-            @if (isset($extraData['dispositivos_rastreros']) && count($extraData['dispositivos_rastreros']) > 0)
+            @if (isset($extraData['dispositivos_rastreros']) && count($extraData['dispositivos_rastreros']) > 0 && $estilo === 'detallado')
                 <div style="font-weight: bold; font-size: 9px; color: #003366; text-align: center; margin-top: 15px; margin-bottom: 5px;">
                     1.2. MONITOREO DE INSECTOS RASTREROS (LÁMINAS)</div>
                 <table style="width: 75%; margin: 0 auto 15px auto;">

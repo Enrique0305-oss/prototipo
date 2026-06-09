@@ -29,7 +29,8 @@ class InformeTecnico extends Model
         'visitas',
         'evidencias',
         'insumos',
-        'estado'
+        'estado',
+        'estilo'
     ];
 
     protected $casts = [

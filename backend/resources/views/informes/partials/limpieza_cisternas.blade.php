@@ -39,29 +39,57 @@
     <div style="font-weight:bold; font-size: 11px; color: #003366; margin-bottom: 10px;">1. INFORMACIÓN DE PRODUCTOS UTILIZADOS</div>
     @if(count($quimicos) > 0)
         @foreach($quimicos as $q)
-            <table style="width: 85%; margin: 0 auto 15px auto; border-collapse: collapse; text-align: center; border: 1px solid black; font-size: 11px;">
-                <tr>
-                    <td colspan="2" style="background-color: #003366; color: white; font-weight: bold; padding: 6px;">
-                        DESINFECCIÓN QUÍMICA
-                    </td>
-                </tr>
-                <tr>
-                    <td style="background-color: #f2f2f2; font-weight: bold; text-align: left; padding: 6px; width: 40%; border: 1px solid black;">INSUMO</td>
-                    <td style="border: 1px solid black; padding: 6px;">{{ $q['producto'] ?? '---' }}</td>
-                </tr>
-                <tr>
-                    <td style="background-color: #f2f2f2; font-weight: bold; text-align: left; padding: 6px; border: 1px solid black;">INGRED. ACTIVO</td>
-                    <td style="border: 1px solid black; padding: 6px;">{{ $q['ingre_activo'] ?? ($q['ingre_activo'] ?? '---') }}</td>
-                </tr>
-                <tr>
-                    <td style="background-color: #f2f2f2; font-weight: bold; text-align: left; padding: 6px; border: 1px solid black;">LOTE DE PROD.</td>
-                    <td style="border: 1px solid black; padding: 6px;">{{ $q['lote'] ?? '---' }}</td>
-                </tr>
-                <tr>
-                    <td style="background-color: #f2f2f2; font-weight: bold; text-align: left; padding: 6px; border: 1px solid black;">CONCENTRACIÓN</td>
-                    <td style="border: 1px solid black; padding: 6px;">{{ $q['concentracion'] ?? '---' }}</td>
-                </tr>
-            </table>
+            @php
+                $chunksVisitas = array_chunk($q['visitas'] ?? [], 8);
+            @endphp
+            @foreach($chunksVisitas as $chunkIndex => $chunk)
+                <table class="products-table text-center" style="margin-bottom: 10px; table-layout: fixed; width: 100%; word-wrap: break-word; font-size: 8px;">
+                    <tr style="background-color: #1a3352; color: white;">
+                        <td colspan="{{ count($chunk) + 1 }}">
+                            DESINFECCIÓN QUÍMICA - {{ strtoupper($q['producto']) }} 
+                            @if(count($chunksVisitas) > 1) (Parte {{ $chunkIndex + 1 }}) @endif
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color: #f2f2f2; font-weight: bold; width: 20%; font-size: 9px;">PRODUCTO QUIMICO</td>
+                        <td colspan="{{ count($chunk) }}">{{ $q['producto'] }}</td>
+                    </tr>
+                    <tr>
+                        <td style="background-color: #f2f2f2; font-weight: bold; font-size: 9px;">ING. ACTIVO</td>
+                        <td colspan="{{ count($chunk) }}">{{ $q['ingre_activo'] ?? '---' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="background-color: #f2f2f2; font-weight: bold; font-size: 9px;">LOTE</td>
+                        <td colspan="{{ count($chunk) }}">{{ $q['lote'] ?? '---' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="background-color: #f2f2f2; font-weight: bold; font-size: 9px;">CONCENTRACIÓN</td>
+                        <td colspan="{{ count($chunk) }}">{{ $q['concentracion'] ?? '---' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="background-color: #f2f2f2; font-weight: bold; font-size: 9px;">CANTIDAD USADA</td>
+                        @foreach($chunk as $v)
+                            <td>{{ $v['cantidad'] ?? '---' }}</td>
+                        @endforeach
+                    </tr>
+                    <tr>
+                        <td style="background-color: #f2f2f2; font-weight: bold; font-size: 9px;">MÉTODO</td>
+                        <td colspan="{{ count($chunk) }}">{{ $q['metodo'] ?? '---' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="background-color: #f2f2f2; font-weight: bold; font-size: 9px;">FECHA DE SERVICIO</td>
+                        @foreach($chunk as $v)
+                            <td>{{ $v['fecha'] ?? '---' }}</td>
+                        @endforeach
+                    </tr>
+                    <tr>
+                        <td style="background-color: #f2f2f2; font-weight: bold; font-size: 9px;">FICHA DE SERVICIO</td>
+                        @foreach($chunk as $v)
+                            <td>{{ $v['ficha'] ?? '---' }}</td>
+                        @endforeach
+                    </tr>
+                </table>
+            @endforeach
         @endforeach
     @else
         <div style="padding:8px;border:1px dashed #ccc;color:#666;margin-bottom:12px;">No se registraron químicos en la ficha.</div>

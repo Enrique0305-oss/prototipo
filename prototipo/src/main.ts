@@ -38,7 +38,9 @@ import './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.css'
 import { renderComercialExponentes, initExponentesEvents } from './modules/comercial/exponentes/exponentes.view'
 import { renderComercialDashboard, initComercialDashboardEvents } from './modules/comercial/dashboard-comercial.view'
 // Finanzas
-import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
+import { renderFinanzas, renderDashboardFinancieroTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
+import { renderCajaChica, initCajaChicaEvents } from './modules/finanzas/caja-chica.view'
+import { renderEstadoCuenta, initEstadoCuentaEvents } from './modules/finanzas/estado-cuenta.view'
 // Facturación
 import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab, renderEstadoCobranzaTab, initFacturacionEvents } from './modules/facturacion/facturacion.view'
 // Operaciones
@@ -76,7 +78,7 @@ let activeSubMenu = '';
 let expandedMenu = ''; // Controla qué menú con submenús está expandido (sin navegar)
 let activeInventoryTab = 'productos'; // Estado para el tab de inventario
 let activeLogisticaTab = 'clientes'; // Estado para el tab de Servicios - Clientes
-let activeFinanzasTab = 'dashboard'; // Estado para el tab de finanzas
+let activeFinanzasTab = 'caja'; // Estado para el tab de finanzas
 let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
 let mesActual = new Date().getMonth() + 1; // 1-12 (mayo = 5)
 let anioActual = new Date().getFullYear(); // 2026
@@ -174,8 +176,8 @@ const MENU_PERMISOS: Record<string, string[]> = {
   'Servicios - Clientes': ['logistica'],
   'Programaciones': ['programaciones'],
   'Comercial': ['prospectos', 'cotizaciones', 'ods', 'odp', 'servicios'],
-  'Finanzas': ['cotizaciones'],  // Finanzas ve cotizaciones
-  'Facturación': ['cotizaciones'],
+  'Finanzas': ['finanzas'],
+  'Facturación': ['finanzas'],
   'Recursos Humanos': ['rrhh-asistencia', 'rrhh-tecnicos', 'rrhh-reportes', 'marcar-asistencia'],
   'Operaciones': ['ods', 'odp', 'servicios', 'operaciones'],
   'Reportes': ['dashboard'],  // Todos con dashboard ven reportes
@@ -247,6 +249,10 @@ function getRutaInicialPorPerfil(): { menu: string; subMenu: string } {
 
   if (tieneAccesoModulo('rrhh-asistencia') || tieneAccesoModulo('marcar-asistencia')) {
     return { menu: 'Recursos Humanos', subMenu: '' };
+  }
+
+  if (tieneAccesoModulo('finanzas')) {
+    return { menu: 'Finanzas', subMenu: '' };
   }
 
   const visible = filtrarMenuPorPermisos(menuItems);
@@ -401,7 +407,9 @@ function getMainContent() {
     setTimeout(() => initComercialDashboardEvents(), 0);
     return html;
   } else if (activeMenu === 'Finanzas') {
-    return renderFinanzas();
+    const html = renderFinanzas();
+    setTimeout(() => updateFinanzasTabContent(), 0);
+    return html;
   } else if (activeMenu === 'Facturación') {
     // Lógica de submenús de Facturación integrada aquí para evitar "Unreachable code"
     if (activeSubMenu === 'Contratos') return renderContratosFijosTab();
@@ -826,14 +834,13 @@ function updateFinanzasTabContent() {
 
 
   switch (activeFinanzasTab) {
-    case 'caja':
-      tabContent.innerHTML = renderCajaChicaTab();
-      break;
-    case 'reportes':
-      tabContent.innerHTML = renderReportesFinancierosTab();
+    case 'estado-cuenta':
+      tabContent.innerHTML = renderEstadoCuenta();
+      setTimeout(() => initEstadoCuentaEvents(), 0);
       break;
     default:
-      tabContent.innerHTML = renderDashboardFinancieroTab();
+      tabContent.innerHTML = renderCajaChica();
+      setTimeout(() => initCajaChicaEvents(), 0);
   }
 }
 

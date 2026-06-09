@@ -118,19 +118,7 @@ class FormatoOperacionalController extends Controller
             $tipoServicioConsultado = $progRequest->formatos_fichas[0];
         }
 
-        // 2. Intentar buscar el formato por ID directo
-        $formato = FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
-            ->where('id_programacion_servicio', $id)
-            ->latest()
-            ->first();
-
-        // 3. Si no se encuentra, buscar por el grupo
-        if (!$formato && $progRequest->id_grupo_programacion) {
-            $formato = FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
-                ->where('id_grupo_programacion', $progRequest->id_grupo_programacion)
-                ->latest()
-                ->first();
-        }
+        $formato = $this->getMejorFormatoParaServicio($progRequest);
 
         if (!$formato) {
             return response()->json([
@@ -266,19 +254,7 @@ class FormatoOperacionalController extends Controller
     {
         $prog = ProgramacionServicio::find($id);
         
-        $formato = FormatoOperacional::with([
-            'detalles',
-            'programacionServicio.tecnico',
-            'programacionServicio.tecnicos',
-        ])->where('id_programacion_servicio', $id)->latest()->first();
-
-        if (!$formato && $prog && $prog->id_grupo_programacion) {
-            $formato = FormatoOperacional::with([
-                'detalles',
-                'programacionServicio.tecnico',
-                'programacionServicio.tecnicos',
-            ])->where('id_grupo_programacion', $prog->id_grupo_programacion)->latest()->first();
-        }
+        $formato = $prog ? $this->getMejorFormatoParaServicio($prog) : null;
 
         if (!$formato) {
             return response()->json([
@@ -1013,5 +989,35 @@ class FormatoOperacionalController extends Controller
         }
 
         return 'FormatoOperacionalPDF';
+    }
+
+    private function getMejorFormatoParaServicio(ProgramacionServicio $progRequest)
+    {
+        if ($progRequest->id_grupo_programacion) {
+            $formatosGrupo = FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
+                ->where('id_grupo_programacion', $progRequest->id_grupo_programacion)
+                ->get();
+            
+            if ($formatosGrupo->isNotEmpty()) {
+                return $formatosGrupo->sortByDesc(function ($f) {
+                    return $f->detalles->filter(function ($d) {
+                        return !empty($d->estado_dispositivo_verdadera) || 
+                               !empty($d->estado_dispositivo) || 
+                               !empty($d->hallazgo_verdadera) || 
+                               !empty($d->hallazgo) || 
+                               !empty($d->estado_lamina_verdadera) || 
+                               !empty($d->estado_lamina) || 
+                               !empty($d->conteo_insectos) || 
+                               !empty($d->conteo_estadio) || 
+                               !empty($d->senales_presencia);
+                    })->count();
+                })->first();
+            }
+        }
+        
+        return FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
+            ->where('id_programacion_servicio', $progRequest->id)
+            ->latest()
+            ->first();
     }
 }

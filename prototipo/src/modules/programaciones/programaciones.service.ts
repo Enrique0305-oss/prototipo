@@ -48,8 +48,9 @@ export const programacionService = {
     );
   },
 
-  delete: async (id: number) => {
-    return apiClient.delete<ApiResponse<null>>(`/programacion-servicio/${id}`);
+  delete: async (id: number, futuras: boolean = false) => {
+    const url = `/programacion-servicio/${id}${futuras ? '?futuras=true' : ''}`;
+    return apiClient.delete<ApiResponse<null>>(url);
   },
 
   // ─── Programación Anual ──────────────────────

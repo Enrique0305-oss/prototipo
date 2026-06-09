@@ -586,26 +586,15 @@ export function renderFinanzas() {
   return `
     <div class="page-header-with-breadcrumb">
       <div class="breadcrumb">Gestión Financiera</div>
-      <div class="page-actions">
-        <button class="btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Exportar Excel
-        </button>
-        <button class="btn-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Nuevo Movimiento
-        </button>
-      </div>
     </div>
 
     <div class="inventory-tabs">
-      <button class="tab-btn active" data-tab="dashboard">Dashboard Financiero</button>
-      <button class="tab-btn" data-tab="caja">Caja Chica</button>
-      <button class="tab-btn" data-tab="reportes">Reportes</button>
+      <button class="tab-btn active" data-tab="caja">Caja Chica</button>
+      <button class="tab-btn" data-tab="estado-cuenta">Estado de Cuenta</button>
     </div>
 
     <div id="finanzas-tab-content">
-      ${renderDashboardFinancieroTab()}
+      ${renderCajaChicaTab()}
     </div>
   `;
 }

@@ -488,6 +488,14 @@ class ProyeccionesController extends Controller
             'fecha_vcto'      => 'nullable|date',
             'fecha_pago'      => 'nullable|date',
             'fecha_ejecucion' => 'nullable|date',
+            'estado'          => 'nullable|string|in:Sin Factura,Pendiente de pago,Pagado,Anulado',
+            'base_imponible'  => 'nullable|numeric',
+            'igv'             => 'nullable|numeric',
+            'porcentaje_detraccion' => 'nullable|numeric',
+            'fecha_pago_detraccion' => 'nullable|date',
+            'cotizacion_oc'   => 'nullable|string',
+            'observaciones'   => 'nullable|string',
+            'registrado_por'  => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -515,7 +523,23 @@ class ProyeccionesController extends Controller
             'fecha_vcto'      => $fechaVcto,
             'fecha_pago'      => $request->fecha_pago ?? $proyeccion->fecha_pago,
             'fecha_ejecucion' => $request->fecha_ejecucion ?? $proyeccion->fecha_ejecucion,
+            'base_imponible'  => $request->base_imponible ?? $proyeccion->base_imponible,
+            'igv'             => $request->igv ?? $proyeccion->igv,
+            'porcentaje_detraccion' => $request->porcentaje_detraccion ?? $proyeccion->porcentaje_detraccion,
+            'fecha_pago_detraccion' => $request->fecha_pago_detraccion ?? $proyeccion->fecha_pago_detraccion,
+            'cotizacion_oc'   => $request->cotizacion_oc ?? $proyeccion->cotizacion_oc,
+            'observaciones'   => $request->observaciones ?? $proyeccion->observaciones,
         ];
+
+        if ($request->filled('estado') && $request->estado !== $proyeccion->estado) {
+            $data['estado'] = $request->estado;
+            $data['fecha_cambio_estado'] = now();
+            if ($request->filled('registrado_por')) {
+                $data['registrado_por'] = $request->registrado_por;
+            } else if (auth()->check()) {
+                $data['registrado_por'] = auth()->user()->nombre ?? auth()->user()->name;
+            }
+        }
         
         \Log::info('Actualizando proyección', ['id' => $id, 'request_id_multicim' => $request->id_multicim, 'data_id_multicim' => $data['id_multicim']]);
 
@@ -638,6 +662,73 @@ class ProyeccionesController extends Controller
     }
 
     /**
+     * Duplicar masivamente proyecciones al mes siguiente
+     * POST /api/v1/proyecciones/duplicar
+     */
+    public function duplicarMasivo(Request $request): JsonResponse
+    {
+        try {
+            $ids = $request->input('ids', []);
+            if (empty($ids) || !is_array($ids)) {
+                return response()->json(['success' => false, 'message' => 'No se enviaron IDs válidos'], 400);
+            }
+
+            $proyecciones = Proyeccion::whereIn('id', $ids)->get();
+            $duplicadas = 0;
+            $bloqueadas = 0;
+
+            foreach ($proyecciones as $proy) {
+                // Calcular fecha del próximo mes
+                $fechaEjecucion = $proy->fecha_ejecucion ? Carbon::parse($proy->fecha_ejecucion) : Carbon::now();
+                $siguienteMes = $fechaEjecucion->copy()->addMonth();
+
+                // Validar si ya existe una proyección para este servicio en el siguiente mes
+                $inicioSiguienteMes = $siguienteMes->copy()->startOfMonth();
+                $finSiguienteMes = $siguienteMes->copy()->endOfMonth();
+
+                $existe = Proyeccion::where('tipo_orden', $proy->tipo_orden)
+                    ->where('id_referencia', $proy->id_referencia)
+                    ->whereBetween('fecha_ejecucion', [$inicioSiguienteMes, $finSiguienteMes])
+                    ->exists();
+
+                if ($existe) {
+                    $bloqueadas++;
+                    continue;
+                }
+
+                // Clonar la proyección
+                $nuevaProyeccion = $proy->replicate();
+                
+                // Limpiar campos de facturación y pagos
+                $nuevaProyeccion->n_factura = null;
+                $nuevaProyeccion->fecha_factura = null;
+                $nuevaProyeccion->fecha_pago = null;
+                $nuevaProyeccion->fecha_vcto = null;
+                $nuevaProyeccion->fecha_pago_detraccion = null;
+                
+                // Establecer estado
+                $nuevaProyeccion->estado = 'Sin Factura';
+                $nuevaProyeccion->fecha_ejecucion = $siguienteMes;
+                $nuevaProyeccion->fecha_cambio_estado = Carbon::now();
+                
+                $nuevaProyeccion->save();
+                $duplicadas++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Se duplicaron {$duplicadas} proyecciones. " . ($bloqueadas > 0 ? "Se bloquearon {$bloqueadas} por ya existir en el mes destino." : "")
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en duplicarMasivo: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al duplicar proyecciones: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Obtener lista de empresas (Multicim)
      * GET /api/v1/empresas
      */
@@ -714,7 +805,7 @@ class ProyeccionesController extends Controller
                 'dias_credito' => null,
                 'fecha_factura' => null,
                 'fecha_pago' => null,
-                'fecha_ejecucion' => $ordenServicio->fecha_tentativa,
+                'fecha_ejecucion' => $ordenServicio->fecha_tentativa ?? $ordenServicio->fecha_aceptacion ?? now(),
                 'fecha_vcto' => null,
                 'dia_vencer' => null,
                 'monto_detrax' => ($ordenServicio->total_costo > 700) ? ($ordenServicio->total_costo * 0.12) : 0,
@@ -755,7 +846,7 @@ class ProyeccionesController extends Controller
 
             $monto = $ordenServicio->total_costo;
             $proyeccion->update([
-                'fecha_ejecucion' => $ordenServicio->fecha_tentativa,
+                'fecha_ejecucion' => $ordenServicio->fecha_tentativa ?? $ordenServicio->fecha_aceptacion ?? now(),
                 'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
                 'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
                 'actividad' => $proyeccion->actividad,

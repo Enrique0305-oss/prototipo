@@ -50,7 +50,7 @@ export const API_ENDPOINTS = {
   // Finanzas
   finanzas: {
     movimientos: '/finanzas/movimientos',
-    cajaChica: '/finanzas/caja-chica',
+    cajaChica: '/caja-chica',
     cuentasCobrar: '/finanzas/cuentas-cobrar',
     cuentasPagar: '/finanzas/cuentas-pagar',
     presupuesto: '/finanzas/presupuesto',

@@ -1116,44 +1116,72 @@ class ProgramacionServicioController extends Controller
     public function destroy(Request $request, $id)
     {
         $prog = ProgramacionServicio::with('insumos')->findOrFail($id);
+        $eliminarFuturas = filter_var($request->query('futuras', false), FILTER_VALIDATE_BOOLEAN);
 
         DB::beginTransaction();
         try {
             $idUsuario = $request->user()?->id;
+            
+            $programacionesAEliminar = [$prog];
 
-            // Devolver insumos al inventario
-            foreach ($prog->insumos as $insumo) {
-                if ($insumo->estado !== 'Utilizado') {
-                    Kardex::registrarMovimiento([
-                        'id_producto' => $insumo->id_producto,
-                        'tipo_movimiento' => 'Entrada',
-                        'cantidad' => $insumo->cantidad_asignada,
-                        'motivo' => 'Devolución Programación',
-                        'referencia' => "PROG-{$prog->id}",
-                        'id_referencia' => $prog->id,
-                        'id_usuario' => $idUsuario,
-                        'observacion' => "Devolución por eliminación de programación #{$prog->id}",
-                    ]);
+            if ($eliminarFuturas) {
+                $query = ProgramacionServicio::where('id', '!=', $prog->id)
+                    ->where('fecha_programada', '>=', $prog->fecha_programada)
+                    ->whereNotIn('estado_ejecucion', ['Realizado', 'Cancelado']);
+
+                if ($prog->id_orden_servicio) {
+                    $query->where('id_orden_servicio', $prog->id_orden_servicio)
+                          ->where('id_servicio', $prog->id_servicio)
+                          ->where('id_cliente_planta', $prog->id_cliente_planta);
+                } elseif ($prog->id_orden_capacitacion) {
+                    $query->where('id_orden_capacitacion', $prog->id_orden_capacitacion);
+                } elseif ($prog->id_orden_asesoria) {
+                    $query->where('id_orden_asesoria', $prog->id_orden_asesoria);
+                } else {
+                    $query->whereRaw('1=0');
+                }
+
+                $futuras = $query->with('insumos')->get();
+                foreach ($futuras as $f) {
+                    $programacionesAEliminar[] = $f;
                 }
             }
 
-            // Eliminar insumos y luego la programación
-            $prog->insumos()->delete();
-            $prog->delete();
-
-            if ($prog->id_orden_servicio) {
-                $orden = OrdenServicio::find($prog->id_orden_servicio);
-                if ($orden) {
-                    $orden->actualizarEstadoProgramacion();
+            foreach ($programacionesAEliminar as $p) {
+                // Devolver insumos al inventario
+                foreach ($p->insumos as $insumo) {
+                    if ($insumo->estado !== 'Utilizado') {
+                        Kardex::registrarMovimiento([
+                            'id_producto' => $insumo->id_producto,
+                            'tipo_movimiento' => 'Entrada',
+                            'cantidad' => $insumo->cantidad_asignada,
+                            'motivo' => 'Devolución Programación',
+                            'referencia' => "PROG-{$p->id}",
+                            'id_referencia' => $p->id,
+                            'id_usuario' => $idUsuario,
+                            'observacion' => "Devolución por eliminación de programación #{$p->id}",
+                        ]);
+                    }
                 }
-            }
 
-            if (!empty($prog->id_grupo_programacion)) {
-                $grupoId = (int) $prog->id_grupo_programacion;
-                $restantesGrupo = ProgramacionServicio::where('id_grupo_programacion', $grupoId)->count();
-                if ($restantesGrupo < 2) {
-                    ProgramacionServicio::where('id_grupo_programacion', $grupoId)->update(['id_grupo_programacion' => null]);
-                    ProgramacionServicioGrupo::where('id', $grupoId)->delete();
+                // Eliminar insumos y luego la programación
+                $p->insumos()->delete();
+                $p->delete();
+
+                if ($p->id_orden_servicio) {
+                    $orden = OrdenServicio::find($p->id_orden_servicio);
+                    if ($orden) {
+                        $orden->actualizarEstadoProgramacion();
+                    }
+                }
+
+                if (!empty($p->id_grupo_programacion)) {
+                    $grupoId = (int) $p->id_grupo_programacion;
+                    $restantesGrupo = ProgramacionServicio::where('id_grupo_programacion', $grupoId)->count();
+                    if ($restantesGrupo < 2) {
+                        ProgramacionServicio::where('id_grupo_programacion', $grupoId)->update(['id_grupo_programacion' => null]);
+                        ProgramacionServicioGrupo::where('id', $grupoId)->delete();
+                    }
                 }
             }
 
