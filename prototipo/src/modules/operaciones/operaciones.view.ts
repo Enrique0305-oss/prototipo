@@ -1,12 +1,24 @@
 import { API_CONFIG } from '../../core/api/api.config'
 import type { Programacion } from '../programaciones/programaciones.types'
 import { programacionServicioService } from '../programaciones/programacion-servicio/programacion-servicio.service'
+import { informeTecnicoService } from '../../services/informeTecnicoService'
+import { mostrarToast } from '../../shared/toast'
+import { authService } from '../auth/auth.service'
 
 // Cache local para formatos cargados por programación (id -> formato)
 const formatosCache = new Map<number, any>();
 let informeGruposCache: ClienteMesGroup[] = [];
 let informeGrupoSeleccionadoKey: string | null = null;
 let informeServiciosPorId = new Map<number, ProgramacionConEvidencias>();
+
+type InformeHallazgoEvidencia = {
+  url: string;
+  descripcion: string;
+  fecha: string;
+  id_programacion: number;
+  servicio: string;
+  tipo_servicio: 'CONTROL DE ROEDORES' | 'CONTROL DE INSECTOS VOLADORES' | 'CONTROL DE INSECTOS RASTREROS' | 'LIMPIEZA DE CISTERNAS' | string;
+};
 
 type FichaOperacionalApiData = any;
 type FormatoOperacionalApiData = any;
@@ -34,7 +46,7 @@ export function renderCrearInformeModal(prefillCliente = ''): string {
         <form id="operaciones-crear-informe-form" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div style="grid-column:1 / -1;display:grid;grid-template-columns:160px 1fr;align-items:center;gap:8px;">
             <label style="font-weight:700;color:#334155;">Código de Informe</label>
-            <input name="codigo_informe" type="text" placeholder="AQO-12-25" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;" />
+            <input name="codigo_informe" type="text" placeholder="IT-OP-XXXX" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;background-color:#f1f5f9;cursor:not-allowed;" />
           </div>
 
           <div style="display:grid;gap:6px;">
@@ -116,7 +128,7 @@ export function abrirModalCrearInforme(prefillCliente = '') {
 
     // Validación mínima
     if (!payload.cliente) {
-      alert('Por favor complete el campo Cliente.');
+      mostrarToast('warning', 'Validación', 'Por favor complete el campo Cliente.');
       return;
     }
 
@@ -142,8 +154,89 @@ export function initCrearInformeEvents() {
   // Esta función se llamará cuando se renderice el tab "Crear Informe"
   // y cargará los servicios realizados del "Servicio del Día"
   setTimeout(() => {
+    // Rellenar elaborado por automáticamente
+    const user = authService.getUser();
+    const inputElaborado = document.querySelector('#operaciones-crear-informe-form-principal [name="elaborado_por"]') as HTMLInputElement | null;
+    if (user && inputElaborado) {
+      inputElaborado.value = `${user.nombre} ${user.apellido} - ${user.departamento || 'OPERACIONES'}`;
+    }
+
     void cargarServiciosParaCrearInforme();
+
+    // Cargar próximo correlativo real
+    informeTecnicoService.getProximoCorrelativo().then(res => {
+      const inputCodigo = document.querySelector('#operaciones-crear-informe-form-principal [name="codigo_informe"]') as HTMLInputElement | null;
+      if (res.success && inputCodigo) {
+        inputCodigo.value = res.correlativo;
+      }
+    });
   }, 100);
+}
+
+export function initHistorialInformesEvents() {
+  setTimeout(() => {
+    void cargarHistorialInformes();
+  }, 100);
+}
+
+async function cargarHistorialInformes() {
+  const container = document.querySelector('#operaciones-historial-informes-body') as HTMLElement | null;
+  if (!container) return;
+
+  try {
+    const res = await informeTecnicoService.getAll();
+    const informes = Array.isArray(res.data) ? res.data : [];
+
+    if (informes.length === 0) {
+      container.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b;">No hay informes registrados</td></tr>';
+      return;
+    }
+
+    container.innerHTML = informes.map((inf) => {
+      const nFichas = Array.isArray(inf.visitas) ? inf.visitas.length : 0;
+      return `
+        <tr>
+          <td><strong>${escapeHtml(inf.correlativo || '---')}</strong></td>
+          <td>${escapeHtml(inf.cliente?.nombre_empresa || '---')}</td>
+          <td style="text-transform: capitalize;">
+            ${escapeHtml(inf.mes_actividad ? formatMonthLabel(inf.mes_actividad) : '---')}
+            <span style="background:#f1f5f9;color:#475569;padding:2px 6px;border-radius:4px;font-size:10px;margin-left:8px;border:1px solid #cbd5e1;white-space:nowrap;">${inf.hoja_tipo === 'falsa' ? 'Hoja Falsa' : 'Hoja Verdadera'}</span>
+          </td>
+          <td>${inf.fecha_emision ? formatFecha(inf.fecha_emision) : '---'}</td>
+          <td>${escapeHtml(inf.elaborado_por || '---')}</td>
+          <td>${nFichas}</td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-icon js-download-informe-pdf" data-id="${inf.id}" title="Descargar PDF" style="color:#8b5cf6; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px; display: flex; align-items: center; justify-content: center; background: white; cursor: pointer;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Eventos para descargar PDF
+    container.querySelectorAll('.js-download-informe-pdf').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const id = target.dataset.id;
+        const correlativo = target.closest('tr')?.querySelector('strong')?.textContent || 'informe';
+        if (id) {
+          try {
+            await informeTecnicoService.downloadPDF(Number(id), `Informe_${correlativo}.pdf`);
+          } catch (err) {
+            console.error('Error downloading PDF:', err);
+            mostrarToast('error', 'Error', 'No se pudo descargar el archivo PDF.');
+          }
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error('Error cargando historial de informes:', err);
+    container.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#b91c1c;">Error al cargar el historial</td></tr>';
+  }
 }
 
 async function cargarServiciosParaCrearInforme() {
@@ -154,6 +247,9 @@ async function cargarServiciosParaCrearInforme() {
     const response = await programacionServicioService.getAll();
     const lista = Array.isArray(response?.data) ? response.data : [];
 
+    const responseInformes = await informeTecnicoService.getAll();
+    const informesGuardados = Array.isArray(responseInformes?.data) ? responseInformes.data : [];
+
     const realizados = lista
       .filter((item): item is Programacion => Boolean(item))
       .filter((item) => item.estado_ejecucion === 'Realizado');
@@ -163,7 +259,43 @@ async function cargarServiciosParaCrearInforme() {
       return;
     }
 
-    const grupos = mapServiciosPorClienteMes(realizados);
+    const usedIdsVerdadera = new Set<number>();
+    const usedIdsFalsa = new Set<number>();
+
+    informesGuardados.forEach(inf => {
+      const isVerdadera = inf.hoja_tipo === 'verdadera';
+      if (Array.isArray(inf.visitas)) {
+        inf.visitas.forEach(v => {
+          if (v.id_programacion) {
+            if (isVerdadera) usedIdsVerdadera.add(v.id_programacion);
+            else usedIdsFalsa.add(v.id_programacion);
+          }
+        });
+      }
+    });
+
+    const todosLosGrupos = mapServiciosPorClienteMes(realizados);
+    
+    // Asignar banderas de qué hojas ya están creadas por completo
+    todosLosGrupos.forEach(grupo => {
+      const pendingVerdadera = grupo.visitas.filter(v => !usedIdsVerdadera.has(v.serviceId));
+      const pendingFalsa = grupo.visitas.filter(v => !usedIdsFalsa.has(v.serviceId));
+      
+      grupo.hasVerdadera = pendingVerdadera.length === 0;
+      grupo.hasFalsa = pendingFalsa.length === 0;
+      
+      grupo.usedIdsVerdadera = Array.from(usedIdsVerdadera);
+      grupo.usedIdsFalsa = Array.from(usedIdsFalsa);
+    });
+
+    // No ocultamos los grupos para que el usuario pueda generar informes adicionales o por separado si lo desea
+    const grupos = todosLosGrupos;
+
+    if (grupos.length === 0) {
+      container.innerHTML = '<p style="color:#64748b;font-size:13px;">Todos los informes de este periodo ya fueron generados.</p>';
+      return;
+    }
+
     informeGruposCache = grupos;
     informeGrupoSeleccionadoKey = grupos[0]?.key ?? null;
     informeServiciosPorId = new Map(realizados.map((item) => [item.id, item as ProgramacionConEvidencias]));
@@ -197,35 +329,205 @@ async function cargarServiciosParaCrearInforme() {
       });
     };
 
-    if (searchInput) {
+    if (searchInput && !searchInput.dataset.listenerBound) {
+      searchInput.dataset.listenerBound = 'true';
       searchInput.addEventListener('input', () => {
         renderList(searchInput.value);
       });
     }
 
-    if (form) {
-      form.addEventListener('submit', (e) => {
+    if (form && !form.dataset.listenerBound) {
+      form.dataset.listenerBound = 'true';
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        
+        const checkedCheckboxes = Array.from(form.querySelectorAll('.js-visita-checkbox:checked')).map(cb => Number((cb as HTMLInputElement).dataset.serviceId));
+        
+        if (checkedCheckboxes.length === 0) {
+          mostrarToast('warning', 'Selección Requerida', 'Debes seleccionar al menos un servicio (visita) para generar el informe.');
+          return;
+        }
+        
         const data = new FormData(form);
-        const payload: Record<string, string> = {};
-        data.forEach((value, key) => { payload[key] = String(value || '').trim(); });
+        const payload: any = {};
+        data.forEach((value, key) => { payload[key] = value; });
 
-        if (!payload.cliente) {
-          alert('Por favor selecciona un cliente para generar el informe.');
-          return;
-        }
-        if (!payload.codigo_informe) {
-          alert('Por favor completa el código de informe.');
+        if (!payload.id_cliente) {
+          mostrarToast('warning', 'Selección Requerida', 'Por favor selecciona un cliente para generar el informe.');
           return;
         }
 
-        console.log('Crear Informe (simulado):', payload);
-        alert(`Informe ${payload.codigo_informe} creado exitosamente (simulado). Backend: siguiente paso.`);
-        form.reset();
+        const group = informeGruposCache.find(g => g.key === informeGrupoSeleccionadoKey);
+        if (!group) {
+           mostrarToast('error', 'Error', 'No se pudo encontrar la información del grupo seleccionado.');
+           return;
+        }
+
+        try {
+          const hallazgosRoedores = obtenerHallazgosRoedoresSeleccionados();
+          const hallazgosVoladores = obtenerHallazgosVoladoresSeleccionados();
+          const hallazgosRastreros = obtenerHallazgosRastrerosSeleccionados();
+          const hallazgosLimpieza = obtenerHallazgosLimpiezaSeleccionados();
+          const conclusionesRoedores = String((payload.conclusiones_roedores || '')).trim();
+          const conclusionesVoladores = String((payload.conclusiones_voladores || '')).trim();
+          const conclusionesRastreros = String((payload.conclusiones_rastreros || '')).trim();
+          const conclusionesLimpieza = String((payload.conclusiones_limpieza || '')).trim();
+          const conclusionesVoladoresAnexo = !!(form.querySelector('.js-conclusiones-voladores-anexo') as HTMLInputElement | null)?.checked;
+          const conclusionesVoladoresResultados = String((payload.conclusiones_voladores_resultados || '')).trim();
+
+          // Filtrar visitas por checkboxes
+          const visitasSeleccionadas = group.visitas.filter(v => checkedCheckboxes.includes(v.serviceId));
+
+          // Construir visitas
+          const visitasPayload = visitasSeleccionadas.map(v => {
+               const entry = formatosCache.get(v.serviceId);
+               const fechaEditable = (form.querySelector(`.js-fecha-visita-editable[data-service-id="${v.serviceId}"]`) as HTMLInputElement | null)?.value || v.fechaRaw;
+               const tipo = resolveTipoServicio(entry?.formato ?? null, entry?.visita?.serviceName || v.serviceName);
+               const estiloSelect = document.querySelector(`.js-estilo-servicio-select[data-tipo="${tipo}"]`) as HTMLSelectElement | null;
+               const estilo = estiloSelect ? estiloSelect.value : 'detallado';
+               
+               return {
+                 id_programacion: v.serviceId,
+                 fecha: fechaEditable,
+                 servicio: v.serviceName,
+                 correlativo_ficha: (v as any).correlativoFicha || '-',
+                 tipo_servicio: tipo,
+                 estilo: estilo
+               };
+            });
+
+          const tieneLimpieza = visitasSeleccionadas.some(v => isLimpiezaFormato(formatosCache.get(v.serviceId)?.formato ?? null, v.serviceName));
+
+          // Insumos: extraer de formatos (solo los seleccionados)
+          const insumosPayload = (() => {
+               const allInsumos: any[] = [];
+               visitasSeleccionadas.forEach(v => {
+                 const entry = formatosCache.get(v.serviceId);
+                 if (entry?.ficha?.insumos_utilizados) {
+                   allInsumos.push(...entry.ficha.insumos_utilizados);
+                 }
+               });
+               return allInsumos;
+            })();
+
+          // Evidencias: unir hallazgos (y filtrar por checkboxes)
+          const evidenciasBase = [...hallazgosRoedores, ...hallazgosVoladores, ...hallazgosRastreros, ...hallazgosLimpieza]
+            .filter(e => checkedCheckboxes.includes(e.id_programacion));
+
+          const createPayload: any = {
+            id_cliente: Number(payload.id_cliente),
+            mes_actividad: payload.mes_actividad || '',
+            fecha_emision: new Date().toISOString().split('T')[0], // Fecha actual
+            elaborado_por: payload.elaborado_por || '',
+            actividad: payload.actividad || '',
+            ubicacion: payload.ubicacion || '',
+            hoja_tipo: payload.hoja_tipo || 'verdadera',
+            visitas: visitasPayload,
+            insumos: insumosPayload,
+            evidencias: evidenciasBase,
+            conclusiones: {
+              roedores: conclusionesRoedores,
+              voladores: conclusionesVoladores,
+              rastreros: conclusionesRastreros,
+              limpieza: conclusionesLimpieza,
+              voladores_anexo: conclusionesVoladoresAnexo,
+              voladores_resultados: conclusionesVoladoresResultados
+            },
+            estado: 'emitido',
+            estilo: 'detallado' // Ya no se usa a nivel global
+          } as any;
+
+          const res = await informeTecnicoService.create(createPayload);
+
+          if (res.success) {
+            mostrarToast('success', 'Informe Creado', `Informe ${res.data?.correlativo || ''} creado exitosamente.`);
+            
+            // Descarga automática del PDF
+            if (res.data?.id) {
+              const correlativo = res.data.correlativo || 'informe';
+              try {
+                await informeTecnicoService.downloadPDF(res.data.id, `Informe_${correlativo}.pdf`);
+              } catch (err) {
+                console.error('Error in automatic download:', err);
+                // No alertamos aquí porque el informe ya se creó
+              }
+            }
+
+            // LIMPIAR POR COMPLETO EL FORMULARIO Y ESTADOS
+            form.reset();
+
+            // Re-rellenar elaborado por automáticamente
+            const user = authService.getUser();
+            const inputElaborado = form.querySelector('[name="elaborado_por"]') as HTMLInputElement | null;
+            if (user && inputElaborado) {
+              inputElaborado.value = `${user.nombre} ${user.apellido} - ${user.departamento || 'OPERACIONES'}`;
+            }
+
+            // Limpiar contenedores dinámicos
+            const detalleContainer = document.querySelector('#operaciones-informe-detalle') as HTMLElement | null;
+            if (detalleContainer) {
+              detalleContainer.innerHTML = '<div style="color:#64748b;font-size:13px;">Selecciona un cliente para ver el detalle por visitas.</div>';
+            }
+
+            const tablaBody = document.querySelector('#operaciones-tabla-visitas-body');
+            if (tablaBody) {
+              tablaBody.innerHTML = '<tr><td colspan="3" style="padding: 12px; text-align: center; color: #64748b;">Selecciona un servicio para ver las visitas</td></tr>';
+            }
+
+            const dispositivosContainer = document.querySelector('#operaciones-dispositivos-preview') as HTMLElement | null;
+            if (dispositivosContainer) {
+              dispositivosContainer.innerHTML = '';
+            }
+
+            // Ocultar todas las secciones dinámicas del formulario
+            const seccionesOcultar = [
+              '#operaciones-conclusiones-roedores-section',
+              '#operaciones-conclusiones-voladores-section',
+              '#operaciones-conclusiones-rastreros-section',
+              '#operaciones-conclusiones-limpieza-section',
+              '#operaciones-hallazgos-roedores-section',
+              '#operaciones-hallazgos-voladores-section',
+              '#operaciones-hallazgos-rastreros-section',
+              '#operaciones-hallazgos-limpieza-section'
+            ];
+            seccionesOcultar.forEach(selector => {
+              const el = form.querySelector(selector) as HTMLElement | null;
+              if (el) el.style.display = 'none';
+            });
+
+            // Limpiar inputs ocultos y caches
+            const idClienteInput = form.querySelector('[name="id_cliente"]') as HTMLInputElement | null;
+            if (idClienteInput) idClienteInput.value = '';
+
+            informeGrupoSeleccionadoKey = null;
+
+            // Obtener y asignar el nuevo correlativo para el próximo informe
+            const codigoInput = form.querySelector('[name="codigo_informe"]') as HTMLInputElement | null;
+            if (codigoInput) {
+              codigoInput.value = 'Cargando...';
+            }
+            informeTecnicoService.getProximoCorrelativo().then(resCorrelativo => {
+              if (resCorrelativo.success && codigoInput) {
+                codigoInput.value = resCorrelativo.correlativo;
+              } else if (codigoInput) {
+                codigoInput.value = 'IT-OP-XXXX';
+              }
+            });
+
+            // Recargar servicios realizados para quitar el que ya se procesó
+            await cargarServiciosParaCrearInforme();
+          } else {
+            mostrarToast('error', 'Error al crear', res.message || 'Error desconocido al intentar guardar el informe.');
+          }
+        } catch (err: any) {
+          console.error('Error saving report:', err);
+          mostrarToast('error', 'Error de Conexión', 'Hubo un problema de conexión al intentar guardar el informe.');
+        }
       });
 
       const hojaSelect = form.querySelector('.js-hoja-tipo-select') as HTMLSelectElement | null;
-      if (hojaSelect) {
+      if (hojaSelect && !hojaSelect.dataset.listenerBound) {
+        hojaSelect.dataset.listenerBound = 'true';
         hojaSelect.addEventListener('change', () => {
           const current = informeGruposCache.find((group) => group.key === informeGrupoSeleccionadoKey) || informeGruposCache[0];
           if (current) {
@@ -234,6 +536,8 @@ async function cargarServiciosParaCrearInforme() {
         });
       }
     }
+
+    // Removed manual UI handlers for Insumos and Evidencias
 
     renderList(searchInput?.value || '');
     const current = informeGruposCache.find((group) => group.key === informeGrupoSeleccionadoKey) || informeGruposCache[0];
@@ -291,7 +595,7 @@ function aplicarFormatoAlFormulario(formEl: HTMLFormElement | null, formatoData:
   `;
 }
 
-function renderFormatoVisitaResumen(formato: FormatoOperacionalViewModel, tipoHoja: 'verdadera' | 'falsa'): string {
+function renderFormatoVisitaResumen(formato: FormatoOperacionalViewModel, tipoHoja: 'verdadera' | 'falsa', serviceName?: string, clienteName?: string): string {
   if (!formato || !Array.isArray(formato.secciones) || formato.secciones.length === 0) {
     return '<div style="color:#64748b;font-size:13px;">Sin información de formato para esta visita.</div>';
   }
@@ -301,15 +605,15 @@ function renderFormatoVisitaResumen(formato: FormatoOperacionalViewModel, tipoHo
     const normalizado = normalizeText(`${seccion.titulo} ${seccion.tipo}`);
     if (normalizado.includes('trampa') && normalizado.includes('luz')) {
       formatosPresentesSet.add('voladores');
-    } else if (normalizado.includes('lamina') && (normalizado.includes('rastreros') || normalizado.includes('pegante'))) {
+    } else if (normalizado.includes('lamina') && normalizado.includes('rastreros')) {
       formatosPresentesSet.add('rastreros');
     } else {
       formatosPresentesSet.add('roedores');
     }
   }
 
-  const esRastreros = isRastrerosFormato(formato) && formatosPresentesSet.size === 1;
-  const esVoladores = isVoladoresFormato(formato) && formatosPresentesSet.size === 1;
+  const esRastreros = isRastrerosFormato(formato, serviceName) && formatosPresentesSet.size === 1;
+  const esVoladores = isVoladoresFormato(formato, serviceName) && formatosPresentesSet.size === 1;
   const sheetTitle = tipoHoja === 'verdadera' ? 'Hoja Verdadera' : 'Hoja Falsa';
 
   const renderRoedores = (secciones: Array<FormatoOperacionalViewModel['secciones'][number]>) => `
@@ -466,7 +770,7 @@ function renderFormatoVisitaResumen(formato: FormatoOperacionalViewModel, tipoHo
                         </tr>
                       </thead>
                       <tbody>
-                        ${INSECTOS_VOLADORES.map((insecto) => `
+                        ${(clienteName && clienteName.toUpperCase().includes('YAMBOLY') ? INSECTOS_VOLADORES_YAMBOLY : INSECTOS_VOLADORES).map((insecto) => `
                           <tr>
                             <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(insecto.label)}</td>
                             <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:600;">${getConteo(insecto.key)}</td>
@@ -517,12 +821,12 @@ function renderEvidenciasVisita(visita: ClienteVisitaViewModel): string {
   `;
 }
 
-function renderInformeVisitaCard(visita: ClienteVisitaViewModel, formato: FormatoOperacionalViewModel | null, tipoHoja: 'verdadera' | 'falsa', index: number): string {
+function renderInformeVisitaCard(visita: ClienteVisitaViewModel, formato: FormatoOperacionalViewModel | null, tipoHoja: 'verdadera' | 'falsa', index: number, clienteName?: string, isUsed: boolean = false): string {
   return `
-    <section style="border:1px solid #dbe7f2;border-radius:12px;background:#fff;overflow:hidden;display:grid;gap:12px;padding:14px;">
+    <section style="border:1px solid #dbe7f2;border-radius:12px;background:#fff;overflow:hidden;display:grid;gap:12px;padding:14px; ${isUsed ? 'opacity: 0.6;' : ''}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
-          <div style="font-size:14px;font-weight:800;color:#0f172a;">Visita ${index + 1}</div>
+          <div style="font-size:14px;font-weight:800;color:#0f172a;">Visita ${index + 1} ${isUsed ? '<span style="color:#ef4444;font-size:11px;font-weight:normal;">(Ya reportada)</span>' : ''}</div>
           <div style="font-size:13px;color:#475569;">${escapeHtml(visita.serviceName)} • ${escapeHtml(visita.fechaLabel)}</div>
         </div>
         <div style="font-size:12px;color:#64748b;">${escapeHtml(visita.tecnicosLabel)}</div>
@@ -530,7 +834,7 @@ function renderInformeVisitaCard(visita: ClienteVisitaViewModel, formato: Format
 
       <div style="display:grid;gap:8px;">
         <h4 style="margin:0;font-size:13px;color:#0f172a;">Dispositivos del Formato (${tipoHoja === 'verdadera' ? 'Hoja Verdadera' : 'Hoja Falsa'})</h4>
-        ${formato ? renderFormatoVisitaResumen(formato, tipoHoja) : '<div style="color:#64748b;font-size:13px;">No se encontró formato para esta visita.</div>'}
+        ${formato ? renderFormatoVisitaResumen(formato, tipoHoja, visita.serviceName, clienteName) : '<div style="color:#64748b;font-size:13px;">No se encontró formato para esta visita.</div>'}
       </div>
 
       <div style="display:grid;gap:8px;">
@@ -541,7 +845,7 @@ function renderInformeVisitaCard(visita: ClienteVisitaViewModel, formato: Format
   `;
 }
 
-function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null }>) {
+function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>, tipoHoja: 'verdadera' | 'falsa' = 'verdadera') {
   const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
   if (!form) return;
 
@@ -549,22 +853,557 @@ function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?
   const primerVisita = visitas[0] || null;
   const nombresServicios = Array.from(new Set(visitas.map((v) => v.serviceName).filter((v) => v && v.length > 0)));
 
+  (form.querySelector('[name="id_cliente"]') as HTMLInputElement)!.value = String(group.idCliente || '');
   (form.querySelector('[name="cliente"]') as HTMLInputElement)!.value = group.cliente || '';
   const primeraProgramacion = primerVisita ? informeServiciosPorId.get(primerVisita.serviceId) : null;
   (form.querySelector('[name="ubicacion"]') as HTMLInputElement)!.value = primeraProgramacion ? String(primeraProgramacion.planta?.direccion || '').trim() : '';
   (form.querySelector('[name="actividad"]') as HTMLInputElement)!.value = nombresServicios.length > 1 ? nombresServicios.join(' + ') : (nombresServicios[0] || '');
   (form.querySelector('[name="mes_actividad"]') as HTMLInputElement)!.value = group.monthKey !== 'unknown' ? group.monthKey : '';
   (form.querySelector('[name="n_visitas"]') as HTMLInputElement)!.value = String(visitas.length || 1);
-  (form.querySelector('[name="fechas_visitas"]') as HTMLInputElement)!.value = visitas.map((v) => v.fechaLabel).filter((v) => v && v !== 'Sin fecha').join(', ');
+  
+  // Actualizar tabla de visitas por grupos
+  const tablaBody = document.querySelector('#operaciones-tabla-visitas-body');
+  if (tablaBody) {
+    if (visitas.length > 0) {
+      // Agrupar visitas por tipo de servicio para visualización (aunque el form principal es uno solo, 
+      // aquí mostramos la lógica de cómo se vería dividido)
+      const visitasAgrupadas = new Map<string, any[]>();
+      
+      visitas.forEach((v) => {
+        const entry = formatosPorVisita?.find(e => e.visita.serviceId === v.serviceId);
+        const tipo = resolveTipoServicio(entry?.formato ?? null, entry?.visita?.serviceName || v.serviceName);
+        
+        if (!visitasAgrupadas.has(tipo)) visitasAgrupadas.set(tipo, []);
+        visitasAgrupadas.get(tipo)!.push({ v, entry });
+      });
+
+      let html = '';
+      visitasAgrupadas.forEach((items, tipo) => {
+        html += `
+          <tr style="background-color: #f1f5f9;">
+            <td colspan="3" style="padding: 8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight: 800; color: #1e40af; text-transform: uppercase; font-size: 11px;">
+                  ${escapeHtml(tipo)}
+                </span>
+                <select class="js-estilo-servicio-select" data-tipo="${escapeHtml(tipo)}" style="padding:2px 6px; border:1px solid #cbd5e1; border-radius:4px; font-size:11px; outline:none; background-color:#fff;">
+                  <option value="detallado" selected>Detallado</option>
+                  <option value="mixto">Mixto</option>
+                  <option value="basico">Básico</option>
+                </select>
+              </div>
+            </td>
+          </tr>
+        `;
+        items.forEach((item: any, idx: number) => {
+          const nFicha = item.entry?.ficha?.correlativo || item.entry?.formato?.correlativo || '-';
+          const isUsed = tipoHoja === 'verdadera' 
+            ? (group.usedIdsVerdadera?.includes(item.v.serviceId) ?? false)
+            : (group.usedIdsFalsa?.includes(item.v.serviceId) ?? false);
+            
+          const isChecked = !isUsed ? 'checked' : '';
+          const disabled = ''; // No bloqueamos la casilla para permitir que el usuario genere el reporte que desee
+          const tooltip = isUsed ? 'title="Este servicio ya fue incluido en un informe previo"' : '';
+          const opacity = isUsed ? 'opacity: 0.6;' : '';
+
+          html += `
+            <tr style="${opacity}">
+              <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: 700; white-space: nowrap;">
+                <label style="display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" class="js-visita-checkbox" data-service-id="${item.v.serviceId}" ${isChecked} ${disabled} ${tooltip} style="width: 16px; height: 16px; cursor: pointer;">
+                  ${String(idx + 1).padStart(2, '0')} ${isUsed ? '<span style="color:#ef4444;font-size:10px;margin-left:4px;">(Ya)</span>' : ''}
+                </label>
+              </td>
+              <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center;">
+                <input
+                  type="date"
+                  class="js-fecha-visita-editable"
+                  data-service-id="${item.v.serviceId}"
+                  value="${escapeHtml(toDateInputValue(item.v.fechaRaw))}"
+                  style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;text-align:center;"
+                />
+              </td>
+              <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: 600;">${escapeHtml(String(nFicha))}</td>
+            </tr>
+          `;
+        });
+      });
+      tablaBody.innerHTML = html;
+    } else {
+      tablaBody.innerHTML = '<tr><td colspan="3" style="padding: 12px; text-align: center; color: #64748b;">No hay visitas registradas</td></tr>';
+    }
+  }
+
+  // Mantenemos los hidden inputs actualizados por si acaso
+  const fechasStr = visitas
+    .map((v) => {
+      const input = form.querySelector(`.js-fecha-visita-editable[data-service-id="${v.serviceId}"]`) as HTMLInputElement | null;
+      return input?.value || v.fechaRaw || '';
+    })
+    .filter((v) => v && v !== 'Sin fecha')
+    .join(', ');
+  (form.querySelector('[name="fechas_visitas"]') as HTMLInputElement)!.value = fechasStr;
+  
+  const fichasStr = (formatosPorVisita || [])
+    .map(e => e.ficha?.correlativo || e.formato?.correlativo || e.formato?.correlativo_documento || e.formato?.numero_documento)
+    .filter(f => f)
+    .join(', ');
+  (form.querySelector('[name="n_fichas"]') as HTMLInputElement)!.value = fichasStr;
+
+  renderSelectorHallazgosRoedores(group, formatosPorVisita || []);
+  renderSelectorHallazgosVoladores(group, formatosPorVisita || []);
+  renderSelectorHallazgosRastreros(group, formatosPorVisita || []);
+  renderSelectorHallazgosLimpieza(group, formatosPorVisita || []);
+
+  // Sync initial state of evidence checkboxes with visita checkboxes
+  const formPrincipal = document.querySelector('#operaciones-crear-informe-form-principal');
+  if (formPrincipal) {
+    const visitaCheckboxes = formPrincipal.querySelectorAll('.js-visita-checkbox');
+    visitaCheckboxes.forEach(cb => {
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  // Removed prefill logic for Insumos Limpieza since it's fully automatic in backend
 
   const codigoInput = form.querySelector('[name="codigo_informe"]') as HTMLInputElement | null;
-  if (codigoInput && !codigoInput.value.trim()) {
-    const firstFormat = formatosPorVisita?.find((entry) => entry.formato)?.formato;
-    if (firstFormat?.codigoDocumento) {
-      codigoInput.value = firstFormat.codigoDocumento;
+  if (codigoInput && (!codigoInput.value.trim() || codigoInput.value === 'IT-OP-0001' || codigoInput.value === 'IT-OP-XXXX')) {
+    // Cargar próximo correlativo real desde el backend
+    informeTecnicoService.getProximoCorrelativo().then(res => {
+      if (res.success && codigoInput) {
+        codigoInput.value = res.correlativo;
+      }
+    });
+  }
+}
+
+function renderSelectorHallazgosRoedores(
+  group: ClienteMesGroup,
+  formatosPorVisita: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>,
+) {
+  const container = document.querySelector('#operaciones-hallazgos-roedores-picker') as HTMLElement | null;
+  const section = document.querySelector('#operaciones-hallazgos-roedores-section') as HTMLElement | null;
+  if (!container) return;
+
+  const candidatos: Array<InformeHallazgoEvidencia & { key: string }> = [];
+  const seen = new Set<string>();
+
+  for (const visita of group.visitas || []) {
+    const entry = formatosPorVisita.find((e) => e.visita.serviceId === visita.serviceId);
+    if (!isRoedoresFormato(entry?.formato ?? null, visita.serviceName)) continue;
+
+    for (const url of visita.evidenceImages || []) {
+      const cleanUrl = String(url || '').trim();
+      if (!cleanUrl) continue;
+      const key = `${visita.serviceId}::${cleanUrl}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      candidatos.push({
+        key,
+        url: cleanUrl,
+        descripcion: '',
+        fecha: visita.fechaLabel || '',
+        id_programacion: visita.serviceId,
+        servicio: visita.serviceName || 'CONTROL DE ROEDORES',
+        tipo_servicio: 'CONTROL DE ROEDORES',
+      });
+    }
+  }
+
+  if (candidatos.length === 0) {
+    if (section) section.style.display = 'none';
+    container.innerHTML = '<p style="color:#64748b;font-size:12px;grid-column:1/-1;">No hay fotos de servicios de Control de Roedores para este informe.</p>';
+    return;
+  }
+
+  if (section) section.style.display = 'block';
+  container.innerHTML = candidatos.map((item, idx) => `
+    <div class="js-hallazgo-item" data-key="${escapeHtml(item.key)}" data-url="${escapeHtml(item.url)}" data-fecha="${escapeHtml(item.fecha)}" data-service-id="${item.id_programacion}" data-servicio="${escapeHtml(item.servicio)}" style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fff;display:grid;gap:6px;">
+      <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:12px;font-weight:600;color:#334155;">
+        <input type="checkbox" class="js-hallazgo-check" checked>
+        Incluir hallazgo ${idx + 1}
+      </label>
+      <img src="${escapeHtml(item.url)}" alt="Hallazgo roedores" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
+      <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
+        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
+        <textarea class="js-hallazgo-desc" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSelectorHallazgosVoladores(
+  group: ClienteMesGroup,
+  formatosPorVisita: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>,
+) {
+  const container = document.querySelector('#operaciones-hallazgos-voladores-picker') as HTMLElement | null;
+  const section = document.querySelector('#operaciones-hallazgos-voladores-section') as HTMLElement | null;
+  if (!container) return;
+
+  const candidatos: Array<InformeHallazgoEvidencia & { key: string }> = [];
+  const seen = new Set<string>();
+
+  for (const visita of group.visitas || []) {
+    const entry = formatosPorVisita.find((e) => e.visita.serviceId === visita.serviceId);
+    if (!isVoladoresFormato(entry?.formato ?? null, visita.serviceName)) continue;
+
+    for (const url of visita.evidenceImages || []) {
+      const cleanUrl = String(url || '').trim();
+      if (!cleanUrl) continue;
+      const key = `${visita.serviceId}::${cleanUrl}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      candidatos.push({
+        key,
+        url: cleanUrl,
+        descripcion: '',
+        fecha: visita.fechaLabel || '',
+        id_programacion: visita.serviceId,
+        servicio: visita.serviceName || 'CONTROL DE INSECTOS VOLADORES',
+        tipo_servicio: 'CONTROL DE INSECTOS VOLADORES',
+      });
+    }
+  }
+
+  if (candidatos.length === 0) {
+    if (section) section.style.display = 'none';
+    container.innerHTML = '<p style="color:#64748b;font-size:12px;grid-column:1/-1;">No hay fotos de servicios de Control de Insectos Voladores para este informe.</p>';
+    return;
+  }
+
+  if (section) section.style.display = 'block';
+  container.innerHTML = candidatos.map((item, idx) => `
+    <div class="js-hallazgo-item-voladores" data-key="${escapeHtml(item.key)}" data-url="${escapeHtml(item.url)}" data-fecha="${escapeHtml(item.fecha)}" data-service-id="${item.id_programacion}" data-servicio="${escapeHtml(item.servicio)}" style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fff;display:grid;gap:6px;">
+      <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:12px;font-weight:600;color:#334155;">
+        <input type="checkbox" class="js-hallazgo-check-voladores" checked>
+        Incluir hallazgo ${idx + 1}
+      </label>
+      <img src="${escapeHtml(item.url)}" alt="Hallazgo voladores" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
+      <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
+        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
+        <textarea class="js-hallazgo-desc-voladores" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
+      </div>
+    </div>
+  `).join('');
+}
+
+function obtenerHallazgosRoedoresSeleccionados(): InformeHallazgoEvidencia[] {
+  const nodes = Array.from(document.querySelectorAll('#operaciones-hallazgos-roedores-picker .js-hallazgo-item')) as HTMLElement[];
+  const hallazgos: InformeHallazgoEvidencia[] = [];
+
+  for (const node of nodes) {
+    const checked = (node.querySelector('.js-hallazgo-check') as HTMLInputElement | null)?.checked ?? false;
+    if (!checked) continue;
+
+    const descripcion = ((node.querySelector('.js-hallazgo-desc') as HTMLTextAreaElement | null)?.value || '').trim();
+    const idProgramacion = Number(node.dataset.serviceId || 0) || 0;
+
+    hallazgos.push({
+      url: String(node.dataset.url || '').trim(),
+      descripcion: descripcion || 'Sin descripción',
+      fecha: String(node.dataset.fecha || '').trim(),
+      id_programacion: idProgramacion,
+      servicio: String(node.dataset.servicio || 'CONTROL DE ROEDORES').trim(),
+      tipo_servicio: 'CONTROL DE ROEDORES',
+    });
+  }
+
+  return hallazgos;
+}
+
+function obtenerHallazgosVoladoresSeleccionados(): InformeHallazgoEvidencia[] {
+  const nodes = Array.from(document.querySelectorAll('#operaciones-hallazgos-voladores-picker .js-hallazgo-item-voladores')) as HTMLElement[];
+  const hallazgos: InformeHallazgoEvidencia[] = [];
+
+  for (const node of nodes) {
+    const checked = (node.querySelector('.js-hallazgo-check-voladores') as HTMLInputElement | null)?.checked ?? false;
+    if (!checked) continue;
+
+    const descripcion = ((node.querySelector('.js-hallazgo-desc-voladores') as HTMLTextAreaElement | null)?.value || '').trim();
+    const idProgramacion = Number(node.dataset.serviceId || 0) || 0;
+
+    hallazgos.push({
+      url: String(node.dataset.url || '').trim(),
+      descripcion: descripcion || 'Sin descripción',
+      fecha: String(node.dataset.fecha || '').trim(),
+      id_programacion: idProgramacion,
+      servicio: String(node.dataset.servicio || 'CONTROL DE INSECTOS VOLADORES').trim(),
+      tipo_servicio: 'CONTROL DE INSECTOS VOLADORES',
+    });
+  }
+
+  return hallazgos;
+}
+
+function renderSelectorHallazgosRastreros(
+  group: ClienteMesGroup,
+  formatosPorVisita: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>,
+) {
+  const container = document.querySelector('#operaciones-hallazgos-rastreros-picker') as HTMLElement | null;
+  const section = document.querySelector('#operaciones-hallazgos-rastreros-section') as HTMLElement | null;
+  if (!container) return;
+
+  const candidatos: Array<InformeHallazgoEvidencia & { key: string }> = [];
+  const seen = new Set<string>();
+
+  for (const visita of group.visitas || []) {
+    const entry = formatosPorVisita.find((e) => e.visita.serviceId === visita.serviceId);
+    if (!isRastrerosFormato(entry?.formato ?? null, visita.serviceName)) continue;
+
+    for (const url of visita.evidenceImages || []) {
+      const cleanUrl = String(url || '').trim();
+      if (!cleanUrl) continue;
+      const key = `${visita.serviceId}::${cleanUrl}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      candidatos.push({
+        key,
+        url: cleanUrl,
+        descripcion: '',
+        fecha: visita.fechaLabel || '',
+        id_programacion: visita.serviceId,
+        servicio: visita.serviceName || 'CONTROL DE INSECTOS RASTREROS',
+        tipo_servicio: 'CONTROL DE INSECTOS RASTREROS',
+      });
+    }
+  }
+
+  if (candidatos.length === 0) {
+    if (section) section.style.display = 'none';
+    container.innerHTML = '<p style="color:#64748b;font-size:12px;grid-column:1/-1;">No hay fotos de servicios de Control de Insectos Rastreros para este informe.</p>';
+    return;
+  }
+
+  if (section) section.style.display = 'block';
+  container.innerHTML = candidatos.map((item, idx) => `
+    <div class="js-hallazgo-item-rastreros" data-key="${escapeHtml(item.key)}" data-url="${escapeHtml(item.url)}" data-fecha="${escapeHtml(item.fecha)}" data-service-id="${item.id_programacion}" data-servicio="${escapeHtml(item.servicio)}" style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fff;display:grid;gap:6px;">
+      <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:12px;font-weight:600;color:#334155;">
+        <input type="checkbox" class="js-hallazgo-check-rastreros" checked>
+        Incluir hallazgo ${idx + 1}
+      </label>
+      <img src="${escapeHtml(item.url)}" alt="Hallazgo rastreros" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
+      <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
+        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
+        <textarea class="js-hallazgo-desc-rastreros" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
+      </div>
+    </div>
+  `).join('');
+}
+
+function obtenerHallazgosRastrerosSeleccionados(): InformeHallazgoEvidencia[] {
+  const nodes = Array.from(document.querySelectorAll('#operaciones-hallazgos-rastreros-picker .js-hallazgo-item-rastreros')) as HTMLElement[];
+  const hallazgos: InformeHallazgoEvidencia[] = [];
+
+  for (const node of nodes) {
+    const checked = (node.querySelector('.js-hallazgo-check-rastreros') as HTMLInputElement | null)?.checked ?? false;
+    if (!checked) continue;
+
+    const descripcion = ((node.querySelector('.js-hallazgo-desc-rastreros') as HTMLTextAreaElement | null)?.value || '').trim();
+    const idProgramacion = Number(node.dataset.serviceId || 0) || 0;
+
+    hallazgos.push({
+      url: String(node.dataset.url || '').trim(),
+      descripcion: descripcion || 'Sin descripción',
+      fecha: String(node.dataset.fecha || '').trim(),
+      id_programacion: idProgramacion,
+      servicio: String(node.dataset.servicio || 'CONTROL DE INSECTOS RASTREROS').trim(),
+      tipo_servicio: 'CONTROL DE INSECTOS RASTREROS',
+    });
+  }
+
+  return hallazgos;
+}
+
+function renderSelectorHallazgosLimpieza(
+  group: ClienteMesGroup,
+  formatosPorVisita: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>,
+) {
+  const container = document.querySelector('#operaciones-hallazgos-limpieza-picker') as HTMLElement | null;
+  const section = document.querySelector('#operaciones-hallazgos-limpieza-section') as HTMLElement | null;
+  if (!container) return;
+
+  const candidatos: Array<InformeHallazgoEvidencia & { key: string }> = [];
+  const seen = new Set<string>();
+
+  for (const visita of group.visitas || []) {
+    const entry = formatosPorVisita.find((e) => e.visita.serviceId === visita.serviceId);
+    if (!isLimpiezaFormato(entry?.formato ?? null, visita.serviceName)) continue;
+
+    for (const url of visita.evidenceImages || []) {
+      const cleanUrl = String(url || '').trim();
+      if (!cleanUrl) continue;
+      const key = `${visita.serviceId}::${cleanUrl}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      candidatos.push({
+        key,
+        url: cleanUrl,
+        descripcion: '',
+        fecha: visita.fechaLabel || '',
+        id_programacion: visita.serviceId,
+        servicio: visita.serviceName || 'LIMPIEZA DE CISTERNAS',
+        tipo_servicio: 'LIMPIEZA DE CISTERNAS',
+      });
+    }
+  }
+
+  if (candidatos.length === 0) {
+    if (section) section.style.display = 'none';
+    container.innerHTML = '<p style="color:#64748b;font-size:12px;grid-column:1/-1;">No hay fotos de servicios de Limpieza de Cisternas para este informe.</p>';
+    return;
+  }
+
+  if (section) section.style.display = 'block';
+  container.innerHTML = candidatos.map((item, idx) => `
+    <div class="js-hallazgo-item-limpieza" data-key="${escapeHtml(item.key)}" data-url="${escapeHtml(item.url)}" data-fecha="${escapeHtml(item.fecha)}" data-service-id="${item.id_programacion}" data-servicio="${escapeHtml(item.servicio)}" style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fff;display:grid;gap:6px;">
+      <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:12px;font-weight:600;color:#334155;">
+        <input type="checkbox" class="js-hallazgo-check-limpieza" checked>
+        Incluir foto ${idx + 1}
+      </label>
+      <img src="${escapeHtml(item.url)}" alt="Evidencia Limpieza" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
+      <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
+        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
+        <textarea class="js-hallazgo-desc-limpieza" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
+      </div>
+    </div>
+  `).join('');
+}
+
+function obtenerHallazgosLimpiezaSeleccionados(): InformeHallazgoEvidencia[] {
+  const nodes = Array.from(document.querySelectorAll('#operaciones-hallazgos-limpieza-picker .js-hallazgo-item-limpieza')) as HTMLElement[];
+  const hallazgos: InformeHallazgoEvidencia[] = [];
+
+  for (const node of nodes) {
+    const checked = (node.querySelector('.js-hallazgo-check-limpieza') as HTMLInputElement | null)?.checked ?? false;
+    if (!checked) continue;
+
+    const descripcion = ((node.querySelector('.js-hallazgo-desc-limpieza') as HTMLTextAreaElement | null)?.value || '').trim();
+    const idProgramacion = Number(node.dataset.serviceId || 0) || 0;
+
+    const servicioName = String(node.dataset.servicio || 'LIMPIEZA DE CISTERNAS').trim();
+    hallazgos.push({
+      url: String(node.dataset.url || '').trim(),
+      descripcion: descripcion || 'Sin descripción',
+      fecha: String(node.dataset.fecha || '').trim(),
+      id_programacion: idProgramacion,
+      servicio: servicioName,
+      tipo_servicio: resolveTipoServicio(null, servicioName),
+    });
+  }
+
+  return hallazgos;
+}
+
+function actualizarSeccionesConclusiones(formatosPorVisita: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null }>) {
+  const roedoresSection = document.querySelector('#operaciones-conclusiones-roedores-section') as HTMLElement | null;
+  const voladoresSection = document.querySelector('#operaciones-conclusiones-voladores-section') as HTMLElement | null;
+  const rastrerosSection = document.querySelector('#operaciones-conclusiones-rastreros-section') as HTMLElement | null;
+  const limpiezaSection = document.querySelector('#operaciones-conclusiones-limpieza-section') as HTMLElement | null;
+
+  const tieneRoedores = formatosPorVisita.some((entry) => isRoedoresFormato(entry.formato, entry.visita.serviceName));
+  const tieneVoladores = formatosPorVisita.some((entry) => isVoladoresFormato(entry.formato, entry.visita.serviceName));
+  const tieneRastreros = formatosPorVisita.some((entry) => isRastrerosFormato(entry.formato, entry.visita.serviceName));
+  const tieneLimpieza = formatosPorVisita.some((entry) => isLimpiezaFormato(entry.formato, entry.visita.serviceName));
+
+  if (roedoresSection) roedoresSection.style.display = tieneRoedores ? 'block' : 'none';
+  if (voladoresSection) voladoresSection.style.display = tieneVoladores ? 'block' : 'none';
+  if (rastrerosSection) rastrerosSection.style.display = tieneRastreros ? 'block' : 'none';
+  
+  if (limpiezaSection) {
+    limpiezaSection.style.display = tieneLimpieza ? 'block' : 'none';
+    if (tieneLimpieza) {
+      const genericEntry = formatosPorVisita.find((entry) => isLimpiezaFormato(entry.formato, entry.visita.serviceName));
+      const serviceName = genericEntry ? genericEntry.visita.serviceName : 'Limpieza de Cisternas';
+      const label = limpiezaSection.querySelector('label') as HTMLElement | null;
+      const textarea = limpiezaSection.querySelector('textarea') as HTMLTextAreaElement | null;
+      if (label) {
+        label.textContent = `Observaciones e Indicaciones - ${serviceName}`;
+      }
+      if (textarea) {
+        textarea.placeholder = `Escribe las observaciones e indicaciones para ${serviceName}`;
+      }
+    }
+  }
+
+  const hallazgosLimpiezaSection = document.querySelector('#operaciones-hallazgos-limpieza-section') as HTMLElement | null;
+  if (hallazgosLimpiezaSection) {
+    hallazgosLimpiezaSection.style.display = tieneLimpieza ? 'block' : 'none';
+    if (tieneLimpieza) {
+      const genericEntry = formatosPorVisita.find((entry) => isLimpiezaFormato(entry.formato, entry.visita.serviceName));
+      const serviceName = genericEntry ? genericEntry.visita.serviceName : 'Limpieza de Cisternas';
+      const h4 = hallazgosLimpiezaSection.querySelector('h4') as HTMLElement | null;
+      if (h4) {
+        h4.textContent = `Registro Fotográfico - ${serviceName}`;
+      }
     }
   }
 }
+
+// Mostrar/ocultar el campo RESULTADOS del anexo voladores según checkbox
+document.addEventListener('change', (ev) => {
+  const target = ev.target as HTMLElement | null;
+  if (!target) return;
+  if ((target as Element).matches && (target as Element).matches('.js-conclusiones-voladores-anexo')) {
+    const cb = target as HTMLInputElement;
+    const cont = document.querySelector('#operaciones-conclusiones-voladores-anexo-resultados') as HTMLElement | null;
+    if (cont) cont.style.display = cb.checked ? 'block' : 'none';
+  }
+
+  if ((target as Element).matches && (target as Element).matches('.js-fecha-visita-editable')) {
+    const input = target as HTMLInputElement;
+    const serviceId = input.dataset.serviceId;
+    if (!serviceId) return;
+    
+    // Format YYYY-MM-DD to DD/MM/YYYY
+    const parts = input.value.split('-');
+    let fechaLabel = '';
+    if (parts.length === 3) {
+      fechaLabel = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    
+    const hallazgos = document.querySelectorAll(`.js-hallazgo-item[data-service-id="${serviceId}"]`);
+    hallazgos.forEach(item => {
+      item.setAttribute('data-fecha', fechaLabel);
+      const labelSpan = item.querySelector('.js-hallazgo-fecha-label');
+      if (labelSpan) {
+        labelSpan.textContent = fechaLabel ? ` • ${fechaLabel}` : '';
+      }
+    });
+  }
+
+  if ((target as Element).matches && (target as Element).matches('.js-visita-checkbox')) {
+    const form = target.closest('form');
+    if (form) {
+      const checkedCount = form.querySelectorAll('.js-visita-checkbox:checked').length;
+      const inputNVisitas = form.querySelector('[name="n_visitas"]') as HTMLInputElement | null;
+      if (inputNVisitas) {
+        inputNVisitas.value = String(checkedCount);
+      }
+      
+      const input = target as HTMLInputElement;
+      const serviceId = input.dataset.serviceId;
+      const isChecked = input.checked;
+      
+      if (serviceId) {
+        // Toggle the corresponding evidence items to visually indicate they are excluded
+        const evidenciaItems = document.querySelectorAll(`.js-hallazgo-item[data-service-id="${serviceId}"]`);
+        evidenciaItems.forEach(item => {
+          const checkbox = item.querySelector('.js-hallazgo-check') as HTMLInputElement | null;
+          if (checkbox) {
+            checkbox.checked = isChecked;
+          }
+          const htmlItem = item as HTMLElement;
+          htmlItem.style.opacity = isChecked ? '1' : '0.4';
+          htmlItem.style.pointerEvents = isChecked ? 'auto' : 'none';
+        });
+      }
+    }
+  }
+});
 
 function renderListaCrearInformeGrupos(groups: ClienteMesGroup[]): string {
   if (!groups || groups.length === 0) {
@@ -577,7 +1416,13 @@ function renderListaCrearInformeGrupos(groups: ClienteMesGroup[]): string {
     const selected = informeGrupoSeleccionadoKey === group.key;
     return `
       <button class="js-grupo-informe-item" data-group-idx="${idx}" type="button" style="padding:10px;border:1px solid ${selected ? '#3b82f6' : '#cbd5e1'};border-radius:8px;background:${selected ? '#dbeafe' : '#fff'};cursor:pointer;text-align:left;font-size:12px;transition:all 0.2s;display:grid;gap:4px;">
-        <div style="font-weight:700;color:#0f172a;">${escapeHtml(group.cliente)}</div>
+        <div style="font-weight:700;color:#0f172a;display:flex;justify-content:space-between;align-items:flex-start;">
+          <span>${escapeHtml(group.cliente)}</span>
+          <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end;">
+            ${group.hasVerdadera ? `<span style="background:#dcfce7;color:#166534;padding:2px 4px;border-radius:4px;font-size:9px;">[V] Creada</span>` : ''}
+            ${group.hasFalsa ? `<span style="background:#fef9c3;color:#854d0e;padding:2px 4px;border-radius:4px;font-size:9px;">[F] Creada</span>` : ''}
+          </div>
+        </div>
         <div style="color:#475569;font-size:11px;">${escapeHtml(group.monthLabel)} • ${escapeHtml(visitasTexto)}</div>
         <div style="color:#64748b;font-size:11px;">${escapeHtml(serviciosTexto)}</div>
       </button>
@@ -591,6 +1436,38 @@ async function cargarDetalleGrupoInforme(group: ClienteMesGroup) {
   if (!detalleContainer || !form) return;
 
   const hojaSelect = form.querySelector('.js-hoja-tipo-select') as HTMLSelectElement | null;
+  if (hojaSelect) {
+    const optVerdadera = hojaSelect.querySelector('option[value="verdadera"]') as HTMLOptionElement | null;
+    const optFalsa = hojaSelect.querySelector('option[value="falsa"]') as HTMLOptionElement | null;
+    
+    if (optVerdadera) {
+      optVerdadera.disabled = false;
+      optVerdadera.text = group.hasVerdadera ? "Hoja Verdadera (Todas reportadas)" : "Hoja Verdadera";
+    }
+    if (optFalsa) {
+      optFalsa.disabled = false;
+      optFalsa.text = group.hasFalsa ? "Hoja Falsa (Todas reportadas)" : "Hoja Falsa";
+    }
+
+    if (group.hasVerdadera && !group.hasFalsa) {
+      hojaSelect.value = "falsa";
+    } else if (!group.hasVerdadera && group.hasFalsa) {
+      hojaSelect.value = "verdadera";
+    }
+    
+    // Add event listener to re-render checkboxes when type changes
+    if (!hojaSelect.dataset.listenerBoundGroup) {
+      hojaSelect.dataset.listenerBoundGroup = 'true';
+      hojaSelect.addEventListener('change', () => {
+        if (informeGrupoSeleccionadoKey) {
+          const activeGroup = informeGruposCache.find(g => g.key === informeGrupoSeleccionadoKey);
+          if (activeGroup) {
+            cargarDetalleGrupoInforme(activeGroup);
+          }
+        }
+      });
+    }
+  }
   const tipoHoja = hojaSelect && hojaSelect.value === 'falsa' ? 'falsa' : 'verdadera';
 
   detalleContainer.innerHTML = '<div style="color:#64748b;font-size:13px;">Cargando visitas del cliente seleccionado...</div>';
@@ -599,24 +1476,40 @@ async function cargarDetalleGrupoInforme(group: ClienteMesGroup) {
     try {
       const cached = formatosCache.get(visita.serviceId);
       if (cached) {
-        return { visita, formato: cached as FormatoOperacionalViewModel };
+        // Enriquecemos la visita con el correlativo de la ficha si está en cache
+        visita.correlativoFicha = cached.ficha?.correlativo || cached.formato?.correlativo || '-';
+        return { visita, formato: cached.formato, ficha: cached.ficha };
       }
 
-      const response = await programacionServicioService.getFormatoOperacionalByServiceId(visita.serviceId);
-      const data = (response?.data ?? null) as FormatoOperacionalApiData | null;
-      const formato = data ? normalizeFormato(data) : null;
-      if (formato) {
-        formatosCache.set(visita.serviceId, formato);
-      }
-      return { visita, formato };
+      const [resFormato, resFicha] = await Promise.all([
+        programacionServicioService.getFormatoOperacionalByServiceId(visita.serviceId),
+        programacionServicioService.getFichaByServiceId(visita.serviceId)
+      ]);
+
+      const dataFormato = (resFormato?.data ?? null) as FormatoOperacionalApiData | null;
+      const formato = dataFormato ? normalizeFormato(dataFormato) : null;
+      const ficha = resFicha?.data ?? null;
+
+      // Enriquecemos la visita con el correlativo de la ficha
+      visita.correlativoFicha = ficha?.correlativo || formato?.correlativo || '-';
+
+      formatosCache.set(visita.serviceId, { formato, ficha });
+      
+      return { visita, formato, ficha };
     } catch {
-      return { visita, formato: null };
+      return { visita, formato: null, ficha: null };
     }
   }));
 
-  rellenarFormularioDesdeGrupo(group, formatosPorVisita);
+  rellenarFormularioDesdeGrupo(group, formatosPorVisita, tipoHoja);
+  actualizarSeccionesConclusiones(formatosPorVisita);
 
-  const html = formatosPorVisita.map((entry, idx) => renderInformeVisitaCard(entry.visita, entry.formato, tipoHoja, idx)).join('');
+  const html = formatosPorVisita.map((entry, idx) => {
+    const isUsed = tipoHoja === 'verdadera' 
+      ? (group.usedIdsVerdadera?.includes(entry.visita.serviceId) ?? false)
+      : (group.usedIdsFalsa?.includes(entry.visita.serviceId) ?? false);
+    return renderInformeVisitaCard(entry.visita, entry.formato, tipoHoja, idx, group.cliente, isUsed);
+  }).join('');
   detalleContainer.innerHTML = html || '<div style="color:#64748b;font-size:13px;">No se encontraron detalles para este cliente.</div>';
 }
 
@@ -643,7 +1536,7 @@ function rellenarFormularioDesdeServicio(servicio: ProgramacionConEvidencias) {
   }
 
   // Mostrar imágenes de evidencia
-  const evidenciasContainer = document.querySelector('#operaciones-evidencias-preview') as HTMLElement | null;
+  const evidenciasContainer = document.querySelector('#operaciones-hallazgos-roedores-picker') as HTMLElement | null;
   if (evidenciasContainer && servicio.fotos_evidencia) {
     const evidencias = parseEvidenceEntries(servicio.fotos_evidencia);
     const uniqueImages = Array.from(new Set(evidencias.map(e => resolvePhotoUrl(e.path))));
@@ -662,6 +1555,7 @@ type ServiceEvidenceEntry = {
   path: string;
   serviceId: number | null;
   serviceTitle: string | null;
+  descripcion: string | null;
 }
 
 type ServicioRealizadoEnProgreso = {
@@ -672,7 +1566,7 @@ type ServicioRealizadoEnProgreso = {
   cliente: string;
   fechaRaw: string;
   tecnicos: Set<string>;
-  evidenciasPorServicio: Map<string, Set<string>>;
+  evidenciasPorServicio: Map<string, Map<string, { url: string; descripcion: string | null }>>;
 }
 
 export type ServicioRealizadoCardViewModel = {
@@ -684,7 +1578,7 @@ export type ServicioRealizadoCardViewModel = {
   tecnicosLabel: string;
   previewImages: string[];
   extraCount: number;
-  secciones: Array<{ servicio: string; imagenes: string[] }>;
+  secciones: Array<{ servicio: string; imagenes: Array<{ url: string; descripcion: string | null }> }>;
 }
 
 export type FichaOperacionalViewModel = {
@@ -706,6 +1600,7 @@ export type FichaOperacionalViewModel = {
   recomendaciones: string;
   firmas: Record<string, unknown> | null;
   observaciones: string;
+  correlativo: string;
 }
 
 export type FormatoOperacionalViewModel = {
@@ -718,6 +1613,9 @@ export type FormatoOperacionalViewModel = {
   horaInicio: string;
   horaFinal: string;
   observaciones: string;
+  correlativo: string;
+  correlativo_documento: string;
+  numero_documento: string;
   formatos_fichas?: string[];
   secciones: Array<{
     tipo: string;
@@ -754,17 +1652,23 @@ export type ClienteVisitaViewModel = {
   tecnicosLabel: string;
   previewImages: string[];
   extraCount: number;
-  secciones: Array<{ servicio: string; imagenes: string[] }>;
+  secciones: Array<{ servicio: string; imagenes: Array<{ url: string; descripcion: string | null }> }>;
   evidenceImages: string[];
   devices?: Array<{ codigo: string; ubicacion: string }>;
+  correlativoFicha?: string;
 }
 
 export type ClienteMesGroup = {
   key: string;
+  idCliente: number;
   cliente: string;
   monthKey: string;
   monthLabel: string;
   visitas: ClienteVisitaViewModel[];
+  hasVerdadera?: boolean;
+  hasFalsa?: boolean;
+  usedIdsVerdadera?: number[];
+  usedIdsFalsa?: number[];
 }
 
 const INSECTOS_VOLADORES = [
@@ -779,6 +1683,17 @@ const INSECTOS_VOLADORES = [
   { key: 'otros_no_identificados', label: 'Otros no identificados' },
 ] as const;
 
+const INSECTOS_VOLADORES_YAMBOLY = [
+  { key: 'moscas_domesticas', label: 'Moscas Domésticas' },
+  { key: 'mosca_menor', label: 'Mosca Menor' },
+  { key: 'zancudo', label: 'Zancudo' },
+  { key: 'avispa', label: 'Avispa' },
+  { key: 'abeja', label: 'Abeja' },
+  { key: 'mariposa', label: 'Mariposa' },
+  { key: 'polilla', label: 'Polilla' },
+  { key: 'gorgojo', label: 'Gorgojo' },
+] as const;
+
 function normalizeText(value: string): string {
   return value
     .toLowerCase()
@@ -786,18 +1701,65 @@ function normalizeText(value: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
-function isVoladoresFormato(formato: FormatoOperacionalViewModel): boolean {
+function isVoladoresFormato(formato: FormatoOperacionalViewModel | null, serviceName?: string): boolean {
+  if (serviceName && normalizeText(serviceName).includes('voladores')) return true;
+  if (!formato) return false;
   return formato.secciones.some((seccion) => {
     const hayTitulo = normalizeText(`${seccion.titulo} ${seccion.tipo}`);
     return hayTitulo.includes('trampa de luz') || hayTitulo.includes('trampa_luz') || hayTitulo.includes('voladores');
   });
 }
 
-function isRastrerosFormato(formato: FormatoOperacionalViewModel): boolean {
+function isRastrerosFormato(formato: FormatoOperacionalViewModel | null, serviceName?: string): boolean {
+  const sName = normalizeText(serviceName || '');
+  if (sName.includes('rastreros')) return true;
+  if (sName.includes('roedores')) return false;
+  if (!formato) return false;
+
+  const tieneRoedores = formato.secciones.some((seccion) => {
+    const hayTitulo = normalizeText(`${seccion.titulo} ${seccion.tipo}`);
+    return hayTitulo.includes('caja cebadera') || hayTitulo.includes('jaula') || hayTitulo.includes('tubo') || hayTitulo.includes('roedores');
+  });
+
   return formato.secciones.some((seccion) => {
     const hayTitulo = normalizeText(`${seccion.titulo} ${seccion.tipo}`);
-    return hayTitulo.includes('lamina') || hayTitulo.includes('pegante') || hayTitulo.includes('rastreros');
+    if (hayTitulo.includes('rastreros')) return true;
+    
+    const esLamina = hayTitulo.includes('lamina') || hayTitulo.includes('pegante');
+    return esLamina && !tieneRoedores;
   });
+}
+
+function isRoedoresFormato(formato: FormatoOperacionalViewModel | null, serviceName?: string): boolean {
+  if (serviceName && normalizeText(serviceName).includes('roedores')) return true;
+  if (!formato) return false;
+  return formato.secciones.some((seccion) => {
+    const hayTitulo = normalizeText(`${seccion.titulo} ${seccion.tipo}`);
+    return hayTitulo.includes('caja cebadera') || hayTitulo.includes('jaula') || hayTitulo.includes('roedores') || hayTitulo.includes('tubo');
+  });
+}
+
+function isLimpiezaFormato(formato: FormatoOperacionalViewModel | null, serviceName?: string): boolean {
+  if (isRoedoresFormato(formato, serviceName)) return false;
+  if (isVoladoresFormato(formato, serviceName)) return false;
+  if (isRastrerosFormato(formato, serviceName)) return false;
+  return true;
+}
+
+function resolveTipoServicio(formato: FormatoOperacionalViewModel | null, serviceName?: string): string {
+  if (isRoedoresFormato(formato, serviceName)) return 'CONTROL DE ROEDORES';
+  if (isRastrerosFormato(formato, serviceName)) return 'CONTROL DE INSECTOS RASTREROS';
+  if (isVoladoresFormato(formato, serviceName)) return 'CONTROL DE INSECTOS VOLADORES';
+  
+  if (serviceName) {
+    const sName = normalizeText(serviceName);
+    if (sName.includes('limpieza') && (sName.includes('cisterna') || sName.includes('reservorio'))) {
+      return 'LIMPIEZA DE CISTERNAS';
+    }
+    return serviceName.toUpperCase().trim();
+  }
+  
+  return 'Otros';
 }
 
 function escapeHtml(value: string | null | undefined): string {
@@ -822,24 +1784,33 @@ function formatFecha(value?: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  return parsed.toLocaleDateString('es-PE');
+  const d = parsed.getDate().toString().padStart(2, '0');
+  const m = (parsed.getMonth() + 1).toString().padStart(2, '0');
+  const y = parsed.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+function toDateInputValue(value?: string): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  const y = parsed.getFullYear();
+  const m = String(parsed.getMonth() + 1).padStart(2, '0');
+  const d = String(parsed.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function getMonthKeyFromFecha(value?: string): string {
-  const raw = String(value ?? '').trim();
-  if (!raw) return 'unknown';
-
-  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoDate) {
-    return `${isoDate[1]}-${isoDate[2]}`;
-  }
-
-  const parsed = new Date(raw);
+  if (!value) return 'unknown';
+  const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return 'unknown';
   }
-
-  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+  const y = parsed.getFullYear();
+  const m = (parsed.getMonth() + 1).toString().padStart(2, '0');
+  return `${y}-${m}`;
 }
 
 function formatMonthLabel(monthKey: string): string {
@@ -862,7 +1833,10 @@ function formatFechaDocumento(value?: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return raw;
   }
-  return parsed.toLocaleDateString('es-PE');
+  const d = parsed.getDate().toString().padStart(2, '0');
+  const m = (parsed.getMonth() + 1).toString().padStart(2, '0');
+  const y = parsed.getFullYear();
+  return `${d}/${m}/${y}`;
 }
 
 function formatHoraDocumento(value?: string): string {
@@ -919,7 +1893,7 @@ function parseEvidenceEntries(value: unknown): ServiceEvidenceEntry[] {
     try {
       entries = JSON.parse(raw);
     } catch {
-      return [{ path: raw, serviceId: null, serviceTitle: null }];
+      return [{ path: raw, serviceId: null, serviceTitle: null, descripcion: null }];
     }
   }
 
@@ -931,7 +1905,7 @@ function parseEvidenceEntries(value: unknown): ServiceEvidenceEntry[] {
   for (const item of entries) {
     if (typeof item === 'string') {
       const path = item.trim();
-      if (path) mapped.push({ path, serviceId: null, serviceTitle: null });
+      if (path) mapped.push({ path, serviceId: null, serviceTitle: null, descripcion: null });
       continue;
     }
 
@@ -944,11 +1918,13 @@ function parseEvidenceEntries(value: unknown): ServiceEvidenceEntry[] {
         ? serviceIdRaw
         : (typeof serviceIdRaw === 'string' ? Number.parseInt(serviceIdRaw, 10) : NaN);
       const serviceTitle = String(obj.service_title ?? '').trim() || null;
+      const descripcion = String(obj.description ?? obj.descripcion ?? '').trim() || null;
 
       mapped.push({
         path,
         serviceId: Number.isFinite(serviceId) ? serviceId : null,
         serviceTitle,
+        descripcion,
       });
     }
   }
@@ -997,7 +1973,7 @@ function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalVi
     : [];
 
   return {
-    codigoDocumento: String(data?.codigo_documento ?? 'FO-OP-002').trim(),
+    codigoDocumento: String(data?.correlativo || data?.codigo_documento || 'FO-OP-002').trim(),
     version: String(data?.version ?? '01').trim(),
     cliente: String(data?.cliente ?? '').trim(),
     direccion: String(data?.direccion ?? '').trim(),
@@ -1006,6 +1982,9 @@ function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalVi
     horaInicio: String(data?.hora_inicio ?? '').trim(),
     horaFinal: String(data?.hora_final ?? '').trim(),
     observaciones: String(data?.observaciones ?? '').trim(),
+    correlativo: String(data?.correlativo ?? '').trim(),
+    correlativo_documento: String(data?.correlativo_documento ?? '').trim(),
+    numero_documento: String(data?.numero_documento ?? '').trim(),
     formatos_fichas: (data as any)?.formatos_fichas || [],
     secciones: secciones,
   };
@@ -1052,7 +2031,7 @@ export function mapServiciosRealizadosCards(items: Programacion[]): ServicioReal
         cliente,
         fechaRaw,
         tecnicos: new Set<string>(),
-        evidenciasPorServicio: new Map<string, Set<string>>(),
+        evidenciasPorServicio: new Map<string, Map<string, { url: string; descripcion: string | null }>>(),
       });
     }
 
@@ -1078,12 +2057,14 @@ export function mapServiciosRealizadosCards(items: Programacion[]): ServicioReal
     for (const evidencia of evidencias) {
       const serviceLabel = (evidencia.serviceTitle || servicio || 'Servicio').trim();
       if (!card.evidenciasPorServicio.has(serviceLabel)) {
-        card.evidenciasPorServicio.set(serviceLabel, new Set<string>());
+        card.evidenciasPorServicio.set(serviceLabel, new Map<string, { url: string; descripcion: string | null }>());
       }
 
       const photoUrl = resolvePhotoUrl(evidencia.path);
       if (photoUrl) {
-        card.evidenciasPorServicio.get(serviceLabel)!.add(photoUrl);
+        if (!card.evidenciasPorServicio.get(serviceLabel)!.has(photoUrl)) {
+          card.evidenciasPorServicio.get(serviceLabel)!.set(photoUrl, { url: photoUrl, descripcion: evidencia.descripcion || null });
+        }
       }
     }
   }
@@ -1098,12 +2079,12 @@ export function mapServiciosRealizadosCards(items: Programacion[]): ServicioReal
   });
 
   return cards.map((card) => {
-    const sections = Array.from(card.evidenciasPorServicio.entries()).map(([servicio, imagenes]) => ({
+    const sections = Array.from(card.evidenciasPorServicio.entries()).map(([servicio, mapImagenes]) => ({
       servicio,
-      imagenes: Array.from(imagenes),
+      imagenes: Array.from(mapImagenes.values()),
     }));
 
-    const allImages = sections.flatMap((section) => section.imagenes);
+    const allImages = sections.flatMap((section) => section.imagenes.map(i => i.url));
     const uniqueImages = Array.from(new Set(allImages));
 
     return {
@@ -1146,8 +2127,18 @@ export function renderServiciosRealizadosCards(cards: ServicioRealizadoCardViewM
           ` : '<div style="color:#64748b;font-size:14px;">Sin imágenes registradas</div>'}
         </div>
         <div class="report-docs-column">
-          <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver ficha operacional">Ficha</button>
-          <button class="report-doc report-doc-placeholder js-open-formato-operacional" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver formato operacional">Formato</button>
+          <button class="report-doc js-open-ficha-operacional" style="background:#fff;border:1px solid #2563eb;color:#2563eb;" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver ficha operacional">
+            <span class="report-doc-icon" style="background:transparent;color:#2563eb;width:auto;height:auto;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            </span>
+            <span class="report-doc-text" style="margin-top:2px;">Ficha</span>
+          </button>
+          <button class="report-doc js-open-formato-operacional" style="background:#fff;border:1px solid #1e293b;color:#1e293b;" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver formato operacional">
+            <span class="report-doc-icon" style="background:transparent;color:#1e293b;width:auto;height:auto;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            </span>
+            <span class="report-doc-text" style="margin-top:2px;">Formato</span>
+          </button>
         </div>
       </div>
       <div class="report-actions-row">
@@ -1168,8 +2159,14 @@ export function renderServiciosRealizadosCards(cards: ServicioRealizadoCardViewM
           <div class="report-right">
             ${compactPhotos}
             <div class="compact-actions">
-              <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(card.key)}">Ficha</button>
-              <button class="report-doc report-doc-placeholder js-open-formato-operacional" type="button" data-card-key="${escapeHtml(card.key)}">Formato</button>
+              <button class="report-doc js-open-ficha-operacional" style="background:#fff;border:1px solid #2563eb;color:#2563eb;" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver ficha operacional">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:2px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                <span class="report-doc-text">Ficha</span>
+              </button>
+              <button class="report-doc js-open-formato-operacional" style="background:#fff;border:1px solid #1e293b;color:#1e293b;" type="button" data-card-key="${escapeHtml(card.key)}" title="Ver formato operacional">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:2px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                <span class="report-doc-text">Formato</span>
+              </button>
               <button class="btn-secondary js-toggle-report-details" type="button" data-card-key="${escapeHtml(card.key)}">▼</button>
             </div>
           </div>
@@ -1194,11 +2191,14 @@ export function renderServicioImagenesModal(card: ServicioRealizadoCardViewModel
         ${card.secciones.map((section) => `
           <div style="margin-top:16px;">
             <h4 style="margin:0 0 10px 0;color:#1e3a8a;font-size:16px;">${escapeHtml(section.servicio)} (${section.imagenes.length})</h4>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
               ${section.imagenes.map((img) => `
-                <a href="${escapeHtml(img)}" target="_blank" rel="noopener noreferrer" style="display:block;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#f8fafc;">
-                  <img src="${escapeHtml(img)}" alt="Evidencia ${escapeHtml(section.servicio)}" style="width:100%;height:140px;object-fit:cover;display:block;" loading="lazy" />
-                </a>
+                <div style="display:flex;flex-direction:column;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#f8fafc;">
+                  <a href="${escapeHtml(img.url)}" target="_blank" rel="noopener noreferrer" style="display:block;">
+                    <img src="${escapeHtml(img.url)}" alt="Evidencia ${escapeHtml(section.servicio)}" style="width:100%;height:160px;object-fit:cover;display:block;" loading="lazy" />
+                  </a>
+                  ${img.descripcion ? `<div style="padding:8px;font-size:13px;color:#475569;background:#fff;border-top:1px solid #e2e8f0;">${escapeHtml(img.descripcion)}</div>` : ''}
+                </div>
               `).join('')}
             </div>
           </div>
@@ -1219,10 +2219,12 @@ export function mapServiciosPorClienteMes(items: Programacion[]): ClienteMesGrou
     const fecha = fechaRaw || '';
     const monthKey = getMonthKeyFromFecha(fecha);
 
+    const idCliente = item.orden_servicio?.cliente?.id || 0;
     const groupKey = `${cliente}::${monthKey}`;
     if (!groups.has(groupKey)) {
       groups.set(groupKey, {
         key: groupKey,
+        idCliente,
         cliente,
         monthKey,
         monthLabel: formatMonthLabel(monthKey),
@@ -1237,12 +2239,24 @@ export function mapServiciosPorClienteMes(items: Programacion[]): ClienteMesGrou
     const tecnicos = getTecnicosList(item).join(', ') || 'Sin técnico asignado';
 
     const evidencias = parseEvidenceEntries(item.fotos_evidencia);
-    const images: string[] = [];
-    for (const ev of evidencias) {
-      const url = resolvePhotoUrl(ev.path);
-      if (url) images.push(url);
+    const evidenciasPorServicio = new Map<string, Map<string, { url: string; descripcion: string | null }>>();
+    for (const evidencia of evidencias) {
+      const serviceLabel = (evidencia.serviceTitle || servicio || 'Servicio').trim();
+      if (!evidenciasPorServicio.has(serviceLabel)) {
+        evidenciasPorServicio.set(serviceLabel, new Map<string, { url: string; descripcion: string | null }>());
+      }
+      const photoUrl = resolvePhotoUrl(evidencia.path);
+      if (photoUrl && !evidenciasPorServicio.get(serviceLabel)!.has(photoUrl)) {
+        evidenciasPorServicio.get(serviceLabel)!.set(photoUrl, { url: photoUrl, descripcion: evidencia.descripcion || null });
+      }
     }
-    const uniqueImages = Array.from(new Set(images));
+
+    const sections = Array.from(evidenciasPorServicio.entries()).map(([serv, mapImagenes]) => ({
+      servicio: serv,
+      imagenes: Array.from(mapImagenes.values()),
+    }));
+
+    const uniqueImages = Array.from(new Set(sections.flatMap(s => s.imagenes.map(i => i.url))));
 
     const visita: ClienteVisitaViewModel = {
       key: `${item.id}_${item.id_grupo_programacion ?? ''}`,
@@ -1254,7 +2268,7 @@ export function mapServiciosPorClienteMes(items: Programacion[]): ClienteMesGrou
       tecnicosLabel: tecnicos,
       previewImages: uniqueImages.slice(0, 4),
       extraCount: Math.max(0, uniqueImages.length - 4),
-      secciones: [], // secciones las cargaremos a demanda usando handlers existentes
+      secciones: sections,
       evidenceImages: uniqueImages,
     };
 
@@ -1271,7 +2285,7 @@ export function mapServiciosPorClienteMes(items: Programacion[]): ClienteMesGrou
 
   // ordenar visitas por fecha asc (de antigua a nueva)
   for (const g of arr) {
-    g.visitas.sort((x: ClienteVisitaViewModel, y: ClienteVisitaViewModel) => (x.fechaLabel || '').localeCompare(y.fechaLabel || ''));
+    g.visitas.sort((x: ClienteVisitaViewModel, y: ClienteVisitaViewModel) => (x.fechaRaw || '').localeCompare(y.fechaRaw || ''));
   }
 
   return arr;
@@ -1341,12 +2355,12 @@ export function renderVisitaDetail(v: ClienteVisitaViewModel): string {
           ` : '<div class="visit-empty">Sin imágenes registradas</div>'}
         </div>
         <div class="report-docs-column report-docs-column-visit">
-          <button class="report-doc report-doc-primary js-open-ficha-operacional" type="button" data-card-key="${escapeHtml(v.key)}" aria-label="Abrir ficha operacional">
-            <span class="report-doc-icon">F</span>
+          <button class="report-doc js-open-ficha-operacional" style="background:#fff;border:1px solid #2563eb;color:#2563eb;" type="button" data-card-key="${escapeHtml(v.key)}" aria-label="Abrir ficha operacional">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:2px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
             <span class="report-doc-text">Ficha</span>
           </button>
-          <button class="report-doc report-doc-placeholder js-open-formato-operacional" type="button" data-card-key="${escapeHtml(v.key)}" aria-label="Abrir formato operacional">
-            <span class="report-doc-icon">O</span>
+          <button class="report-doc js-open-formato-operacional" style="background:#fff;border:1px solid #1e293b;color:#1e293b;" type="button" data-card-key="${escapeHtml(v.key)}" aria-label="Abrir formato operacional">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:2px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
             <span class="report-doc-text">Formato</span>
           </button>
         </div>
@@ -1510,7 +2524,7 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
             <div style="display:grid;grid-template-rows:repeat(3,minmax(0,1fr));">
               <div style="display:grid;grid-template-columns:80px minmax(0,1fr);border-bottom:1px solid #cbd5e1;">
                 <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Código</div>
-                <div style="padding:8px 10px;font-size:13px;color:#0f172a;font-weight:600;">FO-OP-001</div>
+                <div style="padding:8px 10px;font-size:13px;color:#0f172a;font-weight:600;">${escapeHtml(ficha.correlativo || 'FO-0001')}</div>
               </div>
               <div style="display:grid;grid-template-columns:80px minmax(0,1fr);border-bottom:1px solid #cbd5e1;">
                 <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:13px;color:#334155;">Fecha</div>
@@ -1633,7 +2647,7 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
     
     if (tipo === 'trampa_luz' || (normalizado.includes('trampa') && normalizado.includes('luz'))) {
       formatosPresentesSet.add('voladores');
-    } else if (tipo.startsWith('roedores') || normalizado.includes('cebadera')) {
+    } else if (tipo.startsWith('roedores') || tipo === 'tubo_cebadero' || normalizado.includes('cebadera') || normalizado.includes('tubo')) {
       formatosPresentesSet.add('roedores');
     } else if (tipo === 'rastreros_lamina' || normalizado.includes('lamina')) {
       formatosPresentesSet.add('rastreros');
@@ -1828,7 +2842,7 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
 
       if (tipo === 'trampa_luz' || (normalizado.includes('trampa') && normalizado.includes('luz'))) {
         return renderFullVoladores(seccion);
-      } else if (tipo.startsWith('roedores') || normalizado.includes('cebadera')) {
+      } else if (tipo.startsWith('roedores') || tipo === 'tubo_cebadero' || tipo === 'jaula' || normalizado.includes('cebadera') || normalizado.includes('jaula') || normalizado.includes('tubo')) {
         return renderFullRoedores(seccion);
       } else {
         return renderFullRastreros(seccion);
@@ -1961,10 +2975,17 @@ export function renderServiciosDiaTab() {
     </div>
 
     <div class="recent-reports">
-      <h3 style="margin-top: 32px; margin-bottom: 16px;">Informes Recientes con Evidencias</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:32px; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+        <h3 style="margin:0;">Informes Recientes con Evidencias</h3>
+        <div style="display:flex;gap:8px;">
+          <select id="operaciones-servicios-realizados-month-filter" style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;width:160px;"></select>
+          <input type="text" id="operaciones-servicios-realizados-search" placeholder="Buscar cliente..." style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;width:250px;max-width:100%;" />
+        </div>
+      </div>
       <div class="reports-grid" id="operaciones-servicios-realizados-list">
         <p style="color:#64748b; margin:0;">Cargando servicios realizados...</p>
       </div>
+      <div id="operaciones-servicios-realizados-pagination" style="display:flex; justify-content:flex-end; gap:6px; margin-top:16px;"></div>
     </div>
   `;
 }
@@ -1987,16 +3008,20 @@ export function renderCrearInformeTab(): string {
       <!-- Panel derecho: Formulario de Informe -->
       <div style="display:grid;gap:16px;">
         <form id="operaciones-crear-informe-form-principal" style="display:grid;gap:14px;">
+          <input type="hidden" name="id_cliente" />
           <!-- Encabezado -->
           <div style="border-bottom:1px solid #cbd5e1;padding-bottom:12px;">
             <h2 style="margin:0 0 4px 0;font-size:16px;font-weight:700;color:#0f172a;">Crear Informe Técnico Mensual</h2>
             <p style="margin:0;color:#475569;font-size:13px;">Selecciona un servicio para pre-llenar los datos</p>
-            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
-              <label style="font-size:13px;color:#334155;font-weight:600;margin-right:6px;">Hoja:</label>
-              <select name="hoja_tipo" class="js-hoja-tipo-select" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
-                <option value="verdadera">Hoja Verdadera</option>
-                <option value="falsa">Hoja Falsa</option>
-              </select>
+            <div style="margin-top:8px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+              <div style="display:flex;gap:8px;align-items:center;">
+                <label style="font-size:13px;color:#334155;font-weight:600;">Hoja:</label>
+                <select name="hoja_tipo" class="js-hoja-tipo-select" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+                  <option value="verdadera">Hoja Verdadera</option>
+                  <option value="falsa">Hoja Falsa</option>
+                </select>
+              </div>
+
             </div>
           </div>
 
@@ -2004,7 +3029,7 @@ export function renderCrearInformeTab(): string {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Código de Informe</label>
-              <input name="codigo_informe" type="text" placeholder="AQO-12-25" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+              <input name="codigo_informe" type="text" placeholder="IT-OP-XXXX" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background-color:#f1f5f9;cursor:not-allowed;" />
             </div>
             <div>
               <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Mes de la Actividad</label>
@@ -2031,45 +3056,111 @@ export function renderCrearInformeTab(): string {
 
           <div>
             <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Actividad</label>
-            <input name="actividad" type="text" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background:#f8fafc;color:#334155;" />
+            <input name="actividad" type="text" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;color:#334155;" />
           </div>
 
-          <!-- Fila 4: Fechas de visitas y N° de fichas -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div>
-              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Fechas de Visitas (separadas por coma)</label>
-              <input name="fechas_visitas" type="text" placeholder="10/12/2025, 23/12/2025" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
-            </div>
-            <div>
-              <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Nº de Fichas</label>
-              <input name="n_fichas" type="text" placeholder="007678" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
-            </div>
+          <!-- Insumos y áreas manuales removidos por automatización -->
+
+          <!-- Sección: Tabla de Visitas -->
+          <div style="margin-top: 8px;">
+            <table style="width:100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 13px;">
+              <thead>
+                <tr style="background: #f1f5f9;">
+                  <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: center; width: 80px;">N° DE VISITAS</th>
+                  <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">FECHA DE VISITAS</th>
+                  <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">N° FICHAS</th>
+                </tr>
+              </thead>
+              <tbody id="operaciones-tabla-visitas-body">
+                <tr>
+                  <td colspan="3" style="padding: 12px; text-align: center; color: #64748b;">Selecciona un servicio para ver las visitas</td>
+                </tr>
+              </tbody>
+            </table>
+            <!-- Mantenemos inputs ocultos para no romper el submit del form si se usa en otros lados -->
+            <input name="fechas_visitas" type="hidden" />
+            <input name="n_fichas" type="hidden" />
           </div>
 
           <!-- Fila 5: Elaborado por y N° visitas -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Elaborado por</label>
-              <input name="elaborado_por" type="text" placeholder="Nombre del responsable" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+              <input name="elaborado_por" type="text" placeholder="Nombre del responsable" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background-color:#f1f5f9;cursor:not-allowed;" />
             </div>
             <div>
               <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;font-size:13px;">Nº de visitas</label>
-              <input name="n_visitas" type="number" min="0" value="1" style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;" />
+              <input name="n_visitas" type="number" min="0" value="1" readonly style="padding:8px;border:1px solid #cbd5e1;border-radius:6px;width:100%;font-size:13px;background-color:#f1f5f9;cursor:not-allowed;" />
             </div>
           </div>
 
-          <!-- Sección: Evidencias -->
-          <div style="border-top:1px solid #cbd5e1;padding-top:12px;">
-            <h4 style="margin:0 0 10px 0;font-size:13px;font-weight:700;color:#0f172a;">Evidencias Fotográficas del Servicio</h4>
-            <div id="operaciones-evidencias-preview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;">
-              <p style="color:#64748b;font-size:12px;grid-column:1/-1;">Selecciona un servicio para ver evidencias</p>
+          <!-- Sección: Hallazgos de roedores -->
+          <div id="operaciones-hallazgos-roedores-section" style="border-top:1px solid #cbd5e1;padding-top:12px;">
+            <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">4. Hallazgos en Dispositivos de Control (Roedores)</h4>
+            <p style="margin:0 0 10px 0;color:#64748b;font-size:12px;">Selecciona las imágenes que irán en el informe y agrega una descripción para cada hallazgo.</p>
+            <div id="operaciones-hallazgos-roedores-picker" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+              <p style="color:#64748b;font-size:12px;grid-column:1/-1;">Selecciona un cliente para cargar fotos de control de roedores.</p>
+            </div>
+          </div>
+
+          <!-- Sección: Hallazgos de voladores -->
+          <div id="operaciones-hallazgos-voladores-section" style="border-top:1px solid #cbd5e1;padding-top:12px;display:none;">
+            <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">4. Hallazgos en Dispositivos de Control (Voladores)</h4>
+            <p style="margin:0 0 10px 0;color:#64748b;font-size:12px;">Selecciona las imágenes que irán en el informe y agrega una descripción para cada hallazgo.</p>
+            <div id="operaciones-hallazgos-voladores-picker" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+              <p style="color:#64748b;font-size:12px;grid-column:1/-1;">Selecciona un cliente para cargar fotos de control de insectos voladores.</p>
+            </div>
+          </div>
+
+          <!-- Sección: Hallazgos de rastreros -->
+          <div id="operaciones-hallazgos-rastreros-section" style="border-top:1px solid #cbd5e1;padding-top:12px;display:none;">
+            <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">1.3 Registro Fotográfico (Rastreros)</h4>
+            <p style="margin:0 0 10px 0;color:#64748b;font-size:12px;">Selecciona las imágenes que irán en el informe y agrega una descripción para cada hallazgo.</p>
+            <div id="operaciones-hallazgos-rastreros-picker" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+              <p style="color:#64748b;font-size:12px;grid-column:1/-1;">Selecciona un cliente para cargar fotos de control de insectos rastreros.</p>
+            </div>
+          </div>
+
+          <!-- Sección: Hallazgos de limpieza -->
+          <div id="operaciones-hallazgos-limpieza-section" style="border-top:1px solid #cbd5e1;padding-top:12px;display:none;">
+            <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">4. Registro Fotográfico (Limpieza de Cisternas)</h4>
+            <p style="margin:0 0 10px 0;color:#64748b;font-size:12px;">Selecciona las imágenes que irán en el informe y agrega una descripción para cada evidencia.</p>
+            <div id="operaciones-hallazgos-limpieza-picker" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+              <p style="color:#64748b;font-size:12px;grid-column:1/-1;">Selecciona un cliente para cargar fotos de limpieza de cisternas.</p>
             </div>
           </div>
 
           <!-- Botones de acción -->
-          <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #cbd5e1;padding-top:12px;">
-            <button type="reset" class="btn-secondary" style="padding:8px 16px;">Limpiar</button>
-            <button type="submit" class="btn-primary" style="padding:8px 16px;">Crear Informe</button>
+          <div style="display:grid;gap:8px;align-items:start;border-top:1px solid #cbd5e1;padding-top:12px;">
+            <div id="operaciones-conclusiones-roedores-section" style="display:none;">
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:13px;">5.1 Conclusiones y Recomendaciones - Roedores</label>
+              <textarea name="conclusiones_roedores" placeholder="Escribe las conclusiones y recomendaciones para Control de Roedores" rows="4" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical;"></textarea>
+            </div>
+            <div id="operaciones-conclusiones-voladores-section" style="display:none;">
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:13px;">5.2 Conclusiones y Recomendaciones - Voladores</label>
+              <textarea name="conclusiones_voladores" placeholder="Escribe las conclusiones y recomendaciones para Control de Insectos Voladores" rows="4" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical;"></textarea>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#334155;">
+                  <input type="checkbox" name="conclusiones_voladores_anexo" class="js-conclusiones-voladores-anexo"> Incluir Anexo Voladores
+                </label>
+              </div>
+              <div id="operaciones-conclusiones-voladores-anexo-resultados" style="display:none;margin-top:8px;">
+                <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:13px;">RESULTADOS</label>
+                <textarea name="conclusiones_voladores_resultados" placeholder="Escribe los resultados (esto se mostrará en el PDF)" rows="4" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical;"></textarea>
+              </div>
+            </div>
+            <div id="operaciones-conclusiones-rastreros-section" style="display:none;">
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:13px;">1.4 Observaciones e Indicaciones - Rastreros</label>
+              <textarea name="conclusiones_rastreros" placeholder="Escribe las observaciones e indicaciones para Control de Insectos Rastreros" rows="4" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical;"></textarea>
+            </div>
+            <div id="operaciones-conclusiones-limpieza-section" style="display:none;">
+              <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:13px;">5. Observaciones e Indicaciones - Limpieza de Cisternas</label>
+              <textarea name="conclusiones_limpieza" placeholder="Escribe las observaciones e indicaciones para la limpieza" rows="4" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical;"></textarea>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+              <button type="reset" class="btn-secondary" style="padding:8px 16px;">Limpiar</button>
+              <button type="submit" class="btn-primary" style="padding:8px 16px;">Crear Informe</button>
+            </div>
           </div>
         </form>
 
@@ -2115,103 +3206,12 @@ export function renderHistorialInformesTab() {
             <th>ACCIONES</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="operaciones-historial-informes-body">
           <tr>
-            <td><strong>AQO-12-25</strong></td>
-            <td>EMBOTELLADORA AGUAOASIS PERÚ S.A.C.</td>
-            <td>Diciembre 2025</td>
-            <td>17/01/2026</td>
-            <td>BEATRIZ SULCA - ASISTENTE MIP</td>
-            <td>007678</td>
-            <td>
-              <div style="display:flex;gap:6px;">
-                <button class="btn-secondary" style="padding:4px 8px;font-size:11px;">Ver Detalles</button>
-                <button class="btn-primary" style="padding:4px 8px;font-size:11px;">Descargar PDF</button>
-              </div>
-            </td>
-          </tr>
-          <tr>
-            <td><strong>AQO-11-25</strong></td>
-            <td>FARMACÉUTICA CENTRAL</td>
-            <td>Noviembre 2025</td>
-            <td>05/12/2025</td>
-            <td>JUAN GARCÍA - SUPERVISOR</td>
-            <td>007654</td>
-            <td>
-              <div style="display:flex;gap:6px;">
-                <button class="btn-secondary" style="padding:4px 8px;font-size:11px;">Ver Detalles</button>
-                <button class="btn-primary" style="padding:4px 8px;font-size:11px;">Descargar PDF</button>
-              </div>
-            </td>
-          </tr>
-          <tr>
-            <td><strong>AQO-10-25</strong></td>
-            <td>HOTEL MIRAMAR</td>
-            <td>Octubre 2025</td>
-            <td>31/10/2025</td>
-            <td>BEATRIZ SULCA - ASISTENTE MIP</td>
-            <td>007645</td>
-            <td>
-              <div style="display:flex;gap:6px;">
-                <button class="btn-secondary" style="padding:4px 8px;font-size:11px;">Ver Detalles</button>
-                <button class="btn-primary" style="padding:4px 8px;font-size:11px;">Descargar PDF</button>
-              </div>
-            </td>
+            <td colspan="7" style="text-align:center;padding:20px;color:#64748b;">Cargando historial de informes...</td>
           </tr>
         </tbody>
       </table>
-    </div>
-
-    <div class="stats-row" style="margin-top:24px;grid-template-columns:repeat(4,minmax(0,1fr));">
-      <div class="stat-box">
-        <div class="stat-box-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Total Clientes</div>
-          <div class="stat-box-value">24</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon blue">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Informes Entregados</div>
-          <div class="stat-box-value">186</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon orange">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Pendientes</div>
-          <div class="stat-box-value">12</div>
-        </div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-box-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </div>
-        <div class="stat-box-content">
-          <div class="stat-box-label">Tasa de Entrega</div>
-          <div class="stat-box-value">93.9%</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="pagination">
-      <span class="pagination-info">Mostrando 1-5 de 24 clientes</span>
-      <div class="pagination-controls">
-        <button class="pagination-btn" disabled>Anterior</button>
-        <button class="pagination-btn active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">3</button>
-        <button class="pagination-btn">4</button>
-        <button class="pagination-btn">5</button>
-        <button class="pagination-btn">Siguiente</button>
-      </div>
     </div>
   `;
 }
@@ -2460,16 +3460,7 @@ export function renderOperaciones() {
   return `
     <div class="page-header-with-breadcrumb">
       <div class="breadcrumb">Operaciones e Informes</div>
-      <div class="page-actions">
-        <button class="btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Exportar
-        </button>
-        <button class="btn-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          Nuevo Servicio
-        </button>
-      </div>
+
     </div>
 
     <div class="inventory-tabs">

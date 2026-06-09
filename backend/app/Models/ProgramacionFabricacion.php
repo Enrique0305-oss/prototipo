@@ -25,6 +25,9 @@ class ProgramacionFabricacion extends Model
         'hora_fin',
         'estado_ejecucion',
         'observaciones',
+        'fotos_evidencia',
+        'fecha_inicio_real',
+        'fecha_fin_real',
         'creado_por',
     ];
 
@@ -36,6 +39,9 @@ class ProgramacionFabricacion extends Model
         'id_supervisor' => 'array',
         'productos_fabricacion' => 'array',
         'receta_fabricacion' => 'array',
+        'fotos_evidencia' => 'array',
+        'fecha_inicio_real' => 'datetime',
+        'fecha_fin_real' => 'datetime',
     ];
 
     public function tecnico()

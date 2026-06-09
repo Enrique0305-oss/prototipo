@@ -168,8 +168,25 @@
   background: white;
   border-radius: 12px;
   border: 1px solid var(--border-color);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   margin-bottom: 24px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.tabs-container {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.tab-content {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .data-table {
@@ -1406,8 +1423,8 @@
 }
 
 .visit-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: stretch;
 }
@@ -1419,6 +1436,8 @@
   overflow: hidden;
   background: #f8fafc;
   min-height: 110px;
+  width: 120px;
+  flex: 0 0 auto;
 }
 
 .visit-gallery-item img {

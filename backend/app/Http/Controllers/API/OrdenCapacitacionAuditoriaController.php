@@ -631,14 +631,25 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'ponente', 
             'ponentes', 
             'exponentes',
-            'cotizacion', 
+            'cotizacion.detalles.catalogoCapAud', 
+            'cotizacion.detalles.servicio',
             'servicio',
             'materiales', // Cargar materiales
             'equipos',     // Cargar equipos
             'emisor'
         ])->findOrFail($id);
 
-        $orden->servicio_nombre = $orden->servicio ? $orden->servicio->nombre : 'SERVICIO NO ESPECIFICADO';
+        $nombreServicio = null;
+        if ($orden->servicio) {
+            $nombreServicio = $orden->servicio->nombre;
+        } elseif ($orden->cotizacion && $orden->cotizacion->detalles->count() > 0) {
+            $primerDetalle = $orden->cotizacion->detalles->first();
+            $nombreServicio = $primerDetalle->catalogoCapAud ? $primerDetalle->catalogoCapAud->nombre : 
+                              ($primerDetalle->servicio ? $primerDetalle->servicio->nombre : 
+                              ($primerDetalle->descripcion_manual ?? null));
+        }
+        
+        $orden->servicio_nombre = $nombreServicio ?: 'SERVICIO NO ESPECIFICADO';
 
         $pdf = Pdf::loadView('OrdenCapacitacionAudiPDF', compact('orden'));
         

@@ -50,14 +50,20 @@ export interface CajaChica {
 
 export interface MovimientoCajaChica {
   id: number;
-  id_caja_chica: number;
   fecha: string;
-  tipo: TipoMovimiento;
-  concepto: string;
-  monto: number;
-  comprobante?: string;
+  tipo_movimiento: 'Ingreso' | 'Egreso';
   solicitante?: string;
-  aprobado_por?: string;
+  area?: string;
+  proveedor?: string;
+  documento?: string;
+  concepto: string;
+  tipo_dinero?: string;
+  numero_operacion?: string;
+  subtotal?: number;
+  ingreso: number;
+  egreso: number;
+  saldo_actual: number;
+  registrado_por?: string;
 }
 
 // Cuentas por Cobrar

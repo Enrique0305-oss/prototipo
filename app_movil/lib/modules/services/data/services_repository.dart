@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -40,6 +41,9 @@ class ServicesRepository {
   final ServicesLocalDao _localDao;
   final FichaLocalDao _fichaDao;
   final SyncQueueDao _syncQueueDao;
+
+  /// Expone el repositorio de autenticación para uso de otras capas
+  AuthRepository get authRepository => _authRepository;
 
   /// Expone el cliente HTTP configurado para que SyncWorker pueda reutilizarlo.
   ApiClient get apiClient => _apiClient;
@@ -133,24 +137,81 @@ class ServicesRepository {
       query['id_tecnico'] = AppConfig.technicianId.toString();
     }
 
-    final response = await _apiClient.get('/v1/programacion-servicio', token: token, query: query);
+    // Ejecutar las 4 peticiones en paralelo y atrapar errores si alguno falla (para que no rompa el resto)
+    final responses = await Future.wait([
+      _apiClient.get('/v1/programacion-servicio', token: token, query: query).catchError((_) => {'data': []}),
+      _apiClient.get('/v1/programacion-visita', token: token, query: query).catchError((_) => {'data': []}),
+      _apiClient.get('/v1/programacion-fabricacion', token: token, query: query).catchError((_) => {'data': []}),
+      _apiClient.get('/v1/programacion-otros', token: token, query: query).catchError((_) => {'data': []}),
+    ]);
 
-    final data = response['data'];
-    if (data is! List) {
-      return <ServiceTask>[];
+    final List<Map<String, dynamic>> allRawData = [];
+
+    // Inyectar el tipo a cada lista de resultados antes de juntarlas
+    final types = ['Servicio', 'Visita', 'Fabricacion', 'Otro'];
+    for (int i = 0; i < responses.length; i++) {
+      final data = responses[i]['data'];
+      if (data is List) {
+        for (var item in data) {
+          if (item is Map<String, dynamic>) {
+            item['tipo_programacion'] = types[i];
+            allRawData.add(item);
+          }
+        }
+      }
     }
 
-    final services = data
-        .whereType<Map<String, dynamic>>()
+    final services = allRawData
         .map(ServiceTask.fromJson)
-        .toList(growable: false);
+        .toList();
+
+    // Ordenar por hora (y luego por id) para mantener consistencia
+    services.sort((a, b) {
+      final t1 = a.startTime ?? '23:59';
+      final t2 = b.startTime ?? '23:59';
+      final cmp = t1.compareTo(t2);
+      if (cmp != 0) return cmp;
+      return a.id.compareTo(b.id);
+    });
 
     // ─── Guardar en caché local ─────────────────────────────────────────────
     final tid = technicianId ?? AppConfig.technicianId;
     unawaited(_localDao.upsertServices(services, tid));
+    
+    // ─── PRE-FETCH DATOS OFFLINE EN SEGUNDO PLANO ───────────────────────────
+    unawaited(_prefetchServiceData(services));
     // ───────────────────────────────────────────────────────────────────────
 
     return services;
+  }
+
+  /// Pre-carga de datos de los formularios en segundo plano para uso offline real.
+  /// Esto asegura que cuando el técnico presione "Empezar servicio" sin internet,
+  /// la base de datos local SQLite ya tenga todo lo necesario.
+  Future<void> _prefetchServiceData(List<ServiceTask> services) async {
+    for (final s in services) {
+      final status = s.status.toLowerCase();
+      // Omitir cancelados o los que ya terminaron hace tiempo para no saturar
+      if (status.contains('cancelado') || status == 'realizado (pendiente sync)') continue;
+
+      try {
+        await getFormatoOperacionalCalculo(programacionId: s.id);
+      } catch (e) {
+        debugPrint('Prefetch error (Formato Calculo) for ${s.id}: $e');
+      }
+
+      try {
+        await getInsumosQuimicosEntregados(s.id);
+      } catch (e) {
+        debugPrint('Prefetch error (Insumos) for ${s.id}: $e');
+      }
+
+      try {
+        await getFichaByServiceId(s.id);
+      } catch (e) {
+        debugPrint('Prefetch error/info (Ficha) for ${s.id}: $e');
+      }
+    }
   }
 
   Future<ServiceTask> getServiceById(int id) async {
@@ -191,6 +252,8 @@ class ServicesRepository {
     String? observations,
     int? durationMinutes,
     List<ServiceEvidenceUpload> evidencePhotos = const <ServiceEvidenceUpload>[],
+    String tipoProgramacion = 'Servicio',
+    bool isCompletedLocally = false,
   }) async {
     if (AppConfig.useMockData) {
       final index = _mockServices.indexWhere((s) => s.id == id);
@@ -208,7 +271,9 @@ class ServicesRepository {
       throw ApiException('No hay sesion activa', 401, const {});
     }
 
-    final body = <String, dynamic>{};
+    final body = <String, dynamic>{
+      'fecha_fin_real': DateTime.now().toIso8601String(),
+    };
     if (observations != null && observations.isNotEmpty) {
       body['observaciones'] = observations;
     }
@@ -219,11 +284,34 @@ class ServicesRepository {
     // ─── OFFLINE ─────────────────────────────────────────────────────────
     final isOnline = await _connectivity.isOnline;
     if (!isOnline) {
+      final cached = await _localDao.getServiceById(id);
+      if (cached != null && cached.startTimeReal != null && cached.startTimeReal!.isNotEmpty) {
+        body['fecha_inicio_real'] = cached.startTimeReal;
+      }
+
+      if (evidencePhotos.isNotEmpty) {
+        final meta = evidencePhotos
+            .map(
+              (photo) => {
+                'service_id': photo.serviceId,
+                'service_title': photo.serviceTitle,
+                if (photo.description != null) 'description': photo.description,
+              },
+            )
+            .toList(growable: false);
+        body['fotos_evidencia_meta'] = jsonEncode(meta);
+      }
+
       // Copiar fotos al almacenamiento local para que no se pierdan
       final localPhotoPaths = await _copyPhotosToLocalStorage(
         evidencePhotos,
         serviceId: id,
       );
+
+      String endpoint = '/v1/programacion-servicio/$id/completar';
+      if (tipoProgramacion == 'Visita') endpoint = '/v1/programacion-visita/$id/completar';
+      if (tipoProgramacion == 'Fabricacion') endpoint = '/v1/programacion-fabricacion/$id/completar';
+      if (tipoProgramacion == 'Otro') endpoint = '/v1/programacion-otros/$id/completar';
 
       final operationId = _generateOperationId('complete_service', id);
       await _syncQueueDao.enqueue(
@@ -232,7 +320,7 @@ class ServicesRepository {
           entityType: 'complete_service',
           entityId: id,
           method: evidencePhotos.isEmpty ? 'PATCH' : 'MULTIPART',
-          endpoint: '/v1/programacion-servicio/$id/completar',
+          endpoint: endpoint,
           payloadJson: jsonEncode(body),
           photoPathsJson:
               localPhotoPaths.isEmpty ? null : jsonEncode(localPhotoPaths),
@@ -240,21 +328,23 @@ class ServicesRepository {
         ),
       );
 
-      await _localDao.updateServiceStatus(id, 'Realizado (pendiente sync)');
+      await _localDao.updateServiceStatus(
+        id, 
+        'Realizado (pendiente sync)',
+        observations: observations,
+        durationMinutes: durationMinutes,
+        evidencePhotos: localPhotoPaths,
+      );
       return;
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    if (evidencePhotos.isEmpty) {
-      await _apiClient.patch(
-        '/v1/programacion-servicio/$id/completar',
-        token: token,
-        body: body,
-      );
-      return;
-    }
+    String endpoint = '/v1/programacion-servicio/$id/completar';
+    if (tipoProgramacion == 'Visita') endpoint = '/v1/programacion-visita/$id/completar';
+    if (tipoProgramacion == 'Fabricacion') endpoint = '/v1/programacion-fabricacion/$id/completar';
+    if (tipoProgramacion == 'Otro') endpoint = '/v1/programacion-otros/$id/completar';
 
-    final files = evidencePhotos
+    final photoFiles = evidencePhotos
         .map(
           (photo) => MultipartFilePayload(
             field: 'fotos_evidencia[]',
@@ -269,24 +359,25 @@ class ServicesRepository {
           (photo) => {
             'service_id': photo.serviceId,
             'service_title': photo.serviceTitle,
+            if (photo.description != null) 'description': photo.description,
           },
         )
         .toList(growable: false);
 
     await _apiClient.multipart(
       'POST',
-      '/v1/programacion-servicio/$id/completar',
+      endpoint,
       token: token,
       fields: {
         ...body.map((key, value) => MapEntry(key, value.toString())),
         'fotos_evidencia_meta': jsonEncode(meta),
         '_method': 'PATCH',
       },
-      files: files,
+      files: photoFiles,
     );
   }
 
-  Future<DateTime> startService({required int id}) async {
+  Future<DateTime> startService({required int id, String tipoProgramacion = 'Servicio'}) async {
     if (AppConfig.useMockData) {
       return DateTime.now();
     }
@@ -299,13 +390,26 @@ class ServicesRepository {
     // ─── OFFLINE ───────────────────────────────────────────────────────────
     final isOnline = await _connectivity.isOnline;
     if (!isOnline) {
+      final cached = await _localDao.getServiceById(id);
+      if (cached != null && cached.startTimeReal != null && cached.startTimeReal!.isNotEmpty) {
+        final parsed = DateTime.tryParse(cached.startTimeReal!);
+        if (parsed != null) return parsed;
+      }
+      
       // Registramos el inicio localmente para el cronómetro
-      return DateTime.now();
+      final now = DateTime.now();
+      await _localDao.updateServiceStartTime(id, now);
+      return now;
     }
     // ───────────────────────────────────────────────────────────────────────
 
+    String endpoint = '/v1/programacion-servicio/$id/iniciar';
+    if (tipoProgramacion == 'Visita') endpoint = '/v1/programacion-visita/$id/iniciar';
+    if (tipoProgramacion == 'Fabricacion') endpoint = '/v1/programacion-fabricacion/$id/iniciar';
+    if (tipoProgramacion == 'Otro') endpoint = '/v1/programacion-otros/$id/iniciar';
+
     final response = await _apiClient.patch(
-      '/v1/programacion-servicio/$id/iniciar',
+      endpoint,
       token: token,
       body: const <String, dynamic>{},
     );
@@ -320,14 +424,14 @@ class ServicesRepository {
     return parsed ?? DateTime.now();
   }
 
-  Future<DateTime> startServices({required List<int> ids}) async {
+  Future<DateTime> startServices({required List<int> ids, String tipoProgramacion = 'Servicio'}) async {
     if (ids.isEmpty) {
       return DateTime.now();
     }
 
     DateTime? minStartedAt;
     for (final id in ids) {
-      final startedAt = await startService(id: id);
+      final startedAt = await startService(id: id, tipoProgramacion: tipoProgramacion);
       if (minStartedAt == null || startedAt.isBefore(minStartedAt)) {
         minStartedAt = startedAt;
       }
@@ -341,18 +445,19 @@ class ServicesRepository {
     String? observations,
     int? durationMinutes,
     List<ServiceEvidenceUpload> evidencePhotos = const <ServiceEvidenceUpload>[],
+    String tipoProgramacion = 'Servicio',
   }) async {
     final groupedEvidence = <int, List<ServiceEvidenceUpload>>{};
     for (final evidence in evidencePhotos) {
       groupedEvidence.putIfAbsent(evidence.serviceId, () => <ServiceEvidenceUpload>[]).add(evidence);
     }
-
     for (final id in ids) {
       await completeService(
         id: id,
         observations: observations,
         durationMinutes: durationMinutes,
         evidencePhotos: groupedEvidence[id] ?? const <ServiceEvidenceUpload>[],
+        tipoProgramacion: tipoProgramacion,
       );
     }
   }
@@ -542,6 +647,40 @@ class ServicesRepository {
     List<Map<String, dynamic>> insumosMaps = <Map<String, dynamic>>[];
 
     try {
+      // Priorizar el endpoint específico que ya filtra por "químicos" y formatea datos
+      final response = await _apiClient.get(
+        '/v1/almacen/salidas-programacion/$programacionId/quimicos-entregados',
+        token: token,
+      );
+
+      final data = response['data'];
+      if (data is List) {
+        insumosMaps = data.whereType<Map<String, dynamic>>().toList(growable: false);
+        
+        final result = insumosMaps.map((item) {
+          return InsumoQuimicoEntregado(
+            idProducto: (item['id_producto'] as num?)?.toInt() ?? 0,
+            producto: (item['producto'] ?? 'Producto').toString(),
+            lote: (item['lote'] ?? '').toString(),
+            fechaVencimiento: (item['fecha_vencimiento'] ?? '').toString(),
+            unidad: (item['unidad'] ?? '').toString(),
+            cantidadEntregada: (item['cantidad_entregada'] as num?)?.toInt() ?? 0,
+          );
+        }).toList();
+
+        // Guardar en caché
+        unawaited(_fichaDao.upsertFicha(programacionId, 'insumos_entregados', {
+          'items': result.map((e) => e.toJson()).toList(),
+        }));
+
+        return result;
+      }
+    } catch (e) {
+      debugPrint('Error en endpoint quimicos-entregados: $e');
+    }
+
+    // FALLBACKS si el endpoint anterior falla o no existe en versiones previas del backend
+    try {
       final response = await _apiClient.get(
         '/v1/almacen/salidas-programacion/$programacionId/devolucion',
         token: token,
@@ -554,9 +693,7 @@ class ServicesRepository {
           insumosMaps = insumos.whereType<Map<String, dynamic>>().toList(growable: false);
         }
       }
-    } catch (_) {
-      // fallback
-    }
+    } catch (_) {}
 
     if (insumosMaps.isEmpty) {
       try {
@@ -572,9 +709,7 @@ class ServicesRepository {
             insumosMaps = insumos.whereType<Map<String, dynamic>>().toList(growable: false);
           }
         }
-      } catch (_) {
-        // fallback final
-      }
+      } catch (_) {}
     }
 
     if (insumosMaps.isEmpty) {
@@ -605,19 +740,24 @@ class ServicesRepository {
           ?? (insumo['cantidad_entregada'] as num?)?.toInt()
           ?? 0;
 
+      // Limpieza de fecha de vencimiento (si viene con ISO string largo)
+      String vencimiento = (lote['fecha_vencimiento'] ?? insumo['fecha_vencimiento'] ?? insumo['vencimiento'] ?? '').toString();
+      if (vencimiento.contains('T')) {
+        vencimiento = vencimiento.split('T').first;
+      }
+
       result.add(
         InsumoQuimicoEntregado(
           idProducto: idProducto,
           producto: (producto['descripcion'] ?? insumo['producto'] ?? 'Producto').toString(),
           lote: (lote['numero_lote'] ?? insumo['lote'] ?? '').toString(),
-          fechaVencimiento: (lote['fecha_vencimiento'] ?? insumo['fecha_vencimiento'] ?? insumo['vencimiento'] ?? '').toString(),
-          unidad: (producto['unidad_medida'] ?? insumo['unidad'] ?? '').toString(),
+          fechaVencimiento: vencimiento,
+          unidad: (producto['unidad'] ?? insumo['unidad'] ?? '').toString(),
           cantidadEntregada: cantidad,
         ),
       );
     }
 
-    // Guardar en caché para uso offline posterior
     if (result.isNotEmpty) {
       unawaited(_fichaDao.upsertFicha(programacionId, 'insumos_entregados', {
         'items': result.map((e) => e.toJson()).toList(),
@@ -626,6 +766,7 @@ class ServicesRepository {
 
     return result;
   }
+
 
   // Fichas Operacionales (Operational Sheets) Methods
 

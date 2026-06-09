@@ -52,7 +52,7 @@
                 <table style="margin: 0;">
                     <tr>
                         <td class="label" style="width: 40%;">Código</td>
-                        <td class="text-center" style="width: 60%;">{{ $formato->codigo_documento ?? 'FO-OP-002' }}</td>
+                        <td class="text-center" style="width: 60%;">{{ $formato->correlativo ?? ($formato->codigo_documento ?? 'FO-OP-002') }}</td>
                     </tr>
                     <tr>
                         <td class="label">Fecha</td>
@@ -117,7 +117,7 @@
         @php
             $tipoSeccion = $seccion['tipo'] ?? '';
             // Clasificar la sección para elegir el diseño de tabla
-            $esDisposicionRoedores = in_array($tipoSeccion, ['roedores_cebo', 'roedores_lamina', 'jaula']);
+            $esDisposicionRoedores = in_array($tipoSeccion, ['roedores_cebo', 'roedores_lamina', 'tubo_cebadero', 'jaula']);
             $esDisposicionInsectos = in_array($tipoSeccion, ['rastreros_lamina', 'trampa_luz']);
             
             if ($esDisposicionRoedores) $mostroLeyendaRoedores = true;

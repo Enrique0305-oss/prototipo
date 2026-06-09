@@ -558,6 +558,33 @@ export function renderProgramaciones(): string {
       </div>
     </div>
 
+    <div class="prog-modal" id="modalConfirmarEliminacionProg" style="display:none;">
+      <div class="prog-modal-overlay"></div>
+      <div class="prog-modal-content" style="max-width:520px;">
+        <div class="prog-modal-header">
+          <h2>Eliminar Programación</h2>
+          <button class="prog-modal-close" id="closeModalEliminacionProg">&times;</button>
+        </div>
+        <div class="prog-modal-body" id="modalEliminacionProgBody">
+          <p style="margin-bottom:16px;">Seleccione cómo desea proceder con la eliminación:</p>
+          <div style="display:flex; flex-direction:column; gap:12px; margin-bottom: 20px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="radio" name="tipoEliminacionProg" value="solo_esta" checked style="accent-color:#ef4444; width:16px; height:16px;">
+              <span><strong>Eliminar solo esta visita</strong><br><small style="color:#64748b;">Las demás programaciones de este servicio no se verán afectadas.</small></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="radio" name="tipoEliminacionProg" value="esta_y_futuras" style="accent-color:#ef4444; width:16px; height:16px;">
+              <span><strong>Eliminar esta y futuras visitas</strong><br><small style="color:#64748b;">Se eliminará esta programación y todas las programaciones futuras (pendientes) asociadas a esta misma orden.</small></span>
+            </label>
+          </div>
+          <div class="prog-modal-footer" style="justify-content:flex-end;gap:8px;">
+            <button type="button" class="prog-btn-secondary" id="btnCancelarEliminacionProg">Cancelar</button>
+            <button type="button" class="prog-btn-danger" id="btnConfirmarEliminacionProg">Eliminar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     ${mostrarBtnCapAse ? `
       <!-- Modal Programar Capacitación -->
       ${renderModalProgramarCapacitacion()}
@@ -595,13 +622,49 @@ export async function initProgramacionesEvents(): Promise<void> {
   document.getElementById('closeModalDetalle')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
   document.getElementById('closeModalNueva')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacion'));
   document.getElementById('closeModalSugerencia')?.addEventListener('click', () => cerrarModal('modalSugerencia'));
+  document.getElementById('closeModalEliminacionProg')?.addEventListener('click', () => cerrarModal('modalConfirmarEliminacionProg'));
+  document.getElementById('btnCancelarEliminacionProg')?.addEventListener('click', () => cerrarModal('modalConfirmarEliminacionProg'));
   document.querySelectorAll('.prog-modal-overlay').forEach(el => {
     el.addEventListener('click', () => {
       cerrarModal('modalDetalleProgramacion');
       cerrarModal('modalNuevaProgramacion');
       cerrarModal('modalSugerencia');
+      cerrarModal('modalConfirmarEliminacionProg');
     });
   });
+
+  // Bind confirm delete
+  document.getElementById('btnConfirmarEliminacionProg')?.addEventListener('click', async () => {
+    if (!idEliminarPendiente) return;
+    const modal = document.getElementById('modalConfirmarEliminacionProg');
+    if (!modal) return;
+    
+    const radioFuturas = modal.querySelector('input[value="esta_y_futuras"]') as HTMLInputElement;
+    const futuras = radioFuturas?.checked;
+    
+    cerrarModal('modalConfirmarEliminacionProg');
+    
+    try {
+      await programacionService.delete(idEliminarPendiente, futuras);
+      cerrarModal('modalDetalleProgramacion');
+      await recargarProgramaciones();
+      mostrarToast('success', 'Eliminada', futuras ? 'Las programaciones fueron eliminadas correctamente' : 'La programación fue eliminada correctamente');
+    } catch (err) {
+      mostrarToast('error', 'Error', 'No se pudo eliminar la programación');
+      console.error(err);
+    }
+    idEliminarPendiente = null;
+  });
+
+  window.addEventListener('abrirModalEliminarProg', ((e: CustomEvent) => {
+    idEliminarPendiente = e.detail.id;
+    const modal = document.getElementById('modalConfirmarEliminacionProg');
+    if (modal) {
+      const radioSolo = modal.querySelector('input[value="solo_esta"]') as HTMLInputElement;
+      if (radioSolo) radioSolo.checked = true;
+      modal.style.display = 'flex';
+    }
+  }) as EventListener);
 
   // Escuchar evento de capacitación programada para recargar
   window.addEventListener('capacitacionProgramada', async () => {
@@ -1406,15 +1469,10 @@ async function abrirModalDetalle(id: number, tipo: 'servicio' | 'capacitacion' |
   }
 }
 
+let idEliminarPendiente: number | null = null;
+
 async function eliminarProg(id: number) {
-  const ok = await confirmarAccion({ titulo: 'Eliminar Programación', mensaje: '¿Está seguro de eliminar esta programación? Esta acción no se puede deshacer.', tipo: 'error', textoConfirmar: 'Eliminar' });
-  if (!ok) return;
-  try {
-    await programacionService.delete(id);
-    cerrarModal('modalDetalleProgramacion');
-    await recargarProgramaciones();
-    mostrarToast('success', 'Eliminada', 'La programación fue eliminada correctamente');
-  } catch (err) { mostrarToast('error', 'Error', 'No se pudo eliminar la programación'); console.error(err); }
+  window.dispatchEvent(new CustomEvent('abrirModalEliminarProg', { detail: { id } }));
 }
 
 async function cancelarProg(id: number) {

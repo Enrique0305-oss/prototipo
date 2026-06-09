@@ -345,12 +345,13 @@ export function renderAjustesInventarioTab() {
               <th>CATEGORÍA</th>
               <th>STOCK ACTUAL</th>
               <th>STOCK SEGURIDAD</th>
+              <th>UNIDAD</th>
               <th>ACCIÓN</th>
             </tr>
           </thead>
           <tbody id="ajuste-inv-productos-body">
             <tr>
-              <td colspan="5" style="text-align:center; padding:32px; color:#94a3b8;">Cargando productos...</td>
+              <td colspan="6" style="text-align:center; padding:32px; color:#94a3b8;">Cargando productos...</td>
             </tr>
           </tbody>
         </table>
@@ -758,7 +759,7 @@ async function cargarProductosAjusteInventario() {
   const tbody = document.getElementById('ajuste-inv-productos-body');
   if (!tbody) return;
 
-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:28px; color:#94a3b8;">Cargando productos...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:28px; color:#94a3b8;">Cargando productos...</td></tr>';
 
   try {
     const response = await productoService.getAll({ estado: 'Activo' } as any);
@@ -766,7 +767,7 @@ async function cargarProductosAjusteInventario() {
     const search = (document.getElementById('ajuste-inv-search') as HTMLInputElement)?.value || '';
     renderProductosAjusteInventario(search);
   } catch (error) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:28px; color:#dc2626;">Error al cargar productos</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:28px; color:#dc2626;">Error al cargar productos</td></tr>';
   }
 }
 
@@ -784,7 +785,7 @@ function renderProductosAjusteInventario(searchText = '') {
     });
 
   if (!filtrados.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:28px; color:#64748b;">No se encontraron productos para ajustar</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:28px; color:#64748b;">No se encontraron productos para ajustar</td></tr>';
     return;
   }
 
@@ -800,6 +801,7 @@ function renderProductosAjusteInventario(searchText = '') {
         <td>${producto.categoria?.nombre || 'Sin categoría'}</td>
         <td><strong>${stock}</strong></td>
         <td>${seguridad}</td>
+        <td>${producto.unidad || '—'}</td>
         <td>
           <button class="btn-primary btn-abrir-ajuste-inv" data-producto-id="${producto.id}" style="padding:7px 12px; font-size:12px;">
             Ajustar stock
@@ -1390,14 +1392,7 @@ export function renderAlmacenInventario() {
     <div class="page-header-with-breadcrumb">
       <div class="breadcrumb">Gestión de Inventario</div>
       <div class="page-actions">
-        <button class="btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Exportar Excel
-        </button>
-        <button class="btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-          Exportar PDF
-        </button>
+
         <button class="btn-primary">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Agregar Producto
@@ -1434,10 +1429,8 @@ function actualizarEstadisticas() {
   const statsContainer = document.getElementById('productos-stats');
   if (!statsContainer || !estadisticasData) return;
 
-  // Calcular total de stock y valor
-  const totalStock = productosData.reduce((sum, p) =>
-    sum + (p.inventario?.cantidad_disponible || 0), 0
-  );
+  // Contar cantidad de productos en catálogo
+  const totalStock = productosData.length;
 
   const valorTotal = productosData.reduce((sum, p) => {
     const stock = p.inventario?.cantidad_disponible || 0;
@@ -1458,8 +1451,8 @@ function actualizarEstadisticas() {
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
       </div>
       <div class="stat-box-content">
-        <div class="stat-box-label">Stock Disponible</div>
-        <div class="stat-box-value">${totalStock.toLocaleString()} <span class="stat-box-note">unidades</span></div>
+        <div class="stat-box-label">Productos en Catálogo</div>
+        <div class="stat-box-value">${totalStock.toLocaleString()} <span class="stat-box-note">ítems</span></div>
       </div>
     </div>
     <div class="stat-box">

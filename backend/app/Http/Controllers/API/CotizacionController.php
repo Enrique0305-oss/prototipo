@@ -101,6 +101,16 @@ class CotizacionController extends Controller
         ]);
     }
 
+    private function getOrdenVinculada(Cotizacion $cotizacion): ?string
+    {
+        if ($cotizacion->ordenServicio()->exists()) return 'Orden de Servicio';
+        if ($cotizacion->ordenProducto()->exists()) return 'Orden de Producto';
+        if ($cotizacion->ordenCapacitacionAuditoria()->exists()) return 'Orden de Capacitación';
+        if ($cotizacion->ordenAuditoria()->exists()) return 'Orden de Auditoría';
+        if ($cotizacion->ordenAsesoria()->exists()) return 'Orden de Asesoría';
+        return null;
+    }
+
     /**
      * Obtener una cotización específica
      */
@@ -115,6 +125,9 @@ class CotizacionController extends Controller
                 'message' => 'Cotización no encontrada'
             ], 404);
         }
+
+        // Agregar flag para el frontend
+        $cotizacion->orden_vinculada = $this->getOrdenVinculada($cotizacion);
 
         return response()->json([
             'success' => true,
@@ -283,6 +296,14 @@ class CotizacionController extends Controller
                 'success' => false,
                 'message' => 'Cotización no encontrada'
             ], 404);
+        }
+
+        $ordenVinculada = $this->getOrdenVinculada($cotizacion);
+        if ($ordenVinculada) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se puede editar esta cotización porque ya cuenta con una ' . $ordenVinculada
+            ], 403);
         }
 
         $validated = $request->validate([
@@ -527,38 +548,107 @@ class CotizacionController extends Controller
      */
     public function alertaCotizacionesSinOrden(): JsonResponse
     {
-        $producto = Cotizacion::where('estado', 'Aceptada')
-            ->where('tipo_cotizacion', 'Producto')
-            ->whereDoesntHave('ordenProducto')
-            ->count();
+        try {
+            $producto = Cotizacion::where('estado', 'Aceptada')
+                ->where('tipo_cotizacion', 'Producto')
+                ->whereDoesntHave('ordenProducto')
+                ->count();
 
-        $servicio = Cotizacion::where('estado', 'Aceptada')
-            ->where('tipo_cotizacion', 'Servicio')
-            ->whereDoesntHave('ordenServicio')
-            ->count();
+            $servicio = Cotizacion::where('estado', 'Aceptada')
+                ->where('tipo_cotizacion', 'Servicio')
+                ->whereDoesntHave('ordenServicio')
+                ->count();
 
-        $capacitacion = Cotizacion::where('estado', 'Aceptada')
-            ->where('tipo_cotizacion', 'Capacitacion')
-            ->whereDoesntHave('ordenCapacitacionAuditoria')
-            ->count();
+            $capacitacion = Cotizacion::where('estado', 'Aceptada')
+                ->where('tipo_cotizacion', 'Capacitacion')
+                ->whereDoesntHave('ordenCapacitacionAuditoria')
+                ->count();
 
-        $auditoria = Cotizacion::where('estado', 'Aceptada')
-            ->where('tipo_cotizacion', 'Auditoria')
-            ->whereDoesntHave('ordenAuditoria')
-            ->count();
+            $auditoria = Cotizacion::where('estado', 'Aceptada')
+                ->where('tipo_cotizacion', 'Auditoria')
+                ->whereDoesntHave('ordenAuditoria')
+                ->count();
 
-        $total = $producto + $servicio + $capacitacion + $auditoria;
+            $asesoria = Cotizacion::where('estado', 'Aceptada')
+                ->where('tipo_cotizacion', 'Asesoria')
+                ->whereDoesntHave('ordenAsesoria')
+                ->count();
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'total' => $total,
-                'producto' => $producto,
-                'servicio' => $servicio,
-                'capacitacion' => $capacitacion,
-                'auditoria' => $auditoria,
-            ]
-        ]);
+            $total = $producto + $servicio + $capacitacion + $auditoria + $asesoria;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total' => $total,
+                    'producto' => $producto,
+                    'servicio' => $servicio,
+                    'capacitacion' => $capacitacion,
+                    'auditoria' => $auditoria,
+                    'asesoria' => $asesoria,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error en alertaCotizacionesSinOrden: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener alertas: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function generarNombreArchivoCotizacion($cotizacion)
+    {
+        $numeroBruto = $cotizacion->numero_cotizacion ?? '';
+        $numeroCorto = $numeroBruto;
+        if (preg_match('/^(?:COT-)?(\d{4})-(\d+)$/i', $numeroBruto, $matches)) {
+            $year2 = substr($matches[1], -2);
+            $correlativo = str_pad((int)$matches[2], 3, '0', STR_PAD_LEFT);
+            $numeroCorto = "{$correlativo}-{$year2}";
+        }
+
+        $cliente = trim($cotizacion->cliente?->nombre_empresa ?? '');
+        $tipoCot = strtolower($cotizacion->tipo_cotizacion ?? 'servicio');
+        $detalles = $cotizacion->detalles ?? collect();
+
+        if ($tipoCot === 'capacitacion') {
+            $tipoTexto = 'capacitación';
+            $nombres = $detalles->map(fn($d) => trim($d->catalogoCapAud?->nombre ?? $d->descripcion_manual ?? ''))->filter()->unique()->values();
+            $nombre = $nombres->count() === 1 ? $nombres[0] : 'Plan de Capacitaciones';
+        } elseif ($tipoCot === 'asesoria') {
+            $tipoTexto = 'asesoría';
+            $nombres = $detalles->map(fn($d) => trim($d->catalogoCapAud?->nombre ?? $d->descripcion_manual ?? ''))->filter()->unique()->values();
+            $nombre = $nombres->count() === 1 ? $nombres[0] : 'Plan de Asesorías';
+        } elseif ($tipoCot === 'auditoria') {
+            $tipoTexto = 'auditoria';
+            $nombres = $detalles->map(fn($d) => trim($d->catalogoCapAud?->nombre ?? $d->descripcion_manual ?? ''))->filter()->unique()->values();
+            $nombre = $nombres->count() === 1 ? $nombres[0] : 'Plan de Auditoria';
+        } elseif ($tipoCot === 'producto') {
+            $tipoTexto = 'producto';
+            $nombres = $detalles->map(fn($d) => trim($d->producto?->descripcion ?? $d->descripcion_manual ?? ''))->filter()->unique()->values();
+            if ($nombres->count() === 0) {
+                $nombre = 'Productos';
+            } elseif ($nombres->count() === 1) {
+                $nombre = $nombres[0];
+            } elseif ($nombres->count() === 2) {
+                $nombre = "{$nombres[0]} y {$nombres[1]}";
+            } else {
+                $nombre = 'PRODUCTOS';
+            }
+        } else {
+            $tipoTexto = 'servicio';
+            $nombres = $detalles->map(fn($d) => trim($d->servicio?->nombre ?? ''))->filter()->unique()->values();
+            $nombre = $nombres->count() === 1 ? $nombres[0] : 'Control de Plagas';
+        }
+
+        $sanitize = function($val) {
+            return trim(preg_replace('/\s+/', ' ', preg_replace('/[\\\\:*?"<>|]/', '', (string)($val ?? ''))));
+        };
+
+        $numeroSafe = $sanitize($numeroCorto ?: ($cotizacion->id ?? ''));
+        $nombreSafe = $sanitize($nombre ?: 'Propuesta');
+        $clienteSafe = $sanitize($cliente ?: 'CLIENTE');
+
+        return "Envío de propuesta de {$tipoTexto} N°{$numeroSafe} - QSCI Consulting - {$nombreSafe}-{$clienteSafe}";
     }
 
     /**
@@ -594,7 +684,7 @@ class CotizacionController extends Controller
         })->with(['cargo', 'area'])->orderByDesc('id')->first();
 
         $exponentes = collect();
-        if (!empty($cotizacion->exponentes_ids)) {
+        if (!empty($cotizacion->exponentes_ids) && is_array($cotizacion->exponentes_ids)) {
             $exponentes = \App\Models\Exponente::whereIn('id', $cotizacion->exponentes_ids)->get();
         }
 
@@ -615,16 +705,18 @@ class CotizacionController extends Controller
                 ], 500);
             }
 
-            $pdf = Pdf::loadView($pdfView, compact('cotizacion', 'exponentes', 'gerenteComercial'))
+            $titulo_pdf = $this->generarNombreArchivoCotizacion($cotizacion);
+
+            $pdf = Pdf::loadView($pdfView, compact('cotizacion', 'exponentes', 'gerenteComercial', 'titulo_pdf'))
                     ->setPaper('a4', 'portrait');
 
             // Si se pasa parámetro descargar=true, descarga automáticamente
             // Si no, muestra en navegador
             if ($request->get('descargar') === 'true') {
-                return $pdf->download('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
+                return $pdf->download("{$titulo_pdf}.pdf");
             }
 
-            return $pdf->stream('cotizacion-' . $cotizacion->numero_cotizacion . '.pdf');
+            return $pdf->stream("{$titulo_pdf}.pdf");
         } catch (\Throwable $e) {
             Log::error('Error generando PDF de cotizacion', [
                 'cotizacion_id' => $id,
@@ -658,6 +750,14 @@ class CotizacionController extends Controller
                 'success' => false,
                 'message' => 'Cotización no encontrada'
             ], 404);
+        }
+
+        $ordenVinculada = $this->getOrdenVinculada($cotizacion);
+        if ($ordenVinculada) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se puede editar esta cotización porque ya cuenta con una ' . $ordenVinculada
+            ], 403);
         }
 
         $cotizacion->update([

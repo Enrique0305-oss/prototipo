@@ -29,17 +29,33 @@
             }
         }
 
-        $subRows = $isVoladores ? [
-            'Fam. Muscidae (mosca doméstica)',
-            'Fam. Drosophilidae (mosca de vinagre)',
-            'Fam. Phoridae (mosca jorobada)',
-            'Fam. Psychodidae (mosca del drenaje)',
-            'Fam. Chironomidae (mosquito enano)',
-            'Fam. Culicidae (mosquitos)',
-            'Fam. Pyralidae/Tineidae/Gelechiidae (polillas)',
-            'Fam. Sarcophagidae/Calliphoridae (mosca de la carne/mosca metálica)',
-            'Otros no identificados'
-        ] : ['ADULTO', 'NINFA', 'OOTECA'];
+        $isYamboly = false;
+        if (!empty($formato->cliente) && str_contains(strtoupper($formato->cliente), 'YAMBOLY')) {
+            $isYamboly = true;
+        }
+
+        $subRows = $isVoladores ? (
+            $isYamboly ? [
+                'Moscas Domésticas',
+                'Mosca Menor',
+                'Zancudo',
+                'Avispa',
+                'Abeja',
+                'Mariposa',
+                'Polilla',
+                'Gorgojo'
+            ] : [
+                'Fam. Muscidae (mosca doméstica)',
+                'Fam. Drosophilidae (mosca de vinagre)',
+                'Fam. Phoridae (mosca jorobada)',
+                'Fam. Psychodidae (mosca del drenaje)',
+                'Fam. Chironomidae (mosquito enano)',
+                'Fam. Culicidae (mosquitos)',
+                'Fam. Pyralidae/Tineidae/Gelechiidae (polillas)',
+                'Fam. Sarcophagidae/Calliphoridae (mosca de la carne/mosca metálica)',
+                'Otros no identificados'
+            ]
+        ) : ['ADULTO', 'NINFA', 'OOTECA'];
 
         $labelSub = $isVoladores ? 'INSECTO' : 'ESTADIO';
         $jsonField = $isVoladores ? 'conteo_insectos' : 'conteo_estadio';
@@ -117,7 +133,7 @@
     @php
         $allItems = [];
         foreach ($secciones as $seccion) {
-            if (in_array($seccion['tipo'], ['lamina', 'rastreros_lamina', 'roedores_lamina', 'trampa_luz', 'trampa-luz'])) {
+            if (in_array($seccion['tipo'], ['lamina', 'rastreros_lamina', 'roedores_lamina', 'tubo_cebadero', 'trampa_luz', 'trampa-luz'])) {
                 $allItems = array_merge($allItems, $seccion['items']);
             }
         }
@@ -182,24 +198,25 @@
                                     @endphp
                                     @foreach($subRows as $sIdx => $subLabel)
                                         @php
+                                            $cleanSub = str_replace(['_', ' '], '', strtr(strtoupper(trim($subLabel)), 'ÁÉÍÓÚ', 'AEIOU'));
                                             $conteo = 0;
                                             $matchKey = null;
-                                            $normSubLabel = strtoupper(trim($subLabel));
-                                            
-                                            // Extract a potential short key from the label (e.g. "Muscidae" from "Fam. Muscidae...")
                                             $shortKey = '';
                                             if (preg_match('/Fam\. (\w+)/', $subLabel, $matches)) {
                                                 $shortKey = strtoupper($matches[1]);
-                                            } elseif (str_contains($normSubLabel, 'OTROS')) {
+                                            } elseif (str_contains(strtoupper($subLabel), 'OTROS')) {
                                                 $shortKey = 'OTROS';
                                             }
 
                                             foreach (array_keys($dataArray) as $k) {
+                                                $cleanK = str_replace(['_', ' '], '', strtr(strtoupper(trim($k)), 'ÁÉÍÓÚ', 'AEIOU'));
+                                                if ($cleanK === $cleanSub) {
+                                                    $matchKey = $k;
+                                                    break;
+                                                }
                                                 $normK = strtoupper(trim($k));
-                                                // Try exact match, partial match, or short key match
-                                                if ($normK === $normSubLabel || 
-                                                    ($shortKey && str_contains($normK, $shortKey)) ||
-                                                    ($normK && strlen($normK) > 3 && str_contains($normSubLabel, $normK))) {
+                                                if (($shortKey && str_contains($normK, $shortKey)) ||
+                                                    ($normK && strlen($normK) > 3 && str_contains(strtoupper($subLabel), $normK))) {
                                                     $matchKey = $k;
                                                     break;
                                                 }
@@ -268,24 +285,26 @@
                                         @endphp
                                         @foreach($subRows as $sIdx => $subLabel)
                                             @php
+                                                $cleanSub = str_replace(['_', ' '], '', strtr(strtoupper(trim($subLabel)), 'ÁÉÍÓÚ', 'AEIOU'));
                                                 $conteo = 0;
                                                 $matchKey = null;
-                                                $normSubLabel = strtoupper(trim($subLabel));
-                                                
-                                                // Extract a potential short key from the label (e.g. "Muscidae" from "Fam. Muscidae...")
                                                 $shortKey = '';
                                                 if (preg_match('/Fam\. (\w+)/', $subLabel, $matches)) {
                                                     $shortKey = strtoupper($matches[1]);
-                                                } elseif (str_contains($normSubLabel, 'OTROS')) {
+                                                } elseif (str_contains(strtoupper($subLabel), 'OTROS')) {
                                                     $shortKey = 'OTROS';
                                                 }
 
                                                 foreach (array_keys($dataArray) as $k) {
+                                                    $cleanK = str_replace(['_', ' '], '', strtr(strtoupper(trim($k)), 'ÁÉÍÓÚ', 'AEIOU'));
+                                                    if ($cleanK === $cleanSub) {
+                                                        $matchKey = $k;
+                                                        if (is_numeric($k)) {}
+                                                        break;
+                                                    }
                                                     $normK = strtoupper(trim($k));
-                                                    // Try exact match, partial match, or short key match
-                                                    if ($normK === $normSubLabel || 
-                                                        ($shortKey && str_contains($normK, $shortKey)) ||
-                                                        ($normK && strlen($normK) > 3 && str_contains($normSubLabel, $normK))) {
+                                                    if (($shortKey && str_contains($normK, $shortKey)) ||
+                                                        ($normK && strlen($normK) > 3 && str_contains(strtoupper($subLabel), $normK))) {
                                                         $matchKey = $k;
                                                         break;
                                                     }

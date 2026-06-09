@@ -3842,6 +3842,13 @@ async function editarCotizacion(id: number) {
       return;
     }
 
+    // Verificar si ya tiene orden vinculada para bloquear edición
+    if (cotizacion.orden_vinculada) {
+      const numCot = cotizacion.numero_cotizacion || `COT-${id}`;
+      mostrarToast('warning', 'Acción bloqueada', `La cotización "${numCot}" no puede editarse ya que cuenta con una ${cotizacion.orden_vinculada}`);
+      return;
+    }
+
     cotizacionEditandoId = id;
     cotizacionEditandoTipo = tipo;
     cotizacionEditandoNumero = cotizacion?.numero_cotizacion || cotizacion?.numero || `#${id}`;

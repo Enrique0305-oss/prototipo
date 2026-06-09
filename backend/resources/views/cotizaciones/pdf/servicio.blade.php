@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cotización #{{ $cotizacion->numero_cotizacion }}</title>
+    <title>{{ $titulo_pdf ?? 'Propuesta Comercial' }}</title>
     <style>
 @include('cotizaciones.pdf.partials.styles-common')
 
@@ -259,8 +259,8 @@
                                     <th style="border: 1px solid #ccc; padding: 6px 16px; background: #f1f5f9;">Supervisor</th>
                                 </tr>
                                 <tr>
-                                    <td style="border: 1px solid #ccc; padding: 6px 16px;">{{ $detalleLimpieza->op_tecnicos ?? 0 }}</td>
-                                    <td style="border: 1px solid #ccc; padding: 6px 16px;">{{ $detalleLimpieza->supervisor ?? 0 }}</td>
+                                    <td style="border: 1px solid #ccc; padding: 6px 16px;">{{ $detalleLimpieza?->op_tecnicos ?? 0 }}</td>
+                                    <td style="border: 1px solid #ccc; padding: 6px 16px;">{{ $detalleLimpieza?->supervisor ?? 0 }}</td>
                                 </tr>
                             </table>
                             @if($tipoLimpieza === 'trampa_grasa')
@@ -362,11 +362,11 @@
                 </div>
                 @php
                     $hayDetalleCisternaReservorio = $cotizacion->detalles->contains(function($detalle) {
-                        $nombre = mb_strtoupper((string)($detalle->servicio->nombre ?? ''));
+                        $nombre = mb_strtoupper((string)($detalle->servicio?->nombre ?? ''));
                         return str_contains($nombre, 'LIMPIEZA DE CISTERNAS Y RESERVORIOS');
                     });
                     $hayDetalleTrampaGrasa = $cotizacion->detalles->contains(function($detalle) {
-                        $nombre = mb_strtoupper((string)($detalle->servicio->nombre ?? ''));
+                        $nombre = mb_strtoupper((string)($detalle->servicio?->nombre ?? ''));
                         return str_contains($nombre, 'LIMPIEZA DE TRAMPA DE GRASA');
                     });
                 @endphp
@@ -393,7 +393,7 @@
                                 $planta = $cotizacion->cliente ? $cotizacion->cliente->plantas()->find($detalle->id_cliente_planta) : null;
                                 
                                 // Obtener múltiples áreas desde el array JSON
-                                $areaIds = $detalle->id_cliente_planta_area ?? [];
+                                $areaIds = $detalle?->id_cliente_planta_area ?? [];
                                 $areas = [];
                                 if ($planta && is_array($areaIds) && count($areaIds) > 0) {
                                     $areas = $planta->areasActivas()->whereIn('id', $areaIds)->get();
@@ -408,7 +408,7 @@
                                     }
                                 }
                                 
-                                $frecuenciaRaw = trim((string)($detalle->frecuencia_sugerida ?? ''));
+                                $frecuenciaRaw = trim((string)($detalle?->frecuencia_sugerida ?? ''));
                                 $frecuencia = $frecuenciaRaw;
                                 if ($frecuenciaRaw !== '') {
                                     if (preg_match('/\(([^)]+)\)/u', $frecuenciaRaw, $m)) {
@@ -429,7 +429,7 @@
                                 // 3) Si no hay ambos, usar producto SOLO si su categoría es Dispositivos.
                                 // 4) Si no hay dato válido, no mostrar texto de relleno.
                                 $tratamientosDetalle = [];
-                                if ($cotizacion->receta_servicio) {
+                                if (is_array($cotizacion->receta_servicio)) {
                                     foreach ($cotizacion->receta_servicio as $receta) {
                                         if (($receta['id_servicio'] ?? null) == $detalle->id_servicio) {
                                             $equipo = trim((string)($receta['equipo_descripcion'] ?? ''));
@@ -442,10 +442,10 @@
                                             if (!empty($idProductoReceta)) {
                                                 $prodReceta = \App\Models\Producto::with('categoria')->find($idProductoReceta);
                                                 if ($unidadReceta === '') {
-                                                    $unidadReceta = trim((string)($prodReceta->unidad ?? ''));
+                                                    $unidadReceta = trim((string)($prodReceta?->unidad ?? ''));
                                                 }
                                                 if ($prodReceta && $prodReceta->categoria && stripos($prodReceta->categoria->nombre, 'dispositivo') !== false) {
-                                                    $dispositivoPorCategoria = trim((string)($prodReceta->descripcion ?? ''));
+                                                    $dispositivoPorCategoria = trim((string)($prodReceta?->descripcion ?? ''));
                                                 }
                                             }
 
@@ -486,7 +486,7 @@
                                 }
                                 $nombreServicioDetalle = mb_strtoupper((string)($servicio?->nombre ?? ''));
                                 $esDetalleTrampaGrasa = str_contains($nombreServicioDetalle, 'LIMPIEZA DE TRAMPA DE GRASA');
-                                $medidasTanqueRaw = $detalle->medida_tanque ?? null;
+                                $medidasTanqueRaw = $detalle?->medida_tanque ?? null;
                                 $medidasTanqueDetalle = [];
                                 if (is_array($medidasTanqueRaw)) {
                                     $medidasTanqueDetalle = array_values(array_filter(array_map(function ($valor) {
@@ -517,7 +517,7 @@
                             @endphp 
                             <tr>
                                 <td style="font-weight: 600;">
-                                    {{ $servicio?->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}
+                                    {{ $servicio?->nombre ?? $detalle?->descripcion_manual ?? 'N/A' }}
                                 </td>
                                 @if($hayDetalleCisternaReservorio)
                                     <td>
@@ -592,7 +592,7 @@
             <!-- II.2 PRODUCTOS QUIMICOS DISPONIBLES -->
             @php
                 $productosQuimicos = [];
-                $recetaItems = $cotizacion->receta_servicio ?? [];
+                $recetaItems = is_array($cotizacion?->receta_servicio) ? $cotizacion->receta_servicio : [];
                 
                 if (count($recetaItems) > 0) {
                     foreach ($recetaItems as $item) {
@@ -638,9 +638,9 @@
                             @if($producto)
                                 <tr>
                                     <td><strong>{{ $producto->descripcion }}</strong></td>
-                                    <td>{{ $producto->ingre_activo ?? 'N/A' }}</td>
-                                    <td>{{ $producto->plag_objetivo ?? 'N/A' }}</td>
-                                    <td>{{ $producto->presentacion ?? 'N/A' }}</td>
+                                    <td>{{ $producto?->ingre_activo ?? 'N/A' }}</td>
+                                    <td>{{ $producto?->plag_objetivo ?? 'N/A' }}</td>
+                                    <td>{{ $producto?->presentacion ?? 'N/A' }}</td>
                                 </tr>
                             @endif
                         @endforeach
@@ -714,7 +714,7 @@
                             }
 
                             $idServicio = $detalle->id_servicio;
-                            $nombreServicio = $detalle->servicio?->nombre ?? $detalle->descripcion_manual ?? 'SERVICIO';
+                            $nombreServicio = $detalle->servicio?->nombre ?? $detalle?->descripcion_manual ?? 'SERVICIO';
 
                             if (!isset($equiposDispositivosPorServicio[$idServicio])) {
                                 $equiposDispositivosPorServicio[$idServicio] = [
@@ -827,21 +827,21 @@
                     @if($esSoloFosfina && $detalleFosfina)
                         <tr>
                             <td style="text-align: center; font-weight: 700;">SERVICIO DE GASIFICACIÓN</td>
-                            <td style="text-align: center;"><strong>S/ {{ number_format($cotizacion->subtotal ?? ($detalleFosfina->precio_unitario ?? 0), 2) }}</strong></td>
+                            <td style="text-align: center;"><strong>S/ {{ number_format((float)($cotizacion?->subtotal ?? ($detalleFosfina?->precio_unitario ?? 0)), 2) }}</strong></td>
                         </tr>
                     @else
                         @foreach($cotizacion->detalles as $detalle)
                         <tr>
                             <td>
-                                <strong>{{ $detalle->servicio->nombre ?? $detalle->descripcion_manual ?? 'N/A' }}</strong>
+                                <strong>{{ $detalle->servicio?->nombre ?? $detalle?->descripcion_manual ?? 'N/A' }}</strong>
                             </td>
                             @if(!$mostrarServicioFosfina)
                                 <td style="text-align: center;">
-                                    {{ $detalle->frecuencia_sugerida ?? 'A solicitud' }}
+                                    {{ $detalle?->frecuencia_sugerida ?? 'A solicitud' }}
                                 </td>
                             @endif
                             <td style="text-align: right;">
-                                <strong>S/ {{ number_format($detalle->precio_unitario, 2) }}</strong>
+                                <strong>S/ {{ number_format((float)($detalle->precio_unitario ?? 0), 2) }}</strong>
                             </td>
                         </tr>
                         @endforeach
@@ -854,15 +854,15 @@
                 <table class="totals-table">
                     <tr>
                         <td class="label">Subtotal:</td>
-                        <td class="value">S/ {{ number_format($cotizacion->subtotal ?? 0, 2) }}</td>
+                        <td class="value">S/ {{ number_format((float)($cotizacion?->subtotal ?? 0), 2) }}</td>
                     </tr>
                     <tr>
                         <td class="label">IGV (18%):</td>
-                        <td class="value">S/ {{ number_format($cotizacion->igv ?? 0, 2) }}</td>
+                        <td class="value">S/ {{ number_format((float)($cotizacion?->igv ?? 0), 2) }}</td>
                     </tr>
                     <tr class="total-row">
                         <td class="label">TOTAL GENERAL:</td>
-                        <td class="value">S/ {{ number_format($cotizacion->total ?? 0, 2) }}</td>
+                        <td class="value">S/ {{ number_format((float)($cotizacion?->total ?? 0), 2) }}</td>
                     </tr>
                 </table>
             </div>
@@ -913,27 +913,27 @@
                 <table class="payment-table">
                     <tr>
                         <td class="label-cell">Cuenta BCP ahorro en soles</td>
-                        <td>{{ $cotizacion->empresa->cuenta_bcp }}</td>
+                        <td>{{ $cotizacion->empresa?->cuenta_bcp }}</td>
                     </tr>
                     <tr>
                         <td class="label-cell">Código de cuenta interbancario</td>
-                        <td>{{ $cotizacion->empresa->codigo_interbancario_bcp }}</td>
+                        <td>{{ $cotizacion->empresa?->codigo_interbancario_bcp }}</td>
                     </tr>
                     <tr>
                         <td class="label-cell">A nombre de</td>
-                        <td><strong>{{ $cotizacion->empresa->nombre_empresa }}</strong></td>
+                        <td><strong>{{ $cotizacion->empresa?->nombre_empresa }}</strong></td>
                     </tr>
                     <tr>
                         <td class="label-cell">RUC</td>
-                        <td>{{ $cotizacion->empresa->ruc }}</td>
+                        <td>{{ $cotizacion->empresa?->ruc }}</td>
                     </tr>
                     <tr>
                         <td class="label-cell">Banco de la Nación Cuenta de Detracción</td>
-                        <td>{{ $cotizacion->empresa->banco_nacion }}</td>
+                        <td>{{ $cotizacion->empresa?->banco_nacion }}</td>
                     </tr>
                     <tr>
                         <td class="label-cell">Código de Cuenta Interbancario (Detracción)</td>
-                        <td>{{ $cotizacion->empresa->codigo_interbancario_nacion }}</td>
+                        <td>{{ $cotizacion->empresa?->codigo_interbancario_nacion }}</td>
                     </tr>
                 </table>
 
@@ -972,10 +972,10 @@
                     Atentamente,
                 </div> <br>
                 <div class="issued-name">
-                    {{ $gerenteComercial->nombre ?? 'N/A' }} {{ $gerenteComercial->apellidos ?? $gerenteComercial->apellido ?? '' }}
+                    {{ $gerenteComercial?->nombre ?? 'N/A' }} {{ $gerenteComercial?->apellidos ?? $gerenteComercial?->apellido ?? '' }}
                 </div>
                 <div class="issued-position">
-                    {{ $gerenteComercial->cargo?->nombre ?? 'N/A' }}
+                    {{ $gerenteComercial?->cargo?->nombre ?? 'N/A' }}
                 </div>
                 <div class="signature-logos">
                     <table>
@@ -991,10 +991,10 @@
                 </div>
                 <div class="proposal-text">
                     <p>
-                        E-mail: {{ $gerenteComercial->correo ?? 'No registrado' }}
+                        E-mail: {{ $gerenteComercial?->correo ?? 'No registrado' }}
                     </p>
                     <p>
-                        Número: {{ $gerenteComercial->celular ?? 'No registrado' }}
+                        Número: {{ $gerenteComercial?->celular ?? 'No registrado' }}
                     </p>
                 </div>
             </div>

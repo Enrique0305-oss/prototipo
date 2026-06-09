@@ -90,4 +90,59 @@ class OrdenServicio extends Model
         
         return "OS-{$anio}-" . str_pad($numero, 3, '0', STR_PAD_LEFT);
     }
+
+    /**
+     * Verifica si cada detalle de la ODS está completamente programado 
+     * según su frecuencia y la cantidad de programaciones registradas.
+     * Luego actualiza el estado de la ODS a Aprobado, Parcial o Programado.
+     */
+    public function actualizarEstadoProgramacion()
+    {
+        $detalles = $this->detalles; // Requiere la relación 'detalles' cargada o se carga bajo demanda
+        $completos = 0;
+
+        foreach ($detalles as $det) {
+            $count = ProgramacionServicio::where('id_orden_servicio', $this->id)
+                ->where('id_servicio', $det->id_servicio)
+                ->where('id_cliente_planta', $det->id_cliente_planta)
+                // Omitir las canceladas para el conteo, si aplica. Por ahora contamos todas las no canceladas
+                ->where('estado_ejecucion', '!=', 'Cancelado')
+                ->count();
+            
+            $frec = mb_strtolower(trim($det->frecuencia ?? ''));
+            $expected = 1;
+            
+            if (str_contains($frec, 'semanal')) $expected = 52;
+            elseif (str_contains($frec, 'quincenal')) $expected = 24;
+            elseif (str_contains($frec, 'mensual')) $expected = 12;
+            elseif (str_contains($frec, 'bimestral')) $expected = 6;
+            elseif (str_contains($frec, 'trimestral')) $expected = 4;
+            elseif (str_contains($frec, 'semestral')) $expected = 2;
+            elseif (str_contains($frec, 'anual') || str_contains($frec, 'única') || str_contains($frec, 'unica')) $expected = 1;
+            else $expected = 1;
+
+            if ($count >= $expected) {
+                $completos++;
+            } elseif ($count > 1 && !in_array($frec, ['única', 'unica', 'anual'])) {
+                // Si tiene más de 1 y es recurrente, consideramos que hicieron una programación masiva/anual
+                $completos++;
+            }
+        }
+
+        $totalDetalles = $detalles->count();
+
+        if ($totalDetalles === 0) {
+            return;
+        }
+
+        if ($completos === 0) {
+            $this->estado = 'Aprobado';
+        } elseif ($completos >= $totalDetalles) {
+            $this->estado = 'Programado';
+        } else {
+            $this->estado = 'Parcial';
+        }
+
+        $this->save();
+    }
 }

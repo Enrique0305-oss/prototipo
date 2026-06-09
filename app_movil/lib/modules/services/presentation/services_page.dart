@@ -10,6 +10,8 @@ import '../../auth/domain/user_session.dart';
 import '../data/local/ficha_local_dao.dart';
 import '../data/local/sync_queue_dao.dart';
 import '../data/services_repository.dart';
+import 'package:qsci/modules/services/presentation/service_detail_page.dart';
+import 'package:qsci/modules/services/presentation/simplified_task_page.dart';
 import '../domain/service_task.dart';
 import 'service_detail_page.dart';
 import 'widgets/offline_banner.dart';
@@ -474,13 +476,36 @@ class _ServicesPageState extends State<ServicesPage> with WidgetsBindingObserver
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          item.title,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 20,
-                                            color: Colors.white,
-                                          ),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                item.title,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 20,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                            if (representative.tipoProgramacion != 'Servicio')
+                                              Container(
+                                                margin: const EdgeInsets.only(left: 8),
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black.withValues(alpha: 0.3),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: Text(
+                                                  representative.tipoProgramacion,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                         const SizedBox(height: 2),
                                         Text(

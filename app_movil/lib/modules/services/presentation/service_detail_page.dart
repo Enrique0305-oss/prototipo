@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -282,17 +283,54 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                                 ),
                                 itemBuilder: (context, index) {
                                   final evidence = entry.value[index];
-                                  final url = _resolvePhotoUrl(evidence.path);
-                                  return ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.network(
-                                      url,
+                                  final isLocal = evidence.path.startsWith('/') && !evidence.path.contains('media/') && !evidence.path.contains('public/');
+                                  
+                                  Widget imageWidget;
+                                  if (isLocal) {
+                                    imageWidget = Image.file(
+                                      File(evidence.path),
                                       fit: BoxFit.cover,
                                       errorBuilder: (_, __, ___) => Container(
                                         color: const Color(0xFFF1F5F9),
                                         alignment: Alignment.center,
                                         child: const Icon(Icons.broken_image_outlined, color: Color(0xFF94A3B8)),
                                       ),
+                                    );
+                                  } else {
+                                    imageWidget = Image.network(
+                                      _resolvePhotoUrl(evidence.path),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: const Color(0xFFF1F5F9),
+                                        alignment: Alignment.center,
+                                        child: const Icon(Icons.broken_image_outlined, color: Color(0xFF94A3B8)),
+                                      ),
+                                    );
+                                  }
+
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        imageWidget,
+                                        if ((evidence.description ?? '').trim().isNotEmpty)
+                                          Positioned(
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                              color: Colors.black.withOpacity(0.5),
+                                              child: Text(
+                                                evidence.description!,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(color: Colors.white, fontSize: 10),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   );
                                 },
@@ -414,8 +452,12 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   void initState() {
     super.initState();
     _loadPosition();
-    _loadFichaOperacional();
-    _preFetchFormatoCalculo();
+    if (_representativeService.tipoProgramacion == 'Servicio') {
+      _loadFichaOperacional();
+      _preFetchFormatoCalculo();
+    } else {
+      _loadingFicha = false;
+    }
   }
 
   Future<void> _preFetchFormatoCalculo() async {
@@ -805,7 +847,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detalle del servicio'),
+        title: Text('Detalle de la ${_representativeService.tipoProgramacion}'),
         backgroundColor: _navy,
         foregroundColor: Colors.white,
       ),
@@ -884,7 +926,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
               ],
             ),
           ),
-          _buildFichaCard(),
+          if (_representativeService.tipoProgramacion == 'Servicio')
+            _buildFichaCard(),
           const SizedBox(height: 12),
           Text('Validacion por ubicacion', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
@@ -1012,7 +1055,7 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     foregroundColor: Colors.white,
                   ),
                   icon: Icon(_isCompleted ? Icons.visibility_outlined : Icons.play_arrow),
-                  label: Text(_isCompleted ? 'Ver detalles' : 'Empezar servicio'),
+                  label: Text(_isCompleted ? 'Ver detalles' : 'Empezar ${_representativeService.tipoProgramacion.toLowerCase()}'),
                 ),
               ),
             ],

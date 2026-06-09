@@ -30,7 +30,16 @@ class Proyeccion extends Model
         'fecha_vcto',
         'dia_vencer',
         'fecha_pago',
-        'fecha_ejecucion'
+        'fecha_ejecucion',
+        'estado',
+        'fecha_cambio_estado',
+        'registrado_por',
+        'base_imponible',
+        'igv',
+        'porcentaje_detraccion',
+        'fecha_pago_detraccion',
+        'cotizacion_oc',
+        'observaciones'
     ];
 
     // Casts para asegurar que los números y fechas se manejen correctamente
@@ -45,6 +54,11 @@ class Proyeccion extends Model
         'dia_vencer' => 'integer',
         'id_referencia' => 'integer',
         'tipo_orden' => 'string',
+        'fecha_cambio_estado' => 'datetime',
+        'fecha_pago_detraccion' => 'date',
+        'base_imponible' => 'decimal:2',
+        'igv' => 'decimal:2',
+        'porcentaje_detraccion' => 'decimal:2'
     ];
 
     /*

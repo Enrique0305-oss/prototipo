@@ -118,19 +118,7 @@ class FormatoOperacionalController extends Controller
             $tipoServicioConsultado = $progRequest->formatos_fichas[0];
         }
 
-        // 2. Intentar buscar el formato por ID directo
-        $formato = FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
-            ->where('id_programacion_servicio', $id)
-            ->latest()
-            ->first();
-
-        // 3. Si no se encuentra, buscar por el grupo
-        if (!$formato && $progRequest->id_grupo_programacion) {
-            $formato = FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
-                ->where('id_grupo_programacion', $progRequest->id_grupo_programacion)
-                ->latest()
-                ->first();
-        }
+        $formato = $this->getMejorFormatoParaServicio($progRequest);
 
         if (!$formato) {
             return response()->json([
@@ -155,7 +143,7 @@ class FormatoOperacionalController extends Controller
             $detallesFiltrados = $formato->detalles->filter(function($detalle) use ($esRoedores, $esVoladores, $esRastreros) {
                 $sectionKey = $this->displaySectionKey($detalle);
                 
-                if ($esRoedores) return str_contains($sectionKey, 'roedores') || $sectionKey === 'jaula';
+                if ($esRoedores) return str_contains($sectionKey, 'roedores') || $sectionKey === 'jaula' || $sectionKey === 'tubo_cebadero';
                 if ($esRastreros) return str_contains($sectionKey, 'rastreros');
                 if ($esVoladores) return $sectionKey === 'trampa_luz';
                 
@@ -231,44 +219,42 @@ class FormatoOperacionalController extends Controller
 
     public function generarPDF($id)
     {
-        $formato = FormatoOperacional::with([
-            'detalles',
-            'programacionServicio.tecnico',
-            'programacionServicio.tecnicos',
-        ])->findOrFail($id);
+        ini_set('memory_limit', '512M');
+        set_time_limit(120);
 
-        $view = $this->resolveViewName($formato);
-        $tipoPdf = request('tipo_pdf', 'verdadera');
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
-            'formato' => $formato,
-            'secciones' => $this->groupDetalles($formato),
-            'tipo_pdf' => $tipoPdf,
-        ]);
-        $pdf->setPaper('a4', 'portrait');
+        try {
+            $formato = FormatoOperacional::with([
+                'detalles',
+                'programacionServicio.tecnico',
+                'programacionServicio.tecnicos',
+            ])->findOrFail($id);
 
-        $clienteSafe = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $formato->cliente ?? 'sin_cliente');
-        $fechaSafe = $formato->fecha ? \Carbon\Carbon::parse($formato->fecha)->format('Ymd') : 'sin_fecha';
+            $view = $this->resolveViewName($formato);
+            $tipoPdf = request('tipo_pdf', 'verdadera');
+            
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
+                'formato' => $formato,
+                'secciones' => $this->groupDetalles($formato),
+                'tipo_pdf' => $tipoPdf,
+            ]);
+            
+            $pdf->setPaper('a4', 'portrait');
 
-        return $pdf->stream("Formato_Operacional_{$clienteSafe}_{$fechaSafe}.pdf");
+            $clienteSafe = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $formato->cliente ?? 'sin_cliente');
+            $fechaSafe = $formato->fecha ? \Carbon\Carbon::parse($formato->fecha)->format('Ymd') : 'sin_fecha';
+
+            return $pdf->stream("Formato_Operacional_{$clienteSafe}_{$fechaSafe}.pdf");
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Error generando PDF: " . $e->getMessage());
+            return response()->make("<h2>Error al generar el PDF del Formato Operacional</h2><p><b>Mensaje:</b> {$e->getMessage()}</p>", 500);
+        }
     }
 
     public function generarPDFByProgramacion($id)
     {
         $prog = ProgramacionServicio::find($id);
         
-        $formato = FormatoOperacional::with([
-            'detalles',
-            'programacionServicio.tecnico',
-            'programacionServicio.tecnicos',
-        ])->where('id_programacion_servicio', $id)->latest()->first();
-
-        if (!$formato && $prog && $prog->id_grupo_programacion) {
-            $formato = FormatoOperacional::with([
-                'detalles',
-                'programacionServicio.tecnico',
-                'programacionServicio.tecnicos',
-            ])->where('id_grupo_programacion', $prog->id_grupo_programacion)->latest()->first();
-        }
+        $formato = $prog ? $this->getMejorFormatoParaServicio($prog) : null;
 
         if (!$formato) {
             return response()->json([
@@ -291,7 +277,7 @@ class FormatoOperacionalController extends Controller
 
             $detallesFiltrados = $formato->detalles->filter(function($detalle) use ($esRoedores, $esVoladores, $esRastreros) {
                 $sectionKey = $this->displaySectionKey($detalle);
-                if ($esRoedores) return str_contains($sectionKey, 'roedores') || $sectionKey === 'jaula';
+                if ($esRoedores) return str_contains($sectionKey, 'roedores') || $sectionKey === 'jaula' || $sectionKey === 'tubo_cebadero';
                 if ($esRastreros) return str_contains($sectionKey, 'rastreros');
                 if ($esVoladores) return $sectionKey === 'trampa_luz';
                 return true; 
@@ -305,23 +291,26 @@ class FormatoOperacionalController extends Controller
             }
         }
 
-        $secciones = $this->groupDetalles($formato);
-        // ----------------------------------------
+        try {
+            $secciones = $this->groupDetalles($formato);
 
-        $view = $this->resolveViewName($formato);
-        $tipoPdf = request('tipo_pdf', 'verdadera');
-        
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
-            'formato' => $formato,
-            'secciones' => $secciones,
-            'tipo_pdf' => $tipoPdf,
-        ]);
-        $pdf->setPaper('a4', 'portrait');
+            $view = $this->resolveViewName($formato);
+            $tipoPdf = request('tipo_pdf', 'verdadera');
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
+                'formato' => $formato,
+                'secciones' => $secciones,
+                'tipo_pdf' => $tipoPdf,
+            ]);
+            $pdf->setPaper('a4', 'portrait');
 
-        $clienteSafe = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $formato->cliente ?? 'sin_cliente');
-        $fechaSafe = $formato->fecha ? \Carbon\Carbon::parse($formato->fecha)->format('Ymd') : 'sin_fecha';
+            $clienteSafe = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $formato->cliente ?? 'sin_cliente');
+            $fechaSafe = $formato->fecha ? \Carbon\Carbon::parse($formato->fecha)->format('Ymd') : 'sin_fecha';
 
-        return $pdf->stream("Formato_Operacional_{$clienteSafe}_{$fechaSafe}.pdf");
+            return $pdf->stream("Formato_Operacional_{$clienteSafe}_{$fechaSafe}.pdf");
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Error generando PDF por programacion: " . $e->getMessage());
+            return response()->make("<h2>Error al generar el PDF del Formato Operacional</h2><p><b>Mensaje:</b> {$e->getMessage()}</p>", 500);
+        }
     }
 
     public function generarPDFByGrupo($idGrupo)
@@ -378,6 +367,8 @@ class FormatoOperacionalController extends Controller
             'secciones' => $this->groupDetalles($loaded),
             'programacion_servicio' => $loaded->programacionServicio,
             'programacion_servicio_grupo' => $loaded->programacionServicioGrupo,
+            'correlativo' => $loaded->correlativo ?? $loaded->codigo_documento,
+            'correlativo_ficha' => DB::table('fichas_operacionales')->where('id_programacion_servicio', $loaded->id_programacion_servicio)->value('correlativo'),
         ];
     }
 
@@ -389,7 +380,7 @@ class FormatoOperacionalController extends Controller
                 return $this->displaySectionKey($detalle);
             });
 
-        $orderedKeys = ['roedores_cebo', 'roedores_lamina', 'rastreros_lamina', 'trampa_luz', 'jaula', 'otros'];
+        $orderedKeys = ['roedores_cebo', 'roedores_lamina', 'tubo_cebadero', 'rastreros_lamina', 'trampa_luz', 'jaula', 'otros'];
         $result = [];
 
         foreach ($orderedKeys as $key) {
@@ -515,20 +506,59 @@ class FormatoOperacionalController extends Controller
             
             foreach ($section['items'] as $item) {
                 $estadoVerdadera = $this->nullableText($item['estado_dispositivo_verdadera'] ?? $item['estado_verdadera'] ?? $item['estado_dispositivo'] ?? null);
-                $estadoAuditiva = $this->nullableText($item['estado_dispositivo_auditiva'] ?? $item['estado_auditiva'] ?? null);
+                $rawEstadoAuditiva = $item['estado_dispositivo_auditiva'] ?? $item['estado_auditiva'] ?? null;
+
                 $hallazgoVerdadera = $this->dashText($item['hallazgo_verdadera'] ?? $item['hallazgo'] ?? null);
-                $hallazgoAuditiva = $this->dashText($item['hallazgo_auditiva'] ?? null);
+                $rawHallazgoAuditiva = $item['hallazgo_auditiva'] ?? null;
+
                 $senalesVerdadera = $this->dashText($item['senales_presencia_verdadera'] ?? $item['senales_presencia'] ?? null);
-                $senalesAuditiva = $this->dashText($item['senales_presencia_auditiva'] ?? null);
+                $rawSenalesAuditiva = $item['senales_presencia_auditiva'] ?? null;
+
+                // Determinar si el usuario llenó datos auditivos para este dispositivo
+                $hasFilledAuditivaDevice = ($rawEstadoAuditiva !== null && trim((string)$rawEstadoAuditiva) !== '') ||
+                    ($rawHallazgoAuditiva !== null && trim((string)$rawHallazgoAuditiva) !== '' && trim((string)$rawHallazgoAuditiva) !== '-') ||
+                    ($rawSenalesAuditiva !== null && trim((string)$rawSenalesAuditiva) !== '' && trim((string)$rawSenalesAuditiva) !== '-');
+
+                if (!$hasFilledAuditivaDevice) {
+                    $estadoAuditiva = $estadoVerdadera;
+                    $hallazgoAuditiva = $hallazgoVerdadera;
+                    $senalesAuditiva = $senalesVerdadera;
+                } else {
+                    $estadoAuditiva = $this->nullableText($rawEstadoAuditiva);
+                    $hallazgoAuditiva = $this->dashText($rawHallazgoAuditiva);
+                    $senalesAuditiva = $this->dashText($rawSenalesAuditiva);
+                }
 
                 $codigoResuelto = $this->resolveCodigoCaja($item, $sequence, $tipo);
+                
+                // Refinar el tipo si es 'otros' pero el código sugiere una jaula
+                $tipoFinal = $tipo;
+                if ($tipoFinal === 'otros' && str_starts_with(strtoupper($codigoResuelto), 'J-')) {
+                    $tipoFinal = 'jaula';
+                }
+
+                $estadoLaminaVerdadera = $this->nullableText($item['estado_lamina_verdadera'] ?? $item['estado_lamina'] ?? null);
+                $rawEstadoLaminaAuditiva = $item['estado_lamina_auditiva'] ?? null;
+                if ($rawEstadoLaminaAuditiva === null || trim((string)$rawEstadoLaminaAuditiva) === '') {
+                    $estadoLaminaAuditiva = $estadoLaminaVerdadera;
+                } else {
+                    $estadoLaminaAuditiva = $this->nullableText($rawEstadoLaminaAuditiva);
+                }
+
+                $conteoEstadioVerdadera = $this->toNullableInt($item['conteo_estadio_verdadera'] ?? null);
+                $rawConteoEstadioFalsa = $this->toNullableInt($item['conteo_estadio_falsa'] ?? null);
+                if ($rawConteoEstadioFalsa === null) {
+                    $conteoEstadioFalsa = $conteoEstadioVerdadera;
+                } else {
+                    $conteoEstadioFalsa = $rawConteoEstadioFalsa;
+                }
 
                 $details[] = [
-                    'tipo_seccion' => $tipo,
+                    'tipo_seccion' => $tipoFinal,
                     'codigo_caja' => $codigoResuelto,
                     'orden_caja' => $sequence,
                     'id_producto' => $this->toNullableInt($item['id_producto'] ?? null),
-                    'descripcion' => $this->resolveDescripcion($item, $tipo, $formatoContexto, $codigoResuelto),
+                    'descripcion' => $this->resolveDescripcion($item, $tipoFinal, $formatoContexto, $codigoResuelto),
                     'ubicacion' => trim((string) ($item['ubicacion'] ?? '')),
                     'estado_dispositivo' => $estadoVerdadera,
                     'estado_dispositivo_verdadera' => $estadoVerdadera,
@@ -540,13 +570,13 @@ class FormatoOperacionalController extends Controller
                     'senales_presencia_verdadera' => $senalesVerdadera,
                     'senales_presencia_auditiva' => $senalesAuditiva,
                     'conteo_insectos' => $this->normalizeConteoInsectos($item['conteo_insectos'] ?? null),
-                    'estado_lamina' => $this->nullableText($item['estado_lamina_verdadera'] ?? $item['estado_lamina'] ?? null),
-                    'estado_lamina_verdadera' => $this->nullableText($item['estado_lamina_verdadera'] ?? null),
-                    'estado_lamina_auditiva' => $this->nullableText($item['estado_lamina_auditiva'] ?? null),
+                    'estado_lamina' => $estadoLaminaVerdadera,
+                    'estado_lamina_verdadera' => $estadoLaminaVerdadera,
+                    'estado_lamina_auditiva' => $estadoLaminaAuditiva,
                     'estadio' => $this->nullableText($item['estadio'] ?? null),
                     'conteo_estadio' => $this->normalizeConteoEstadio($item['conteo_estadio'] ?? null),
-                    'conteo_estadio_verdadera' => $this->toNullableInt($item['conteo_estadio_verdadera'] ?? null),
-                    'conteo_estadio_falsa' => $this->toNullableInt($item['conteo_estadio_falsa'] ?? null),
+                    'conteo_estadio_verdadera' => $conteoEstadioVerdadera,
+                    'conteo_estadio_falsa' => $conteoEstadioFalsa,
                     'numero_lote' => $this->nullableText($item['numero_lote'] ?? null),
                 ];
                 $sequence++;
@@ -634,6 +664,10 @@ class FormatoOperacionalController extends Controller
             return 'jaula';
         }
 
+        if (str_contains($normalized, 'tubo')) {
+            return 'tubo_cebadero';
+        }
+
         return 'otros';
     }
 
@@ -659,6 +693,11 @@ class FormatoOperacionalController extends Controller
             return 'jaula';
         }
 
+        // Tubos cebaderos → siempre Roedores
+        if ($tipo === 'tubo_cebadero') {
+            return 'tubo_cebadero';
+        }
+
         // ═══ PRIORIDAD 2: Láminas (tipo_seccion='lamina') ═══
         // Tanto Roedores como Rastreros usan tipo_seccion='lamina'.
         // La DESCRIPCIÓN guardada en la BD es lo que las diferencia:
@@ -679,7 +718,7 @@ class FormatoOperacionalController extends Controller
                 ? 'roedores_lamina'
                 : 'roedores_cebo';
         }
-        if (str_contains($descripcion, 'jaula')) {
+        if (str_contains($descripcion, 'jaula') || str_starts_with(strtoupper((string)$detalle->codigo_caja), 'J-')) {
             return 'jaula';
         }
 
@@ -700,6 +739,7 @@ class FormatoOperacionalController extends Controller
             'rastreros_lamina' => 'L',
             'trampa_luz' => 'TL',
             'jaula' => 'J',
+            'tubo_cebadero' => 'TB',
             default => 'C',
         };
 
@@ -714,6 +754,7 @@ class FormatoOperacionalController extends Controller
             'rastreros_lamina' => 'Láminas pegantes',
             'trampa_luz' => 'Trampa de luz',
             'jaula' => 'Jaulas',
+            'tubo_cebadero' => 'Tubos cebaderos con cebo',
             default => 'Otros',
         };
     }
@@ -728,7 +769,7 @@ class FormatoOperacionalController extends Controller
         $code = trim((string) ($item['codigo_caja'] ?? $item['codigo'] ?? ''));
         
         // Si la app móvil envió un código válido con prefijo reconocido, preservarlo
-        if ($code !== '' && preg_match('/^(C|L|TL|J|T)-\d+$/i', $code)) {
+        if ($code !== '' && preg_match('/^(C|L|TL|J|TB)-\d+$/i', $code)) {
             return strtoupper($code);
         }
 
@@ -737,6 +778,7 @@ class FormatoOperacionalController extends Controller
             'trampa_luz' => 'TL',
             'lamina' => 'L',
             'jaula' => 'J',
+            'tubo_cebadero' => 'TB',
             default => 'C', // cebo y otros
         };
 
@@ -764,6 +806,10 @@ class FormatoOperacionalController extends Controller
 
         if ($tipo === 'jaula') {
             return 'Jaulas';
+        }
+
+        if ($tipo === 'tubo_cebadero') {
+            return 'Tubos cebaderos con cebo';
         }
 
         if ($tipo === 'lamina') {
@@ -826,6 +872,17 @@ class FormatoOperacionalController extends Controller
         }
 
         $result = [];
+        $hasFilledAuditiva = false;
+        foreach ($value as $counts) {
+            if (is_array($counts)) {
+                $auditivaRaw = $counts['auditiva'] ?? $counts['falsa'] ?? $counts['audit'] ?? 0;
+                if (is_numeric($auditivaRaw) && (int)$auditivaRaw != 0) {
+                    $hasFilledAuditiva = true;
+                    break;
+                }
+            }
+        }
+
         foreach ($value as $family => $counts) {
             if (!is_array($counts)) {
                 continue;
@@ -837,10 +894,14 @@ class FormatoOperacionalController extends Controller
             }
 
             $verdaderaRaw = $counts['verdadera'] ?? $counts['real'] ?? 0;
-            $auditivaRaw = $counts['auditiva'] ?? $counts['falsa'] ?? $counts['audit'] ?? 0;
-
             $verdadera = is_numeric($verdaderaRaw) ? max(0, (int) $verdaderaRaw) : 0;
-            $auditiva = is_numeric($auditivaRaw) ? max(0, (int) $auditivaRaw) : 0;
+
+            if ($hasFilledAuditiva) {
+                $auditivaRaw = $counts['auditiva'] ?? $counts['falsa'] ?? $counts['audit'] ?? 0;
+                $auditiva = is_numeric($auditivaRaw) ? max(0, (int) $auditivaRaw) : 0;
+            } else {
+                $auditiva = $verdadera;
+            }
 
             $result[$key] = [
                 'verdadera' => $verdadera,
@@ -858,6 +919,17 @@ class FormatoOperacionalController extends Controller
         }
 
         $result = [];
+        $hasFilledAuditiva = false;
+        foreach ($value as $counts) {
+            if (is_array($counts)) {
+                $auditivaRaw = $counts['auditiva'] ?? $counts['falsa'] ?? $counts['audit'] ?? 0;
+                if (is_numeric($auditivaRaw) && (int)$auditivaRaw != 0) {
+                    $hasFilledAuditiva = true;
+                    break;
+                }
+            }
+        }
+
         foreach ($value as $stage => $counts) {
             if (!is_array($counts)) {
                 continue;
@@ -869,10 +941,14 @@ class FormatoOperacionalController extends Controller
             }
 
             $verdaderaRaw = $counts['verdadera'] ?? $counts['real'] ?? 0;
-            $auditivaRaw = $counts['auditiva'] ?? $counts['falsa'] ?? $counts['audit'] ?? 0;
-
             $verdadera = is_numeric($verdaderaRaw) ? max(0, (int) $verdaderaRaw) : 0;
-            $auditiva = is_numeric($auditivaRaw) ? max(0, (int) $auditivaRaw) : 0;
+
+            if ($hasFilledAuditiva) {
+                $auditivaRaw = $counts['auditiva'] ?? $counts['falsa'] ?? $counts['audit'] ?? 0;
+                $auditiva = is_numeric($auditivaRaw) ? max(0, (int) $auditivaRaw) : 0;
+            } else {
+                $auditiva = $verdadera;
+            }
 
             $result[$key] = [
                 'verdadera' => $verdadera,
@@ -913,5 +989,35 @@ class FormatoOperacionalController extends Controller
         }
 
         return 'FormatoOperacionalPDF';
+    }
+
+    private function getMejorFormatoParaServicio(ProgramacionServicio $progRequest)
+    {
+        if ($progRequest->id_grupo_programacion) {
+            $formatosGrupo = FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
+                ->where('id_grupo_programacion', $progRequest->id_grupo_programacion)
+                ->get();
+            
+            if ($formatosGrupo->isNotEmpty()) {
+                return $formatosGrupo->sortByDesc(function ($f) {
+                    return $f->detalles->filter(function ($d) {
+                        return !empty($d->estado_dispositivo_verdadera) || 
+                               !empty($d->estado_dispositivo) || 
+                               !empty($d->hallazgo_verdadera) || 
+                               !empty($d->hallazgo) || 
+                               !empty($d->estado_lamina_verdadera) || 
+                               !empty($d->estado_lamina) || 
+                               !empty($d->conteo_insectos) || 
+                               !empty($d->conteo_estadio) || 
+                               !empty($d->senales_presencia);
+                    })->count();
+                })->first();
+            }
+        }
+        
+        return FormatoOperacional::with(['detalles', 'programacionServicio', 'programacionServicioGrupo'])
+            ->where('id_programacion_servicio', $progRequest->id)
+            ->latest()
+            ->first();
     }
 }

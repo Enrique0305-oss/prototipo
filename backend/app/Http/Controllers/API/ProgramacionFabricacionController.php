@@ -275,8 +275,107 @@ class ProgramacionFabricacionController extends Controller
         ]);
     }
 
+    public function completar(Request $request, $id)
+    {
+        $programacion = ProgramacionFabricacion::findOrFail($id);
+
+        $validated = $request->validate([
+            'observaciones' => 'nullable|string',
+            'fecha_inicio_real' => 'nullable|date',
+            'fecha_fin_real' => 'nullable|date',
+            'duracion_real' => 'nullable|integer',
+        ]);
+
+        $fechaFin = $validated['fecha_fin_real'] ?? now();
+        $fechaInicio = $validated['fecha_inicio_real'] ?? null;
+
+        if (!$fechaInicio && !empty($validated['duracion_real'])) {
+            $fechaInicio = \Carbon\Carbon::parse($fechaFin)->subMinutes($validated['duracion_real']);
+        }
+
+        $fotosEvidencia = (is_string($programacion->fotos_evidencia) ? json_decode($programacion->fotos_evidencia, true) : $programacion->fotos_evidencia) ?? [];
+        if (!is_array($fotosEvidencia)) $fotosEvidencia = [];
+        
+        $metadatosFotos = $this->normalizarMetaFotosEvidencia($request->input('fotos_evidencia_meta'));
+        $fotosSubidas = $this->guardarFotosEvidencia($request, $programacion, $metadatosFotos);
+        
+        if (!empty($fotosSubidas)) {
+            $fotosEvidencia = array_values(array_merge($fotosEvidencia, $fotosSubidas));
+        }
+
+        $programacion->update([
+            'estado_ejecucion' => 'Realizado',
+            'fecha_inicio_real' => $fechaInicio,
+            'fecha_fin_real' => $fechaFin,
+            'observaciones' => $validated['observaciones'] ?? $programacion->observaciones,
+            'fotos_evidencia' => $fotosEvidencia,
+        ]);
+
+        $programacion->load(['tecnico', 'ordenFabricacion.detalles.producto']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Programación de fabricación completada exitosamente',
+            'data' => $programacion,
+        ]);
+    }
+
     private function normalizeIds(array $ids): array
     {
         return array_values(array_unique(array_filter(array_map('intval', $ids), fn (int $id) => $id > 0)));
+    }
+
+    private function guardarFotosEvidencia(Request $request, ProgramacionFabricacion $prog, array $metadatos = []): array
+    {
+        if (!$request->hasFile('fotos_evidencia')) {
+            return [];
+        }
+
+        $archivos = $request->file('fotos_evidencia');
+        if (!is_array($archivos)) {
+            $archivos = [$archivos];
+        }
+
+        $rutaBase = "programacion-fabricacion/evidencias/{$prog->id}";
+        $rutas = [];
+
+        foreach ($archivos as $indice => $archivo) {
+            if (!$archivo || !$archivo->isValid()) {
+                continue;
+            }
+
+            $extension = strtolower($archivo->getClientOriginalExtension() ?: 'jpg');
+            $nombre = now()->format('Ymd_His') . '_' . \Illuminate\Support\Str::uuid()->toString() . '.' . $extension;
+            $ruta = $archivo->storeAs($rutaBase, $nombre, 'public');
+            $metadato = $metadatos[$indice] ?? [];
+            $rutas[] = [
+                'path' => $ruta,
+                'service_id' => isset($metadato['service_id']) ? (int) $metadato['service_id'] : null,
+                'service_title' => isset($metadato['service_title']) ? trim((string) $metadato['service_title']) : null,
+                'description' => isset($metadato['description']) ? trim((string) $metadato['description']) : null,
+            ];
+        }
+
+        return $rutas;
+    }
+
+    private function normalizarMetaFotosEvidencia(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $value = $decoded;
+            }
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        return array_values($value);
     }
 }

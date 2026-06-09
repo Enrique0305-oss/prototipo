@@ -6,9 +6,30 @@ use Illuminate\Database\Eloquent\Model;
 
 class FichaOperacional extends Model
 {
+    protected static function boot()
+    {
+        parent::boot();
+        static::creating(function ($model) {
+            if (!$model->correlativo) {
+                $lastRecord = static::whereNotNull('correlativo')
+                    ->where('correlativo', 'LIKE', 'FO-%')
+                    ->orderBy('id', 'desc')
+                    ->first();
+                
+                $lastNumber = 0;
+                if ($lastRecord && preg_match('/FO-(\d+)/', $lastRecord->correlativo, $matches)) {
+                    $lastNumber = (int) $matches[1];
+                }
+                
+                $model->correlativo = 'FO-' . str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
+            }
+        });
+    }
+
     protected $table = 'fichas_operacionales';
 
     protected $fillable = [
+        'correlativo',
         'id_programacion_servicio',
         'id_grupo_programacion',
         'id_usuario_creador',

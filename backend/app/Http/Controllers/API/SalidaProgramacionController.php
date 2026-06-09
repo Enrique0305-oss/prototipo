@@ -12,6 +12,7 @@ use App\Models\Inventario;
 use App\Models\Lote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 
 class SalidaProgramacionController extends Controller
@@ -650,16 +651,37 @@ class SalidaProgramacionController extends Controller
         }
 
         $insumos = ProgramacionInsumo::whereIn('id_programacion', $ids)
-            ->where('estado', 'Entregado')
+            ->whereIn('estado', ['Entregado', 'Utilizado'])
             ->with(['producto.categoria', 'lote'])
             ->get();
 
         $quimicos = $insumos->filter(function ($insumo) {
             $producto = $insumo->producto;
-            if (!$producto || !$producto->categoria) {
-                return false;
+            if (!$producto) return false;
+
+            // Si tiene ingrediente activo, definitivamente es un químico/biocida
+            if (!empty($producto->ingre_activo)) {
+                return true;
             }
-            return stripos($producto->categoria->nombre, 'quimico') !== false;
+
+            if (!$producto->categoria) return false;
+
+            $catNombre = mb_strtolower($producto->categoria->nombre, 'UTF-8');
+            $catNombre = str_replace(
+                ['á', 'é', 'í', 'ó', 'ú', 'ü'], 
+                ['a', 'e', 'i', 'o', 'u', 'u'], 
+                $catNombre
+            );
+
+            // Palabras clave comunes para químicos y biocidas
+            $keywords = ['quimico', 'biocida', 'plaguicida', 'insecticida', 'desinfectante', 'cebo', 'rodenticida'];
+            foreach ($keywords as $kw) {
+                if (strpos($catNombre, $kw) !== false) {
+                    return true;
+                }
+            }
+
+            return false;
         })->values();
 
         // Agrupar por producto y lote para sumar las cantidades de los servicios del grupo
@@ -681,9 +703,9 @@ class SalidaProgramacionController extends Controller
                 'producto' => $producto->descripcion ?? 'Producto',
                 'lote' => $lote->numero_lote ?? '',
                 'fecha_vencimiento' => $lote && $lote->fecha_vencimiento
-                    ? $lote->fecha_vencimiento->format('Y-m-d')
-                    : '',
-                'unidad' => $producto->unidad ?? '',
+                    ? (is_string($lote->fecha_vencimiento) ? $lote->fecha_vencimiento : $lote->fecha_vencimiento->format('Y-m-d'))
+                    : null,
+                'unidad' => $producto->unidad ?? '-',
                 'cantidad_entregada' => $cantidadEntregada,
             ];
         })->values();
@@ -691,6 +713,142 @@ class SalidaProgramacionController extends Controller
         return response()->json([
             'success' => true,
             'data' => $data,
+        ]);
+    }
+
+    /**
+     * Previsualización de Necesidades de Materiales (Proyecciones para Almacén)
+     * Lee las Órdenes de Servicio Aprobadas/Parciales y proyecta 1 visita de sus servicios pendientes.
+     */
+    public function getPrevisualizacionMateriales()
+    {
+        // 1. Obtener Órdenes de Servicio en estado Aprobado o Parcial
+        $query = \App\Models\OrdenServicio::with([
+            'cliente',
+            'productos.producto.inventario',
+            'detalles.servicio.productosReceta.producto.inventario'
+        ]);
+
+        $query->where(function ($q) {
+            $q->whereIn('estado', ['Aprobado', 'Parcial']);
+
+            if (Schema::hasColumn('orden_servicio', 'aprobacion')) {
+                $q->orWhere('aprobacion', 'Aprobado');
+            }
+        });
+
+        $ordenes = $query->get();
+
+        $resultado = [];
+
+        foreach ($ordenes as $orden) {
+            $materialesProyectados = [];
+
+            foreach ($orden->detalles as $det) {
+                // Verificar cuántas programaciones ya existen para este detalle
+                $count = ProgramacionServicio::where('id_orden_servicio', $orden->id)
+                    ->where('id_servicio', $det->id_servicio)
+                    ->where('id_cliente_planta', $det->id_cliente_planta)
+                    ->where('estado_ejecucion', '!=', 'Cancelado')
+                    ->count();
+                
+                $frec = mb_strtolower(trim($det->frecuencia ?? ''));
+                $expected = 1;
+                
+                if (str_contains($frec, 'semanal')) $expected = 52;
+                elseif (str_contains($frec, 'quincenal')) $expected = 24;
+                elseif (str_contains($frec, 'mensual')) $expected = 12;
+                elseif (str_contains($frec, 'bimestral')) $expected = 6;
+                elseif (str_contains($frec, 'trimestral')) $expected = 4;
+                elseif (str_contains($frec, 'semestral')) $expected = 2;
+                elseif (str_contains($frec, 'anual') || str_contains($frec, 'única') || str_contains($frec, 'unica')) $expected = 1;
+                
+                $estaCompleto = false;
+                if ($count >= $expected) {
+                    $estaCompleto = true;
+                } elseif ($count > 1 && !in_array($frec, ['única', 'unica', 'anual'])) {
+                    // Si se programó de forma masiva
+                    $estaCompleto = true;
+                }
+
+                // Si NO está completo, proyectamos los materiales para UNA (1) próxima visita
+                if (!$estaCompleto && $det->servicio) {
+                    $recetasOrden = $orden->productos->filter(function ($prod) use ($det) {
+                        if (empty($prod->id_servicio)) {
+                            return true;
+                        }
+
+                        return (int) $prod->id_servicio === (int) $det->id_servicio;
+                    });
+
+                    if ($recetasOrden->isEmpty()) {
+                        $recetasOrden = $orden->productos;
+                    }
+
+                    if ($recetasOrden->isNotEmpty()) {
+                        foreach ($recetasOrden->groupBy('id_producto') as $idProd => $itemsProd) {
+                            $primero = $itemsProd->first();
+                            $cant = (float) $itemsProd->sum('cantidad');
+
+                            if (!$idProd || $cant <= 0) {
+                                continue;
+                            }
+
+                            if (!isset($materialesProyectados[$idProd])) {
+                                $materialesProyectados[$idProd] = [
+                                    'id_producto' => (int) $idProd,
+                                    'producto' => $primero && $primero->producto ? $primero->producto->descripcion : 'Desconocido',
+                                    'unidad' => $primero && $primero->producto ? $primero->producto->unidad : '',
+                                    'cantidad_proyectada' => 0,
+                                    'stock_actual' => $primero && $primero->producto && $primero->producto->inventario ? $primero->producto->inventario->cantidad_disponible : 0,
+                                ];
+                            }
+
+                            $materialesProyectados[$idProd]['cantidad_proyectada'] += $cant;
+                        }
+                    } else {
+                        foreach ($det->servicio->productosReceta as $receta) {
+                            $idProd = $receta->id_producto;
+
+                            // Ignoramos si es un equipo o si no tiene id_producto
+                            if (!$idProd) continue;
+
+                            $cant = $receta->cantidad_default;
+
+                            if (!isset($materialesProyectados[$idProd])) {
+                                $materialesProyectados[$idProd] = [
+                                    'id_producto' => $idProd,
+                                    'producto' => $receta->producto ? $receta->producto->descripcion : 'Desconocido',
+                                    'unidad' => $receta->producto ? $receta->producto->unidad : '',
+                                    'cantidad_proyectada' => 0,
+                                    'stock_actual' => $receta->producto && $receta->producto->inventario ? $receta->producto->inventario->cantidad_disponible : 0,
+                                ];
+                            }
+                            $materialesProyectados[$idProd]['cantidad_proyectada'] += $cant;
+                        }
+                    }
+                }
+            }
+
+            // Solo agregamos la orden si hay materiales proyectados pendientes
+            if (!empty($materialesProyectados)) {
+                $fechaReferencia = $orden->fecha_aceptacion
+                    ?? $orden->fecha_tentativa
+                    ?? now();
+
+                $resultado[] = [
+                    'id_orden' => $orden->id,
+                    'numero_orden' => $orden->numero_orden,
+                    'cliente' => $orden->cliente ? $orden->cliente->nombre_empresa : 'Sin cliente',
+                    'fecha_aprobacion' => $fechaReferencia->format('Y-m-d'),
+                    'materiales' => array_values($materialesProyectados)
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $resultado
         ]);
     }
 }

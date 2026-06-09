@@ -20,7 +20,7 @@ class AuthController extends Controller
         2 => ['dashboard', 'ods', 'odp', 'servicios', 'programaciones', 'marcar-asistencia'],                         // Operaciones
         3 => ['dashboard', 'productos', 'categorias', 'logistica', 'cotizaciones', 'marcar-asistencia'],               // Administración
         4 => ['dashboard', 'rrhh-asistencia', 'rrhh-empleados', 'rrhh-reportes', 'marcar-asistencia', 'usuarios'],    // RRHH
-        5 => ['dashboard', 'cotizaciones', 'logistica', 'marcar-asistencia'],                                          // Finanzas
+        5 => ['finanzas', 'marcar-asistencia'],                                                                        // Finanzas
         6 => ['*'],                                                                                                     // Gerencia = TODO
         7 => ['dashboard', 'inventario', 'entradas-salidas', 'marcar-asistencia'],                                     // Almacén
     ];
@@ -35,6 +35,10 @@ class AuthController extends Controller
 
         if (in_array($areaNombre, ['gerencia', 'it'], true)) {
             return ['*'];
+        }
+
+        if (in_array($areaNombre, ['investigacion', 'investigación'], true)) {
+            return ['dashboard', 'marcar-asistencia', 'operaciones'];
         }
 
         // Área Programación - Cargo: Programación Servicio

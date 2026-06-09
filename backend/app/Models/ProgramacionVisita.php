@@ -28,6 +28,9 @@ class ProgramacionVisita extends Model
         'direccion_completa',
         'estado_ejecucion',
         'observaciones',
+        'fotos_evidencia',
+        'fecha_inicio_real',
+        'fecha_fin_real',
         'creado_por',
     ];
 
@@ -38,6 +41,9 @@ class ProgramacionVisita extends Model
         'tecnicos_ids' => 'array',
         'id_cliente_planta_area' => 'array',
         'id_supervisor' => 'array',
+        'fotos_evidencia' => 'array',
+        'fecha_inicio_real' => 'datetime',
+        'fecha_fin_real' => 'datetime',
     ];
 
     public function cliente()

@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cotización #{{ $cotizacion->numero_cotizacion }}</title>
+    <title>{{ $titulo_pdf ?? 'Propuesta Comercial' }}</title>
     <style>
 @include('cotizaciones.pdf.partials.styles-common')
 

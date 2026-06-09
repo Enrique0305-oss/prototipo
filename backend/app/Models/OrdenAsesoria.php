@@ -75,6 +75,11 @@ class OrdenAsesoria extends Model
         return $this->belongsToMany(Exponente::class, 'orden_asesoria_exponentes', 'id_orden_asesoria', 'id_exponente');
     }
 
+    public function proyecciones()
+    {
+        return $this->hasMany(Proyeccion::class, 'id_referencia')->where('tipo_orden', 'asesoria');
+    }
+
     public function detalles()
     {
         return $this->hasMany(DetalleOrdenAsesoria::class, 'id_orden_asesoria');

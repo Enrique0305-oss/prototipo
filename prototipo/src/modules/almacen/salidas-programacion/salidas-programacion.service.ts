@@ -115,4 +115,9 @@ export const salidasProgramacionService = {
     const filename = `Acta_Entrega_${esGrupo ? 'Grupo' : 'Programacion'}_${idProgramacion}.pdf`;
     return apiClient.downloadFile(`/almacen/salidas-programacion/${idProgramacion}/pdf-entrega?es_grupo=${esGrupo ? '1' : '0'}`, filename);
   },
+
+  // Obtener la previsualización de necesidades de materiales para ODS aprobadas/parciales
+  getPrevisualizacionMateriales: async () => {
+    return apiClient.get<{ success: boolean; data: any[] }>('/almacen/salidas-programacion/previsualizacion');
+  },
 };

@@ -10,7 +10,7 @@ import { renderDashboard, initDashboardEvents } from './modules/dashboard/dashbo
 import { renderDashboardProgramacionServicio, initDashboardProgramacionServicioEvents } from './modules/programaciones/programacion-servicio/dashboard-programacion-servicio.view'
 import { renderProgramacionServicio, initProgramacionServicioEvents } from './modules/programaciones/programacion-servicio/programacion-servicio.view'
 import { renderProgramacionCapacitacionAsesoria, initProgramacionCapacitacionAsesoriaEvents } from './modules/programaciones/programacion-capacitacion-asesoria/programacion-capacitacion-asesoria.view'
-import { renderRecursosHumanos, renderAsistenciaTab, renderAsistenciaPersonalTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, cargarAsistenciaPersonal, renderReportesTab, renderHorariosTab, cargarHorarios, getTabsRecursosHumanosPermitidos, tieneAccesoCompletoRecursosHumanos, cargarReportesRRHH } from './modules/recursos-humanos/recursos-humanos.view'
+import { renderRecursosHumanos, renderAsistenciaTab, renderAsistenciaPersonalTab, renderMarcarAsistenciaTab, cargarMarcarAsistencia, cargarAsistenciaAdmin, cargarAsistenciaPersonal, renderReportesTab, renderHorariosTab, cargarHorarios, getTabsRecursosHumanosPermitidos, tieneAccesoCompletoRecursosHumanos, cargarReportesRRHH, renderServiciosTecnicosTab, cargarReporteServiciosTecnicos } from './modules/recursos-humanos/recursos-humanos.view'
 import { renderTecnicosTab, cargarTecnicos } from './modules/recursos-humanos/tecnicos.view'
 // Almacén
 import { renderAlmacenMantenimiento, initMantenimientoEvents } from './modules/almacen/mantenimiento/mantenimiento.view'
@@ -38,7 +38,9 @@ import './modules/comercial/aprobacion-cotizaciones/aprobacion-cotizaciones.css'
 import { renderComercialExponentes, initExponentesEvents } from './modules/comercial/exponentes/exponentes.view'
 import { renderComercialDashboard, initComercialDashboardEvents } from './modules/comercial/dashboard-comercial.view'
 // Finanzas
-import { renderFinanzas, renderDashboardFinancieroTab, renderCajaChicaTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
+import { renderFinanzas, renderDashboardFinancieroTab, renderReportesFinancierosTab } from './modules/finanzas/finanzas.view'
+import { renderCajaChica, initCajaChicaEvents } from './modules/finanzas/caja-chica.view'
+import { renderEstadoCuenta, initEstadoCuentaEvents } from './modules/finanzas/estado-cuenta.view'
 // Facturación
 import { renderFacturacion, renderOrdenesProyectadasTab, renderContratosFijosTab, renderEstadoCobranzaTab, initFacturacionEvents } from './modules/facturacion/facturacion.view'
 // Operaciones
@@ -57,7 +59,9 @@ import {
   renderFormatoOperacionalModal,
   initInformesClienteEvents,
   initCrearInformeEvents,
+  initHistorialInformesEvents,
   abrirModalCrearInforme,
+  type ClienteMesGroup,
   type FichaOperacionalViewModel,
   type FormatoOperacionalViewModel,
   type ServicioRealizadoCardViewModel,
@@ -74,7 +78,7 @@ let activeSubMenu = '';
 let expandedMenu = ''; // Controla qué menú con submenús está expandido (sin navegar)
 let activeInventoryTab = 'productos'; // Estado para el tab de inventario
 let activeLogisticaTab = 'clientes'; // Estado para el tab de Servicios - Clientes
-let activeFinanzasTab = 'dashboard'; // Estado para el tab de finanzas
+let activeFinanzasTab = 'caja'; // Estado para el tab de finanzas
 let activeFacturacionTab = 'ordenes'; // Estado para el tab de facturación
 let mesActual = new Date().getMonth() + 1; // 1-12 (mayo = 5)
 let anioActual = new Date().getFullYear(); // 2026
@@ -113,6 +117,7 @@ type FichaOperacionalApiData = {
   firmas?: unknown;
   observaciones?: string | null;
   insumos_utilizados?: unknown;
+  correlativo?: string | null;
 };
 
 type FormatoOperacionalApiData = {
@@ -149,6 +154,9 @@ type FormatoOperacionalApiData = {
       numero_lote?: string | null;
     }>;
   }>;
+  correlativo?: string | null;
+  correlativo_documento?: string | null;
+  numero_documento?: string | null;
 };
 
 declare global {
@@ -168,10 +176,10 @@ const MENU_PERMISOS: Record<string, string[]> = {
   'Servicios - Clientes': ['logistica'],
   'Programaciones': ['programaciones'],
   'Comercial': ['prospectos', 'cotizaciones', 'ods', 'odp', 'servicios'],
-  'Finanzas': ['cotizaciones'],  // Finanzas ve cotizaciones
-  'Facturación': ['cotizaciones'],
+  'Finanzas': ['finanzas'],
+  'Facturación': ['finanzas'],
   'Recursos Humanos': ['rrhh-asistencia', 'rrhh-tecnicos', 'rrhh-reportes', 'marcar-asistencia'],
-  'Operaciones': ['ods', 'odp', 'servicios'],
+  'Operaciones': ['ods', 'odp', 'servicios', 'operaciones'],
   'Reportes': ['dashboard'],  // Todos con dashboard ven reportes
   'Usuarios': ['usuarios'],
 };
@@ -241,6 +249,10 @@ function getRutaInicialPorPerfil(): { menu: string; subMenu: string } {
 
   if (tieneAccesoModulo('rrhh-asistencia') || tieneAccesoModulo('marcar-asistencia')) {
     return { menu: 'Recursos Humanos', subMenu: '' };
+  }
+
+  if (tieneAccesoModulo('finanzas')) {
+    return { menu: 'Finanzas', subMenu: '' };
   }
 
   const visible = filtrarMenuPorPermisos(menuItems);
@@ -395,7 +407,9 @@ function getMainContent() {
     setTimeout(() => initComercialDashboardEvents(), 0);
     return html;
   } else if (activeMenu === 'Finanzas') {
-    return renderFinanzas();
+    const html = renderFinanzas();
+    setTimeout(() => updateFinanzasTabContent(), 0);
+    return html;
   } else if (activeMenu === 'Facturación') {
     // Lógica de submenús de Facturación integrada aquí para evitar "Unreachable code"
     if (activeSubMenu === 'Contratos') return renderContratosFijosTab();
@@ -484,12 +498,7 @@ function renderApp() {
         </nav>
 
         <div class="sidebar-footer">
-          <div class="support-section">
-            <p class="support-title" style="font-weight: 600;">${userName}</p>
-            <p class="support-text" style="font-size: 11px; opacity: 0.8;">${userRole}</p>
-            <button class="contact-btn">Soporte</button>
-          </div>
-          <button class="logout-btn" onclick="logout()" style="margin-top: 16px; width: 100%; padding: 10px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s;">
+          <button class="logout-btn" onclick="logout()" style="width: 100%; padding: 10px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
               <polyline points="16 17 21 12 16 7"></polyline>
@@ -825,14 +834,13 @@ function updateFinanzasTabContent() {
 
 
   switch (activeFinanzasTab) {
-    case 'caja':
-      tabContent.innerHTML = renderCajaChicaTab();
-      break;
-    case 'reportes':
-      tabContent.innerHTML = renderReportesFinancierosTab();
+    case 'estado-cuenta':
+      tabContent.innerHTML = renderEstadoCuenta();
+      setTimeout(() => initEstadoCuentaEvents(), 0);
       break;
     default:
-      tabContent.innerHTML = renderDashboardFinancieroTab();
+      tabContent.innerHTML = renderCajaChica();
+      setTimeout(() => initCajaChicaEvents(), 0);
   }
 }
 
@@ -903,6 +911,9 @@ function updateRecursosTabContent() {
     case 'reportes':
       tabContent.innerHTML = renderReportesTab();
       break;
+    case 'servicios-tecnicos':
+      tabContent.innerHTML = renderServiciosTecnicosTab();
+      break;
     default:
       tabContent.innerHTML = tieneAccesoCompletoRecursosHumanos() ? renderAsistenciaTab() : renderAsistenciaPersonalTab();
   }
@@ -928,6 +939,10 @@ function updateRecursosTabContent() {
 
   if (activeRecursosTab === 'reportes') {
     cargarReportesRRHH();
+  }
+
+  if (activeRecursosTab === 'servicios-tecnicos') {
+    cargarReporteServiciosTecnicos();
   }
 
   if (activeRecursosTab === 'tecnicos') {
@@ -959,6 +974,7 @@ function updateOperacionesTabContent() {
       break;
     case 'historial':
       tabContent.innerHTML = renderHistorialInformesTab();
+      setTimeout(() => initHistorialInformesEvents(), 0);
       break;
     default:
       tabContent.innerHTML = renderServiciosDiaTab();
@@ -998,100 +1014,188 @@ async function cargarServiciosRealizadosOperaciones() {
       });
     });
 
-    container.innerHTML = renderServiciosPorClienteMes(groups);
-    // guardar groups en caché para handlers
-    operacionesGroupsCache = groups;
-    initOperacionesImagenesHandlers(container);
+    const renderAndBindGroups = (groupsToRender: ClienteMesGroup[]) => {
+      container.innerHTML = renderServiciosPorClienteMes(groupsToRender);
+      operacionesGroupsCache = groupsToRender;
+      initOperacionesImagenesHandlers(container);
 
-    // Toggle para mostrar/ocultar el cuerpo del grupo (círculos + detalle)
-    container.querySelectorAll('.group-toggle-btn').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
-        const b = e.currentTarget as HTMLButtonElement;
-        const gi = Number(b.dataset.groupIdx || '0');
-        const groupEl = b.closest('.cliente-mes-group') as HTMLElement | null;
-        if (!groupEl) return;
-        const body = groupEl.querySelector('.group-body') as HTMLElement | null;
-        if (!body) return;
-        const isOpen = body.style.display && body.style.display !== 'none';
-        body.style.display = isOpen ? 'none' : 'block';
-        b.textContent = isOpen ? '▶' : '▼';
+      // Toggle para mostrar/ocultar el cuerpo del grupo (círculos + detalle)
+      container.querySelectorAll('.group-toggle-btn').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          const b = e.currentTarget as HTMLButtonElement;
+          const gi = Number(b.dataset.groupIdx || '0');
+          const groupEl = b.closest('.cliente-mes-group') as HTMLElement | null;
+          if (!groupEl) return;
+          const body = groupEl.querySelector('.group-body') as HTMLElement | null;
+          if (!body) return;
+          const isOpen = body.style.display && body.style.display !== 'none';
+          body.style.display = isOpen ? 'none' : 'block';
+          b.textContent = isOpen ? '▶' : '▼';
 
-        // si se abre, intentar cargar formato del grupo y propagar dispositivos a las visitas
-        if (!isOpen) {
-          const group = operacionesGroupsCache[gi];
-          try {
-            if (group && (group.visitas || []).length > 0 && group.visitas[0].serviceId && (group as any).groupId) {
-              const groupId = (group as any).groupId;
-              if (groupId && groupId > 0) {
-                // crear un card mínimo para pasar a la función de carga
-                const tempCard = { serviceId: group.visitas[0].serviceId, groupId } as any;
-                try {
-                  const formato = await cargarFormatoOperacional(tempCard);
-                  // extraer dispositivos (codigo, ubicacion) desde el formato
-                  const devices: Array<{ codigo: string; ubicacion: string }> = [];
-                  if (Array.isArray((formato as any).secciones)) {
-                    for (const s of (formato as any).secciones) {
-                      if (Array.isArray(s.items)) {
-                        for (const it of s.items) {
-                          const codigo = String((it as any).codigoCaja ?? (it as any).codigo_caja ?? (it as any).codigo ?? '').trim();
-                          const ubicacion = String((it as any).ubicacion ?? '').trim();
-                          if (codigo) devices.push({ codigo, ubicacion });
+          // si se abre, intentar cargar formato del grupo y propagar dispositivos a las visitas
+          if (!isOpen) {
+            const group = operacionesGroupsCache[gi];
+            try {
+              if (group && (group.visitas || []).length > 0 && group.visitas[0].serviceId && (group as any).groupId) {
+                const groupId = (group as any).groupId;
+                if (groupId && groupId > 0) {
+                  // crear un card mínimo para pasar a la función de carga
+                  const tempCard = { serviceId: group.visitas[0].serviceId, groupId } as any;
+                  try {
+                    const formato = await cargarFormatoOperacional(tempCard);
+                    // extraer dispositivos (codigo, ubicacion) desde el formato
+                    const devices: Array<{ codigo: string; ubicacion: string }> = [];
+                    if (Array.isArray((formato as any).secciones)) {
+                      for (const s of (formato as any).secciones) {
+                        if (Array.isArray(s.items)) {
+                          for (const it of s.items) {
+                            const codigo = String((it as any).codigoCaja ?? (it as any).codigo_caja ?? (it as any).codigo ?? '').trim();
+                            const ubicacion = String((it as any).ubicacion ?? '').trim();
+                            if (codigo) devices.push({ codigo, ubicacion });
+                          }
                         }
                       }
                     }
-                  }
 
-                  // asignar devices a cada visita del grupo
-                  if (devices.length > 0) {
-                    group.visitas.forEach((v: any) => {
-                      v.devices = devices;
-                    });
+                    // asignar devices a cada visita del grupo
+                    if (devices.length > 0) {
+                      group.visitas.forEach((v: any) => {
+                        v.devices = devices;
+                      });
+                    }
+                  } catch (err) {
+                    // si no existe formato del grupo o falla, no hacer nada
                   }
-                } catch (err) {
-                  // si no existe formato del grupo o falla, no hacer nada
                 }
               }
+            } catch (err) {
+              console.warn('No se pudo cargar formato del grupo al abrirlo', err);
             }
-          } catch (err) {
-            console.warn('No se pudo cargar formato del grupo al abrirlo', err);
+
+            const firstCircle = body.querySelector('.visit-circle') as HTMLButtonElement | null;
+            if (firstCircle) firstCircle.click();
           }
-
-          const firstCircle = body.querySelector('.visit-circle') as HTMLButtonElement | null;
-          if (firstCircle) firstCircle.click();
-        }
+        });
       });
-    });
 
-    // inicializar listeners de círculos de visitas: al hacer click renderiza solo la visita seleccionada
-    container.querySelectorAll('.visit-circle').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        const b = e.currentTarget as HTMLButtonElement;
-        const gi = Number(b.dataset.groupIdx || '0');
-        const vi = Number(b.dataset.visitIdx || '0');
-        const group = operacionesGroupsCache[gi];
-        if (!group) return;
-        const visita = group.visitas && group.visitas[vi];
-        if (!visita) return;
+      // inicializar listeners de círculos de visitas: al hacer click renderiza solo la visita seleccionada
+      container.querySelectorAll('.visit-circle').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const b = e.currentTarget as HTMLButtonElement;
+          const gi = Number(b.dataset.groupIdx || '0');
+          const vi = Number(b.dataset.visitIdx || '0');
+          const group = operacionesGroupsCache[gi];
+          if (!group) return;
+          const visita = group.visitas && group.visitas[vi];
+          if (!visita) return;
 
-        const groupEl = b.closest('.cliente-mes-group') as HTMLElement | null;
-        if (!groupEl) return;
-        const details = groupEl.querySelector('.group-visit-details') as HTMLElement | null;
-        if (!details) return;
+          const groupEl = b.closest('.cliente-mes-group') as HTMLElement | null;
+          if (!groupEl) return;
+          const details = groupEl.querySelector('.group-visit-details') as HTMLElement | null;
+          if (!details) return;
 
-        // Renderizar solo el detalle de la visita seleccionada
-        details.innerHTML = renderVisitaDetail(visita);
+          // Renderizar solo el detalle de la visita seleccionada
+          details.innerHTML = renderVisitaDetail(visita);
 
-        // enganchar handlers dentro del detalle (ficha, formato, imagenes)
-        initOperacionesImagenesHandlers(details);
+          // enganchar handlers dentro del detalle (ficha, formato, imagenes)
+          initOperacionesImagenesHandlers(details);
 
-        // marcar circulo activo visualmente
-        const parent = b.closest('.visit-circles');
-        if (parent) {
-          parent.querySelectorAll('.visit-circle').forEach((c) => c.classList.remove('active'));
-          b.classList.add('active');
-        }
+          // marcar circulo activo visualmente
+          const parent = b.closest('.visit-circles');
+          if (parent) {
+            parent.querySelectorAll('.visit-circle').forEach((c) => c.classList.remove('active'));
+            b.classList.add('active');
+          }
+        });
       });
-    });
+    };
+
+    let currentPage = 1;
+    const itemsPerPage = 10;
+    let currentSearchTerm = '';
+    let currentMonthFilter = '';
+
+    const renderPagination = (totalItems: number) => {
+      const paginationContainer = document.getElementById('operaciones-servicios-realizados-pagination');
+      if (!paginationContainer) return;
+      
+      const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+      let html = '';
+      
+      html += `<button class="pagination-btn" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>Anterior</button>`;
+      for (let i = 1; i <= totalPages; i++) {
+        html += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+      }
+      html += `<button class="pagination-btn" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>Siguiente</button>`;
+      
+      paginationContainer.innerHTML = html;
+
+      paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const target = e.currentTarget as HTMLButtonElement;
+          if (target.disabled) return;
+          const page = Number(target.dataset.page);
+          if (page >= 1 && page <= totalPages) {
+            currentPage = page;
+            applyFiltersAndRender();
+          }
+        });
+      });
+    };
+
+    const applyFiltersAndRender = () => {
+      let filtered = groups.filter(g => 
+        g.cliente.toLowerCase().includes(currentSearchTerm)
+      );
+      
+      if (currentMonthFilter !== 'todos') {
+        filtered = filtered.filter(g => g.monthKey === currentMonthFilter);
+      }
+
+      const totalItems = filtered.length;
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const paginatedGroups = filtered.slice(startIndex, startIndex + itemsPerPage);
+
+      renderAndBindGroups(paginatedGroups);
+      renderPagination(totalItems);
+    };
+
+    const monthSelect = document.getElementById('operaciones-servicios-realizados-month-filter') as HTMLSelectElement | null;
+    const searchInput = document.getElementById('operaciones-servicios-realizados-search') as HTMLInputElement | null;
+
+    if (monthSelect) {
+      const uniqueMonths = Array.from(new Set(groups.map(g => g.monthKey))).sort((a, b) => b.localeCompare(a));
+      let optionsHtml = '<option value="todos">Todos los meses</option>';
+      uniqueMonths.forEach(m => {
+        const label = groups.find(g => g.monthKey === m)?.monthLabel || m;
+        optionsHtml += `<option value="${m}">${label}</option>`;
+      });
+      monthSelect.innerHTML = optionsHtml;
+      
+      if (uniqueMonths.length > 0) {
+        monthSelect.value = uniqueMonths[0];
+        currentMonthFilter = uniqueMonths[0];
+      } else {
+        currentMonthFilter = 'todos';
+      }
+
+      monthSelect.addEventListener('change', (e) => {
+        currentMonthFilter = (e.target as HTMLSelectElement).value;
+        currentPage = 1;
+        applyFiltersAndRender();
+      });
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        currentSearchTerm = (e.target as HTMLInputElement).value.toLowerCase();
+        currentPage = 1;
+        applyFiltersAndRender();
+      });
+    }
+
+    // Initial render
+    applyFiltersAndRender();
   } catch (error) {
     console.error('No se pudieron cargar servicios realizados en Operaciones:', error);
     container.innerHTML = '<p style="color:#b91c1c; margin:0;">No se pudieron cargar los servicios realizados.</p>';
@@ -1120,9 +1224,9 @@ function initOperacionesImagenesHandlers(container: HTMLElement) {
       const card = operacionesRealizadosCardsCache.get(key);
       if (!card) return;
 
-      const originalText = target.textContent;
+      const originalHTML = target.innerHTML;
       target.disabled = true;
-      target.textContent = 'Cargando...';
+      target.innerHTML = '<span class="report-doc-text">Cargando...</span>';
 
       try {
         const ficha = await cargarFichaOperacional(card);
@@ -1132,7 +1236,7 @@ function initOperacionesImagenesHandlers(container: HTMLElement) {
         alert('No se pudo cargar la ficha operacional para este servicio.');
       } finally {
         target.disabled = false;
-        target.textContent = originalText;
+        target.innerHTML = originalHTML;
       }
     });
   });
@@ -1146,9 +1250,9 @@ function initOperacionesImagenesHandlers(container: HTMLElement) {
       const card = operacionesRealizadosCardsCache.get(key);
       if (!card) return;
 
-      const originalText = target.textContent;
+      const originalHTML = target.innerHTML;
       target.disabled = true;
-      target.textContent = 'Cargando...';
+      target.innerHTML = '<span class="report-doc-text">Cargando...</span>';
 
       try {
         const formato = await cargarFormatoOperacional(card);
@@ -1158,7 +1262,7 @@ function initOperacionesImagenesHandlers(container: HTMLElement) {
         alert('No se pudo cargar el formato operacional para este servicio.');
       } finally {
         target.disabled = false;
-        target.textContent = originalText;
+        target.innerHTML = originalHTML;
       }
     });
   });
@@ -1234,6 +1338,7 @@ function normalizeFicha(data: FichaOperacionalApiData): FichaOperacionalViewMode
     recomendaciones: String(data.recomendaciones ?? '').trim(),
     firmas,
     observaciones: String(data.observaciones ?? '').trim(),
+    correlativo: String(data.correlativo ?? '').trim(),
   };
 }
 
@@ -1294,7 +1399,7 @@ function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalVi
     : [];
 
   return {
-    codigoDocumento: String(data.codigo_documento ?? 'FO-OP-002').trim(),
+    codigoDocumento: String(data.correlativo || data.codigo_documento || 'FO-OP-002').trim(),
     version: String(data.version ?? '01').trim(),
     cliente: String(data.cliente ?? '').trim(),
     direccion: String(data.direccion ?? '').trim(),
@@ -1303,6 +1408,9 @@ function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalVi
     horaInicio: String(data.hora_inicio ?? '').trim(),
     horaFinal: String(data.hora_final ?? '').trim(),
     observaciones: String(data.observaciones ?? '').trim(),
+    correlativo: String(data.correlativo ?? '').trim(),
+    correlativo_documento: String(data.correlativo_documento ?? '').trim(),
+    numero_documento: String(data.numero_documento ?? '').trim(),
     formatos_fichas: (data as any).formatos_fichas || [],
     secciones: secciones,
   };
@@ -1481,9 +1589,58 @@ function abrirModalImagenesOperaciones(card: ServicioRealizadoCardViewModel) {
 }
 
 function logout() {
-  if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-    authService.logout();
+  const existing = document.getElementById('logout-modal-host');
+  if (existing) {
+    existing.remove();
   }
+
+  const host = document.createElement('div');
+  host.id = 'logout-modal-host';
+  host.innerHTML = `
+    <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;">
+      <div style="background:white;padding:24px;border-radius:12px;width:100%;max-width:380px;box-shadow:0 10px 25px rgba(0,0,0,0.2);text-align:center;">
+        <div style="width:48px;height:48px;background:#fee2e2;color:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </div>
+        <h3 style="margin:0 0 8px;font-size:18px;color:#1e293b;font-weight:600;">¿Cerrar sesión?</h3>
+        <p style="margin:0 0 24px;color:#64748b;font-size:14px;line-height:1.5;">Estás a punto de salir del sistema. Tendrás que volver a ingresar tus credenciales para acceder de nuevo.</p>
+        <div style="display:flex;gap:12px;justify-content:center;">
+          <button id="btn-cancel-logout" style="flex:1;padding:10px;background:#f1f5f9;color:#475569;border:none;border-radius:6px;font-weight:500;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">Cancelar</button>
+          <button id="btn-confirm-logout" style="flex:1;padding:10px;background:#ef4444;color:white;border:none;border-radius:6px;font-weight:500;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Salir del sistema</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(host);
+
+  const close = () => {
+    host.remove();
+  };
+
+  document.getElementById('btn-cancel-logout')?.addEventListener('click', close);
+  
+  document.getElementById('btn-confirm-logout')?.addEventListener('click', () => {
+    close();
+    authService.logout();
+  });
+
+  // Cerrar al hacer clic fuera del modal
+  host.firstElementChild?.addEventListener('click', (e) => {
+    if (e.target === host.firstElementChild) {
+      close();
+    }
+  });
+
+  document.addEventListener('keydown', function onEsc(event) {
+    if (event.key === 'Escape') {
+      close();
+      document.removeEventListener('keydown', onEsc);
+    }
+  });
 }
 
 (window as any).logout = logout;

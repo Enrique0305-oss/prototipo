@@ -1,7 +1,7 @@
-﻿// Recursos Humanos View
+// Recursos Humanos View
 import * as ExcelJS from 'exceljs';
 import { Chart, registerables } from 'chart.js';
-import { rrhhService, type MiEstadoResponse, type EmpleadoHorarioResumen, type DiaHorario, type AsistenciaAdminRecord, type RrhhReporteDashboardResponse } from '../../services/rrhhService';
+import { rrhhService, type MiEstadoResponse, type EmpleadoHorarioResumen, type DiaHorario, type AsistenciaAdminRecord, type RrhhReporteDashboardResponse, type RrhhReporteServiciosTecnicosResponse } from '../../services/rrhhService';
 import { authService } from '../auth/auth.service';
 
 Chart.register(...registerables);
@@ -62,7 +62,7 @@ export function tieneAccesoCompletoRecursosHumanos(): boolean {
 
 export function getTabsRecursosHumanosPermitidos(): string[] {
   if (tieneAccesoCompletoRecursosHumanos()) {
-    return ['asistencia', 'marcar', 'horarios', 'tecnicos', 'reportes'];
+    return ['asistencia', 'marcar', 'horarios', 'tecnicos', 'reportes', 'servicios-tecnicos'];
   }
   return ['asistencia', 'marcar'];
 }
@@ -1322,6 +1322,324 @@ function colorBadgeArea(i: number): string {
   return colors[i % colors.length];
 }
 
+function formatearHorasDesdeMinutos(minutos: number): string {
+  return minutosATextoLargo(Math.max(0, Math.round(minutos)));
+}
+
+export function renderServiciosTecnicosTab() {
+  const hoy = new Date().toISOString().split('T')[0];
+
+  return `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+        <div>
+          <h3 style="margin:0;font-size:18px;color:#0f172a;">Horas trabajadas por técnico</h3>
+          <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Consolidado diario de servicios realizados por técnico, usando el tiempo guardado al completar cada servicio.</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <input type="date" class="op-filter-select" id="rrhh-servicios-tecnicos-fecha" value="${hoy}">
+          <button class="btn-filter" id="rrhh-servicios-tecnicos-btn-aplicar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+            Consultar
+          </button>
+          <button class="btn-secondary" id="rrhh-servicios-tecnicos-btn-exportar" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Exportar Excel
+          </button>
+        </div>
+      </div>
+      <div id="rrhh-servicios-tecnicos-body" style="text-align:center; padding: 28px 12px; color:#64748b;">
+        Selecciona una fecha para ver el resumen diario.
+      </div>
+    </div>
+  `;
+}
+
+let rrhhTecnicosReporteCache: RrhhReporteServiciosTecnicosResponse['data']['por_tecnico'] = [];
+
+async function exportarReporteServiciosTecnicosExcel(fecha: string, area: string): Promise<void> {
+  const resp = await rrhhService.getReporteServiciosTecnicos(fecha, area);
+  if (!resp.success) {
+    throw new Error('No se pudo generar el Excel de servicios por técnico');
+  }
+
+  const data = resp.data;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'QSCI Group';
+  workbook.created = new Date();
+
+  const resumenSheet = workbook.addWorksheet('Resumen');
+  aplicarEstiloTituloHoja(resumenSheet, 'REPORTE SERVICIOS TÉCNICOS - RESUMEN', 2, '2C4A7C');
+  resumenSheet.addRow(['Fecha', data.filtros.fecha]);
+  resumenSheet.addRow([]);
+
+  resumenSheet.addRow([
+    'TÉCNICO',
+    'SERVICIOS',
+    'HORAS TOTALES',
+    'PROMEDIO POR SERVICIO (min)',
+    'PRIMER INICIO',
+    'ÚLTIMO FIN',
+  ]);
+  aplicarEstiloEncabezado(resumenSheet.getRow(5), 'DBEAFE');
+
+  data.por_tecnico.forEach((item) => {
+    resumenSheet.addRow([
+      item.tecnico,
+      item.servicios,
+      formatearHorasDesdeMinutos(item.minutos),
+      item.promedio_servicio_min.toFixed(1),
+      item.primer_inicio || '--:--',
+      item.ultimo_fin || '--:--',
+    ]);
+  });
+
+  resumenSheet.getColumn(1).width = 35;
+  resumenSheet.getColumn(2).width = 15;
+  resumenSheet.getColumn(3).width = 20;
+  resumenSheet.getColumn(4).width = 25;
+  resumenSheet.getColumn(5).width = 15;
+  resumenSheet.getColumn(6).width = 15;
+
+  const detalleSheet = workbook.addWorksheet('Detalle por Servicio');
+  aplicarEstiloTituloHoja(detalleSheet, 'DESGLOSE DE SERVICIOS POR TÉCNICO', 2, 'D97706');
+  detalleSheet.addRow(['Fecha', data.filtros.fecha]);
+  detalleSheet.addRow([]);
+
+  detalleSheet.addRow([
+    'TÉCNICO',
+    'SERVICIO',
+    'CLIENTE',
+    'HORA INICIO',
+    'HORA FIN',
+    'TIEMPO (min)',
+  ]);
+  aplicarEstiloEncabezado(detalleSheet.getRow(5), 'FDE68A');
+
+  data.por_tecnico.forEach((item) => {
+    if (item.detalles && item.detalles.length > 0) {
+      item.detalles.forEach((d) => {
+        detalleSheet.addRow([
+          item.tecnico,
+          d.servicio,
+          d.cliente,
+          d.inicio || '--:--',
+          d.fin || '--:--',
+          d.minutos,
+        ]);
+      });
+    }
+  });
+
+  detalleSheet.getColumn(1).width = 35;
+  detalleSheet.getColumn(2).width = 35;
+  detalleSheet.getColumn(3).width = 35;
+  detalleSheet.getColumn(4).width = 15;
+  detalleSheet.getColumn(5).width = 15;
+  detalleSheet.getColumn(6).width = 15;
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `Reporte_Servicios_Tecnicos_${data.filtros.fecha}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+export async function cargarReporteServiciosTecnicos() {
+  const body = document.getElementById('rrhh-servicios-tecnicos-body');
+  const fechaEl = document.getElementById('rrhh-servicios-tecnicos-fecha') as HTMLInputElement | null;
+  const aplicarBtn = document.getElementById('rrhh-servicios-tecnicos-btn-aplicar') as HTMLButtonElement | null;
+  const exportarBtn = document.getElementById('rrhh-servicios-tecnicos-btn-exportar') as HTMLButtonElement | null;
+
+  if (!body || !fechaEl) return;
+
+  const fecha = fechaEl.value || new Date().toISOString().split('T')[0];
+
+  if (aplicarBtn && !aplicarBtn.dataset.bound) {
+    aplicarBtn.dataset.bound = '1';
+    aplicarBtn.addEventListener('click', () => cargarReporteServiciosTecnicos());
+  }
+
+  if (exportarBtn && !exportarBtn.dataset.bound) {
+    exportarBtn.dataset.bound = '1';
+    exportarBtn.addEventListener('click', async () => {
+      exportarBtn.disabled = true;
+      const textoOriginal = exportarBtn.innerHTML;
+      exportarBtn.innerHTML = 'Exportando...';
+      try {
+        const currentFecha = (document.getElementById('rrhh-servicios-tecnicos-fecha') as HTMLInputElement)?.value || new Date().toISOString().split('T')[0];
+        await exportarReporteServiciosTecnicosExcel(currentFecha, 'Todos');
+        mostrarNotificacionAsistencia('Excel de servicios generado correctamente.', 'success');
+      } catch (err: any) {
+        mostrarNotificacionAsistencia(err?.message || 'Error al exportar Excel', 'error');
+      } finally {
+        exportarBtn.disabled = false;
+        exportarBtn.innerHTML = textoOriginal;
+      }
+    });
+  }
+
+  body.innerHTML = `
+    <div style="text-align:center; padding: 28px 12px; color:#64748b;">
+      <div class="spinner" style="margin: 0 auto 16px; width: 34px; height: 34px; border: 4px solid #e2e8f0; border-top-color: #2c4a7c; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      Consultando servicios por técnico...
+    </div>
+  `;
+
+  try {
+    const resp: RrhhReporteServiciosTecnicosResponse = await rrhhService.getReporteServiciosTecnicos(fecha, 'Todos');
+    if (!resp.success) throw new Error('No se pudo cargar el reporte de técnicos');
+
+    const data = resp.data;
+    rrhhTecnicosReporteCache = data.por_tecnico;
+    const resumen = data.resumen;
+    const filas = data.por_tecnico.length > 0
+      ? data.por_tecnico.map((item, index) => `
+        <tr>
+          <td><strong>${escapeHtml(item.tecnico)}</strong></td>
+          <td>${item.servicios}</td>
+          <td><strong>${formatearHorasDesdeMinutos(item.minutos)}</strong></td>
+          <td>${item.promedio_servicio_min.toFixed(1)} min</td>
+          <td>${item.primer_inicio || '--:--'}</td>
+          <td>${item.ultimo_fin || '--:--'}</td>
+          <td>
+            <button class="op-btn-icon js-open-rrhh-tech-details" data-index="${index}" title="Ver detalles">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="7" style="text-align:center; padding: 20px; color:#64748b;">No hay servicios completados para la fecha seleccionada.</td></tr>';
+
+    body.innerHTML = `
+      <div class="stat-boxes" style="margin-bottom: 18px;">
+        <div class="stat-box"><div class="stat-box-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div><div class="stat-box-content"><div class="stat-box-label">Total de Servicios</div><div class="stat-box-value">${resumen.total_servicios}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Horas Totales</div><div class="stat-box-value">${formatearHorasDesdeMinutos(resumen.total_minutos)}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Técnicos con servicios</div><div class="stat-box-value">${resumen.tecnicos_con_servicios}</div></div></div>
+        <div class="stat-box"><div class="stat-box-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg></div><div class="stat-box-content"><div class="stat-box-label">Promedio por Servicio</div><div class="stat-box-value">${resumen.promedio_servicio_min.toFixed(1)} min</div></div></div>
+      </div>
+
+      <div class="table-container">
+        <table class="op-table">
+          <thead>
+            <tr>
+              <th>TÉCNICO</th>
+              <th>SERVICIOS</th>
+              <th>HORAS TOTALES</th>
+              <th>PROMEDIO POR SERVICIO</th>
+              <th>PRIMER INICIO</th>
+              <th>ÚLTIMO FIN</th>
+              <th>ACCIONES</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>
+    `;
+
+    document.querySelectorAll('.js-open-rrhh-tech-details').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const indexStr = (e.currentTarget as HTMLElement).getAttribute('data-index');
+        if (indexStr) {
+          abrirModalDetallesTecnico(Number(indexStr));
+        }
+      });
+    });
+
+  } catch (err: any) {
+    body.innerHTML = `
+      <div style="text-align:center; padding: 28px 12px; color:#dc2626;">
+        <p style="margin: 0 0 12px; font-size: 15px; font-weight: 600;">No se pudo cargar el resumen de servicios por técnico.</p>
+        <p style="margin: 0 0 16px; color:#64748b;">${escapeHtml(err?.message || 'Error de conexión con el servidor')}</p>
+        <button class="btn-primary" id="rrhh-servicios-tecnicos-reintentar">Reintentar</button>
+      </div>
+    `;
+    document.getElementById('rrhh-servicios-tecnicos-reintentar')?.addEventListener('click', () => cargarReporteServiciosTecnicos());
+  }
+}
+
+function abrirModalDetallesTecnico(index: number) {
+  const tecnicoData = rrhhTecnicosReporteCache[index];
+  if (!tecnicoData) return;
+
+  const detalles = tecnicoData.detalles || [];
+  
+  let filas = detalles.map((d, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td><strong>${escapeHtml(d.servicio)}</strong></td>
+      <td>${escapeHtml(d.cliente)}</td>
+      <td>${d.inicio || '--:--'}</td>
+      <td>${d.fin || '--:--'}</td>
+      <td><strong>${d.minutos} min</strong></td>
+    </tr>
+  `).join('');
+
+  if (filas === '') {
+    filas = '<tr><td colspan="6" style="text-align:center; padding: 20px; color:#64748b;">No hay detalles de servicios disponibles.</td></tr>';
+  }
+
+  const modalHtml = `
+    <div class="modal-overlay active" id="modal-tech-details" style="z-index: 1000; background: rgba(15,23,42,0.6); display: flex; align-items: center; justify-content: center; position: fixed; inset: 0;">
+      <div class="modal-content" style="background: white; border-radius: 16px; width: 100%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);">
+        
+        <div style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+          <div>
+            <h3 style="margin: 0; font-size: 18px; color: #0f172a; font-weight: 600;">Detalles de Servicios - ${escapeHtml(tecnicoData.tecnico)}</h3>
+            <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">Área: ${escapeHtml(tecnicoData.area)} | Total: ${tecnicoData.servicios} servicios (${formatearHorasDesdeMinutos(tecnicoData.minutos)})</p>
+          </div>
+          <button id="close-tech-details" style="background: transparent; border: none; cursor: pointer; color: #64748b; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+
+        <div style="padding: 24px; overflow-y: auto; background: #ffffff;">
+          <div class="table-container" style="box-shadow: none; border: 1px solid #e2e8f0;">
+            <table class="op-table" style="margin: 0;">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">#</th>
+                  <th>SERVICIO</th>
+                  <th>CLIENTE</th>
+                  <th>INICIO</th>
+                  <th>FIN</th>
+                  <th>TIEMPO</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filas}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end;">
+          <button id="close-tech-details-btn" class="btn-secondary" style="padding: 8px 16px;">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  const modal = document.getElementById('modal-tech-details');
+  const closeBtn1 = document.getElementById('close-tech-details');
+  const closeBtn2 = document.getElementById('close-tech-details-btn');
+
+  const closeModal = () => {
+    modal?.remove();
+  };
+
+  closeBtn1?.addEventListener('click', closeModal);
+  closeBtn2?.addEventListener('click', closeModal);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+}
+
 export async function cargarReportesRRHH() {
   const body = document.getElementById('rrhh-reportes-body');
   const mesEl = document.getElementById('rrhh-reportes-mes') as HTMLSelectElement | null;
@@ -1375,7 +1693,6 @@ export async function cargarReportesRRHH() {
 
     const data = resp.data;
     const { kpis, por_area, top_empleados, alertas } = data;
-
     const horasTrabajadasTexto = horasDecimalesATextoLargo(Number(kpis.horas_trabajadas_totales) || 0);
     const horasEfectivasTexto = horasDecimalesATextoLargo(Number(kpis.horas_efectivas) || 0);
     const jornadaPromedioTexto = horasDecimalesATextoLargo(Number(kpis.jornada_promedio_horas) || 0);
@@ -2917,6 +3234,7 @@ export function renderRecursosHumanos() {
     horarios: 'Horarios',
     tecnicos: 'Técnicos',
     reportes: 'Reportes',
+    'servicios-tecnicos': 'Horas Técnicos',
   };
 
   const tabInicial = tabsPermitidos.includes('asistencia') ? 'asistencia' : tabsPermitidos[0] || 'asistencia';

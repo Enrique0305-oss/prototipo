@@ -627,7 +627,6 @@ function renderGestionEquiposTab() {
       <table class="op-table" id="tabla-equipos">
         <thead>
           <tr>
-            <th>ID</th>
             <th>DESCRIPCIÓN</th>
             <th>MARCA</th>
             <th>MODELO</th>
@@ -639,7 +638,7 @@ function renderGestionEquiposTab() {
           </tr>
         </thead>
         <tbody id="equipos-tbody">
-          <tr><td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">Cargando equipos...</td></tr>
+          <tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">Cargando equipos...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1802,7 +1801,7 @@ async function cargarEquipos() {
   const tbody = document.getElementById('equipos-tbody');
   if (!tbody) return;
 
-  tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:#94a3b8;">Cargando equipos...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">Cargando equipos...</td></tr>';
 
   try {
     const filters: any = { page: currentPage, per_page: 15 };
@@ -1818,14 +1817,13 @@ async function cargarEquipos() {
     const pagination = (response as any).pagination;
 
     if (equipos.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:#94a3b8;">No se encontraron equipos.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">No se encontraron equipos.</td></tr>';
       renderPagination(null);
       return;
     }
 
     tbody.innerHTML = equipos.map(eq => `
       <tr>
-        <td><strong style="color:#2563eb;">${eq.id}</strong></td>
         <td><div style="font-weight:600;">${eq.descripcion}</div></td>
         <td>${eq.marca}</td>
         <td>${eq.modelo}</td>
@@ -1859,7 +1857,7 @@ async function cargarEquipos() {
 
   } catch (error) {
     console.error('Error cargando equipos:', error);
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:#dc2626;">Error al cargar equipos.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#dc2626;">Error al cargar equipos.</td></tr>';
   }
 }
 

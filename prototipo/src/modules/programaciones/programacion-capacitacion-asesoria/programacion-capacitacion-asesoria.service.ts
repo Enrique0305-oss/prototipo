@@ -123,8 +123,9 @@ export const programacionCapacitacionAsesoriaService = {
 		);
 	},
 
-	delete: async (id: number) => {
-		return apiClient.delete<ApiResponse<null>>(`/programacion-servicio/${id}`);
+	delete: async (id: number, futuras: boolean = false) => {
+		const url = futuras ? `/programacion-servicio/${id}?futuras=true` : `/programacion-servicio/${id}`;
+		return apiClient.delete<ApiResponse<null>>(url);
 	},
 
 	getODSDisponibles: async () => {

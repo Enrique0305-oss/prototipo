@@ -58,6 +58,10 @@ class FichaOperacionalController extends Controller
         $ficha->fill($validated);
         $ficha->save();
 
+        if ($request->boolean('finalizar_automaticamente')) {
+            $this->ejecutarFinalizacion($ficha, $request);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Ficha guardada como borrador',
@@ -70,11 +74,22 @@ class FichaOperacionalController extends Controller
      */
     public function show($id)
     {
-        // $id es el id de ProgramacionServicio
+        // 1. Intentar buscar por ID de programación directo
         $ficha = FichaOperacional::where('id_programacion_servicio', $id)
             ->with(['programacionServicio', 'programacionServicioGrupo'])
             ->latest()
             ->first();
+
+        // 2. Si no se encuentra, buscar por el grupo al que pertenece la programación
+        if (!$ficha) {
+            $prog = ProgramacionServicio::find($id);
+            if ($prog && $prog->id_grupo_programacion) {
+                $ficha = FichaOperacional::where('id_grupo_programacion', $prog->id_grupo_programacion)
+                    ->with(['programacionServicio', 'programacionServicioGrupo'])
+                    ->latest()
+                    ->first();
+            }
+        }
 
         if (!$ficha) {
             return response()->json([
@@ -127,6 +142,10 @@ class FichaOperacionalController extends Controller
         $ficha->fill($validated);
         $ficha->save();
 
+        if ($request->boolean('finalizar_automaticamente')) {
+            $this->ejecutarFinalizacion($ficha, $request);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Ficha actualizada',
@@ -151,36 +170,8 @@ class FichaOperacionalController extends Controller
 
         DB::beginTransaction();
         try {
-            $prog = $ficha->programacionServicio;
-
-            // Actualizar ficha a completada
-            $ficha->marcarCompletada();
-
-            // Marcar programación como Realizado
-            if ($prog->estado_ejecucion !== 'Realizado') {
-                $prog->update([
-                    'estado_ejecucion' => 'Realizado',
-                    'fecha_ejecucion_real' => now(),
-                    'observaciones' => $ficha->observaciones ?? $prog->observaciones,
-                    'modificado_por' => (int) ($request->user()?->id ?? 0),
-                ]);
-
-                // Actualizar insumos a "Utilizado"
-                $prog->insumos()->update(['estado' => 'Utilizado']);
-
-                // Verificar si TODAS las programaciones de la ODS están Realizadas
-                $orden = $prog->ordenServicio;
-                if ($orden) {
-                    $pendientes = ProgramacionServicio::where('id_orden_servicio', $orden->id)
-                        ->whereNotIn('estado_ejecucion', ['Realizado', 'Cancelado'])
-                        ->count();
-
-                    if ($pendientes === 0) {
-                        $orden->estado = 'Completado';
-                        $orden->save();
-                    }
-                }
-            }
+            // Ejecutar la lógica de finalización extraída
+            $this->ejecutarFinalizacion($ficha, $request);
 
             DB::commit();
 
@@ -198,6 +189,43 @@ class FichaOperacionalController extends Controller
                 'success' => false,
                 'message' => 'Error al finalizar ficha: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Extrae la lógica pesada de la finalización para reutilizarla
+     */
+    private function ejecutarFinalizacion($ficha, Request $request)
+    {
+        $prog = $ficha->programacionServicio;
+
+        // Actualizar ficha a completada
+        $ficha->marcarCompletada();
+
+        // Marcar programación como Realizado
+        if ($prog->estado_ejecucion !== 'Realizado') {
+            $prog->update([
+                'estado_ejecucion' => 'Realizado',
+                'fecha_ejecucion_real' => now(),
+                'observaciones' => $ficha->observaciones ?? $prog->observaciones,
+                'modificado_por' => (int) ($request->user()?->id ?? 0),
+            ]);
+
+            // Actualizar insumos a "Utilizado"
+            $prog->insumos()->update(['estado' => 'Utilizado']);
+
+            // Verificar si TODAS las programaciones de la ODS están Realizadas
+            $orden = $prog->ordenServicio;
+            if ($orden) {
+                $pendientes = ProgramacionServicio::where('id_orden_servicio', $orden->id)
+                    ->whereNotIn('estado_ejecucion', ['Realizado', 'Cancelado'])
+                    ->count();
+
+                if ($pendientes === 0) {
+                    $orden->estado = 'Completado';
+                    $orden->save();
+                }
+            }
         }
     }
 
@@ -285,6 +313,7 @@ class FichaOperacionalController extends Controller
      */
     public function generarPDFByProgramacion($id)
     {
+        // 1. Buscar por ID de programación
         $ficha = FichaOperacional::with([
                 'programacionServicio.tecnico',
                 'programacionServicio.tecnicos',
@@ -292,6 +321,20 @@ class FichaOperacionalController extends Controller
             ->where('id_programacion_servicio', $id)
             ->latest()
             ->first();
+
+        // 2. Fallback por grupo
+        if (!$ficha) {
+            $prog = ProgramacionServicio::find($id);
+            if ($prog && $prog->id_grupo_programacion) {
+                $ficha = FichaOperacional::with([
+                        'programacionServicio.tecnico',
+                        'programacionServicio.tecnicos',
+                    ])
+                    ->where('id_grupo_programacion', $prog->id_grupo_programacion)
+                    ->latest()
+                    ->first();
+            }
+        }
 
         if (!$ficha) {
             return response()->json([

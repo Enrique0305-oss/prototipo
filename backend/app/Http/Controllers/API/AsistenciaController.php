@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RrhhAsistencia;
 use App\Models\RrhhHorario;
 use App\Models\Personal;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -783,6 +784,127 @@ class AsistenciaController extends Controller
                 'distribucion_estados' => $estadosDistribucion,
                 'alertas' => $alertas,
                 'areas_disponibles' => $porArea->pluck('area')->values(),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /asistencia/reporte-servicios-tecnicos?fecha=YYYY-MM-DD&area=Todos
+     * Resumen diario de horas trabajadas por técnico en servicios.
+     */
+    public function reporteServiciosTecnicos(Request $request)
+    {
+        $fecha = (string) $request->query('fecha', Carbon::now()->toDateString());
+        $areaFiltro = trim((string) $request->query('area', ''));
+
+        try {
+            $dia = Carbon::parse($fecha)->toDateString();
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El parámetro fecha debe tener formato YYYY-MM-DD',
+            ], 422);
+        }
+
+        $query = DB::table('programacion_servicio_inicios as psi')
+            ->join('programacion_servicio as ps', 'ps.id', '=', 'psi.id_programacion')
+            ->leftJoin('tecnicos as t', 't.id', '=', 'psi.id_tecnico')
+            ->leftJoin('personal as p', 'p.id', '=', 't.id_personal')
+            ->leftJoin('area as a', 'a.id', '=', 'p.id_area')
+            ->whereNotNull('psi.duracion_segundos')
+            ->whereNotNull('psi.fecha_fin')
+            ->whereDate('psi.fecha_fin', $dia);
+
+        if ($areaFiltro !== '' && mb_strtolower($areaFiltro) !== 'todos') {
+            $query->where('a.nombre', $areaFiltro);
+        }
+
+        $registros = $query
+            ->selectRaw('
+                COALESCE(psi.id_tecnico, 0) as id_tecnico,
+                COALESCE(CONCAT(t.nombre, " ", t.apellidos), "Técnico no identificado") as tecnico,
+                COALESCE(a.nombre, "Sin área") as area,
+                COUNT(*) as servicios,
+                SUM(psi.duracion_segundos) as segundos,
+                MIN(psi.fecha_inicio) as primer_inicio,
+                MAX(psi.fecha_fin) as ultimo_fin
+            ')
+            ->groupBy('psi.id_tecnico', 't.nombre', 't.apellidos', 'a.nombre')
+            ->orderByDesc('segundos')
+            ->get();
+
+        $detallesQuery = DB::table('programacion_servicio_inicios as psi')
+            ->join('programacion_servicio as ps', 'ps.id', '=', 'psi.id_programacion')
+            ->leftJoin('servicios as s', 's.id', '=', 'ps.id_servicio')
+            ->leftJoin('orden_servicio as os', 'os.id', '=', 'ps.id_orden_servicio')
+            ->leftJoin('cliente as c', 'c.id', '=', 'os.id_cliente')
+            ->leftJoin('tecnicos as t', 't.id', '=', 'psi.id_tecnico')
+            ->leftJoin('personal as p', 'p.id', '=', 't.id_personal')
+            ->leftJoin('area as a', 'a.id', '=', 'p.id_area')
+            ->whereNotNull('psi.duracion_segundos')
+            ->whereNotNull('psi.fecha_fin')
+            ->whereDate('psi.fecha_fin', $dia);
+
+        if ($areaFiltro !== '' && mb_strtolower($areaFiltro) !== 'todos') {
+            $detallesQuery->where('a.nombre', $areaFiltro);
+        }
+
+        $detalles = $detallesQuery->select(
+            'psi.id_tecnico',
+            's.nombre as servicio',
+            'c.nombre_empresa as cliente',
+            'psi.fecha_inicio',
+            'psi.fecha_fin',
+            'psi.duracion_segundos'
+        )->orderBy('psi.fecha_inicio')->get()->groupBy('id_tecnico');
+
+        $totalSegundos = (int) $registros->sum('segundos');
+        $totalServicios = (int) $registros->sum('servicios');
+        $promedioServicioMin = $totalServicios > 0
+            ? round(($totalSegundos / 60) / $totalServicios, 1)
+            : 0.0;
+
+        $porTecnico = $registros->map(function ($item) use ($detalles) {
+            $segundos = (int) ($item->segundos ?? 0);
+            $servicios = (int) ($item->servicios ?? 0);
+
+            return [
+                'id_tecnico' => (int) ($item->id_tecnico ?? 0),
+                'tecnico' => (string) ($item->tecnico ?? 'Técnico no identificado'),
+                'area' => (string) ($item->area ?? 'Sin área'),
+                'servicios' => $servicios,
+                'minutos' => (int) round($segundos / 60),
+                'horas' => round($segundos / 3600, 2),
+                'promedio_servicio_min' => $servicios > 0 ? round(($segundos / 60) / $servicios, 1) : 0.0,
+                'primer_inicio' => $item->primer_inicio ? Carbon::parse($item->primer_inicio)->format('H:i') : null,
+                'ultimo_fin' => $item->ultimo_fin ? Carbon::parse($item->ultimo_fin)->format('H:i') : null,
+                'detalles' => $detalles->get($item->id_tecnico, collect())->map(function($d) {
+                    return [
+                        'servicio' => $d->servicio ?? 'Servicio sin nombre',
+                        'cliente' => $d->cliente ?? 'Cliente no especificado',
+                        'inicio' => $d->fecha_inicio ? Carbon::parse($d->fecha_inicio)->format('H:i') : null,
+                        'fin' => $d->fecha_fin ? Carbon::parse($d->fecha_fin)->format('H:i') : null,
+                        'minutos' => (int) round($d->duracion_segundos / 60)
+                    ];
+                })->values()
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'filtros' => [
+                    'fecha' => $dia,
+                    'area' => $areaFiltro === '' ? 'Todos' : $areaFiltro,
+                ],
+                'resumen' => [
+                    'total_servicios' => $totalServicios,
+                    'total_minutos' => (int) round($totalSegundos / 60),
+                    'total_horas' => round($totalSegundos / 3600, 2),
+                    'promedio_servicio_min' => $promedioServicioMin,
+                    'tecnicos_con_servicios' => $registros->count(),
+                ],
+                'por_tecnico' => $porTecnico,
             ],
         ]);
     }

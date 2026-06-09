@@ -132,7 +132,10 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
   Future<void> _markStart() async {
     setState(() => _starting = true);
     try {
-      final startedAt = await widget.repository.startServices(ids: _serviceIds);
+      final startedAt = await widget.repository.startServices(
+        ids: _serviceIds, 
+        tipoProgramacion: _representativeService.tipoProgramacion,
+      );
       if (!mounted) return;
 
       _startedAt = startedAt;
@@ -385,20 +388,22 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
             ),
           ),
           contentPadding: const EdgeInsets.all(8),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 300, maxWidth: 300),
-                child: Image.file(File(item.file.path), fit: BoxFit.contain),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: controller,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Descripción (opcional)'),
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 300, maxWidth: 300),
+                  child: Image.file(File(item.file.path), fit: BoxFit.contain),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Descripción (opcional)'),
+                ),
+              ],
+            ),
           ),
           actions: [
             IconButton(
@@ -494,6 +499,7 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
             ? null
             : _observationController.text.trim(),
         durationMinutes: _elapsedSeconds > 0 ? (_elapsedSeconds / 60).ceil() : null,
+        tipoProgramacion: _representativeService.tipoProgramacion,
         evidencePhotos: _evidence
             .map(
               (draft) => ServiceEvidenceUpload(
@@ -501,6 +507,7 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
                 name: draft.file.name,
                 serviceId: draft.serviceId,
                 serviceTitle: draft.serviceTitle,
+                description: draft.description,
               ),
             )
             .toList(growable: false),
@@ -556,33 +563,39 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
   }
 
   Future<void> _openOperationalSheetAndFinalize() async {
-    final confirmed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => ServiceOperationalSheetPage(
-          representativeService: _representativeService,
-          groupedServices: _effectiveServices,
-          servicesRepository: widget.repository,
-          initialObservations: _observationController.text.trim(),
+    final currentTechId = await widget.repository.authRepository.getTechnicianId();
+    final isPrincipal = _representativeService.tecnicoPrincipalId == null || 
+                        _representativeService.tecnicoPrincipalId == currentTechId;
+
+    if (isPrincipal && _representativeService.tipoProgramacion == 'Servicio') {
+      final confirmed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => ServiceOperationalSheetPage(
+            representativeService: _representativeService,
+            groupedServices: _effectiveServices,
+            servicesRepository: widget.repository,
+            initialObservations: _observationController.text.trim(),
+          ),
         ),
-      ),
-    );
+      );
 
-    if (confirmed != true) {
-      return;
-    }
+      if (confirmed != true) {
+        return;
+      }
 
-    final formatoConfirmado = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => ServiceFormatoOperacionalPage(
-          representativeService: _representativeService,
-          groupedServices: _effectiveServices,
-          servicesRepository: widget.repository,
+      final formatoConfirmado = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => ServiceFormatoOperacionalPage(
+            representativeService: _representativeService,
+            groupedServices: _effectiveServices,
+            servicesRepository: widget.repository,
+          ),
         ),
-      ),
-    );
+      );
 
-    if (formatoConfirmado != true) {
-      return;
+      if (formatoConfirmado != true) {
+        return;
+      }
     }
 
     await _completeServiceOnServer();
@@ -595,7 +608,7 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Servicio en curso'),
+        title: Text('${_representativeService.tipoProgramacion} en curso'),
         backgroundColor: const Color(0xFF1E3A8A),
         foregroundColor: Colors.white,
       ),
@@ -769,7 +782,7 @@ class _ServiceExecutionPageState extends State<ServiceExecutionPage> {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Finalizar servicio'),
+                : Text('Finalizar ${_representativeService.tipoProgramacion.toLowerCase()}'),
           ),
         ],
       ),

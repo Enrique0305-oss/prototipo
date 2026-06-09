@@ -105,6 +105,49 @@ const List<_InsectFamily> _insectFamilies = <_InsectFamily>[
   ),
 ];
 
+const List<_InsectFamily> _yambolyInsectFamilies = <_InsectFamily>[
+  _InsectFamily(
+    key: 'moscas_domesticas',
+    title: 'Moscas Domésticas',
+    subtitle: '',
+  ),
+  _InsectFamily(
+    key: 'mosca_menor',
+    title: 'Mosca Menor',
+    subtitle: '',
+  ),
+  _InsectFamily(
+    key: 'zancudo',
+    title: 'Zancudo',
+    subtitle: '',
+  ),
+  _InsectFamily(
+    key: 'avispa',
+    title: 'Avispa',
+    subtitle: '',
+  ),
+  _InsectFamily(
+    key: 'abeja',
+    title: 'Abeja',
+    subtitle: '',
+  ),
+  _InsectFamily(
+    key: 'mariposa',
+    title: 'Mariposa',
+    subtitle: '',
+  ),
+  _InsectFamily(
+    key: 'polilla',
+    title: 'Polilla',
+    subtitle: '',
+  ),
+  _InsectFamily(
+    key: 'gorgojo',
+    title: 'Gorgojo',
+    subtitle: '',
+  ),
+];
+
 const List<String> _estadoLaminaOptions = <String>['D', 'M', 'B'];
 const List<String> _estadioLabels = <String>['Adulto', 'Ninfa', 'Ooteca'];
 
@@ -139,6 +182,8 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
     super.initState();
     _futureGroups = _loadGroups();
   }
+
+  bool get _isYamboly => widget.representativeService.client.toUpperCase().contains('YAMBOLY');
 
   List<ServiceTask> get _effectiveServices {
     if (widget.groupedServices.isNotEmpty) {
@@ -214,10 +259,17 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
           final isTrampaLuz = _isTrampaLuzSection(tipoSeccion, titulo);
           final isRastreros = _isRastrerosSection(tipoSeccion, titulo);
           
+          final clientUpper = widget.representativeService.client.toUpperCase();
+          final isYamboly = clientUpper.contains('YAMBOLY');
+          final insectFamiliesToUse = isYamboly ? _yambolyInsectFamilies : _insectFamilies;
+          
           final units = List.generate(
             cantidad < 0 ? 0 : cantidad,
             (index) {
-              final draft = _DispositivoUnitDraft(enableInsectCounts: isTrampaLuz);
+              final draft = _DispositivoUnitDraft(
+                enableInsectCounts: isTrampaLuz,
+                insectFamilies: insectFamiliesToUse,
+              );
               
               // Si hay historial para esta posición (index), rellenar ubicación
               if (index < historial.length) {
@@ -299,7 +351,7 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
     }
     
     // 2. Roedores (Prioridad sobre láminas genéricas)
-    if (_isCajaCebaderaSection(tipoSeccion, titulo) || normalized.contains('cebadera') || normalized.contains('cebo')) {
+    if (_isCajaCebaderaSection(tipoSeccion, titulo) || normalized.contains('cebadera') || normalized.contains('cebo') || normalized.contains('tubo')) {
       return 'CONTROL DE ROEDORES';
     }
     
@@ -327,6 +379,9 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
     }
     if (isRastreros) {
       return 'L';
+    }
+    if (normalized.contains('tubo')) {
+      return 'TB';
     }
     if (normalized.contains('cebo') || normalized.contains('lamina')) {
       return 'C';
@@ -457,10 +512,12 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
             items: const <String>['C-TP = Captura en trampa pegante', 'C-J = Captura en jaula', 'C-R = Consumo de rodenticida', 'CNT-SC = Consumo de cebo no tóxico', 'C / E / H / O / P / R = Señales de presencia'],
           ),
         if (hasVoladoresSection)
-          const _LegendCard(
+          _LegendCard(
             title: 'Insectos',
             items: <String>[
-              'Registrar conteo Verdadera y Auditiva por familia',
+              _isYamboly
+                  ? 'Registrar conteo Verdadera y Auditiva por insecto'
+                  : 'Registrar conteo Verdadera y Auditiva por familia',
             ],
           ),
         if (hasRastrerosSection) ...[
@@ -559,11 +616,29 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
           final quantity = location.cantidad;
           for (final lamina in location.laminas.take(quantity)) {
             final currentSeq = prefixSequences[prefix]!;
+
+            // Determinar si la hoja falsa (auditiva) tiene datos cargados
+            final hasFilledAuditivaLamina = lamina.auditivaEstadoLamina != null && lamina.auditivaEstadoLamina!.trim().isNotEmpty;
+            bool hasFilledAuditivaCounts = false;
+            for (final estadio in _estadioLabels) {
+              if ((lamina.estadioCounts[estadio]?.auditiva ?? 0) != 0) {
+                hasFilledAuditivaCounts = true;
+                break;
+              }
+            }
+
+            final useVerdaderaForAuditiva = !hasFilledAuditivaLamina && !hasFilledAuditivaCounts;
+            final effectiveAuditivaEstado = useVerdaderaForAuditiva
+                ? lamina.verdaderaEstadoLamina
+                : lamina.auditivaEstadoLamina;
+
             final conteoEstadio = <String, Map<String, int>>{
               for (final estadio in _estadioLabels)
                 estadio: <String, int>{
                   'verdadera': lamina.estadioCounts[estadio]?.verdadera ?? 0,
-                  'auditiva': lamina.estadioCounts[estadio]?.auditiva ?? 0,
+                  'auditiva': useVerdaderaForAuditiva
+                      ? (lamina.estadioCounts[estadio]?.verdadera ?? 0)
+                      : (lamina.estadioCounts[estadio]?.auditiva ?? 0),
                 },
             };
 
@@ -572,10 +647,10 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
               'ubicacion': location.ubicacionController.text.trim(),
               'estado_dispositivo': _valueOrDash(lamina.verdaderaEstadoLamina),
               'estado_dispositivo_verdadera': _valueOrDash(lamina.verdaderaEstadoLamina),
-              'estado_dispositivo_auditiva': _valueOrDash(lamina.auditivaEstadoLamina),
+              'estado_dispositivo_auditiva': _valueOrDash(effectiveAuditivaEstado),
               'estado_lamina': _valueOrDash(lamina.verdaderaEstadoLamina),
               'estado_lamina_verdadera': _valueOrDash(lamina.verdaderaEstadoLamina),
-              'estado_lamina_auditiva': _valueOrDash(lamina.auditivaEstadoLamina),
+              'estado_lamina_auditiva': _valueOrDash(effectiveAuditivaEstado),
               'estadio': 'MULTIPLE',
               'conteo_estadio': conteoEstadio,
             });
@@ -585,22 +660,59 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
       } else {
         for (final unit in group.units) {
           final currentSeq = prefixSequences[prefix]!;
+
+          // Determinar si la hoja falsa (auditiva) tiene datos cargados
+          final hasFilledAuditivaDevice = (unit.estadoDispositivoAuditiva != null && unit.estadoDispositivoAuditiva!.trim().isNotEmpty) ||
+              (unit.hallazgoAuditiva != null && unit.hallazgoAuditiva!.trim().isNotEmpty) ||
+              (unit.senalesPresenciaAuditiva != null && unit.senalesPresenciaAuditiva!.trim().isNotEmpty);
+
+          bool hasFilledAuditivaCounts = false;
+          if (unit.hasInsectCounts) {
+            for (final entry in unit.insectCounts.entries) {
+              if (entry.value.auditiva != 0) {
+                hasFilledAuditivaCounts = true;
+                break;
+              }
+            }
+          }
+
+          final useVerdaderaForAuditiva = !hasFilledAuditivaDevice && !hasFilledAuditivaCounts;
+
+          final effectiveEstadoAuditiva = useVerdaderaForAuditiva
+              ? unit.estadoDispositivoVerdadera
+              : unit.estadoDispositivoAuditiva;
+
+          final effectiveHallazgoAuditiva = useVerdaderaForAuditiva
+              ? unit.hallazgoVerdadera
+              : unit.hallazgoAuditiva;
+
+          final effectiveSenalesPresenciaAuditiva = useVerdaderaForAuditiva
+              ? unit.senalesPresenciaVerdadera
+              : unit.senalesPresenciaAuditiva;
+
           final item = <String, dynamic>{
             'codigo_caja': '$prefix-${currentSeq.toString().padLeft(2, '0')}',
             'ubicacion': unit.ubicacionController.text.trim(),
             'estado_dispositivo': unit.estadoDispositivoVerdadera,
             'estado_dispositivo_verdadera': unit.estadoDispositivoVerdadera,
-            'estado_dispositivo_auditiva': unit.estadoDispositivoAuditiva,
+            'estado_dispositivo_auditiva': effectiveEstadoAuditiva,
             'hallazgo': _valueOrDash(unit.hallazgoVerdadera),
             'hallazgo_verdadera': _valueOrDash(unit.hallazgoVerdadera),
-            'hallazgo_auditiva': _valueOrDash(unit.hallazgoAuditiva),
+            'hallazgo_auditiva': _valueOrDash(effectiveHallazgoAuditiva),
             'senales_presencia': _valueOrDash(unit.senalesPresenciaVerdadera),
             'senales_presencia_verdadera': _valueOrDash(unit.senalesPresenciaVerdadera),
-            'senales_presencia_auditiva': _valueOrDash(unit.senalesPresenciaAuditiva),
+            'senales_presencia_auditiva': _valueOrDash(effectiveSenalesPresenciaAuditiva),
           };
 
           if (unit.hasInsectCounts) {
-            item['conteo_insectos'] = unit.insectCountsToJson();
+            final insectCountsPayload = <String, Map<String, int>>{};
+            for (final entry in unit.insectCounts.entries) {
+              insectCountsPayload[entry.key] = <String, int>{
+                'verdadera': entry.value.verdadera,
+                'auditiva': useVerdaderaForAuditiva ? entry.value.verdadera : entry.value.auditiva,
+              };
+            }
+            item['conteo_insectos'] = insectCountsPayload;
           }
 
           items.add(item);
@@ -612,7 +724,9 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
       
       sections.add({
         'tipo': tipo,
+        'tipo_seccion': tipo,
         'formato': formatoOperacional,
+        'descripcion': group.descripcion,
         'items': items,
       });
     }
@@ -632,6 +746,9 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
 
   String _sectionTypeFor(String descripcion) {
     final normalized = _normalizeText(descripcion);
+    if (normalized.contains('tubo')) {
+      return 'tubo_cebadero';
+    }
     if (normalized.contains('cebo')) {
       return 'cebo';
     }
@@ -699,6 +816,7 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
           final hasVoladoresSection = groups.any((g) => g.isVoladores);
           final hasRastrerosSection = groups.any((g) => g.isRastreros);
           final hasRodentOrOtherSections = groups.any((g) => !g.isVoladores && !g.isRastreros);
+          final formatosDisponibles = _formatosFichasDisponibles;
 
           return Form(
             key: _formKey,
@@ -714,7 +832,7 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
                   countLabel: hasRastrerosSection ? 'Total de láminas pegantes' : 'Dispositivos',
                 ),
                 if (groups.isEmpty)
-                  const _EmptyState()
+                  _EmptyState(hasFormatos: formatosDisponibles.isNotEmpty)
                 else if (_formatosOrdenados(groups).length > 1)
                   ..._buildFormatoBlocks(groups)
                 else ...[
@@ -738,10 +856,12 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
                       items: const <String>['C-TP = Captura en trampa pegante', 'C-J = Captura en jaula', 'C-R = Consumo de rodenticida', 'CNT-SC = Consumo de cebo no tóxico', 'C / E / H / O / P / R = Señales de presencia'],
                     ),
                   if (hasVoladoresSection)
-                    const _LegendCard(
+                    _LegendCard(
                       title: 'Insectos',
                       items: <String>[
-                        'Registrar conteo Verdadera y Auditiva por familia',
+                        _isYamboly
+                            ? 'Registrar conteo Verdadera y Auditiva por insecto'
+                            : 'Registrar conteo Verdadera y Auditiva por familia',
                       ],
                     ),
                   if (hasRastrerosSection) ...[
@@ -849,14 +969,17 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
 // ---------------------------------------------------------------------------
 
 class _DispositivoUnitDraft {
-  _DispositivoUnitDraft({this.enableInsectCounts = false})
-      : insectCounts = enableInsectCounts
+  _DispositivoUnitDraft({
+    this.enableInsectCounts = false,
+    this.insectFamilies = const <_InsectFamily>[],
+  }) : insectCounts = enableInsectCounts
             ? {
-                for (final family in _insectFamilies) family.key: _DualCountDraft(),
+                for (final family in insectFamilies) family.key: _DualCountDraft(),
               }
             : const <String, _DualCountDraft>{};
 
   final bool enableInsectCounts;
+  final List<_InsectFamily> insectFamilies;
   final TextEditingController ubicacionController = TextEditingController();
   String? estadoDispositivoVerdadera;
   String? estadoDispositivoAuditiva;
@@ -1121,6 +1244,13 @@ class _RastreroGroupSectionState extends State<_RastreroGroupSection> {
     });
   }
 
+  void _removeLocation(int index) {
+    if (_locations.length <= 1) return;
+    setState(() {
+      _locations.removeAt(index);
+    });
+  }
+
   void _refreshLocation(_RastreroLocationDraft location, int maxAllowed) {
     final parsed = int.tryParse(location.cantidadController.text.trim()) ?? 1;
     final normalized = parsed.clamp(1, maxAllowed <= 0 ? 1 : maxAllowed);
@@ -1209,6 +1339,7 @@ class _RastreroGroupSectionState extends State<_RastreroGroupSection> {
               canAddLocation: _remainingTotal > 0,
               onChanged: () => setState(() {}),
               onAddLocation: _addLocation,
+              onRemoveLocation: () => _removeLocation(index),
             ),
           );
         }),
@@ -1226,6 +1357,7 @@ class _RastreroLocationCard extends StatelessWidget {
     required this.canAddLocation,
     required this.onChanged,
     required this.onAddLocation,
+    required this.onRemoveLocation,
   });
 
   final int index;
@@ -1234,6 +1366,7 @@ class _RastreroLocationCard extends StatelessWidget {
   final bool canAddLocation;
   final VoidCallback onChanged;
   final VoidCallback onAddLocation;
+  final VoidCallback onRemoveLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -1268,6 +1401,14 @@ class _RastreroLocationCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                const Spacer(),
+                if (index > 0)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: onRemoveLocation,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -1452,52 +1593,6 @@ class _RastreroLocationCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDualCountRow({
-    required String title,
-    required String leftLabel,
-    required String rightLabel,
-    required TextEditingController leftController,
-    required TextEditingController rightController,
-    required VoidCallback onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                leftLabel,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                rightLabel,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(child: _buildCountField(leftController, onChanged)),
-            const SizedBox(width: 10),
-            Expanded(child: _buildCountField(rightController, onChanged)),
-          ],
-        ),
-      ],
-    );
-  }
 
   Widget _buildStageCountTable(_RastreroLaminaDraft lamina, VoidCallback onChanged) {
     return Container(
@@ -1820,7 +1915,7 @@ class _UnitCardState extends State<_UnitCard> {
             ],
           ),
           const SizedBox(height: 8),
-          ..._insectFamilies.map((family) {
+          ...unit.insectFamilies.map((family) {
             final draft = unit.insectCounts[family.key];
             if (draft == null) {
               return const SizedBox.shrink();
@@ -2157,7 +2252,11 @@ class _LegendCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({
+    this.hasFormatos = false,
+  });
+
+  final bool hasFormatos;
 
   @override
   Widget build(BuildContext context) {
@@ -2168,9 +2267,45 @@ class _EmptyState extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: const Text(
-        'No se encontraron dispositivos salidos de almacén para esta programación.',
-        textAlign: TextAlign.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            hasFormatos ? Icons.storage_outlined : Icons.info_outline,
+            size: 48,
+            color: hasFormatos ? const Color(0xFFA0AEC0) : const Color(0xFF3B82F6),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            hasFormatos
+                ? 'No se encontraron dispositivos'
+                : 'Sin Formato Operacional',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasFormatos
+                ? 'Salidos de almacén para esta programación.'
+                : 'Esta programación no tiene formatos de fichas seleccionados. Puede cerrar el servicio directamente completando solo la Ficha Operacional.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xFF64748B)),
+          ),
+          if (!hasFormatos) ...[
+            const SizedBox(height: 16),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Cerrar servicio sin dispositivos'),
+            ),
+          ],
+        ],
       ),
     );
   }

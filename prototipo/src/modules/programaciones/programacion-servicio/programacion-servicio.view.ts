@@ -1103,6 +1103,33 @@ export function renderProgramacionServicio(): string {
       </div>
     </div>
 
+    <div class="prog-modal" id="modalConfirmarEliminacionProg" style="display:none; z-index:9999;">
+      <div class="prog-modal-overlay"></div>
+      <div class="prog-modal-content" style="max-width:520px; z-index:10000; position:relative;">
+        <div class="prog-modal-header">
+          <h2>Eliminar Programación</h2>
+          <button class="prog-modal-close" id="closeModalEliminacionProg">&times;</button>
+        </div>
+        <div class="prog-modal-body" id="modalEliminacionProgBody">
+          <p style="margin-bottom:16px;">Seleccione cómo desea proceder con la eliminación:</p>
+          <div style="display:flex; flex-direction:column; gap:12px; margin-bottom: 20px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="radio" name="tipoEliminacionProg" value="solo_esta" checked style="accent-color:#ef4444; width:16px; height:16px;">
+              <span><strong>Eliminar solo esta visita</strong><br><small style="color:#64748b;">Las demás programaciones de este servicio no se verán afectadas.</small></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="radio" name="tipoEliminacionProg" value="esta_y_futuras" style="accent-color:#ef4444; width:16px; height:16px;">
+              <span><strong>Eliminar esta y futuras visitas</strong><br><small style="color:#64748b;">Se eliminará esta programación y todas las programaciones futuras (pendientes) asociadas a esta misma orden.</small></span>
+            </label>
+          </div>
+          <div class="prog-modal-footer" style="justify-content:flex-end;gap:8px;">
+            <button type="button" class="prog-btn-secondary" id="btnCancelarEliminacionProg">Cancelar</button>
+            <button type="button" class="prog-btn-danger" id="btnConfirmarEliminacionProg">Eliminar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   `;
 }
 
@@ -1144,17 +1171,44 @@ export async function initProgramacionServicioEvents(): Promise<void> {
   document.getElementById('closeModalDetalle')?.addEventListener('click', () => cerrarModal('modalDetalleProgramacion'));
   document.getElementById('closeModalNueva')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacion'));
   document.getElementById('closeModalNuevaVisita')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacionVisita'));
-  document.getElementById('closeModalSugerencia')?.addEventListener('click', () => cerrarModal('modalSugerencia'));
   document.getElementById('closeModalFormatoOperacionalAutomatico')?.addEventListener('click', () => cerrarModal('modalFormatoOperacionalAutomatico'));
+  document.getElementById('closeModalEliminacionProg')?.addEventListener('click', () => cerrarModal('modalConfirmarEliminacionProg'));
+  document.getElementById('btnCancelarEliminacionProg')?.addEventListener('click', () => cerrarModal('modalConfirmarEliminacionProg'));
   document.querySelectorAll('.prog-modal-overlay').forEach(el => {
     el.addEventListener('click', () => {
-      cerrarModal('modalSelectorTipoProgramacion');
       cerrarModal('modalDetalleProgramacion');
       cerrarModal('modalNuevaProgramacion');
       cerrarModal('modalNuevaProgramacionVisita');
+      cerrarModal('modalSelectorTipoProgramacion');
+      cerrarModal('modalNuevaFabricacion');
+      cerrarModal('modalNuevaOtros');
       cerrarModal('modalSugerencia');
       cerrarModal('modalFormatoOperacionalAutomatico');
+      cerrarModal('modalConfirmarEliminacionProg');
     });
+  });
+
+  // Bind confirm delete
+  document.getElementById('btnConfirmarEliminacionProg')?.addEventListener('click', async () => {
+    if (!idEliminarPendiente) return;
+    const modal = document.getElementById('modalConfirmarEliminacionProg');
+    if (!modal) return;
+    
+    const radioFuturas = modal.querySelector('input[value="esta_y_futuras"]') as HTMLInputElement;
+    const futuras = radioFuturas?.checked;
+    
+    cerrarModal('modalConfirmarEliminacionProg');
+    
+    try {
+      await programacionService.delete(idEliminarPendiente, futuras);
+      cerrarModal('modalDetalleProgramacion');
+      await recargarProgramaciones();
+      mostrarToast('success', 'Eliminada', futuras ? 'Las programaciones fueron eliminadas correctamente' : 'La programación fue eliminada correctamente');
+    } catch (err) {
+      mostrarToast('error', 'Error', 'No se pudo eliminar la programación');
+      console.error(err);
+    }
+    idEliminarPendiente = null;
   });
 
 }
@@ -2713,15 +2767,16 @@ function parseFormatosFichasValue(value: unknown): string[] {
   return [];
 }
 
+let idEliminarPendiente: number | null = null;
+
 async function eliminarProg(id: number) {
-  const ok = await confirmarAccion({ titulo: 'Eliminar Programación', mensaje: '¿Está seguro de eliminar esta programación? Esta acción no se puede deshacer.', tipo: 'error', textoConfirmar: 'Eliminar' });
-  if (!ok) return;
-  try {
-    await programacionService.delete(id);
-    cerrarModal('modalDetalleProgramacion');
-    await recargarProgramaciones();
-    mostrarToast('success', 'Eliminada', 'La programación fue eliminada correctamente');
-  } catch (err) { mostrarToast('error', 'Error', 'No se pudo eliminar la programación'); console.error(err); }
+  idEliminarPendiente = id;
+  const modal = document.getElementById('modalConfirmarEliminacionProg');
+  if (modal) {
+    const radioSolo = modal.querySelector('input[value="solo_esta"]') as HTMLInputElement;
+    if (radioSolo) radioSolo.checked = true;
+    modal.style.display = 'flex';
+  }
 }
 
 async function eliminarVisita(id: number) {
@@ -2786,6 +2841,7 @@ async function completarProg(id: number) {
 function renderFormatoOperacionalAutomaticoModal(data: FormatoOperacionalCalculoRespuesta): string {
   const totales = data.dispositivos?.totales ?? {
     cajas_cebaderas: 0,
+    tubos_cebaderos: 0,
     jaulas: 0,
     cebos: 0,
     laminas: 0,
@@ -2804,10 +2860,14 @@ function renderFormatoOperacionalAutomaticoModal(data: FormatoOperacionalCalculo
 
   return `
     <div style="display:grid;gap:16px;">
-      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;">
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;">
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;">
           <div style="font-size:11px;color:#1d4ed8;font-weight:700;text-transform:uppercase;">Cajas cebaderas</div>
           <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.cajas_cebaderas ?? 0}</div>
+        </div>
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px;">
+          <div style="font-size:11px;color:#0369a1;font-weight:700;text-transform:uppercase;">Tubos cebaderos</div>
+          <div style="font-size:22px;font-weight:800;color:#0f172a;">${totales.tubos_cebaderos ?? 0}</div>
         </div>
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;">
           <div style="font-size:11px;color:#15803d;font-weight:700;text-transform:uppercase;">Cebos</div>
@@ -4884,7 +4944,7 @@ function getColorByState(estado: string): string {
     'Realizado': 'green',
     'Cancelado': 'red',
     'En Camino': 'cyan',
-    'En Ejecución': 'orange',
+    'En Ejecución': 'gradient-ejecucion',
     'Reprogramado': 'yellow',
   };
   return c[estado] || 'blue';

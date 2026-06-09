@@ -10,6 +10,10 @@ use App\Models\OrdenServicioEquipo;
 use App\Models\Cotizacion;
 use App\Models\CotizacionDetalle;
 use App\Models\Proyeccion;
+use App\Models\ProgramacionServicio;
+use App\Models\ProgramacionInsumo;
+use App\Models\Kardex;
+use App\Models\ServicioProducto;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -521,6 +525,19 @@ class OrdenServicioController extends Controller
         try {
             DB::beginTransaction();
 
+            $bloqueado = in_array($orden->estado, ['Programado', 'Parcial', 'Completado']);
+
+            if ($bloqueado) {
+                // Si está bloqueada, por seguridad ignoramos cualquier intento de cambiar servicios, fechas u observaciones.
+                unset($validated['fecha_aceptacion']);
+                unset($validated['fecha_tentativa']);
+                unset($validated['observaciones']);
+                unset($validated['detalles']);
+                unset($validated['incluye_igv']);
+                // El estado solo podría cambiar si explícitamente se permite (ej. pasar a completado por otro flujo)
+                // Pero desde el frontend de edición, no debería cambiar.
+            }
+
             // Actualizar estado si viene
             if (isset($validated['estado'])) {
                 $orden->estado = $validated['estado'];
@@ -614,6 +631,150 @@ class OrdenServicioController extends Controller
             }
 
             $orden->save();
+
+            // Sincronización automática de Programaciones Futuras
+            $idUsuario = $request->user()?->id;
+
+            $programacionesPendientes = ProgramacionServicio::with('insumos')
+                ->where('id_orden_servicio', $orden->id)
+                ->whereIn('estado_ejecucion', ['Programado', 'Reprogramado', 'Cancelado'])
+                ->get();
+
+            $viejosServicios = $programacionesPendientes->pluck('id_servicio')->unique();
+            $nuevosServicios = collect($validated['detalles'] ?? [])->pluck('id_servicio')->unique();
+
+            foreach ($programacionesPendientes as $prog) {
+                // Recuperar si fue cancelado accidentalmente por el bug anterior
+                if ($prog->estado_ejecucion === 'Cancelado' && str_contains($prog->observaciones ?? '', 'Cancelado automáticamente por eliminación de servicio en la OS original')) {
+                    $prog->estado_ejecucion = 'Programado';
+                    $prog->observaciones = str_replace("\nCancelado automáticamente por eliminación de servicio en la OS original.", "", $prog->observaciones);
+                }
+
+                // Mapeo inteligente de servicios
+                if (!$nuevosServicios->contains($prog->id_servicio)) {
+                    if ($nuevosServicios->count() === 1) {
+                        // Si ahora solo hay un servicio en la OS, asumimos que todas las programaciones pasan a este nuevo servicio.
+                        $prog->id_servicio = $nuevosServicios->first();
+                        $prog->save();
+                    } else {
+                        // Si hay múltiples servicios nuevos y no sabemos a cuál mapear, intentamos mapear por Planta/Área
+                        $detalleCoincidente = collect($validated['detalles'] ?? [])->first(function($det) use ($prog) {
+                            return ($det['id_cliente_planta'] ?? null) == $prog->id_cliente_planta 
+                                && ($det['id_cliente_planta_area'] ?? null) == $prog->id_cliente_planta_area;
+                        });
+                        
+                        if ($detalleCoincidente) {
+                            $prog->id_servicio = $detalleCoincidente['id_servicio'];
+                            $prog->save();
+                        } else {
+                            // Si ni siquiera coinciden la planta/área, no lo cancelamos, simplemente lo dejamos con el servicio anterior
+                            // o lo asignamos al primer servicio disponible para evitar que desaparezca.
+                            $prog->id_servicio = $nuevosServicios->first() ?? $prog->id_servicio;
+                            $prog->save();
+                        }
+                    }
+                }
+
+                // Resincronizar insumos si no se canceló
+                if ($prog->estado_ejecucion !== 'Cancelado') {
+                    foreach ($prog->insumos as $insumo) {
+                        if ($insumo->estado === 'Utilizado') {
+                            Kardex::registrarMovimiento([
+                                'id_producto' => $insumo->id_producto,
+                                'tipo_movimiento' => 'Entrada',
+                                'cantidad' => $insumo->cantidad_asignada,
+                                'motivo' => 'Devolución Edición OS',
+                                'referencia' => "PROG-{$prog->id}",
+                                'id_referencia' => $prog->id,
+                                'id_usuario' => $idUsuario,
+                                'observacion' => "Devolución automática por edición de Orden de Servicio #{$orden->numero_orden}",
+                            ]);
+                        }
+                    }
+
+                    $prog->insumos()->delete();
+
+                    $insumosOrden = OrdenServicioProducto::query()
+                        ->where('id_orden_servicio', $orden->id)
+                        ->where(function($q) use ($prog) {
+                            $q->where('id_servicio', $prog->id_servicio)
+                              ->orWhereNull('id_servicio');
+                        })
+                        ->get();
+
+                    // RESILIENCIA AL FRONTEND: Si el frontend envió el detalle con un id_servicio antiguo (ej. 3) 
+                    // pero los productos con el nuevo id_servicio (ej. 13), la consulta anterior devolverá 0.
+                    // En ese caso, buscamos los insumos de esta orden que coincidan por Planta y Área.
+                    if ($insumosOrden->isEmpty() && $prog->id_cliente_planta) {
+                        $insumosOrden = OrdenServicioProducto::query()
+                            ->where('id_orden_servicio', $orden->id)
+                            ->where('id_cliente_planta', $prog->id_cliente_planta)
+                            ->get()
+                            ->filter(function($item) use ($prog) {
+                                $progAreas = is_string($prog->id_cliente_planta_area) ? json_decode($prog->id_cliente_planta_area, true) : $prog->id_cliente_planta_area;
+                                $itemArea = $item->id_cliente_planta_area;
+                                if (empty($progAreas) || empty($itemArea)) return true; // Si alguno no tiene área, lo asumimos general de la planta
+                                return is_array($progAreas) && in_array($itemArea, $progAreas);
+                            })->values();
+
+                        // Si los encontramos por Planta/Área, auto-corregimos el id_servicio de la Programación
+                        // para que coincida con la realidad de los productos.
+                        if ($insumosOrden->isNotEmpty()) {
+                            $realIdServicio = $insumosOrden->first()->id_servicio;
+                            if ($realIdServicio) {
+                                $prog->id_servicio = $realIdServicio;
+                                $prog->save();
+                            }
+                        }
+                    }
+
+                    $insumosOrden = collect($insumosOrden)
+                        ->groupBy('id_producto')
+                        ->map(fn ($rows, $idProducto) => [
+                            'id_producto' => (int) $idProducto,
+                            'cantidad' => (int) round((float) $rows->sum('cantidad')),
+                        ])
+                        ->filter(fn ($item) => $item['cantidad'] > 0)
+                        ->values();
+
+                    if ($insumosOrden->isEmpty()) {
+                        $insumosOrden = ServicioProducto::where('id_servicio', $prog->id_servicio)
+                            ->get()
+                            ->map(fn ($item) => [
+                                'id_producto' => (int) $item->id_producto,
+                                'cantidad' => (int) round((float) $item->cantidad_default),
+                            ])
+                            ->filter(fn ($item) => $item['cantidad'] > 0)
+                            ->values();
+                    }
+
+                    foreach ($insumosOrden as $item) {
+                        ProgramacionInsumo::create([
+                            'id_programacion' => $prog->id,
+                            'id_producto' => $item['id_producto'],
+                            'cantidad_asignada' => $item['cantidad'],
+                            'estado' => 'Asignado',
+                        ]);
+                    }
+                } elseif ($prog->estado_ejecucion === 'Cancelado') {
+                    // Si se canceló, devolver todo
+                    foreach ($prog->insumos as $insumo) {
+                        if ($insumo->estado === 'Utilizado') {
+                            Kardex::registrarMovimiento([
+                                'id_producto' => $insumo->id_producto,
+                                'tipo_movimiento' => 'Entrada',
+                                'cantidad' => $insumo->cantidad_asignada,
+                                'motivo' => 'Devolución Cancelación OS',
+                                'referencia' => "PROG-{$prog->id}",
+                                'id_referencia' => $prog->id,
+                                'id_usuario' => $idUsuario,
+                                'observacion' => "Cancelación automática por edición de Orden de Servicio",
+                            ]);
+                        }
+                    }
+                    $prog->insumos()->delete();
+                }
+            }
 
             DB::commit();
 

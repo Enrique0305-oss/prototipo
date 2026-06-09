@@ -7,9 +7,10 @@ import './salidas-programacion.css';
 
 let programacionesPendientes: ProgramacionPendiente[] = [];
 let historialData: ProgramacionPendiente[] = [];
+let previsualizacionData: any[] = [];
 let filtroFechaDesde = '';
 let filtroFechaHasta = '';
-let vistaSeccActual: 'pendientes' | 'historial' = 'pendientes';
+let vistaSeccActual: 'pendientes' | 'historial' | 'previsualizacion' = 'pendientes';
 let paginaActual = 1;
 const ITEMS_POR_PAGINA = 20;
 
@@ -29,6 +30,10 @@ export function renderSalidasProgramacion(): string {
         <button class="sp-tab active" data-tab="pendientes">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
           Pendientes de Entrega
+        </button>
+        <button class="sp-tab" data-tab="previsualizacion">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          Previsualización de Materiales
         </button>
         <button class="sp-tab" data-tab="historial">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -100,14 +105,23 @@ function enlazarEventos() {
     tab.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
       const btn = target.closest('.sp-tab') as HTMLElement;
-      const tabName = btn?.dataset.tab as 'pendientes' | 'historial';
+      const tabName = btn?.dataset.tab as 'pendientes' | 'historial' | 'previsualizacion';
       if (!tabName) return;
 
       document.querySelectorAll('.sp-tab').forEach(t => t.classList.remove('active'));
       btn.classList.add('active');
       vistaSeccActual = tabName;
+      
+      // Mostrar u ocultar barra de filtros según la pestaña
+      const filtersBar = document.querySelector('.prov-filters-bar') as HTMLElement;
+      if (tabName === 'previsualizacion' && filtersBar) {
+        filtersBar.style.display = 'none';
+      } else if (filtersBar) {
+        filtersBar.style.display = 'flex';
+      }
 
       if (tabName === 'pendientes') await cargarPendientes();
+      else if (tabName === 'previsualizacion') await cargarPrevisualizacion();
       else await cargarHistorial();
     });
   });
@@ -212,6 +226,40 @@ async function cargarHistorial() {
   } catch (error) {
     console.error('Error cargando historial:', error);
     const mensaje = obtenerMensajeError(error, 'Error al cargar historial');
+    contenedor.innerHTML = `<div class="sp-error">${mensaje}</div>`;
+    mostrarToast('error', 'Error', mensaje);
+    ocultarPaginacion();
+  }
+}
+
+async function cargarPrevisualizacion() {
+  const contenedor = document.getElementById('contenidoSalidasProg');
+  if (!contenedor) return;
+
+  contenedor.innerHTML = '<div class="sp-loading">Cargando previsualización de materiales...</div>';
+
+  try {
+    const res = await salidasProgramacionService.getPrevisualizacionMateriales();
+    previsualizacionData = res.data || [];
+    paginaActual = 1;
+
+    if (previsualizacionData.length === 0) {
+      contenedor.innerHTML = `
+        <div class="sp-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          No hay órdenes de servicio pendientes de programación con materiales necesarios.
+        </div>`;
+      ocultarPaginacion();
+      return;
+    }
+
+    contenedor.innerHTML = renderTablaPrevisualizacion();
+    renderPaginacion(previsualizacionData.length);
+  } catch (error) {
+    console.error('Error cargando previsualización:', error);
+    const mensaje = obtenerMensajeError(error, 'Error al cargar previsualización');
     contenedor.innerHTML = `<div class="sp-error">${mensaje}</div>`;
     mostrarToast('error', 'Error', mensaje);
     ocultarPaginacion();
@@ -338,6 +386,65 @@ function renderTablaHistorial(): string {
   `;
 }
 
+function renderTablaPrevisualizacion(): string {
+  const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA;
+  const fin = inicio + ITEMS_POR_PAGINA;
+  const pagina = previsualizacionData.slice(inicio, fin);
+
+  return `
+    <div class="table-container">
+      <table class="op-table">
+        <thead>
+          <tr>
+            <th>ORDEN DE SERVICIO</th>
+            <th>CLIENTE</th>
+            <th>FECHA APROBACIÓN</th>
+            <th>INSUMOS PROYECTADOS (PRÓXIMA VISITA)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pagina.map(orden => {
+            return `
+              <tr>
+                <td style="vertical-align:top"><strong>${orden.numero_orden}</strong></td>
+                <td style="vertical-align:top">${orden.cliente}</td>
+                <td style="vertical-align:top">${orden.fecha_aprobacion}</td>
+                <td>
+                  <table class="prov-detail-table" style="margin:0; width:100%; box-shadow:none;">
+                    <thead>
+                      <tr>
+                        <th style="background:#f1f5f9">Producto</th>
+                        <th style="background:#f1f5f9; text-align:center">Stock Actual</th>
+                        <th style="background:#f1f5f9; text-align:center">Cantidad Proyectada</th>
+                        <th style="background:#f1f5f9">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${orden.materiales.map((mat: any) => {
+                        const esSuficiente = Number(mat.stock_actual) >= Number(mat.cantidad_proyectada);
+                        const claseEstado = esSuficiente ? 'prov-badge-activo' : 'prov-badge-pendiente';
+                        const textoEstado = esSuficiente ? 'Suficiente' : 'Stock Insuficiente';
+                        return `
+                          <tr>
+                            <td>${mat.producto}</td>
+                            <td style="text-align:center">${mat.stock_actual} ${mat.unidad}</td>
+                            <td style="text-align:center; font-weight:bold;">${mat.cantidad_proyectada} ${mat.unidad}</td>
+                            <td><span class="prov-badge ${claseEstado}">${textoEstado}</span></td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 // ═══════════ Paginación ═══════════
 
 function renderPaginacion(totalItems: number) {
@@ -414,6 +521,9 @@ function rerenderTablaActual() {
     contenedor.innerHTML = renderTablaPendientes();
     renderPaginacion(programacionesPendientes.length);
     enlazarEventosPendientes();
+  } else if (vistaSeccActual === 'previsualizacion') {
+    contenedor.innerHTML = renderTablaPrevisualizacion();
+    renderPaginacion(previsualizacionData.length);
   } else {
     contenedor.innerHTML = renderTablaHistorial();
     renderPaginacion(historialData.length);
