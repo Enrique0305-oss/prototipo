@@ -383,7 +383,7 @@
 
                 <p class="payment-header-text">Valor Agregado</p>
                 <ul>
-                    <li style="font-size: 13px; margin-bottom: 5px;">Capacitaciones certificadas a nombre de QSCI COnsulting y del COlegio de Biólogos del Perú Región Lima VII</li>
+                    <li style="font-size: 13px; margin-bottom: 5px;">Capacitaciones certificadas a nombre de QSCI Consulting y del Colegio de Biólogos del Perú Región Lima VII</li>
                     <li style="font-size: 13px; margin-bottom: 5px;">Personal calificado con experiencia certificada en Calidad e Inocuidad Alimentaria</li>
                 </ul>
 

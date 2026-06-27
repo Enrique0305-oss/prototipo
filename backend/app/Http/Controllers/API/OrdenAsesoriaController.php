@@ -15,7 +15,7 @@ class OrdenAsesoriaController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = OrdenAsesoria::with(['cliente', 'cotizacion', 'servicio', 'exponente', 'exponentes']);
+        $query = OrdenAsesoria::with(['cliente', 'cotizacion', 'servicio', 'exponente', 'exponentes', 'detalles']);
 
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {
@@ -41,6 +41,18 @@ class OrdenAsesoriaController extends Controller
         $ordenes = $query->orderBy('fecha_servicio', 'desc')->get();
 
         $data = $ordenes->map(function ($orden) {
+            $temas = $orden->detalles
+                ->map(function ($detalle) {
+                    return trim((string) ($detalle->item ?? ''));
+                })
+                ->filter(function ($item) {
+                    return $item !== '' && mb_strtolower($item) !== 'detalle';
+                })
+                ->unique()
+                ->values();
+
+            $temaPrincipal = $temas->first() ?: ($orden->servicio->nombre ?? null);
+
             return [
                 'id' => $orden->id,
                 'numero_orden' => $orden->numero_orden,
@@ -58,6 +70,8 @@ class OrdenAsesoriaController extends Controller
                 'costo' => $orden->costo,
                 'estado' => $orden->estado,
                 'observaciones' => $orden->observaciones,
+                'tema_principal' => $temaPrincipal,
+                'temas' => $temas,
                 'cliente' => $orden->cliente ? [
                     'id' => $orden->cliente->id,
                     'nombre_empresa' => $orden->cliente->nombre_empresa,
@@ -283,7 +297,7 @@ class OrdenAsesoriaController extends Controller
             };
         }
 
-        $cotizacion = Cotizacion::with('detalles.servicio')->find($validated['id_cotizacion']);
+        $cotizacion = Cotizacion::with(['detalles.servicio', 'detalles.catalogoCapAud'])->find($validated['id_cotizacion']);
 
         if ($cotizacion->tipo_cotizacion !== 'Asesoria') {
             return response()->json([
@@ -348,7 +362,9 @@ class OrdenAsesoriaController extends Controller
             }
 
             foreach ($cotizacion->detalles as $detalle) {
-                $nombre = $detalle->servicio ? $detalle->servicio->nombre : ($detalle->descripcion_manual ?: 'Detalle');
+                $nombre = $detalle->catalogoCapAud
+                    ? $detalle->catalogoCapAud->nombre
+                    : ($detalle->servicio ? $detalle->servicio->nombre : ($detalle->descripcion_manual ?: 'Detalle'));
                 $descripcion = $detalle->descripcion_manual;
                 if (!$descripcion) {
                     $descripcion = 'Cantidad: ' . ($detalle->cantidad ?? 1) . ' | Precio Unitario: S/ ' . number_format((float) ($detalle->precio_unitario ?? 0), 2);
@@ -543,7 +559,7 @@ class OrdenAsesoriaController extends Controller
 
     public function descargarPdf($id)
     {
-        $orden = OrdenAsesoria::with(['cliente', 'cotizacion', 'servicio', 'exponente', 'exponentes', 'detalles', 'emisor'])
+        $orden = OrdenAsesoria::with(['cliente', 'cotizacion.detalles.catalogoCapAud', 'cotizacion.detalles.servicio', 'servicio', 'exponente', 'exponentes', 'detalles', 'emisor'])
             ->findOrFail($id);
 
         $pdf = Pdf::loadView('OrdenAsesoriaPDF', compact('orden'));

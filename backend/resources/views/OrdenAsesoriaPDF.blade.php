@@ -26,6 +26,28 @@
         $exponentes = $orden->exponentes && $orden->exponentes->count() > 0
             ? $orden->exponentes->map(fn($e) => trim(($e->nombre ?? '') . ' ' . ($e->apellidos ?? '')))->implode(', ')
             : ($orden->exponente ? trim(($orden->exponente->nombre ?? '') . ' ' . ($orden->exponente->apellidos ?? '')) : '---');
+
+        $temasOrden = $orden->detalles
+            ->map(fn($d) => trim((string) ($d->item ?? '')))
+            ->filter(fn($item) => $item !== '' && mb_strtolower($item) !== 'detalle')
+            ->unique()
+            ->values();
+
+        $temasCotizacion = collect(optional($orden->cotizacion)->detalles ?? [])
+            ->map(function ($d) {
+                if (!empty($d->catalogoCapAud?->nombre)) {
+                    return trim((string) $d->catalogoCapAud->nombre);
+                }
+                if (!empty($d->servicio?->nombre)) {
+                    return trim((string) $d->servicio->nombre);
+                }
+                return trim((string) ($d->descripcion_manual ?? ''));
+            })
+            ->filter(fn($item) => $item !== '')
+            ->unique()
+            ->values();
+
+        $temasAsesoria = $temasOrden->count() > 0 ? $temasOrden : $temasCotizacion;
     @endphp
 
     @php
@@ -120,6 +142,16 @@
         <tr>
             <td class="label">Nro Participantes</td>
             <td>{{ $orden->num_participantes ?? 0 }}</td>
+        </tr>
+        <tr>
+            <td class="label">Temas</td>
+            <td>
+                @if($temasAsesoria->count() > 0)
+                    {!! $temasAsesoria->map(fn($tema, $i) => ($i + 1) . '. ' . e($tema))->implode('<br>') !!}
+                @else
+                    ---
+                @endif
+            </td>
         </tr>
         <tr>
             <td class="label">Certificados</td>

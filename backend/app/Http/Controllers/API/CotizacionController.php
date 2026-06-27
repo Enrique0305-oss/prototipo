@@ -47,7 +47,7 @@ class CotizacionController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Cotizacion::with(['cliente', 'creador', 'empresa']);
+        $query = Cotizacion::with(['cliente', 'creador', 'empresa', 'detalles.planta']);
 
         // Filtros
         if ($request->has('estado')) {
@@ -77,12 +77,30 @@ class CotizacionController extends Controller
 
         // Formatear respuesta
         $data = $cotizaciones->map(function($cot) {
+            $plantas = $cot->detalles
+                ->map(function($detalle) {
+                    return trim((string) optional($detalle->planta)->nombre);
+                })
+                ->filter(function($nombre) {
+                    return $nombre !== '';
+                })
+                ->unique()
+                ->values();
+
+            $plantaResumen = '';
+            if ($plantas->count() === 1) {
+                $plantaResumen = $plantas->first();
+            } elseif ($plantas->count() >= 2) {
+                $plantaResumen = 'Plantas en General';
+            }
+
             return [
                 'id' => $cot->id,
                 'numero' => $cot->numero_cotizacion,
                 'empresa_emisora' => $cot->empresa->alias_empresa ?? 'N/A',
                 'id_cliente' => $cot->id_cliente,
                 'cliente_nombre' => $cot->cliente->nombre_empresa ?? 'N/A',
+                'planta_resumen' => $plantaResumen,
                 'fecha_emision' => $cot->fecha_emision->format('Y-m-d'),
                 'tipo' => $cot->tipo_cotizacion,
                 'subtotal' => (float) $cot->subtotal,
