@@ -906,6 +906,10 @@ function renderizarTabla() {
   tbody.innerHTML = cotizacionesPagina.map(cot => {
     const numero = cot.numero || cot.numero_cotizacion || '—';
     const cliente = cot.cliente_nombre || (cot.cliente as any)?.nombre_empresa || '—';
+    const plantaResumen = String((cot as any).planta_resumen || '').trim();
+    const clienteHtml = plantaResumen
+      ? `<div><div>${cliente}</div><div style="font-size:11px;color:#94a3b8;margin-top:2px;">${plantaResumen}</div></div>`
+      : cliente;
     const fecha = formatearFechaSinDesfase(cot.fecha_emision);
     const tipoRaw = cot.tipo || cot.tipo_cotizacion || '—';
     const tipoNorm = String(tipoRaw)
@@ -960,7 +964,7 @@ function renderizarTabla() {
     return `
       <tr>
         <td><strong>${numero}</strong></td>
-        <td>${cliente}</td>
+        <td>${clienteHtml}</td>
         <td>${fecha}</td>
         <td><span class="badge ${tipoBadgeClass}">${tipoLabel}</span></td>
         <td><span class="badge ${estadoBadge[estado] || 'badge-warning'}">${estado}</span></td>
