@@ -59,6 +59,10 @@ function renderTabs() {
 function renderTable(): void {
   const tbody = document.getElementById('estado-cuenta-body');
   const monthFilter = document.getElementById('ec-month-filter') as HTMLSelectElement;
+  const tipoFilter = document.getElementById('ec-tipo-filter') as HTMLSelectElement;
+  const solicitanteFilter = document.getElementById('ec-solicitante-filter') as HTMLSelectElement;
+  const searchFilter = document.getElementById('ec-search-filter') as HTMLInputElement;
+
   if (!tbody) return;
 
   if (isLoading) {
@@ -86,9 +90,27 @@ function renderTable(): void {
       }
     });
 
-    filteredMovimientos = movimientos.filter(mov => mov.fecha.substring(0, 7) === selectedMonth);
+    filteredMovimientos = filteredMovimientos.filter(mov => mov.fecha.substring(0, 7) === selectedMonth);
   } else {
     saldoAnterior = 0;
+  }
+
+  if (tipoFilter && tipoFilter.value !== 'todos') {
+    filteredMovimientos = filteredMovimientos.filter(mov => mov.tipo_movimiento === tipoFilter.value);
+  }
+
+  if (solicitanteFilter && solicitanteFilter.value !== 'todos') {
+    filteredMovimientos = filteredMovimientos.filter(mov => mov.registrado_por === solicitanteFilter.value);
+  }
+
+  if (searchFilter && searchFilter.value.trim() !== '') {
+    const searchTerm = searchFilter.value.trim().toLowerCase();
+    filteredMovimientos = filteredMovimientos.filter(mov => {
+      const matchDesc = mov.descripcion?.toLowerCase().includes(searchTerm);
+      const matchDetalle = mov.detalle?.toLowerCase().includes(searchTerm);
+      const matchDoc = mov.factura_doc?.toLowerCase().includes(searchTerm);
+      return matchDesc || matchDetalle || matchDoc;
+    });
   }
 
   currentFilteredMovimientos = filteredMovimientos;
@@ -168,6 +190,18 @@ async function loadData(): Promise<void> {
           monthFilter.value = currentVal;
         } else if (uniqueMonths.length > 0) {
           monthFilter.value = uniqueMonths[0]; // Seleccionar último mes por defecto
+        }
+      }
+
+      const solicitanteFilter = document.getElementById('ec-solicitante-filter') as HTMLSelectElement;
+      if (solicitanteFilter) {
+        const uniqueSolicitantes = Array.from(new Set(movimientos.map(m => m.registrado_por).filter(s => s && s.trim() !== ''))).sort();
+        const currentSol = solicitanteFilter.value;
+        solicitanteFilter.innerHTML = '<option value="todos">Todos los registrados por</option>' + uniqueSolicitantes.map(s => {
+          return `<option value="${s}">${s}</option>`;
+        }).join('');
+        if (currentSol && currentSol !== 'todos' && uniqueSolicitantes.includes(currentSol)) {
+          solicitanteFilter.value = currentSol;
         }
       }
     }
@@ -286,8 +320,21 @@ export function renderEstadoCuenta() {
             <div id="ec-summary-final" style="font-size:18px;font-weight:800;color:#0f172a;background:#f1f5f9;padding:2px 8px;border-radius:4px;margin-left:-8px;">S/ 0.00</div>
           </div>
         </div>
-        <div>
-          <select id="ec-month-filter" style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;font-weight:600;min-width:180px;cursor:pointer;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="ec-search-filter" placeholder="Buscar concepto o detalle..." style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;min-width:220px;font-size:13px;">
+          
+          <select id="ec-tipo-filter" style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;font-size:13px;cursor:pointer;">
+            <option value="todos">Todos los tipos</option>
+            <option value="Ingreso">Ingreso</option>
+            <option value="Egreso">Egreso</option>
+            <option value="Saldo inicial">Saldo Inicial</option>
+          </select>
+
+          <select id="ec-solicitante-filter" style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;font-size:13px;cursor:pointer;">
+            <option value="todos">Todos los registrados por</option>
+          </select>
+
+          <select id="ec-month-filter" style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;font-weight:600;min-width:160px;cursor:pointer;">
             <option value="todos">Todos los meses</option>
           </select>
         </div>
@@ -325,9 +372,14 @@ export function initEstadoCuentaEvents() {
   renderTabs();
   
   const monthFilter = document.getElementById('ec-month-filter');
-  monthFilter?.addEventListener('change', () => {
-    renderTable();
-  });
+  const tipoFilter = document.getElementById('ec-tipo-filter');
+  const solicitanteFilter = document.getElementById('ec-solicitante-filter');
+  const searchFilter = document.getElementById('ec-search-filter');
+
+  monthFilter?.addEventListener('change', () => renderTable());
+  tipoFilter?.addEventListener('change', () => renderTable());
+  solicitanteFilter?.addEventListener('change', () => renderTable());
+  searchFilter?.addEventListener('input', () => renderTable());
 
   loadData();
 

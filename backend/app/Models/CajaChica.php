@@ -25,4 +25,9 @@ class CajaChica extends Model
         'saldo_actual',
         'registrado_por',
     ];
+
+    public function detalles()
+    {
+        return $this->hasMany(CajaChicaDetalle::class, 'caja_chica_id');
+    }
 }

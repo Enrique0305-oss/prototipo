@@ -37,6 +37,10 @@ function getLocalDateString(): string {
 function renderTable(): void {
   const tbody = document.getElementById('caja-chica-body');
   const monthFilter = document.getElementById('cc-month-filter') as HTMLSelectElement;
+  const tipoFilter = document.getElementById('cc-tipo-filter') as HTMLSelectElement;
+  const solicitanteFilter = document.getElementById('cc-solicitante-filter') as HTMLSelectElement;
+  const searchFilter = document.getElementById('cc-search-filter') as HTMLInputElement;
+
   if (!tbody) return;
 
   if (isLoading) {
@@ -63,9 +67,26 @@ function renderTable(): void {
       }
     });
 
-    filteredMovimientos = movimientos.filter(mov => mov.fecha.substring(0, 7) === selectedMonth);
+    filteredMovimientos = filteredMovimientos.filter(mov => mov.fecha.substring(0, 7) === selectedMonth);
   } else {
     saldoAnterior = 0; // If all months, initial balance is 0 conceptually
+  }
+
+  if (tipoFilter && tipoFilter.value !== 'todos') {
+    filteredMovimientos = filteredMovimientos.filter(mov => mov.tipo_movimiento === tipoFilter.value);
+  }
+
+  if (solicitanteFilter && solicitanteFilter.value !== 'todos') {
+    filteredMovimientos = filteredMovimientos.filter(mov => mov.solicitante === solicitanteFilter.value);
+  }
+
+  if (searchFilter && searchFilter.value.trim() !== '') {
+    const searchTerm = searchFilter.value.trim().toLowerCase();
+    filteredMovimientos = filteredMovimientos.filter(mov => {
+      const matchConcepto = mov.concepto?.toLowerCase().includes(searchTerm);
+      const matchDetalles = mov.detalles && mov.detalles.some(det => det.concepto?.toLowerCase().includes(searchTerm));
+      return matchConcepto || matchDetalles;
+    });
   }
 
   currentFilteredMovimientos = filteredMovimientos;
@@ -90,8 +111,9 @@ function renderTable(): void {
   if (filteredMovimientos.length === 0) {
     tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:#64748b;">No hay movimientos en el mes seleccionado.</td></tr>';
   } else {
-    tbody.innerHTML = filteredMovimientos.map(mov => `
-      <tr style="border-bottom:1px solid #f1f5f9;">
+    tbody.innerHTML = filteredMovimientos.map(mov => {
+      let rows = `
+      <tr style="border-bottom:1px solid #f1f5f9; ${mov.detalles && mov.detalles.length > 0 ? 'background:#f8fafc;' : ''}">
         <td style="padding:12px 16px;">${formatDate(mov.fecha)}</td>
         <td style="padding:12px 16px;">
           <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;${
@@ -103,14 +125,32 @@ function renderTable(): void {
         <td style="padding:12px 16px;color:#64748b;font-size:12px;">${mov.registrado_por || '—'}</td>
         <td style="padding:12px 16px;">${mov.solicitante || '—'}</td>
         <td style="padding:12px 16px;">${mov.area || '—'}</td>
-        <td style="padding:12px 16px;">${mov.concepto}</td>
+        <td style="padding:12px 16px;font-weight:600;">${mov.concepto}</td>
         <td style="padding:12px 16px;">${mov.documento || '—'} / ${mov.proveedor || '—'}</td>
         <td style="padding:12px 16px;">${mov.numero_operacion || '—'}</td>
         <td style="padding:12px 16px;color:#dc2626;font-weight:500;">${mov.tipo_movimiento === 'Egreso' ? formatCurrency(mov.egreso) : '—'}</td>
         <td style="padding:12px 16px;color:#059669;font-weight:500;">${mov.tipo_movimiento === 'Ingreso' ? formatCurrency(mov.ingreso) : '—'}</td>
         <td style="padding:12px 16px;font-weight:700;color:#0f172a;background:#f8fafc;">${formatCurrency(mov.saldo_actual)}</td>
-      </tr>
-    `).join('');
+      </tr>`;
+      
+      if (mov.detalles && mov.detalles.length > 0) {
+        mov.detalles.forEach(det => {
+          rows += `
+          <tr style="border-bottom:1px dashed #e2e8f0;background:#fff;">
+            <td colspan="5"></td>
+            <td style="padding:8px 16px;font-size:12px;color:#475569;display:flex;align-items:center;gap:6px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              ${det.concepto}
+            </td>
+            <td colspan="2"></td>
+            <td style="padding:8px 16px;font-size:12px;color:#dc2626;">${mov.tipo_movimiento === 'Egreso' ? formatCurrency(det.monto) : '—'}</td>
+            <td style="padding:8px 16px;font-size:12px;color:#059669;">${mov.tipo_movimiento === 'Ingreso' ? formatCurrency(det.monto) : '—'}</td>
+            <td></td>
+          </tr>`;
+        });
+      }
+      return rows;
+    }).join('');
   }
 
   const saldoTotalElement = document.getElementById('caja-chica-saldo-total');
@@ -141,6 +181,18 @@ async function loadData(): Promise<void> {
           monthFilter.value = currentVal;
         } else if (uniqueMonths.length > 0) {
           monthFilter.value = uniqueMonths[0]; // Seleccionar último mes por defecto
+        }
+      }
+
+      const solicitanteFilter = document.getElementById('cc-solicitante-filter') as HTMLSelectElement;
+      if (solicitanteFilter) {
+        const uniqueSolicitantes = Array.from(new Set(movimientos.map(m => m.solicitante).filter(s => s && s.trim() !== ''))).sort();
+        const currentSol = solicitanteFilter.value;
+        solicitanteFilter.innerHTML = '<option value="todos">Todos los solicitantes</option>' + uniqueSolicitantes.map(s => {
+          return `<option value="${s}">${s}</option>`;
+        }).join('');
+        if (currentSol && currentSol !== 'todos' && uniqueSolicitantes.includes(currentSol)) {
+          solicitanteFilter.value = currentSol;
         }
       }
     }
@@ -215,6 +267,18 @@ function renderModal(): string {
               N° de Operación
               <input type="text" name="numero_operacion" placeholder="Si aplica" style="padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;">
             </label>
+
+            <div style="grid-column:1/-1;margin-top:8px;border-top:1px dashed #cbd5e1;padding-top:16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <span style="font-size:14px;font-weight:700;color:#0f172a;">Detalle de Gastos (Opcional)</span>
+                <button type="button" id="btn-add-detalle" style="padding:6px 12px;background:#e2e8f0;color:#334155;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Agregar Ítem
+                </button>
+              </div>
+              <div id="detalles-container" style="display:flex;flex-direction:column;gap:8px;">
+                <!-- Filas dinámicas irán aquí -->
+              </div>
+            </div>
           </form>
         </div>
         <div style="padding:20px 24px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:12px;background:#f8fafc;border-radius:0 0 12px 12px;">
@@ -272,8 +336,20 @@ export function renderCajaChica() {
             <div id="cc-summary-final" style="font-size:18px;font-weight:800;color:#0f172a;background:#f1f5f9;padding:2px 8px;border-radius:4px;margin-left:-8px;">S/ 0.00</div>
           </div>
         </div>
-        <div>
-          <select id="cc-month-filter" style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;font-weight:600;min-width:180px;cursor:pointer;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="cc-search-filter" placeholder="Buscar concepto o detalle..." style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;min-width:220px;font-size:13px;">
+          
+          <select id="cc-tipo-filter" style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;font-size:13px;cursor:pointer;">
+            <option value="todos">Todos los tipos</option>
+            <option value="Ingreso">Ingreso</option>
+            <option value="Egreso">Egreso</option>
+          </select>
+
+          <select id="cc-solicitante-filter" style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;font-size:13px;cursor:pointer;">
+            <option value="todos">Todos los solicitantes</option>
+          </select>
+
+          <select id="cc-month-filter" style="padding:10px 16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-family:inherit;font-weight:600;min-width:160px;cursor:pointer;">
             <option value="todos">Todos los meses</option>
           </select>
         </div>
@@ -312,9 +388,14 @@ export function initCajaChicaEvents() {
   let personalList: any[] = [];
   
   const monthFilter = document.getElementById('cc-month-filter');
-  monthFilter?.addEventListener('change', () => {
-    renderTable();
-  });
+  const tipoFilter = document.getElementById('cc-tipo-filter');
+  const solicitanteFilter = document.getElementById('cc-solicitante-filter');
+  const searchFilter = document.getElementById('cc-search-filter');
+
+  monthFilter?.addEventListener('change', () => renderTable());
+  tipoFilter?.addEventListener('change', () => renderTable());
+  solicitanteFilter?.addEventListener('change', () => renderTable());
+  searchFilter?.addEventListener('input', () => renderTable());
 
   loadData();
 
@@ -324,17 +405,6 @@ export function initCajaChicaEvents() {
   const btnCancelar = document.getElementById('btn-cancelar-modal');
   const btnGuardar = document.getElementById('btn-guardar-movimiento');
   const form = document.getElementById('form-caja-chica') as HTMLFormElement;
-
-  function closeModal() {
-    if (modal) modal.style.display = 'none';
-    if (form) form.reset();
-    
-    // Restaurar fecha a hoy
-    const fechaInput = form?.querySelector('input[name="fecha"]') as HTMLInputElement;
-    if (fechaInput) {
-      fechaInput.value = getLocalDateString();
-    }
-  }
 
   const selectSolicitante = document.getElementById('caja-chica-solicitante') as HTMLSelectElement;
   const selectArea = document.getElementById('caja-chica-area') as HTMLSelectElement;
@@ -380,6 +450,36 @@ export function initCajaChicaEvents() {
     }
   });
 
+  const btnAddDetalle = document.getElementById('btn-add-detalle');
+  const detallesContainer = document.getElementById('detalles-container');
+  let detalleIndex = 0;
+
+  btnAddDetalle?.addEventListener('click', () => {
+    if (!detallesContainer) return;
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.innerHTML = `
+      <input type="text" name="detalle_concepto_${detalleIndex}" placeholder="Concepto (ej. Taxi)" required style="flex:2;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;font-size:13px;">
+      <input type="number" step="0.01" name="detalle_monto_${detalleIndex}" placeholder="Monto" required style="flex:1;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;font-size:13px;">
+      <button type="button" class="btn-remove-detalle" style="padding:8px;background:#fee2e2;color:#ef4444;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    `;
+    detallesContainer.appendChild(row);
+    row.querySelector('.btn-remove-detalle')?.addEventListener('click', () => {
+      row.remove();
+    });
+    detalleIndex++;
+  });
+
+  function closeModal() {
+    if (modal) modal.style.display = 'none';
+    if (form) form.reset();
+    if (detallesContainer) detallesContainer.innerHTML = '';
+    detalleIndex = 0;
+  }
+
   btnNuevo?.addEventListener('click', () => {
     if (modal) modal.style.display = 'flex';
     const fechaInput = form?.querySelector('input[name="fecha"]') as HTMLInputElement;
@@ -405,10 +505,36 @@ export function initCajaChicaEvents() {
     const formData = new FormData(form);
     const currentUser = authService.getUser();
     
+    const detalles: { concepto: string, monto: number }[] = [];
+    if (detallesContainer) {
+      const rows = detallesContainer.querySelectorAll('div');
+      rows.forEach(row => {
+        const inputConcepto = row.querySelector('input[type="text"]') as HTMLInputElement;
+        const inputMonto = row.querySelector('input[type="number"]') as HTMLInputElement;
+        if (inputConcepto && inputMonto && inputConcepto.value.trim() !== '') {
+          detalles.push({
+            concepto: inputConcepto.value.trim(),
+            monto: Number(inputMonto.value)
+          });
+        }
+      });
+    }
+
+    const subtotal = Number(formData.get('subtotal'));
+
+    if (detalles.length > 0) {
+      const sumaDetalles = detalles.reduce((acc, curr) => acc + curr.monto, 0);
+      // Validamos con una tolerancia muy pequeña para evitar errores de precisión de decimales
+      if (Math.abs(sumaDetalles - subtotal) > 0.01) {
+        mostrarToast('warning', 'Validación', `La suma de los detalles (S/ ${sumaDetalles.toFixed(2)}) no coincide con el Monto general (S/ ${subtotal.toFixed(2)}). Por favor verifica.`);
+        return;
+      }
+    }
+
     const data = {
       tipo_movimiento: formData.get('tipo_movimiento') as string,
       fecha: formData.get('fecha') as string,
-      subtotal: Number(formData.get('subtotal')),
+      subtotal: subtotal,
       concepto: formData.get('concepto') as string,
       solicitante: formData.get('solicitante') as string,
       area: formData.get('area') as string,
@@ -417,6 +543,7 @@ export function initCajaChicaEvents() {
       tipo_dinero: formData.get('tipo_dinero') as string,
       numero_operacion: formData.get('numero_operacion') as string,
       registrado_por: currentUser?.nombre || 'Desconocido',
+      detalles: detalles
     };
 
     try {
@@ -510,7 +637,38 @@ export function initCajaChicaEvents() {
           if (colNumber >= 9) {
             cell.numFmt = '"S/ "#,##0.00';
           }
+          if (m.detalles && m.detalles.length > 0) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F8FAFC' } };
+          }
         });
+
+        if (m.detalles && m.detalles.length > 0) {
+          m.detalles.forEach(det => {
+            const detRow = sheet.addRow([
+              '', '', '', '', '',
+              `↳ ${det.concepto}`,
+              '', '',
+              m.tipo_movimiento === 'Egreso' ? Number(det.monto) : '',
+              m.tipo_movimiento === 'Ingreso' ? Number(det.monto) : '',
+              ''
+            ]);
+            detRow.eachCell((cell, colNumber) => {
+              cell.border = {
+                  top: { style: 'dashed', color: { argb: 'E2E8F0' } },
+                  bottom: { style: 'dashed', color: { argb: 'E2E8F0' } },
+              };
+              cell.alignment = { vertical: 'middle', wrapText: true };
+              if (colNumber >= 9 && typeof cell.value === 'number') {
+                cell.numFmt = '"S/ "#,##0.00';
+                if (m.tipo_movimiento === 'Egreso') cell.font = { color: { argb: 'DC2626' } };
+                if (m.tipo_movimiento === 'Ingreso') cell.font = { color: { argb: '059669' } };
+              }
+              if (colNumber === 6) {
+                cell.font = { color: { argb: '475569' }, italic: true };
+              }
+            });
+          });
+        }
       });
 
       sheet.getColumn(1).width = 12;

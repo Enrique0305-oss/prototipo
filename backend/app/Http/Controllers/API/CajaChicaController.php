@@ -12,7 +12,7 @@ class CajaChicaController extends Controller
     public function index(Request $request)
     {
         // Ordenamos por ID descendente para mostrar los más recientes arriba
-        $movimientos = CajaChica::orderBy('id', 'desc')->get();
+        $movimientos = CajaChica::with('detalles')->orderBy('id', 'desc')->get();
         
         $ultimo = CajaChica::orderBy('id', 'desc')->first();
         $saldoActual = $ultimo ? $ultimo->saldo_actual : 0;
@@ -38,6 +38,9 @@ class CajaChicaController extends Controller
             'numero_operacion' => 'nullable|string',
             'subtotal' => 'nullable|numeric',
             'registrado_por' => 'nullable|string',
+            'detalles' => 'nullable|array',
+            'detalles.*.concepto' => 'required_with:detalles|string',
+            'detalles.*.monto' => 'required_with:detalles|numeric',
         ]);
 
         $monto = $request->input('subtotal', 0);
@@ -64,6 +67,17 @@ class CajaChicaController extends Controller
             'saldo_actual' => $saldoActual,
             'registrado_por' => \Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::user()->name : ($validated['registrado_por'] ?? 'Sistema')
         ]));
+
+        if (isset($validated['detalles']) && count($validated['detalles']) > 0) {
+            foreach ($validated['detalles'] as $detalle) {
+                $caja->detalles()->create([
+                    'concepto' => $detalle['concepto'],
+                    'monto' => $detalle['monto'],
+                ]);
+            }
+        }
+        
+        $caja->load('detalles');
 
         return response()->json([
             'success' => true,

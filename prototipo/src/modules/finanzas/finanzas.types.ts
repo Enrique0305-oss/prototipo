@@ -64,6 +64,11 @@ export interface MovimientoCajaChica {
   egreso: number;
   saldo_actual: number;
   registrado_por?: string;
+  detalles?: {
+    id?: number;
+    concepto: string;
+    monto: number;
+  }[];
 }
 
 // Cuentas por Cobrar
