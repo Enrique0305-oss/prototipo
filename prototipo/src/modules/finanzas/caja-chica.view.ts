@@ -1,14 +1,20 @@
 import * as ExcelJS from 'exceljs';
+import { Chart, registerables } from 'chart.js';
+import type { ChartConfiguration, ChartType } from 'chart.js';
 import { finanzasService } from './finanzas.service';
 import { personalService } from '../../services/personalService';
 import { authService } from '../auth/auth.service';
 import type { MovimientoCajaChica } from './finanzas.types';
 import { mostrarToast } from '../../shared/toast';
 
+Chart.register(...registerables);
+
 let movimientos: MovimientoCajaChica[] = [];
 let currentFilteredMovimientos: MovimientoCajaChica[] = [];
 let saldoActual: number = 0;
 let isLoading = false;
+let chartInstances: Chart[] = [];
+let currentTab: 'registros' | 'dashboard' = 'registros';
 
 function formatDate(dateString: string): string {
   if (!dateString) return '—';
@@ -157,6 +163,11 @@ function renderTable(): void {
   if (saldoTotalElement) {
     saldoTotalElement.textContent = formatCurrency(saldoActual);
   }
+
+  // Actualizar dashboard dinámicamente si los filtros cambian
+  if (currentTab === 'dashboard') {
+    renderDashboard();
+  }
 }
 
 async function loadData(): Promise<void> {
@@ -289,6 +300,160 @@ function renderModal(): string {
     </div>
   `;
 }
+function destroyCharts(): void {
+  while (chartInstances.length > 0) {
+    chartInstances.pop()?.destroy();
+  }
+}
+
+function createOrReplaceChart(canvasId: string, config: ChartConfiguration<ChartType, number[], string>): void {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const existing = chartInstances.find((chart) => chart.canvas === canvas);
+  if (existing) {
+    existing.destroy();
+    chartInstances.splice(chartInstances.indexOf(existing), 1);
+  }
+
+  const chart = new Chart(ctx, config);
+  chartInstances.push(chart);
+}
+
+function renderDashboard(): void {
+  const container = document.getElementById('cc-dashboard-view');
+  if (!container || container.style.display === 'none') return;
+
+  destroyCharts();
+
+  if (currentFilteredMovimientos.length === 0) {
+    return;
+  }
+
+  // Calculate Dashboard Data
+  let totalIngresos = 0;
+  let totalEgresos = 0;
+  let totalOperaciones = currentFilteredMovimientos.length;
+  
+  const gastosPorArea: Record<string, number> = {};
+  const gastosPorSolicitante: Record<string, number> = {};
+  
+  // Data for trend line (group by date)
+  const daysInMonth = Array.from({length: 31}, (_, i) => String(i + 1).padStart(2, '0'));
+  const tendenciaIngresos: Record<string, number> = {};
+  const tendenciaEgresos: Record<string, number> = {};
+  
+  daysInMonth.forEach(d => {
+    tendenciaIngresos[d] = 0;
+    tendenciaEgresos[d] = 0;
+  });
+
+  currentFilteredMovimientos.forEach(mov => {
+    const isIngreso = mov.tipo_movimiento === 'Ingreso';
+    const amount = isIngreso ? Number(mov.ingreso || 0) : Number(mov.egreso || 0);
+    
+    if (isIngreso) totalIngresos += amount;
+    else totalEgresos += amount;
+
+    // By area (only expenses)
+    if (!isIngreso) {
+      const area = mov.area || 'Sin Área';
+      gastosPorArea[area] = (gastosPorArea[area] || 0) + amount;
+      
+      const solicitante = mov.solicitante || 'Sin Solicitante';
+      gastosPorSolicitante[solicitante] = (gastosPorSolicitante[solicitante] || 0) + amount;
+    }
+
+    // Trend
+    if (mov.fecha) {
+      const day = mov.fecha.substring(8, 10);
+      if (tendenciaIngresos[day] !== undefined) {
+        if (isIngreso) tendenciaIngresos[day] += amount;
+        else tendenciaEgresos[day] += amount;
+      }
+    }
+  });
+
+  // Render KPIs
+  const elOperaciones = document.getElementById('cc-kpi-operaciones');
+  const elIngresos = document.getElementById('cc-kpi-ingresos');
+  const elEgresos = document.getElementById('cc-kpi-egresos');
+  
+  if(elOperaciones) elOperaciones.textContent = String(totalOperaciones);
+  if(elIngresos) elIngresos.textContent = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(totalIngresos);
+  if(elEgresos) elEgresos.textContent = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(totalEgresos);
+
+  // 1. Tendencia Chart
+  createOrReplaceChart('cc-chart-tendencia', {
+    type: 'bar',
+    data: {
+      labels: daysInMonth,
+      datasets: [
+        {
+          label: 'Egresos',
+          data: daysInMonth.map(d => tendenciaEgresos[d]),
+          backgroundColor: '#ef4444',
+          borderRadius: 4
+        },
+        {
+          label: 'Ingresos / Reposiciones',
+          data: daysInMonth.map(d => tendenciaIngresos[d]),
+          backgroundColor: '#10b981',
+          borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  // 2. Area Chart
+  const areaLabels = Object.keys(gastosPorArea);
+  const areaData = Object.values(gastosPorArea);
+  createOrReplaceChart('cc-chart-area', {
+    type: 'doughnut',
+    data: {
+      labels: areaLabels,
+      datasets: [{
+        data: areaData,
+        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#64748b']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'right' } }
+    }
+  });
+
+  // 3. Solicitante Chart
+  const solicitanteEntries = Object.entries(gastosPorSolicitante).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  createOrReplaceChart('cc-chart-solicitante', {
+    type: 'bar',
+    data: {
+      labels: solicitanteEntries.map(e => e[0]),
+      datasets: [{
+        label: 'Gastos por Solicitante',
+        data: solicitanteEntries.map(e => e[1]),
+        backgroundColor: '#3b82f6',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+}
 
 export function renderCajaChica() {
   return `
@@ -306,11 +471,21 @@ export function renderCajaChica() {
             <div style="font-size:12px;color:#64748b;font-weight:600;">SALDO ACTUAL</div>
             <div id="caja-chica-saldo-total" style="font-size:20px;font-weight:800;color:#0f172a;">S/ 0.00</div>
           </div>
-          <button id="btn-exportar-cc-excel" style="display:flex;align-items:center;gap:8px;padding:10px 20px;background:#10b981;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;box-shadow:0 4px 6px -1px rgba(16, 185, 129, 0.2);transition:background 0.2s;">
+          <div style="display:flex;align-items:center;background:#f1f5f9;border-radius:8px;padding:4px;border:1px solid #e2e8f0;height:40px;box-sizing:border-box;">
+            <button id="tab-cc-registros" style="height:100%;padding:0 16px;background:#fff;color:#0f172a;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;align-items:center;gap:6px;transition:all 0.2s;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              Ver Datos
+            </button>
+            <button id="tab-cc-dashboard" style="height:100%;padding:0 16px;background:transparent;color:#64748b;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.2s;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+              Ver Estadística
+            </button>
+          </div>
+          <button id="btn-exportar-cc-excel" style="display:flex;align-items:center;gap:8px;padding:10px 20px;background:#10b981;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;box-shadow:0 4px 6px -1px rgba(16, 185, 129, 0.2);transition:background 0.2s;height:40px;box-sizing:border-box;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
             Exportar Excel
           </button>
-          <button id="btn-nuevo-movimiento" style="display:flex;align-items:center;gap:8px;padding:10px 20px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;box-shadow:0 4px 6px -1px rgba(37,99,235,0.2);">
+          <button id="btn-nuevo-movimiento" style="display:flex;align-items:center;gap:8px;padding:10px 20px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;box-shadow:0 4px 6px -1px rgba(37,99,235,0.2);height:40px;box-sizing:border-box;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Nuevo Movimiento
           </button>
@@ -355,30 +530,69 @@ export function renderCajaChica() {
         </div>
       </div>
 
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);overflow:hidden;">
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:1000px;">
-            <thead>
-              <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;text-align:left;">
-                <th style="padding:14px 16px;color:#475569;font-weight:600;white-space:nowrap;">FECHA</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;">MOVIMIENTO</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;">REGISTRADO POR</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;">SOLICITANTE</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;">ÁREA</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;width:25%;">CONCEPTO</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;">DOC. / PROVEEDOR</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;">N° OPERACIÓN</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;">EGRESO</th>
-                <th style="padding:14px 16px;color:#475569;font-weight:600;">INGRESO</th>
-                <th style="padding:14px 16px;color:#0f172a;font-weight:700;">SALDO</th>
-              </tr>
-            </thead>
-            <tbody id="caja-chica-body">
-              <tr><td colspan="11" style="text-align:center;padding:24px;color:#64748b;">Cargando movimientos...</td></tr>
-            </tbody>
-          </table>
+      <div id="cc-table-view">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);overflow:hidden;">
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:1000px;">
+              <thead>
+                <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;text-align:left;">
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;white-space:nowrap;">FECHA</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;">MOVIMIENTO</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;">REGISTRADO POR</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;">SOLICITANTE</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;">ÁREA</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;width:25%;">CONCEPTO</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;">DOC. / PROVEEDOR</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;">N° OPERACIÓN</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;">EGRESO</th>
+                  <th style="padding:14px 16px;color:#475569;font-weight:600;">INGRESO</th>
+                  <th style="padding:14px 16px;color:#0f172a;font-weight:700;">SALDO</th>
+                </tr>
+              </thead>
+              <tbody id="caja-chica-body">
+                <tr><td colspan="11" style="text-align:center;padding:24px;color:#64748b;">Cargando movimientos...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+
+      <div id="cc-dashboard-view" style="display:none;flex-direction:column;gap:24px;">
+        <!-- KPIs -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="font-size:13px;color:#64748b;font-weight:600;margin-bottom:8px;">TOTAL INGRESOS</div>
+            <div id="cc-kpi-ingresos" style="font-size:24px;font-weight:800;color:#10b981;">S/ 0.00</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="font-size:13px;color:#64748b;font-weight:600;margin-bottom:8px;">TOTAL EGRESOS</div>
+            <div id="cc-kpi-egresos" style="font-size:24px;font-weight:800;color:#ef4444;">S/ 0.00</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="font-size:13px;color:#64748b;font-weight:600;margin-bottom:8px;">N° OPERACIONES</div>
+            <div id="cc-kpi-operaciones" style="font-size:24px;font-weight:800;color:#0f172a;">0</div>
+          </div>
+        </div>
+
+        <!-- Gráficos Principales -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px;">
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+            <h3 style="margin:0 0 16px 0;font-size:16px;color:#0f172a;">Flujo Diario (Mes Actual)</h3>
+            <div style="height:300px;"><canvas id="cc-chart-tendencia"></canvas></div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+            <h3 style="margin:0 0 16px 0;font-size:16px;color:#0f172a;">Gastos por Área</h3>
+            <div style="height:300px;"><canvas id="cc-chart-area"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Ranking -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+          <h3 style="margin:0 0 16px 0;font-size:16px;color:#0f172a;">Top Solicitantes (Gastos)</h3>
+          <div style="height:300px;"><canvas id="cc-chart-solicitante"></canvas></div>
+        </div>
+      </div>
+
     </div>
     ${renderModal()}
   `;
@@ -396,6 +610,38 @@ export function initCajaChicaEvents() {
   tipoFilter?.addEventListener('change', () => renderTable());
   solicitanteFilter?.addEventListener('change', () => renderTable());
   searchFilter?.addEventListener('input', () => renderTable());
+
+  const tabRegistros = document.getElementById('tab-cc-registros');
+  const tabDashboard = document.getElementById('tab-cc-dashboard');
+  const viewRegistros = document.getElementById('cc-table-view');
+  const viewDashboard = document.getElementById('cc-dashboard-view');
+
+  const setActiveTab = (tab: 'registros' | 'dashboard') => {
+    currentTab = tab;
+    if (tab === 'registros') {
+      tabRegistros!.style.background = '#fff';
+      tabRegistros!.style.color = '#0f172a';
+      tabRegistros!.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+      tabDashboard!.style.background = 'transparent';
+      tabDashboard!.style.color = '#64748b';
+      tabDashboard!.style.boxShadow = 'none';
+      viewRegistros!.style.display = 'block';
+      viewDashboard!.style.display = 'none';
+    } else {
+      tabDashboard!.style.background = '#fff';
+      tabDashboard!.style.color = '#0f172a';
+      tabDashboard!.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+      tabRegistros!.style.background = 'transparent';
+      tabRegistros!.style.color = '#64748b';
+      tabRegistros!.style.boxShadow = 'none';
+      viewRegistros!.style.display = 'none';
+      viewDashboard!.style.display = 'flex';
+      renderDashboard(); // Render charts when tab becomes visible
+    }
+  };
+
+  tabRegistros?.addEventListener('click', () => setActiveTab('registros'));
+  tabDashboard?.addEventListener('click', () => setActiveTab('dashboard'));
 
   loadData();
 
