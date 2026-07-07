@@ -754,71 +754,63 @@ class ProyeccionesController extends Controller
         try {
             \Log::info('Iniciando creación automática de proyección de servicio', ['orden_id' => $ordenServicio->id]);
             
-            // Verificar si ya existe proyección para esta orden
-            $proyeccionExistente = Proyeccion::where('id_orden_servicio', $ordenServicio->id)
-                ->first();
-
-            if ($proyeccionExistente) {
-                \Log::info('Proyección de servicio ya existe, actualizando', ['proyeccion_id' => $proyeccionExistente->id]);
-                // Si existe, actualizar datos relevantes
-                return self::actualizarProyeccionServicio($proyeccionExistente, $ordenServicio);
+            // Si la orden ya tiene proyecciones, llamamos a actualizar
+            $proyeccionesExistentes = Proyeccion::where('id_orden_servicio', $ordenServicio->id)->get();
+            if ($proyeccionesExistentes->count() > 0) {
+                \Log::info('Proyecciones de servicio ya existen, actualizando', ['orden_id' => $ordenServicio->id]);
+                return self::actualizarProyeccionServicio($ordenServicio);
             }
 
-            // Obtener primera empresa multicim si no se proporciona
+            // Obtener multicim
             if (!$multicimId) {
                 $multicimId = $ordenServicio->id_multicim ?? ($ordenServicio->cotizacion ? $ordenServicio->cotizacion->id_multicim : null);
                 if (!$multicimId) {
-                    $primerMulticim = Multicim::first();
-                    $multicimId = $primerMulticim ? $primerMulticim->id : 1;
+                    $multicimId = Multicim::first()?->id ?? 1;
                 }
             }
 
-            \Log::info('Creando nueva proyección de servicio', [
-                'monto' => $ordenServicio->total_costo,
-                'multicim' => $multicimId
-            ]);
-
-            $serviciosDetallados = [];
-            $serviciosUnicos = [];
+            $proyeccionesCreadas = [];
             foreach ($ordenServicio->detalles as $det) {
-                $nombreServicio = $det->servicio ? $det->servicio->nombre : 'Servicio';
-                $frecuencia = $det->frecuencia ?? 'S/N';
-                $clave = $nombreServicio . '|' . $frecuencia;
-                if (!isset($serviciosUnicos[$clave])) {
-                    $serviciosUnicos[$clave] = true;
-                    $serviciosDetallados[] = [
-                        'nombre' => $nombreServicio,
-                        'frecuencia' => $frecuencia
-                    ];
+                $nombreServicio = $det->servicio ? $det->servicio->nombre : ($det->descripcion_manual ?? 'Servicio');
+                $montoDetalle = floatval($det->precio);
+                
+                // IGV
+                $igv = 0;
+                if ($ordenServicio->incluye_igv) {
+                    $igv = $montoDetalle * 0.18;
+                    $montoTotal = $montoDetalle + $igv;
+                } else {
+                    $montoTotal = $montoDetalle;
                 }
+
+                $detraccion = ($montoTotal > 700) ? ($montoTotal * 0.12) : 0;
+
+                $proyeccion = Proyeccion::create([
+                    'tipo_orden' => 'servicio',
+                    'id_referencia' => $ordenServicio->id,
+                    'id_detalle_origen' => $det->id,
+                    'id_multicim' => $multicimId,
+                    'id_orden_servicio' => $ordenServicio->id,
+                    'actividad' => null,
+                    'servicios_detallados' => [
+                        [
+                            'nombre' => $nombreServicio,
+                            'frecuencia' => $det->frecuencia ?? 'S/N'
+                        ]
+                    ],
+                    'n_factura' => null,
+                    'fecha_ejecucion' => $ordenServicio->fecha_tentativa ?? $ordenServicio->fecha_aceptacion ?? now(),
+                    'monto_detrax' => $detraccion,
+                    'base_imponible' => $montoDetalle,
+                    'igv' => $igv,
+                    'total_final' => $montoTotal - $detraccion,
+                ]);
+                $proyeccionesCreadas[] = $proyeccion;
             }
 
-            // Crear nueva proyección
-            $proyeccion = Proyeccion::create([
-                'tipo_orden' => 'servicio',
-                'id_referencia' => $ordenServicio->id,
-                'id_multicim' => $multicimId,
-                'id_orden_servicio' => $ordenServicio->id,
-                'actividad' => null,
-                'servicios_detallados' => $serviciosDetallados,
-                'n_factura' => null,
-                'dias_credito' => null,
-                'fecha_factura' => null,
-                'fecha_pago' => null,
-                'fecha_ejecucion' => $ordenServicio->fecha_tentativa ?? $ordenServicio->fecha_aceptacion ?? now(),
-                'fecha_vcto' => null,
-                'dia_vencer' => null,
-                'monto_detrax' => ($ordenServicio->total_costo > 700) ? ($ordenServicio->total_costo * 0.12) : 0,
-                'total_final' => $ordenServicio->total_costo - (($ordenServicio->total_costo > 700) ? ($ordenServicio->total_costo * 0.12) : 0),
-            ]);
-
-            \Log::info('Proyección de servicio creada exitosamente', ['proyeccion_id' => $proyeccion->id]);
-            return $proyeccion;
+            return collect($proyeccionesCreadas);
         } catch (\Exception $e) {
-            \Log::error('Error creando proyección automática de servicio: ' . $e->getMessage(), [
-                'exception' => $e,
-                'orden_id' => $ordenServicio->id ?? 'unknown'
-            ]);
+            \Log::error('Error creando proyecciones parciales de servicio: ' . $e->getMessage());
             return null;
         }
     }
@@ -826,37 +818,106 @@ class ProyeccionesController extends Controller
     /**
      * Actualizar una proyección existente de servicio
      */
-    public static function actualizarProyeccionServicio($proyeccion, $ordenServicio)
+    public static function actualizarProyeccionServicio($ordenServicio)
     {
         try {
-            $serviciosDetallados = [];
-            $serviciosUnicos = [];
-            foreach ($ordenServicio->detalles as $det) {
-                $nombreServicio = $det->servicio ? $det->servicio->nombre : 'Servicio';
-                $frecuencia = $det->frecuencia ?? 'S/N';
-                $clave = $nombreServicio . '|' . $frecuencia;
-                if (!isset($serviciosUnicos[$clave])) {
-                    $serviciosUnicos[$clave] = true;
-                    $serviciosDetallados[] = [
-                        'nombre' => $nombreServicio,
-                        'frecuencia' => $frecuencia
-                    ];
+            $proyeccionesExistentes = Proyeccion::where('id_orden_servicio', $ordenServicio->id)->get();
+            $multicimId = $ordenServicio->id_multicim ?? ($ordenServicio->cotizacion ? $ordenServicio->cotizacion->id_multicim : null);
+            if (!$multicimId) {
+                $multicimId = Multicim::first()?->id ?? 1;
+            }
+
+            // Identificar los detalles actuales de la orden
+            $detallesActualesIds = $ordenServicio->detalles->pluck('id')->toArray();
+
+            // Mapear proyecciones existentes por id_detalle_origen
+            foreach ($proyeccionesExistentes as $proyeccion) {
+                if ($proyeccion->id_detalle_origen === null) {
+                    // Si es una proyección global y NO ha sido facturada, la borramos para recrearla parcializada
+                    if (empty($proyeccion->n_factura)) {
+                        $proyeccion->delete();
+                    } else {
+                        // Si ya está facturada, solo actualizamos fechas
+                        $proyeccion->update([
+                            'fecha_ejecucion' => $ordenServicio->fecha_tentativa ?? $ordenServicio->fecha_aceptacion ?? now(),
+                        ]);
+                    }
+                } else {
+                    // Si el detalle origen ya no existe y no tiene factura, la borramos
+                    if (!in_array($proyeccion->id_detalle_origen, $detallesActualesIds) && empty($proyeccion->n_factura)) {
+                        $proyeccion->delete();
+                    }
                 }
             }
 
-            $monto = $ordenServicio->total_costo;
-            $proyeccion->update([
-                'fecha_ejecucion' => $ordenServicio->fecha_tentativa ?? $ordenServicio->fecha_aceptacion ?? now(),
-                'monto_detrax' => ($monto > 700) ? ($monto * 0.12) : 0,
-                'total_final' => $monto - (($monto > 700) ? ($monto * 0.12) : 0),
-                'actividad' => $proyeccion->actividad,
-                'servicios_detallados' => $serviciosDetallados,
-            ]);
+            // Recargar proyecciones existentes (sin las borradas)
+            $proyeccionesExistentes = Proyeccion::where('id_orden_servicio', $ordenServicio->id)->get();
 
-            return $proyeccion;
+            foreach ($ordenServicio->detalles as $det) {
+                $nombreServicio = $det->servicio ? $det->servicio->nombre : ($det->descripcion_manual ?? 'Servicio');
+                $montoDetalle = floatval($det->precio);
+                
+                $igv = 0;
+                if ($ordenServicio->incluye_igv) {
+                    $igv = $montoDetalle * 0.18;
+                    $montoTotal = $montoDetalle + $igv;
+                } else {
+                    $montoTotal = $montoDetalle;
+                }
+
+                $detraccion = ($montoTotal > 700) ? ($montoTotal * 0.12) : 0;
+                $proyeccionDetalle = $proyeccionesExistentes->firstWhere('id_detalle_origen', $det->id);
+
+                if ($proyeccionDetalle) {
+                    // Solo actualizamos montos si NO ha sido facturada
+                    if (empty($proyeccionDetalle->n_factura)) {
+                        $proyeccionDetalle->update([
+                            'fecha_ejecucion' => $ordenServicio->fecha_tentativa ?? $ordenServicio->fecha_aceptacion ?? now(),
+                            'monto_detrax' => $detraccion,
+                            'base_imponible' => $montoDetalle,
+                            'igv' => $igv,
+                            'total_final' => $montoTotal - $detraccion,
+                            // 'actividad' => ... no la actualizamos para que no borre lo que el usuario haya puesto manualmente
+                            'servicios_detallados' => [
+                                [
+                                    'nombre' => $nombreServicio,
+                                    'frecuencia' => $det->frecuencia ?? 'S/N'
+                                ]
+                            ]
+                        ]);
+                    }
+                } else {
+                    // Si no existía, y no hemos chocado con una proyección global facturada, la creamos
+                    $tieneGlobalFacturada = $proyeccionesExistentes->whereNull('id_detalle_origen')->whereNotNull('n_factura')->isNotEmpty();
+                    
+                    if (!$tieneGlobalFacturada) {
+                        Proyeccion::create([
+                            'tipo_orden' => 'servicio',
+                            'id_referencia' => $ordenServicio->id,
+                            'id_detalle_origen' => $det->id,
+                            'id_multicim' => $multicimId,
+                            'id_orden_servicio' => $ordenServicio->id,
+                            'actividad' => null,
+                            'servicios_detallados' => [
+                                [
+                                    'nombre' => $nombreServicio,
+                                    'frecuencia' => $det->frecuencia ?? 'S/N'
+                                ]
+                            ],
+                            'fecha_ejecucion' => $ordenServicio->fecha_tentativa ?? $ordenServicio->fecha_aceptacion ?? now(),
+                            'monto_detrax' => $detraccion,
+                            'base_imponible' => $montoDetalle,
+                            'igv' => $igv,
+                            'total_final' => $montoTotal - $detraccion,
+                        ]);
+                    }
+                }
+            }
+
+            return true;
         } catch (\Exception $e) {
-            \Log::error('Error actualizando proyección: ' . $e->getMessage());
-            return null;
+            \Log::error('Error actualizando proyecciones parciales: ' . $e->getMessage());
+            return false;
         }
     }
 

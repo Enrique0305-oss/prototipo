@@ -13,6 +13,7 @@ class DetalleOrdenProducto extends Model
     protected $fillable = [
         'id_orden_producto',
         'id_producto',
+        'descripcion_manual',
         'id_lote',
         'cantidad',
         'precio_unitario',

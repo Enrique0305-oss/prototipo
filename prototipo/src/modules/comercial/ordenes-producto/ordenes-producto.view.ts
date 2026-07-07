@@ -534,6 +534,8 @@ function agregarLineaConDatos(idProducto: number | null, nombre: string, cantida
   let productoOpts = buildProductoSelectOptions(idProducto);
   if (idProducto && !productosDisponibles.find(p => p.id === idProducto) && nombre) {
     productoOpts += '<option value="' + idProducto + '" selected>' + nombre + '</option>';
+  } else if (!idProducto && nombre) {
+    productoOpts += '<option value="" selected data-descripcion-manual="' + nombre + '">' + nombre + ' (Servicio Extra)</option>';
   }
 
   const subtotal = cantidad * precioUnitario;
@@ -821,7 +823,7 @@ async function abrirModalEditarOP(id: number, soloLectura: boolean = false) {
     detalles.forEach((d: any) => {
       agregarLineaConDatos(
         d.id_producto,
-        d.producto?.descripcion || ('Producto #' + d.id_producto),
+        d.producto?.descripcion || d.descripcion_manual || ('Producto #' + d.id_producto),
         Number(d.cantidad || 1),
         Number(d.precio_unitario || 0)
       );
@@ -899,13 +901,16 @@ async function guardarOP() {
   lineas.forEach(linea => {
     const selectProd = linea.querySelector('.producto-select') as HTMLSelectElement;
     const idProducto = selectProd?.value || (linea.querySelector('.producto-id-hidden') as HTMLInputElement)?.value;
+    const optSelected = selectProd?.options[selectProd.selectedIndex];
+    const descripcionManual = optSelected?.getAttribute('data-descripcion-manual') || null;
     const cantidad = parseInt((linea.querySelector('.cantidad-input') as HTMLInputElement)?.value || '0');
     const precioUnitario = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
 
-    if (!idProducto) valid = false;
+    if (!idProducto && !descripcionManual) valid = false;
 
     detalles.push({
-      id_producto: Number(idProducto),
+      id_producto: idProducto ? Number(idProducto) : null,
+      descripcion_manual: descripcionManual,
       cantidad,
       precio_unitario: precioUnitario,
     });

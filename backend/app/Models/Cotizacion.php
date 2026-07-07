@@ -82,6 +82,11 @@ class Cotizacion extends Model
         return $this->hasOne(OrdenCapacitacionAuditoria::class, 'id_cotizacion');
     }
 
+    public function ordenesCapacitacionAuditoria()
+    {
+        return $this->hasMany(OrdenCapacitacionAuditoria::class, 'id_cotizacion');
+    }
+
     public function ordenAuditoria()
     {
         return $this->hasOne(OrdenAuditoria::class, 'id_cotizacion');

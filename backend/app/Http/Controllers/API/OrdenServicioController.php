@@ -162,7 +162,8 @@ class OrdenServicioController extends Controller
         $detalles = $cotizacion->detalles->map(function($detalle) {
             return [
                 'id_servicio' => $detalle->id_servicio,
-                'servicio_nombre' => $detalle->servicio ? $detalle->servicio->nombre : null,
+                'descripcion_manual' => $detalle->descripcion_manual,
+                'servicio_nombre' => $detalle->servicio ? $detalle->servicio->nombre : ($detalle->descripcion_manual ?? null),
                 'frecuencia' => $detalle->frecuencia_sugerida,
                 'precio' => $detalle->precio_unitario,
                 'id_cliente_planta' => $detalle->id_cliente_planta,
@@ -296,7 +297,8 @@ class OrdenServicioController extends Controller
             'codigo_doc' => 'nullable|string|max:20',
             'version' => 'nullable|string|max:10',
             'detalles' => 'required|array|min:1',
-            'detalles.*.id_servicio' => 'required|exists:servicios,id',
+            'detalles.*.id_servicio' => 'nullable|exists:servicios,id',
+            'detalles.*.descripcion_manual' => 'nullable|string',
             'detalles.*.local' => 'nullable|string|max:255',
             'detalles.*.frecuencia' => 'nullable|string|max:100',
             'detalles.*.precio' => 'required|numeric|min:0',
@@ -376,7 +378,8 @@ class OrdenServicioController extends Controller
             foreach ($validated['detalles'] as $detalle) {
                 DetalleOrdenServicio::create([
                     'id_orden_servicio' => $orden->id,
-                    'id_servicio' => $detalle['id_servicio'],
+                    'id_servicio' => $detalle['id_servicio'] ?? null,
+                    'descripcion_manual' => $detalle['descripcion_manual'] ?? null,
                     'local' => $detalle['local'] ?? null,
                     'frecuencia' => $detalle['frecuencia'] ?? null,
                     'precio' => $detalle['precio'],
@@ -781,12 +784,7 @@ class OrdenServicioController extends Controller
             $orden->load(['cliente', 'emisor', 'detalles.servicio', 'detalles.planta', 'cotizacion', 'productos.producto', 'productos.servicio', 'productos.planta', 'productos.area', 'productos.equipo', 'equipos.equipo', 'equipos.servicio', 'equipos.planta', 'equipos.area']);
 
             // Actualizar automáticamente proyección para orden de servicio
-            ProyeccionesController::actualizarProyeccionServicio(
-                Proyeccion::where('tipo_orden', 'servicio')
-                    ->where('id_referencia', $orden->id)
-                    ->first(),
-                $orden
-            );
+            ProyeccionesController::actualizarProyeccionServicio($orden);
 
             return response()->json([
                 'success' => true,

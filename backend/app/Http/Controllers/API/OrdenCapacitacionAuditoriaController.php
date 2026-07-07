@@ -93,12 +93,31 @@ class OrdenCapacitacionAuditoriaController extends Controller
      */
     public function cotizacionesDisponibles(): JsonResponse
     {
-        $cotizaciones = Cotizacion::with(['cliente', 'creador'])
-            ->where('tipo_cotizacion', 'Capacitacion')
+        $cotizaciones = Cotizacion::with(['cliente', 'creador', 'detalles', 'beneficios', 'ordenesCapacitacionAuditoria'])
+            ->where(function($query) {
+                $query->where('tipo_cotizacion', 'Capacitacion')
+                      ->orWhereHas('beneficios');
+            })
             ->where('estado', 'Aceptada')
-            ->whereDoesntHave('ordenCapacitacionAuditoria') // Solo las que no tienen orden aún
             ->orderBy('fecha_emision', 'desc')
             ->get();
+
+        $cotizaciones = $cotizaciones->filter(function($cot) {
+            $ordenes = $cot->ordenesCapacitacionAuditoria;
+            if ($cot->tipo_cotizacion === 'Capacitacion') {
+                $idsConOrden = $ordenes->pluck('id_cotizacion_detalle')->filter()->toArray();
+                if ($ordenes->count() > 0 && empty($idsConOrden)) {
+                    // Soporte para órdenes antiguas que no guardaron id_cotizacion_detalle
+                    return false; 
+                }
+                $idsTotales = $cot->detalles->pluck('id')->toArray();
+                return count(array_diff($idsTotales, $idsConOrden)) > 0;
+            } else {
+                $idsConOrden = $ordenes->pluck('id_cotizacion_beneficio')->filter()->toArray();
+                $idsTotales = $cot->beneficios->pluck('id')->toArray();
+                return count(array_diff($idsTotales, $idsConOrden)) > 0;
+            }
+        })->values();
 
         $data = $cotizaciones->map(function($cot) {
             return [
@@ -127,7 +146,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
      */
     public function desdeCotizacion($cotizacionId): JsonResponse
     {
-        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.catalogoCapAud', 'detalles.planta.areas'])
+        $cotizacion = Cotizacion::with(['cliente', 'detalles.servicio', 'detalles.catalogoCapAud', 'detalles.planta.areas', 'beneficios.catalogoCapAud'])
             ->find($cotizacionId);
 
         if (!$cotizacion) {
@@ -137,10 +156,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
             ], 404);
         }
 
-        if ($cotizacion->tipo_cotizacion !== 'Capacitacion') {
+        if ($cotizacion->tipo_cotizacion !== 'Capacitacion' && $cotizacion->beneficios->count() === 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'La cotización no es de tipo Capacitacion'
+                'message' => 'La cotización no es de tipo Capacitacion ni tiene beneficios registrados.'
             ], 400);
         }
 
@@ -151,25 +170,55 @@ class OrdenCapacitacionAuditoriaController extends Controller
             ], 400);
         }
 
-        // Verificar si ya tiene orden
-        if ($cotizacion->ordenCapacitacionAuditoria) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Esta cotización ya tiene una orden de capacitación/auditoría creada',
-                'orden_existente' => $cotizacion->ordenCapacitacionAuditoria->numero_orden
-            ], 400);
-        }
+        // Cargar las órdenes que ya existen para esta cotización
+        $cotizacion->load('ordenesCapacitacionAuditoria');
+        $ordenesExistentes = $cotizacion->ordenesCapacitacionAuditoria;
+
+        $esCapacitacion = $cotizacion->tipo_cotizacion === 'Capacitacion';
+        $fuenteDetalles = $esCapacitacion ? $cotizacion->detalles : $cotizacion->beneficios;
 
         // Obtener el primer servicio/catalogo
-        $primerDetalle = $cotizacion->detalles->first();
+        $primerDetalle = $fuenteDetalles->first();
         $exponentesIds = array_values(array_filter((array) ($cotizacion->exponentes_ids ?? []), fn($id) => !empty($id)));
         $exponentesSeleccionados = empty($exponentesIds)
             ? collect([])
             : Exponente::whereIn('id', $exponentesIds)->get();
 
         // Mapear todos los detalles de la cotización
-        $detalles = $cotizacion->detalles->map(function($d) {
-            $planta = $d->planta;
+        $detalles = $fuenteDetalles->map(function($d) use ($esCapacitacion, $ordenesExistentes) {
+            if (!$esCapacitacion) {
+                // Mapear desde CotizacionBeneficio
+                $yaGenerada = $ordenesExistentes->where('id_cotizacion_beneficio', $d->id)->isNotEmpty();
+                return [
+                    'id_referencia' => $d->id,
+                    'is_beneficio' => true,
+                    'generada' => $yaGenerada,
+                    'id_servicio' => null,
+                    'id_catalogo_cap_aud' => $d->id_catalogo_cap_aud,
+                    'id_cliente_planta' => null,
+                    'id_cliente_planta_area' => [],
+                    'planta_nombre' => null,
+                    'areas_nombres' => [],
+                    'nombre' => $d->catalogoCapAud ? $d->catalogoCapAud->nombre : ($d->nombre_beneficio ?? 'Beneficio'),
+                    'tipo' => 'Capacitacion',
+                    'descripcion' => $d->nombre_beneficio,
+                    'cantidad' => 1,
+                    'precio_unitario' => 0,
+                    'modalidad_sugerida' => $d->modalidad_sugerida,
+                    'duracion_horas' => $d->horas_capacitacion ?? ($d->catalogoCapAud ? $d->catalogoCapAud->duracion_horas : null),
+                    'horas_capacitacion' => $d->horas_capacitacion,
+                    'num_participantes' => 0,
+                    'fecha_servicio' => null,
+                ];
+            }
+
+            // Soporte para orden antigua sin detalle especificado
+            $yaGenerada = $ordenesExistentes->where('id_cotizacion_detalle', $d->id)->isNotEmpty();
+            if (!$yaGenerada && $ordenesExistentes->count() > 0 && empty($ordenesExistentes->pluck('id_cotizacion_detalle')->filter()->toArray())) {
+                $yaGenerada = true; // Si hay órdenes antiguas sin ID, asumimos que este detalle (probablemente el primero) ya está generado
+            }
+
+            $planta = $d->planta ?? null;
             $areaIds = $d->id_cliente_planta_area ?? [];
 
             if (!is_array($areaIds)) {
@@ -188,6 +237,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 ->values();
 
             return [
+                'id_referencia' => $d->id,
+                'is_beneficio' => false,
+                'generada' => $yaGenerada,
                 'id_servicio' => $d->id_servicio,
                 'id_catalogo_cap_aud' => $d->id_catalogo_cap_aud,
                 'id_cliente_planta' => $d->id_cliente_planta,
@@ -206,6 +258,17 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'fecha_servicio' => $d->fecha_servicio,
             ];
         });
+
+        // Filtrar solo los que NO han sido generados
+        $detallesDisponibles = $detalles->filter(fn($d) => !$d['generada'])->values();
+        $primerDetalleDisponible = $detallesDisponibles->first();
+
+        if ($detallesDisponibles->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Todos los cursos/beneficios de esta cotización ya tienen una orden generada.'
+            ], 400);
+        }
 
         return response()->json([
             'success' => true,
@@ -230,7 +293,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
                     'direccion' => $cotizacion->cliente->direccion,
                 ],
                 'costo_total' => (float) $cotizacion->total,
-                'detalles' => $detalles,
+                'detalles' => $detallesDisponibles,
                 'exponentes' => $exponentesSeleccionados->map(fn($e) => [
                     'id' => $e->id,
                     'nombre' => $e->nombre,
@@ -238,12 +301,13 @@ class OrdenCapacitacionAuditoriaController extends Controller
                     'especialidad' => $e->especialidad,
                     'profesion' => $e->profesion,
                 ])->values(),
-                'servicio' => $primerDetalle ? [
-                    'id' => $primerDetalle->id_servicio,
-                    'id_servicio' => $primerDetalle->id_servicio,
-                    'id_catalogo_cap_aud' => $primerDetalle->id_catalogo_cap_aud,
-                    'nombre' => $primerDetalle->catalogoCapAud ? $primerDetalle->catalogoCapAud->nombre : ($primerDetalle->servicio ? $primerDetalle->servicio->nombre : null),
-                    'modalidad_sugerida' => $primerDetalle->modalidad_sugerida,
+                'cursos_disponibles' => $detallesDisponibles, // Agregamos lista de cursos para el frontend
+                'servicio' => $primerDetalleDisponible ? [
+                    'id' => $esCapacitacion ? $primerDetalleDisponible['id_servicio'] : null,
+                    'id_servicio' => $esCapacitacion ? $primerDetalleDisponible['id_servicio'] : null,
+                    'id_catalogo_cap_aud' => $primerDetalleDisponible['id_catalogo_cap_aud'],
+                    'nombre' => $primerDetalleDisponible['nombre'],
+                    'modalidad_sugerida' => $primerDetalleDisponible['modalidad_sugerida'],
                 ] : null,
             ]
         ]);
@@ -258,6 +322,12 @@ class OrdenCapacitacionAuditoriaController extends Controller
         $validated = $request->validate([
             'id_cotizacion' => 'required|exists:cotizacion,id',
             'id_servicio' => 'nullable|exists:servicios,id',
+            'id_cotizacion_detalle' => 'nullable|exists:cotizacion_detalle,id',
+            'id_cotizacion_beneficio' => 'nullable|exists:cotizacion_beneficio,id',
+            'is_beneficio' => 'nullable|boolean',
+            'id_cliente_planta' => 'nullable|exists:cliente_planta,id',
+            'id_cliente_planta_area' => 'nullable|array',
+            'id_cliente_planta_area.*' => 'exists:cliente_planta_area,id',
             'id_ponente' => 'nullable|exists:personal,id',
             'ponentes' => 'nullable|array',
             'ponentes.*' => 'exists:personal,id',
@@ -293,12 +363,29 @@ class OrdenCapacitacionAuditoriaController extends Controller
 
         $cotizacion = Cotizacion::find($validated['id_cotizacion']);
         
-        if ($cotizacion->tipo_cotizacion !== 'Capacitacion') {
-            return response()->json(['success' => false, 'message' => 'La cotización debe ser de tipo Capacitacion'], 400);
+        if ($cotizacion->tipo_cotizacion !== 'Capacitacion' && $cotizacion->beneficios->count() === 0) {
+            return response()->json(['success' => false, 'message' => 'La cotización no es de tipo Capacitacion ni tiene beneficios'], 400);
         }
 
-        if ($cotizacion->ordenCapacitacionAuditoria) {
-            return response()->json(['success' => false, 'message' => 'Esta cotización ya tiene una orden'], 400);
+        $isBeneficio = filter_var($validated['is_beneficio'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $idDetalle = $validated['id_cotizacion_detalle'] ?? null;
+        $idBeneficio = $validated['id_cotizacion_beneficio'] ?? null;
+
+        // Verificar si ya tiene orden PARA ESTE CURSO ESPECÍFICO
+        $cotizacion->load('ordenesCapacitacionAuditoria');
+        $ordenesExistentes = $cotizacion->ordenesCapacitacionAuditoria;
+        
+        if ($isBeneficio && $idBeneficio) {
+            if ($ordenesExistentes->where('id_cotizacion_beneficio', $idBeneficio)->isNotEmpty()) {
+                return response()->json(['success' => false, 'message' => 'Este beneficio ya tiene una orden generada'], 400);
+            }
+        } elseif (!$isBeneficio && $idDetalle) {
+            if ($ordenesExistentes->where('id_cotizacion_detalle', $idDetalle)->isNotEmpty()) {
+                return response()->json(['success' => false, 'message' => 'Este curso ya tiene una orden generada'], 400);
+            }
+        } elseif ($ordenesExistentes->count() > 0 && !$idDetalle && !$idBeneficio) {
+            // Soporte para frontend antiguo o sin datos específicos
+            return response()->json(['success' => false, 'message' => 'Ya existe una orden para esta cotización y no se especificó un curso válido.'], 400);
         }
 
         // Fecha de aceptación desde la cotización (aceptada/rechazada)
@@ -306,8 +393,17 @@ class OrdenCapacitacionAuditoriaController extends Controller
             ? $cotizacion->fecha_estado_cotizacion->format('Y-m-d')
             : ($validated['fecha_aceptacion'] ?? $cotizacion->fecha_emision->format('Y-m-d'));
 
-        // Copiar datos desde el primer detalle de cotización cuando falte algo
-        $detalle = $cotizacion->detalles->first();
+        // Copiar datos desde el detalle de cotización cuando falte algo
+        $detalle = null;
+        if ($isBeneficio && $idBeneficio) {
+            $detalle = $cotizacion->beneficios->firstWhere('id', $idBeneficio);
+        } elseif (!$isBeneficio && $idDetalle) {
+            $detalle = $cotizacion->detalles->firstWhere('id', $idDetalle);
+        }
+        
+        if (!$detalle) {
+            $detalle = $cotizacion->tipo_cotizacion === 'Capacitacion' ? $cotizacion->detalles->first() : $cotizacion->beneficios->first();
+        }
         if ($detalle) {
             if (empty($validated['fecha_servicio'])) {
                 $validated['fecha_servicio'] = $detalle->fecha_servicio ?? $cotizacion->fecha_emision->format('Y-m-d');
@@ -329,6 +425,10 @@ class OrdenCapacitacionAuditoriaController extends Controller
                 'id_cotizacion' => $validated['id_cotizacion'],
                 'id_cliente' => $cotizacion->id_cliente,
                 'id_servicio' => $validated['id_servicio'] ?? null,
+                'id_cotizacion_detalle' => !$isBeneficio ? $idDetalle : null,
+                'id_cotizacion_beneficio' => $isBeneficio ? $idBeneficio : null,
+                'id_cliente_planta' => $validated['id_cliente_planta'] ?? null,
+                'id_cliente_planta_area' => $validated['id_cliente_planta_area'] ?? [],
                 'horas_capacitacion' => $validated['horas_capacitacion'] ?? null, 
                 'id_ponente' => !empty($ponenteIds) ? $ponenteIds[0] : null,
                 'id_exponente' => !empty($exponenteIds) ? $exponenteIds[0] : null,
@@ -443,6 +543,9 @@ class OrdenCapacitacionAuditoriaController extends Controller
 
         $validated = $request->validate([
             'id_servicio' => 'nullable|exists:servicios,id',
+            'id_cliente_planta' => 'nullable|exists:cliente_planta,id',
+            'id_cliente_planta_area' => 'nullable|array',
+            'id_cliente_planta_area.*' => 'exists:cliente_planta_area,id',
             'id_ponente' => 'nullable|exists:personal,id',
             'ponentes' => 'sometimes|array',
             'ponentes.*' => 'exists:personal,id',
@@ -633,6 +736,7 @@ class OrdenCapacitacionAuditoriaController extends Controller
             'exponentes',
             'cotizacion.detalles.catalogoCapAud', 
             'cotizacion.detalles.servicio',
+            'cotizacion.beneficios.catalogoCapAud',
             'servicio',
             'materiales', // Cargar materiales
             'equipos',     // Cargar equipos
@@ -642,7 +746,21 @@ class OrdenCapacitacionAuditoriaController extends Controller
         $nombreServicio = null;
         if ($orden->servicio) {
             $nombreServicio = $orden->servicio->nombre;
-        } elseif ($orden->cotizacion && $orden->cotizacion->detalles->count() > 0) {
+        } elseif ($orden->id_cotizacion_beneficio) {
+            $beneficio = $orden->cotizacion->beneficios->firstWhere('id', $orden->id_cotizacion_beneficio);
+            if ($beneficio) {
+                $nombreServicio = $beneficio->catalogoCapAud ? $beneficio->catalogoCapAud->nombre : ($beneficio->nombre_beneficio ?? null);
+            }
+        } elseif ($orden->id_cotizacion_detalle) {
+            $detalle = $orden->cotizacion->detalles->firstWhere('id', $orden->id_cotizacion_detalle);
+            if ($detalle) {
+                $nombreServicio = $detalle->catalogoCapAud ? $detalle->catalogoCapAud->nombre : 
+                                  ($detalle->servicio ? $detalle->servicio->nombre : 
+                                  ($detalle->descripcion_manual ?? null));
+            }
+        } 
+        
+        if (!$nombreServicio && $orden->cotizacion && $orden->cotizacion->detalles->count() > 0) {
             $primerDetalle = $orden->cotizacion->detalles->first();
             $nombreServicio = $primerDetalle->catalogoCapAud ? $primerDetalle->catalogoCapAud->nombre : 
                               ($primerDetalle->servicio ? $primerDetalle->servicio->nombre : 

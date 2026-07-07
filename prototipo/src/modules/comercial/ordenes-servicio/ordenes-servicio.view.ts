@@ -967,6 +967,8 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
   let servicioOpts = buildServicioSelectOptions(idServicio);
   if (idServicio && !serviciosDisponibles.find(s => s.id === idServicio) && nombre) {
     servicioOpts += '<option value="' + idServicio + '" selected>' + nombre + '</option>';
+  } else if (!idServicio && nombre) {
+    servicioOpts += '<option value="" selected data-descripcion-manual="' + nombre + '">' + nombre + ' (Servicio Extra)</option>';
   }
 
   const html =
@@ -1846,7 +1848,7 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
     detalles.forEach((d: any) => {
       agregarLineaConDatos(
         d.id_servicio,
-        d.servicio?.nombre || ('Servicio #' + d.id_servicio),
+        d.servicio?.nombre || d.descripcion_manual || ('Servicio #' + d.id_servicio),
         d.frecuencia || '',
         Number(d.precio || 0),
         d.id_cliente_planta || null,
@@ -2009,16 +2011,19 @@ async function guardarODS() {
   lineas.forEach(linea => {
     const selectSrv = linea.querySelector('.servicio-select') as HTMLSelectElement;
     const idServicio = selectSrv?.value || (linea.querySelector('.servicio-id-hidden') as HTMLInputElement)?.value;
+    const optSelected = selectSrv?.options[selectSrv.selectedIndex];
+    const descripcionManual = optSelected?.getAttribute('data-descripcion-manual') || null;
     const idPlanta = parseInt((linea.querySelector('.planta-select') as HTMLSelectElement)?.value) || null;
     const areaIds = getAreaIdsFromODSRow(linea);
     const frecuencia = frecuenciaDesdeFilaODS(linea as HTMLElement);
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
 
-    if (!idServicio) valid = false;
+    if (!idServicio && !descripcionManual) valid = false;
     if (frecuencia === '__INVALID__') frecuenciaDiasInvalida = true;
 
     detalles.push({
-      id_servicio: Number(idServicio),
+      id_servicio: idServicio ? Number(idServicio) : null,
+      descripcion_manual: descripcionManual,
       id_cliente_planta: idPlanta,
       id_cliente_planta_area: areaIds.length > 0 ? areaIds : null,
       frecuencia: (frecuencia && frecuencia !== '__INVALID__') ? frecuencia : null,

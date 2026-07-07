@@ -13,6 +13,7 @@ class DetalleOrdenServicio extends Model
     protected $fillable = [
         'id_orden_servicio',
         'id_servicio',
+        'descripcion_manual',
         'id_cliente_planta',
         'id_cliente_planta_area',
         'local',

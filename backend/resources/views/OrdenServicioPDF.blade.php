@@ -166,7 +166,7 @@
                 @foreach($detallesPlanta->values() as $index => $detalle)
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
-                    <td>{{ mb_strtoupper($detalle->servicio->nombre ?? 'SERVICIO') }}</td>
+                    <td>{{ mb_strtoupper($detalle->servicio->nombre ?? $detalle->descripcion_manual ?? 'SERVICIO') }}</td>
                     <td class="text-center">{{ mb_strtoupper($detalle->frecuencia ?? 'A SOLICITUD') }}</td>
                     <td class="text-right">S/. {{ number_format($detalle->precio ?? 0, 2) }}</td>
                 </tr>
@@ -271,12 +271,13 @@
 
     @endforeach
 
-    {{-- ── EQUIPOS GENERALES (sin planta/área - agregados manualmente) ── --}}
-    @if($equiposGenerales->count() > 0 || $productosGenerales->count() > 0)
-        @php
-            // Si hay detalles sin planta, mostrar servicios generales
-            $detallesGenerales = $detallesPorPlanta->get(0, collect());
-        @endphp
+    {{-- ── EQUIPOS Y SERVICIOS GENERALES (sin planta/área - agregados manualmente) ── --}}
+    @php
+        // Si hay detalles sin planta, mostrar servicios generales
+        $detallesGenerales = $detallesPorPlanta->get(0, collect());
+    @endphp
+
+    @if($equiposGenerales->count() > 0 || $productosGenerales->count() > 0 || $detallesGenerales->count() > 0)
 
         @if($todasPlantaIds->count() > 0)
         <div class="location-title" style="margin-top: 10px;">
@@ -298,7 +299,7 @@
                 @foreach($detallesGenerales->values() as $index => $detalle)
                 <tr>
                     <td class="text-center">{{ $index + 1 }}</td>
-                    <td>{{ mb_strtoupper($detalle->servicio->nombre ?? 'SERVICIO') }}</td>
+                    <td>{{ mb_strtoupper($detalle->servicio->nombre ?? $detalle->descripcion_manual ?? 'SERVICIO') }}</td>
                     <td class="text-center">{{ mb_strtoupper($detalle->frecuencia ?? 'A SOLICITUD') }}</td>
                     <td class="text-right">S/. {{ number_format($detalle->precio ?? 0, 2) }}</td>
                 </tr>

@@ -31,6 +31,10 @@ class OrdenCapacitacionAuditoria extends Model
         'emitido_por',
         'horas_capacitacion',
         'observaciones',
+        'id_cliente_planta',
+        'id_cliente_planta_area',
+        'id_cotizacion_detalle',
+        'id_cotizacion_beneficio',
     ];
 
     protected $casts = [
@@ -43,6 +47,7 @@ class OrdenCapacitacionAuditoria extends Model
         'subtotal' => 'decimal:2',
         'igv' => 'decimal:2',
         'incluye_igv' => 'boolean',
+        'id_cliente_planta_area' => 'array',
     ];
 
     // Relaciones

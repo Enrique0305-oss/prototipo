@@ -103,7 +103,7 @@
             @endphp
             <tr>
                 <td class="text-center">{{ $index + 1 }}</td>
-                <td>{{ mb_strtoupper($detalle->producto->descripcion ?? 'PRODUCTO') }}</td>
+                <td>{{ mb_strtoupper($detalle->producto->descripcion ?? $detalle->descripcion_manual ?? 'PRODUCTO') }}</td>
                 <td class="text-center">{{ $cantidad }}</td>
                 <td class="text-right">S/. {{ number_format($precioUnit, 2) }}</td>
                 <td class="text-right">S/. {{ number_format($subtotalLinea, 2) }}</td>

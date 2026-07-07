@@ -2,6 +2,7 @@
 import './ordenes-capacitacion.css';
 import { ordenCapacitacionService } from '../../../services/ordenCapacitacionService';
 import { exponenteService, type Exponente } from '../../../services/exponenteService';
+import { clienteService } from '../../../services/clienteService';
 import { mostrarToast } from '../../../shared/toast';
 
 let ocListData: any[] = [];
@@ -202,10 +203,22 @@ export function renderComercialOrdenesCapacitacion() {
             </div>
           </div>
 
-          <!-- Detalles de la cotización -->
-          <div id="oc-detalles-cotizacion" style="display:none;margin-bottom:20px;">
-            <h4 style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px;">Ubicación del Servicio</h4>
-            <div id="oc-detalles-lista" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;"></div>
+          <!-- Detalles de la cotización y Ubicación -->
+          <div id="oc-detalles-cotizacion" style="display:none;margin-bottom:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+              <div class="oc-field">
+                <label class="oc-label" style="font-size:12px;color:#64748b;font-weight:600;">PLANTA</label>
+                <select id="oc-planta-select" class="oc-input">
+                  <option value="">- Seleccione Planta -</option>
+                </select>
+              </div>
+              <div class="oc-field">
+                <label class="oc-label" style="font-size:12px;color:#64748b;font-weight:600;">ÁREA</label>
+                <div id="oc-area-container" style="display:flex;flex-wrap:wrap;gap:6px;">
+                  <!-- Checkboxes generados dinámicamente -->
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Datos del servicio -->
@@ -220,8 +233,14 @@ export function renderComercialOrdenesCapacitacion() {
             <div class="oc-grid">
               <div class="oc-field">
                 <label class="oc-label">Servicio / Capacitación</label>
+                <select id="oc-servicio-select" class="oc-input" style="display:none;">
+                  <option value="">- Seleccionar Curso/Beneficio -</option>
+                </select>
                 <input type="text" id="oc-servicio-nombre" class="oc-input" readonly placeholder="Se auto-completa desde cotización">
                 <input type="hidden" id="oc-servicio-id">
+                <input type="hidden" id="oc-is-beneficio">
+                <input type="hidden" id="oc-id-cotizacion-detalle">
+                <input type="hidden" id="oc-id-cotizacion-beneficio">
               </div>
               <div>
                 <label style="display:block; font-size:14px; font-weight:600; margin-bottom:5px;">Emitido por</label>
@@ -724,6 +743,9 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     const res = await ordenCapacitacionService.getDesdeCotizacion(cotizacionId);
     const raw = res.data || res;
     const data = (raw as any).data || raw;
+    
+    // Almacenar data globalmente para accederla al cambiar curso
+    (window as any)._currentOCData = data;
 
     // Reiniciar exponentes al cambiar de cotización y luego precargar los de la cotización elegida
     selectedExponentes = [];
@@ -740,49 +762,60 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     (document.getElementById('oc-cot-info-detalle') as HTMLElement).textContent =
       '| Emitida: ' + (data.cotizacion?.fecha_emision || '') + ' | Total: S/ ' + Number(data.costo_total || 0).toFixed(2);
 
-    // Mostrar ubicación (Planta / Área) en lugar del detalle de cotización
-    const detalles = data.detalles || [];
+    // Mostrar ubicación (Planta / Área)
     const detallesDiv = document.getElementById('oc-detalles-cotizacion') as HTMLElement;
-    const detallesLista = document.getElementById('oc-detalles-lista') as HTMLElement;
-
-    if (detalles.length > 0) {
-      const ubicaciones = detalles
-        .map((d: any) => ({
-          planta: String(d.planta_nombre || '').trim(),
-          areas: Array.isArray(d.areas_nombres)
-            ? d.areas_nombres.map((a: any) => String(a || '').trim()).filter((a: string) => !!a)
-            : [],
-        }))
-        .filter((u: any) => !!u.planta || u.areas.length > 0);
-
-      const plantasUnicas: string[] = Array.from(new Set(ubicaciones.map((u: any) => u.planta).filter((p: string) => !!p)));
-      const areasUnicas: string[] = Array.from(new Set(ubicaciones.flatMap((u: any) => u.areas as string[]).filter((a: string) => !!a)));
-
-      detallesDiv.style.display = 'block';
-      detallesLista.innerHTML =
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">' +
-          '<div>' +
-            '<div style="font-size:12px;color:#64748b;margin-bottom:6px;font-weight:600;">PLANTA</div>' +
-            '<div style="font-size:14px;color:#0f172a;font-weight:600;">' + (plantasUnicas.join(', ') || '-') + '</div>' +
-          '</div>' +
-          '<div>' +
-            '<div style="font-size:12px;color:#64748b;margin-bottom:6px;font-weight:600;">ÁREA</div>' +
-            '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
-              (areasUnicas.length > 0
-                ? areasUnicas.map((area: string) => '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:12px;font-weight:600;">' + area + '</span>').join('')
-                : '<span style="font-size:14px;color:#0f172a;font-weight:600;">-</span>') +
-            '</div>' +
-          '</div>' +
-        '</div>';
-    } else {
-      detallesDiv.style.display = 'none';
+    detallesDiv.style.display = 'block';
+    
+    // Cargar Plantas del cliente
+    if (data.cliente?.id) {
+       cargarPlantasClienteOC(data.cliente.id);
     }
+    // Mostrar ubicación (Planta / Área)
+    // El renderizado de áreas se manejará desde cargarPlantasClienteOC y el onChange del select.
 
     // Auto-llenar servicio
-    if (data.servicio) {
-      (document.getElementById('oc-servicio-nombre') as HTMLInputElement).value = data.servicio.nombre || '';
-      const servicioId = data.servicio.id_servicio ?? data.servicio.id ?? '';
-      (document.getElementById('oc-servicio-id') as HTMLInputElement).value = servicioId ? String(servicioId) : '';
+    const servicioNombreInput = document.getElementById('oc-servicio-nombre') as HTMLInputElement;
+    const servicioSelect = document.getElementById('oc-servicio-select') as HTMLSelectElement;
+    
+    if (data.cursos_disponibles && data.cursos_disponibles.length > 1) {
+       servicioNombreInput.style.display = 'none';
+       servicioSelect.style.display = 'block';
+       servicioSelect.innerHTML = '<option value="">- Seleccionar Curso/Beneficio -</option>';
+       data.cursos_disponibles.forEach((curso: any, index: number) => {
+          const isBen = curso.is_beneficio ? '(Beneficio) ' : '';
+          servicioSelect.innerHTML += `<option value="${index}">${isBen}${curso.nombre}</option>`;
+       });
+       
+       // Limpiar campos ocultos hasta que seleccione
+       (document.getElementById('oc-servicio-id') as HTMLInputElement).value = '';
+       (document.getElementById('oc-is-beneficio') as HTMLInputElement).value = '';
+       (document.getElementById('oc-id-cotizacion-detalle') as HTMLInputElement).value = '';
+       (document.getElementById('oc-id-cotizacion-beneficio') as HTMLInputElement).value = '';
+    } else {
+       servicioNombreInput.style.display = 'block';
+       servicioSelect.style.display = 'none';
+       if (data.servicio) {
+         servicioNombreInput.value = data.servicio.nombre || '';
+         const servicioId = data.servicio.id_servicio ?? data.servicio.id ?? '';
+         (document.getElementById('oc-servicio-id') as HTMLInputElement).value = servicioId ? String(servicioId) : '';
+       }
+       
+       const primerCurso = data.cursos_disponibles ? data.cursos_disponibles[0] : null;
+       if (primerCurso) {
+           (document.getElementById('oc-is-beneficio') as HTMLInputElement).value = primerCurso.is_beneficio ? 'true' : 'false';
+           if (primerCurso.is_beneficio) {
+               (document.getElementById('oc-id-cotizacion-beneficio') as HTMLInputElement).value = String(primerCurso.id_referencia);
+               (document.getElementById('oc-id-cotizacion-detalle') as HTMLInputElement).value = '';
+           } else {
+               (document.getElementById('oc-id-cotizacion-detalle') as HTMLInputElement).value = String(primerCurso.id_referencia);
+               (document.getElementById('oc-id-cotizacion-beneficio') as HTMLInputElement).value = '';
+           }
+           
+           // Esperar un momento a que las plantas del cliente carguen
+           setTimeout(() => {
+               autoSelectPlantaAndArea(primerCurso);
+           }, 300);
+       }
     }
 
     // Auto-llenar modalidad sugerida
@@ -846,7 +879,17 @@ async function cargarDatosCotizacion(cotizacionId: number) {
     actualizarSelectorExponentes();
 
     // Auto-llenar costo
-    (document.getElementById('oc-costo') as HTMLInputElement).value = Number(data.costo_total || 0).toFixed(2);
+    // Auto-llenar costo
+    if (data.cursos_disponibles && data.cursos_disponibles.length === 1) {
+        const c = data.cursos_disponibles[0];
+        const precio = c.precio_unitario || c.precio_referencial || 0;
+        const cant = c.cantidad || 1;
+        (document.getElementById('oc-costo') as HTMLInputElement).value = (precio * cant).toFixed(2);
+    } else if (data.cursos_disponibles && data.cursos_disponibles.length > 1) {
+        (document.getElementById('oc-costo') as HTMLInputElement).value = '0.00';
+    } else {
+        (document.getElementById('oc-costo') as HTMLInputElement).value = Number(data.costo_total || 0).toFixed(2);
+    }
     calcularDesgloseOC();
 
   } catch (e: any) {
@@ -1015,6 +1058,16 @@ async function guardarOC() {
   const observaciones = (document.getElementById('oc-observaciones') as HTMLTextAreaElement).value?.trim();
   const horasCapacitacion = (document.getElementById('oc-horas-capacitacion') as HTMLInputElement)?.value || '';
 
+  const idCotizacionDetalle = (document.getElementById('oc-id-cotizacion-detalle') as HTMLInputElement)?.value;
+  const idCotizacionBeneficio = (document.getElementById('oc-id-cotizacion-beneficio') as HTMLInputElement)?.value;
+  const isBeneficio = (document.getElementById('oc-is-beneficio') as HTMLInputElement)?.value;
+  
+  const idPlanta = (document.getElementById('oc-planta-select') as HTMLSelectElement)?.value;
+  
+  const areasContainer = document.getElementById('oc-area-container');
+  const checkedAreas = Array.from(areasContainer?.querySelectorAll('input[type="checkbox"]:checked') || [])
+    .map(cb => (cb as HTMLInputElement).value);
+
   // --- RECOLECCIÓN DIRECTA DE MATERIALES ---
   const filasMateriales = document.querySelectorAll('#body-materiales tr'); 
   const materiales = Array.from(filasMateriales).map(fila => ({
@@ -1057,6 +1110,11 @@ async function guardarOC() {
     id_cotizacion: Number(idCotizacion),
     id_usuario: Number(idUsuario),
     id_servicio: idServicio ? Number(idServicio) : null,
+    id_cotizacion_detalle: idCotizacionDetalle ? Number(idCotizacionDetalle) : null,
+    id_cotizacion_beneficio: idCotizacionBeneficio ? Number(idCotizacionBeneficio) : null,
+    is_beneficio: isBeneficio === 'true',
+    id_cliente_planta: idPlanta ? Number(idPlanta) : null,
+    id_cliente_planta_area: checkedAreas.map(Number),
     ponentes: [],
     exponentes: exponenteIds,
     fecha_servicio: fechaServicio,
@@ -1204,3 +1262,119 @@ export function initOrdenesCapacitacionEvents() {
   cargarEstadisticasOC();
   cargarOrdenesCapacitacion();
 }
+
+// =============================
+// PLANTAS Y CURSOS LOGIC
+// =============================
+async function cargarPlantasClienteOC(idCliente: number) {
+   const plantaSelect = document.getElementById('oc-planta-select') as HTMLSelectElement;
+   try {
+       const res = await clienteService.getPlantas(idCliente);
+       const plantas = res.data || [];
+       plantaSelect.innerHTML = '<option value="">- Seleccione Planta -</option>';
+       plantas.forEach((p: any) => {
+           plantaSelect.innerHTML += `<option value="${p.id}">${p.nombre}</option>`;
+       });
+   } catch(e) {
+       console.error("Error al cargar plantas", e);
+   }
+}
+
+async function cargarAreasPorPlanta(idCliente: number, idPlanta: number) {
+   const areaContainer = document.getElementById('oc-area-container') as HTMLElement;
+   if (!idPlanta || !idCliente) {
+       areaContainer.innerHTML = '';
+       return;
+   }
+   try {
+       const res = await clienteService.getAreas(idCliente, idPlanta);
+       const areas = res.data || [];
+       areaContainer.innerHTML = '';
+       if (areas.length === 0) {
+          areaContainer.innerHTML = '<span style="color:#64748b;font-size:12px;">Sin áreas</span>';
+       } else {
+          areas.forEach((a: any) => {
+             areaContainer.innerHTML += `
+               <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#e2e8f0;padding:4px 8px;border-radius:12px;cursor:pointer;">
+                 <input type="checkbox" value="${a.id}"> ${a.nombre}
+               </label>
+             `;
+          });
+       }
+   } catch (e) {
+       console.error("Error áreas", e);
+   }
+}
+
+async function autoSelectPlantaAndArea(curso: any) {
+    const plantaSelect = document.getElementById('oc-planta-select') as HTMLSelectElement;
+    const idCliente = (document.getElementById('oc-cliente-id') as HTMLInputElement).value;
+    const areaContainer = document.getElementById('oc-area-container') as HTMLElement;
+    
+    if (curso && curso.id_cliente_planta) {
+        if (plantaSelect && idCliente) {
+            plantaSelect.value = String(curso.id_cliente_planta);
+            await cargarAreasPorPlanta(Number(idCliente), curso.id_cliente_planta);
+            
+            if (curso.id_cliente_planta_area && Array.isArray(curso.id_cliente_planta_area)) {
+                const checkboxes = areaContainer.querySelectorAll('input[type="checkbox"]');
+                checkboxes.forEach((cb: any) => {
+                    if (curso.id_cliente_planta_area.includes(Number(cb.value)) || curso.id_cliente_planta_area.includes(String(cb.value))) {
+                        cb.checked = true;
+                    }
+                });
+            }
+        }
+    } else {
+        if (plantaSelect) plantaSelect.value = '';
+        if (areaContainer) areaContainer.innerHTML = '';
+    }
+}
+
+document.addEventListener('change', async (e) => {
+   const target = e.target as HTMLElement;
+   
+   if (target.id === 'oc-planta-select') {
+       const idPlanta = (target as HTMLSelectElement).value;
+       const idCliente = (document.getElementById('oc-cliente-id') as HTMLInputElement).value;
+       await cargarAreasPorPlanta(Number(idCliente), Number(idPlanta));
+   }
+   
+   if (target.id === 'oc-servicio-select') {
+       const index = (target as HTMLSelectElement).value;
+       if (!index) return;
+       const data = (window as any)._currentOCData;
+       if (data && data.cursos_disponibles) {
+           const curso = data.cursos_disponibles[index];
+           if (curso) {
+               (document.getElementById('oc-servicio-id') as HTMLInputElement).value = curso.id_servicio || '';
+               (document.getElementById('oc-is-beneficio') as HTMLInputElement).value = curso.is_beneficio ? 'true' : 'false';
+               if (curso.is_beneficio) {
+                   (document.getElementById('oc-id-cotizacion-beneficio') as HTMLInputElement).value = String(curso.id_referencia);
+                   (document.getElementById('oc-id-cotizacion-detalle') as HTMLInputElement).value = '';
+               } else {
+                   (document.getElementById('oc-id-cotizacion-detalle') as HTMLInputElement).value = String(curso.id_referencia);
+                   (document.getElementById('oc-id-cotizacion-beneficio') as HTMLInputElement).value = '';
+               }
+               (document.getElementById('oc-horas-capacitacion') as HTMLInputElement).value = curso.horas_capacitacion || '';
+               (document.getElementById('oc-num-participantes') as HTMLInputElement).value = curso.num_participantes || '';
+               
+               const modalidadSelect = document.getElementById('oc-modalidad') as HTMLSelectElement;
+               if (curso.modalidad_sugerida && modalidadSelect) {
+                   const modMap:any = {'Presencial':'Presencial','Virtual':'Virtual','Hibrido':'Híbrido','Híbrido':'Híbrido','Asincrona':'Asíncrona','Asíncrona':'Asíncrona'};
+                   modalidadSelect.value = modMap[curso.modalidad_sugerida] || curso.modalidad_sugerida;
+               }
+               
+               const costoInput = document.getElementById('oc-costo') as HTMLInputElement;
+               if (costoInput) {
+                   const precio = curso.precio_unitario || curso.precio_referencial || 0;
+                   const cant = curso.cantidad || 1;
+                   costoInput.value = (precio * cant).toFixed(2);
+                   calcularDesgloseOC();
+               }
+               
+               await autoSelectPlantaAndArea(curso);
+           }
+       }
+   }
+});

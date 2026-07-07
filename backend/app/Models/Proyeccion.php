@@ -19,6 +19,7 @@ class Proyeccion extends Model
         'id_multicim',
         'tipo_orden',
         'id_referencia',
+        'id_detalle_origen',
         'id_orden_servicio',
         'id_orden_producto',
         'id_orden_capacitacion_auditoria',

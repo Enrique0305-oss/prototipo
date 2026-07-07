@@ -21,7 +21,7 @@ return new class extends Migration
             $table->dateTime('fecha_fin_real')->nullable()->after('fecha_inicio_real');
         });
 
-        Schema::table('programacion_otro', function (Blueprint $table) {
+        Schema::table('programacion_otros', function (Blueprint $table) {
             $table->dateTime('fecha_inicio_real')->nullable()->after('hora_fin');
             $table->dateTime('fecha_fin_real')->nullable()->after('fecha_inicio_real');
         });
@@ -40,7 +40,7 @@ return new class extends Migration
             $table->dropColumn(['fecha_inicio_real', 'fecha_fin_real']);
         });
 
-        Schema::table('programacion_otro', function (Blueprint $table) {
+        Schema::table('programacion_otros', function (Blueprint $table) {
             $table->dropColumn(['fecha_inicio_real', 'fecha_fin_real']);
         });
     }

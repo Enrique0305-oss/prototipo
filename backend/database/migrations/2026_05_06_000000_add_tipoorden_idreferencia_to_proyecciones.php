@@ -18,11 +18,11 @@ return new class extends Migration
             if (!Schema::hasColumn('proyecciones', 'id_referencia')) {
                 $table->integer('id_referencia')->nullable()->after('tipo_orden');
             }
-            if (!Schema::hasColumn('proyecciones', 'created_at')) {
-                $table->timestamp('created_at')->nullable()->after('updated_at');
-            }
             if (!Schema::hasColumn('proyecciones', 'updated_at')) {
                 $table->timestamp('updated_at')->nullable();
+            }
+            if (!Schema::hasColumn('proyecciones', 'created_at')) {
+                $table->timestamp('created_at')->nullable();
             }
         });
     }

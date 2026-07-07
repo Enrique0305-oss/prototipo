@@ -705,7 +705,7 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
             <th style="padding: 12px; text-align: left;">ACTIVIDAD</th>
             <th style="padding: 12px; text-align: left;">EMPRESA</th>
             <th style="padding: 12px; text-align: left;">ESTADO</th>
-            <th style="padding: 12px; text-align: left;">CLIENTE</th>
+            <th style="padding: 12px; text-align: left;">CLIENTE / ORIGEN</th>
             <th style="padding: 12px; text-align: left;">FECHA EJECUCION</th>
             <th style="padding: 12px; text-align: left;">IMPORTES (S/)</th>
             <th style="padding: 12px; text-align: left;">N° FACTURA</th>
@@ -752,7 +752,13 @@ export function renderOrdenesProyectadasTab(proyecciones: any[] = []) {
                   </span>
                   ${p.registrado_por ? `<div style="font-size:9px; color:#94a3b8; margin-top:3px; text-align:center;">Por: ${p.registrado_por}</div>` : ''}
               </td>
-              <td style="padding: 10px; font-weight: 600;">${clienteNombre}</td>
+              <td style="padding: 10px; font-weight: 600;">
+                  ${clienteNombre}
+                  <div style="font-size:10px; color:#64748b; margin-top:4px; font-weight:normal;">
+                      ${ref.numero_orden ? `<span style="background:#e2e8f0; padding:2px 4px; border-radius:3px;">${ref.numero_orden}</span>` : ''}
+                      ${p.servicios_detallados && p.servicios_detallados.length > 0 ? `<div style="margin-top:2px; font-style:italic; max-width:150px; white-space:normal;">${p.servicios_detallados[0].nombre}</div>` : ''}
+                  </div>
+              </td>
 
               <td style="padding: 10px; text-align: center;">${fDate(p.fecha_ejecucion)}</td>
 

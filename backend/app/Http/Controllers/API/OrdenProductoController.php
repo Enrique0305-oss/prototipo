@@ -141,7 +141,8 @@ class OrdenProductoController extends Controller
         $detalles = $cotizacion->detalles->map(function($detalle) {
             return [
                 'id_producto' => $detalle->id_producto,
-                'producto_nombre' => $detalle->producto ? $detalle->producto->descripcion : null,
+                'descripcion_manual' => $detalle->descripcion_manual,
+                'producto_nombre' => $detalle->producto ? $detalle->producto->descripcion : ($detalle->descripcion_manual ?? null),
                 'cantidad' => $detalle->cantidad,
                 'precio_unitario' => $detalle->precio_unitario,
                 'subtotal' => $detalle->subtotal,
@@ -183,7 +184,8 @@ class OrdenProductoController extends Controller
             'fecha_aceptacion' => 'nullable|date',
             'emitido_por' => 'required|exists:personal,id',
             'detalles' => 'required|array|min:1',
-            'detalles.*.id_producto' => 'required|exists:productos,id',
+            'detalles.*.id_producto' => 'nullable|exists:productos,id',
+            'detalles.*.descripcion_manual' => 'nullable|string',
             'detalles.*.cantidad' => 'required|integer|min:1',
             'detalles.*.precio_unitario' => 'required|numeric|min:0',
             'incluye_igv' => 'sometimes|boolean',
@@ -245,7 +247,8 @@ class OrdenProductoController extends Controller
                 
                 DetalleOrdenProducto::create([
                     'id_orden_producto' => $orden->id,
-                    'id_producto' => $detalle['id_producto'],
+                    'id_producto' => $detalle['id_producto'] ?? null,
+                    'descripcion_manual' => $detalle['descripcion_manual'] ?? null,
                     'cantidad' => $detalle['cantidad'],
                     'precio_unitario' => $detalle['precio_unitario'],
                     'subtotal' => $subtotal,
@@ -318,7 +321,8 @@ class OrdenProductoController extends Controller
             'fecha_aceptacion' => 'nullable|date',
             'incluye_igv' => 'sometimes|boolean',
             'detalles' => 'sometimes|array|min:1',
-            'detalles.*.id_producto' => 'required_with:detalles|exists:productos,id',
+            'detalles.*.id_producto' => 'nullable|exists:productos,id',
+            'detalles.*.descripcion_manual' => 'nullable|string',
             'detalles.*.cantidad' => 'required_with:detalles|integer|min:1',
             'detalles.*.precio_unitario' => 'required_with:detalles|numeric|min:0',
             'estado' => 'nullable|in:Aprobado,Pendiente,Rechazado',
@@ -361,7 +365,8 @@ class OrdenProductoController extends Controller
                     
                     DetalleOrdenProducto::create([
                         'id_orden_producto' => $orden->id,
-                        'id_producto' => $detalle['id_producto'],
+                        'id_producto' => $detalle['id_producto'] ?? null,
+                        'descripcion_manual' => $detalle['descripcion_manual'] ?? null,
                         'cantidad' => $detalle['cantidad'],
                         'precio_unitario' => $detalle['precio_unitario'],
                         'subtotal' => $subtotal,
