@@ -168,6 +168,9 @@ class OrdenServicioController extends Controller
                 'precio' => $detalle->precio_unitario,
                 'id_cliente_planta' => $detalle->id_cliente_planta,
                 'id_cliente_planta_area' => $detalle->id_cliente_planta_area,
+                'fosfina_producto' => $detalle->fosfina_producto ?? null,
+                'fosfina_cantidad' => $detalle->fosfina_cantidad ?? null,
+                'medida_tanque' => $detalle->medida_tanque ?? null,
             ];
         });
 
@@ -305,6 +308,9 @@ class OrdenServicioController extends Controller
             'detalles.*.id_cliente_planta' => 'nullable|integer|exists:cliente_planta,id',
             'detalles.*.id_cliente_planta_area' => 'nullable|array',
             'detalles.*.id_cliente_planta_area.*' => 'integer|exists:cliente_planta_area,id',
+            'detalles.*.fosfina_producto' => 'nullable|string|max:255',
+            'detalles.*.fosfina_cantidad' => 'nullable|string|max:50',
+            'detalles.*.medida_tanque' => 'nullable',
             'incluye_igv' => 'sometimes|boolean',
             // Productos y equipos
             'productos' => 'sometimes|array',
@@ -385,6 +391,9 @@ class OrdenServicioController extends Controller
                     'precio' => $detalle['precio'],
                     'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
                     'id_cliente_planta_area' => $detalle['id_cliente_planta_area'] ?? null,
+                    'fosfina_producto' => $detalle['fosfina_producto'] ?? null,
+                    'fosfina_cantidad' => $detalle['fosfina_cantidad'] ?? null,
+                    'medida_tanque' => $detalle['medida_tanque'] ?? null,
                 ]);
             }
 
@@ -581,6 +590,9 @@ class OrdenServicioController extends Controller
                         'precio' => $detalle['precio'],
                         'id_cliente_planta' => $detalle['id_cliente_planta'] ?? null,
                         'id_cliente_planta_area' => $detalle['id_cliente_planta_area'] ?? null,
+                        'fosfina_producto' => $detalle['fosfina_producto'] ?? null,
+                        'fosfina_cantidad' => $detalle['fosfina_cantidad'] ?? null,
+                        'medida_tanque' => $detalle['medida_tanque'] ?? null,
                     ]);
                 }
 

@@ -855,7 +855,10 @@ async function cargarDatosCotizacion(cotizacionId: number) {
         d.frecuencia || '',
         Number(d.precio || 0),
         d.id_cliente_planta || null,
-        normalizeAreaIds(d.id_cliente_planta_area)
+        normalizeAreaIds(d.id_cliente_planta_area),
+        d.fosfina_producto || null,
+        d.fosfina_cantidad || null,
+        d.medida_tanque || null
       );
     });
 
@@ -945,7 +948,7 @@ function getAreaOptionsODS(idPlanta: number | null, selectedId?: number | null):
   return opts;
 }
 
-function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuencia: string, precio: number, idPlanta?: number | null, idAreas: number[] = []) {
+function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuencia: string, precio: number, idPlanta?: number | null, idAreas: number[] = [], fosfinaProducto: string | null = null, fosfinaCantidad: string | null = null, medidaTanque: any = null) {
   const tbody = document.getElementById('ods-detalle-body');
   if (!tbody) return;
 
@@ -976,6 +979,9 @@ function agregarLineaConDatos(idServicio: number | null, nombre: string, frecuen
       '<td>' +
         '<select class="os-input os-input-sm servicio-select">' + servicioOpts + '</select>' +
         '<input type="hidden" class="servicio-id-hidden" value="' + (idServicio || '') + '">' +
+        '<input type="hidden" class="fosfina-producto-hidden" value="' + (fosfinaProducto || '') + '">' +
+        '<input type="hidden" class="fosfina-cantidad-hidden" value="' + (fosfinaCantidad || '') + '">' +
+        '<input type="hidden" class="medida-tanque-hidden" value=\'' + (medidaTanque ? JSON.stringify(medidaTanque).replace(/'/g, "&#39;") : '') + '\'>' +
       '</td>' +
       '<td>' +
         '<select class="os-input os-input-sm planta-select">' + getPlantaOptionsODS(idPlanta) + '</select>' +
@@ -1852,7 +1858,10 @@ async function abrirModalEditarODS(id: number, soloLectura: boolean = false) {
         d.frecuencia || '',
         Number(d.precio || 0),
         d.id_cliente_planta || null,
-        normalizeAreaIds(d.id_cliente_planta_area)
+        normalizeAreaIds(d.id_cliente_planta_area),
+        d.fosfina_producto || null,
+        d.fosfina_cantidad || null,
+        d.medida_tanque || null
       );
     });
 
@@ -2018,6 +2027,14 @@ async function guardarODS() {
     const frecuencia = frecuenciaDesdeFilaODS(linea as HTMLElement);
     const precio = parseFloat((linea.querySelector('.precio-input') as HTMLInputElement)?.value || '0');
 
+    const fosfinaProducto = (linea.querySelector('.fosfina-producto-hidden') as HTMLInputElement)?.value || null;
+    const fosfinaCantidad = (linea.querySelector('.fosfina-cantidad-hidden') as HTMLInputElement)?.value || null;
+    const medidaTanqueStr = (linea.querySelector('.medida-tanque-hidden') as HTMLInputElement)?.value || '';
+    let medidaTanque = null;
+    if (medidaTanqueStr) {
+      try { medidaTanque = JSON.parse(medidaTanqueStr.replace(/&#39;/g, "'")); } catch (e) {}
+    }
+
     if (!idServicio && !descripcionManual) valid = false;
     if (frecuencia === '__INVALID__') frecuenciaDiasInvalida = true;
 
@@ -2028,6 +2045,9 @@ async function guardarODS() {
       id_cliente_planta_area: areaIds.length > 0 ? areaIds : null,
       frecuencia: (frecuencia && frecuencia !== '__INVALID__') ? frecuencia : null,
       precio,
+      fosfina_producto: fosfinaProducto,
+      fosfina_cantidad: fosfinaCantidad,
+      medida_tanque: medidaTanque,
     });
   });
 

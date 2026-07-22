@@ -27,6 +27,7 @@ export interface Cliente {
   direccion?: string;
   persona_contacto?: string;
   telefono_contacto?: string;
+  correo?: string;
   origen?: 'Referido' | 'Web' | 'Llamada' | 'Visita' | 'Redes sociales' | 'Otro';
   fecha_registro?: string;
   estado: 'Acepta' | 'No acepta' | 'Contactado';

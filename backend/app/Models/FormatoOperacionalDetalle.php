@@ -34,6 +34,7 @@ class FormatoOperacionalDetalle extends Model
         'conteo_estadio_verdadera',
         'conteo_estadio_falsa',
         'numero_lote',
+        'oculto_en_falsa',
     ];
 
     protected $casts = [
@@ -43,6 +44,7 @@ class FormatoOperacionalDetalle extends Model
         'conteo_estadio' => 'array',
         'conteo_estadio_verdadera' => 'integer',
         'conteo_estadio_falsa' => 'integer',
+        'oculto_en_falsa' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

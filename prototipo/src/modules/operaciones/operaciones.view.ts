@@ -371,7 +371,16 @@ async function cargarServiciosParaCrearInforme() {
           const conclusionesRoedores = String((payload.conclusiones_roedores || '')).trim();
           const conclusionesVoladores = String((payload.conclusiones_voladores || '')).trim();
           const conclusionesRastreros = String((payload.conclusiones_rastreros || '')).trim();
-          const conclusionesLimpieza = String((payload.conclusiones_limpieza || '')).trim();
+          
+          const conclusionesOtros: Record<string, string> = {};
+          const otrosTextareas = Array.from(document.querySelectorAll('.js-conclusiones-otros')) as HTMLTextAreaElement[];
+          for (const ta of otrosTextareas) {
+            const sName = ta.dataset.servicio;
+            if (sName) {
+              conclusionesOtros[sName] = String(ta.value || '').trim();
+            }
+          }
+
           const conclusionesVoladoresAnexo = !!(form.querySelector('.js-conclusiones-voladores-anexo') as HTMLInputElement | null)?.checked;
           const conclusionesVoladoresResultados = String((payload.conclusiones_voladores_resultados || '')).trim();
 
@@ -414,6 +423,50 @@ async function cargarServiciosParaCrearInforme() {
           const evidenciasBase = [...hallazgosRoedores, ...hallazgosVoladores, ...hallazgosRastreros, ...hallazgosLimpieza]
             .filter(e => checkedCheckboxes.includes(e.id_programacion));
 
+          // Extract Insumos de Roedores
+          let insumosRoedores: any[] = [];
+          const tieneRoedores = visitasSeleccionadas.some(v => {
+            const entry = formatosCache.get(v.serviceId);
+            return isRoedoresFormato(entry?.formato ?? null, v.serviceName);
+          });
+
+          if (tieneRoedores) {
+            const insumosRoedoresRows = Array.from(document.querySelectorAll('.js-insumo-roedores-row')) as HTMLElement[];
+            for (const row of insumosRoedoresRows) {
+              const dispositivo = (row.querySelector('.js-insumo-roedores-dispositivo') as HTMLSelectElement).value;
+              const uso = (row.querySelector('.js-insumo-roedores-uso') as HTMLSelectElement).value;
+              const producto = (row.querySelector('.js-insumo-roedores-producto') as HTMLSelectElement).value;
+              const sustancia = (row.querySelector('.js-insumo-roedores-sustancia') as HTMLInputElement).value;
+              const ia = (row.querySelector('.js-insumo-roedores-ia') as HTMLInputElement).value;
+              const lote = (row.querySelector('.js-insumo-roedores-lote') as HTMLInputElement).value;
+              const concentracion = (row.querySelector('.js-insumo-roedores-concentracion') as HTMLInputElement).value;
+              
+              if (producto) {
+                insumosRoedores.push({
+                  dispositivo,
+                  uso_tipo: uso,
+                  producto,
+                  tipo_sustancia: sustancia,
+                  ingrediente_activo: ia,
+                  lote,
+                  concentracion
+                });
+              }
+            }
+          }
+
+          // Extract Insumos Quimicos Seleccionados
+          const checkboxesQuimicos = document.querySelectorAll('.js-quimico-seleccionado:checked');
+          const insumosQuimicosSeleccionados: Record<string, string[]> = {};
+          checkboxesQuimicos.forEach(c => {
+            const el = c as HTMLInputElement;
+            const servicio = el.dataset.servicio || 'OTROS SERVICIOS';
+            if (!insumosQuimicosSeleccionados[servicio]) {
+              insumosQuimicosSeleccionados[servicio] = [];
+            }
+            insumosQuimicosSeleccionados[servicio].push(el.value);
+          });
+
           const createPayload: any = {
             id_cliente: Number(payload.id_cliente),
             mes_actividad: payload.mes_actividad || '',
@@ -424,12 +477,14 @@ async function cargarServiciosParaCrearInforme() {
             hoja_tipo: payload.hoja_tipo || 'verdadera',
             visitas: visitasPayload,
             insumos: insumosPayload,
+            insumos_roedores: insumosRoedores,
+            insumos_quimicos_seleccionados: insumosQuimicosSeleccionados,
             evidencias: evidenciasBase,
             conclusiones: {
               roedores: conclusionesRoedores,
               voladores: conclusionesVoladores,
               rastreros: conclusionesRastreros,
-              limpieza: conclusionesLimpieza,
+              otros: conclusionesOtros,
               voladores_anexo: conclusionesVoladoresAnexo,
               voladores_resultados: conclusionesVoladoresResultados
             },
@@ -569,6 +624,7 @@ function aplicarFormatoAlFormulario(formEl: HTMLFormElement | null, formatoData:
   for (const s of secciones) {
     const items = Array.isArray(s.items) ? s.items : [];
     for (const it of items) {
+      if (tipoHoja === 'falsa' && (it.oculto_en_falsa || it.ocultoEnFalsa)) continue;
       const codigoCaja = String((it.codigo_caja ?? it.codigoCaja ?? it.codigo) || '').trim();
       const ubicacion = String(it.ubicacion || '').trim();
       if (codigoCaja) devices.push({ codigo: codigoCaja, ubicacion });
@@ -633,7 +689,7 @@ function renderFormatoVisitaResumen(formato: FormatoOperacionalViewModel, tipoHo
                 </tr>
               </thead>
               <tbody>
-                ${seccion.items.map((item) => {
+                ${seccion.items.filter(item => !(tipoHoja === 'falsa' && ((item as any).oculto_en_falsa || item.ocultoEnFalsa))).map((item) => {
                   const estado = tipoHoja === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
                   const hallazgo = tipoHoja === 'verdadera' ? item.hallazgoVerdadera : item.hallazgoAuditiva;
                   const senales = tipoHoja === 'verdadera' ? item.senalesPresenciaVerdadera : item.senalesPresenciaAuditiva;
@@ -701,7 +757,7 @@ function renderFormatoVisitaResumen(formato: FormatoOperacionalViewModel, tipoHo
                   </tr>
                 </thead>
                 <tbody>
-                  ${seccion.items.map((item) => {
+                  ${seccion.items.filter(item => !(tipoHoja === 'falsa' && ((item as any).oculto_en_falsa || item.ocultoEnFalsa))).map((item) => {
                     const estadoLamina = fallbackText(item.estadoLamina, '-');
                     const estadio = fallbackText(item.estadio, '-');
                     const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
@@ -745,7 +801,7 @@ function renderFormatoVisitaResumen(formato: FormatoOperacionalViewModel, tipoHo
         <div style="border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff;">
           <div style="padding:6px 10px;border-bottom:1px solid #cbd5e1;background:#f8fafc;font-size:13px;font-weight:700;color:#334155;">${escapeHtml(seccion.titulo)} (${seccion.cantidad})</div>
           <div style="display:grid;gap:12px;padding:10px;">
-            ${seccion.items.map((item) => {
+            ${seccion.items.filter(item => !(tipoHoja === 'falsa' && ((item as any).oculto_en_falsa || item.ocultoEnFalsa))).map((item) => {
               const estado = tipoHoja === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
               const conteos = item.conteoInsectos ?? {};
               const getConteo = (key: string) => {
@@ -910,7 +966,7 @@ function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?
             <tr style="${opacity}">
               <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: 700; white-space: nowrap;">
                 <label style="display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
-                  <input type="checkbox" class="js-visita-checkbox" data-service-id="${item.v.serviceId}" ${isChecked} ${disabled} ${tooltip} style="width: 16px; height: 16px; cursor: pointer;">
+                  <input type="checkbox" class="js-visita-checkbox" data-service-id="${item.v.serviceId}" data-tipo="${escapeHtml(tipo)}" ${isChecked} ${disabled} ${tooltip} style="width: 16px; height: 16px; cursor: pointer;">
                   ${String(idx + 1).padStart(2, '0')} ${isUsed ? '<span style="color:#ef4444;font-size:10px;margin-left:4px;">(Ya)</span>' : ''}
                 </label>
               </td>
@@ -950,6 +1006,8 @@ function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?
     .join(', ');
   (form.querySelector('[name="n_fichas"]') as HTMLInputElement)!.value = fichasStr;
 
+  renderSelectorInsumosRoedores(group, formatosPorVisita || []);
+  renderSelectorInsumosQuimicos(group, formatosPorVisita || []);
   renderSelectorHallazgosRoedores(group, formatosPorVisita || []);
   renderSelectorHallazgosVoladores(group, formatosPorVisita || []);
   renderSelectorHallazgosRastreros(group, formatosPorVisita || []);
@@ -975,6 +1033,238 @@ function rellenarFormularioDesdeGrupo(group: ClienteMesGroup, formatosPorVisita?
       }
     });
   }
+}
+
+function renderSelectorInsumosQuimicos(
+  group: ClienteMesGroup,
+  formatosPorVisita: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>
+) {
+  const container = document.querySelector('#operaciones-insumos-quimicos-container') as HTMLElement | null;
+  const section = document.querySelector('#operaciones-insumos-quimicos-section') as HTMLElement | null;
+  if (!container || !section) return;
+
+  const insumosPorServicio = new Map<string, Set<string>>();
+  
+  if (group.visitas) {
+    for (const v of group.visitas) {
+      const entry = formatosPorVisita.find(e => e.visita.serviceId === v.serviceId);
+      const isEspecifico = isRoedoresFormato(entry?.formato ?? null, v.serviceName) ||
+                           isVoladoresFormato(entry?.formato ?? null, v.serviceName) ||
+                           isRastrerosFormato(entry?.formato ?? null, v.serviceName);
+      
+      // Solo recolectamos insumos químicos si el servicio NO tiene un formato específico (es genérico)
+      if (!isEspecifico && v.insumosEntregados && Array.isArray(v.insumosEntregados)) {
+        const serviceNameUpper = (v.serviceName || 'OTROS SERVICIOS').toUpperCase().trim();
+        if (!insumosPorServicio.has(serviceNameUpper)) {
+          insumosPorServicio.set(serviceNameUpper, new Set<string>());
+        }
+
+        for (const ins of v.insumosEntregados) {
+          if (ins.producto && ins.producto.descripcion) {
+            insumosPorServicio.get(serviceNameUpper)!.add(ins.producto.descripcion.toUpperCase().trim());
+          }
+        }
+      }
+    }
+  }
+
+  let hasInsumos = false;
+  insumosPorServicio.forEach(set => { if (set.size > 0) hasInsumos = true; });
+
+  if (!hasInsumos) {
+    section.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  section.style.display = 'block';
+  
+  let html = '';
+  insumosPorServicio.forEach((insumosSet, serviceName) => {
+    if (insumosSet.size === 0) return;
+    
+    html += `
+      <div style="margin-bottom: 10px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
+        <div style="font-weight: 600; font-size: 11px; color: #475569; margin-bottom: 6px; text-transform: uppercase;">
+          ${escapeHtml(serviceName)}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+    `;
+    
+    const quimicos = Array.from(insumosSet).sort();
+    for (const q of quimicos) {
+      html += `
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#334155;cursor:pointer;">
+          <input type="checkbox" class="js-quimico-seleccionado" data-servicio="${escapeHtml(serviceName)}" value="${escapeHtml(q)}" style="cursor:pointer;">
+          ${escapeHtml(q)}
+        </label>
+      `;
+    }
+    
+    html += `
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+function renderSelectorInsumosRoedores(
+  group: ClienteMesGroup,
+  formatosPorVisita: Array<{ visita: ClienteVisitaViewModel; formato: FormatoOperacionalViewModel | null; ficha?: any }>,
+) {
+  const container = document.querySelector('#operaciones-insumos-roedores-container') as HTMLElement | null;
+  const section = document.querySelector('#operaciones-insumos-roedores-section') as HTMLElement | null;
+  if (!container || !section) return;
+
+  const hasRoedores = group.visitas?.some(v => {
+    const entry = formatosPorVisita.find(e => e.visita.serviceId === v.serviceId);
+    return isRoedoresFormato(entry?.formato ?? null, v.serviceName);
+  });
+
+  if (!hasRoedores) {
+    section.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  // Extraer insumos únicos de las fichas de las visitas
+  const insumosDisponibles: any[] = [];
+  const insumosNombres = new Set<string>();
+  
+  for (const v of group.visitas || []) {
+    const entry = formatosPorVisita.find(e => e.visita.serviceId === v.serviceId);
+    if (!isRoedoresFormato(entry?.formato ?? null, v.serviceName)) continue;
+
+    if (v.insumosEntregados && Array.isArray(v.insumosEntregados)) {
+      for (const insumoRaw of v.insumosEntregados) {
+        if (!insumoRaw || !insumoRaw.producto) continue;
+        const nombreProducto = insumoRaw.producto.descripcion || insumoRaw.producto.nombre_producto || 'Desconocido';
+        const ia = insumoRaw.producto.ingre_activo || insumoRaw.producto.ingrediente_activo || '';
+        const lote = insumoRaw.lote?.numero_lote || insumoRaw.lote?.codigo_lote || insumoRaw.lote?.lote || '';
+        
+        if (!insumosNombres.has(nombreProducto)) {
+          insumosNombres.add(nombreProducto);
+          insumosDisponibles.push({
+            producto: nombreProducto,
+            ingrediente_activo: ia,
+            lote: lote
+          });
+        }
+      }
+    }
+  }
+
+  // Set the available insumos in a data attribute to use when adding rows
+  container.dataset.insumos = JSON.stringify(insumosDisponibles);
+
+  // Render initial default rows if empty
+  if (container.children.length === 0) {
+    addInsumoRoedoresRow(container, 'CAJA CEBADERA', 'CON CEBO', insumosDisponibles);
+    addInsumoRoedoresRow(container, 'CAJA CEBADERA', 'CON LÁMINA PEGANTE', insumosDisponibles);
+    addInsumoRoedoresRow(container, 'JAULAS DE CAPTURA', 'NO APLICA', insumosDisponibles);
+  }
+
+  // Set up event listeners for + buttons if not already bound
+  if (!section.dataset.bound) {
+    section.dataset.bound = 'true';
+    const btnCebadera = section.querySelector('#btn-add-insumo-cebadera');
+    const btnJaula = section.querySelector('#btn-add-insumo-jaula');
+    
+    if (btnCebadera) {
+      btnCebadera.addEventListener('click', () => {
+        addInsumoRoedoresRow(container, 'CAJA CEBADERA', 'CON CEBO', insumosDisponibles);
+      });
+    }
+    if (btnJaula) {
+      btnJaula.addEventListener('click', () => {
+        addInsumoRoedoresRow(container, 'JAULAS DE CAPTURA', 'NO APLICA', insumosDisponibles);
+      });
+    }
+  }
+}
+
+function addInsumoRoedoresRow(container: HTMLElement, dispositivo: string, usoTipo: string, insumosDisponibles: any[]) {
+  const isJaula = dispositivo === 'JAULAS DE CAPTURA';
+  
+  const options = insumosDisponibles.map(insumo => 
+    `<option value="${escapeHtml(insumo.producto)}" data-ia="${escapeHtml(insumo.ingrediente_activo || insumo.ingredienteActivo || '')}" data-lote="${escapeHtml(insumo.lote || '')}">${escapeHtml(insumo.producto)}</option>`
+  ).join('');
+
+  const row = document.createElement('div');
+  row.className = 'js-insumo-roedores-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 30px;gap:8px;align-items:end;background:#f8fafc;padding:10px;border-radius:6px;border:1px solid #e2e8f0;';
+  
+  row.innerHTML = `
+    <div>
+      <label style="display:block;font-size:10px;font-weight:600;color:#64748b;margin-bottom:4px;">Dispositivo</label>
+      <select class="js-insumo-roedores-dispositivo" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:11px;">
+        <option value="CAJA CEBADERA" ${dispositivo === 'CAJA CEBADERA' ? 'selected' : ''}>CAJA CEBADERA</option>
+        <option value="JAULAS DE CAPTURA" ${dispositivo === 'JAULAS DE CAPTURA' ? 'selected' : ''}>JAULAS DE CAPTURA</option>
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;font-weight:600;color:#64748b;margin-bottom:4px;">Uso / Tipo</label>
+      <select class="js-insumo-roedores-uso" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:11px;">
+        <option value="CON CEBO" ${usoTipo === 'CON CEBO' ? 'selected' : ''}>CON CEBO</option>
+        <option value="CON LÁMINA PEGANTE" ${usoTipo === 'CON LÁMINA PEGANTE' ? 'selected' : ''}>CON LÁMINA PEGANTE</option>
+        <option value="NO APLICA" ${usoTipo === 'NO APLICA' ? 'selected' : ''}>NO APLICA</option>
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;font-weight:600;color:#64748b;margin-bottom:4px;">Insumo (Almacén)</label>
+      <select class="js-insumo-roedores-producto" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:11px;">
+        <option value="">Seleccione...</option>
+        ${options}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;font-weight:600;color:#64748b;margin-bottom:4px;">Tipo Sustancia</label>
+      <input type="text" class="js-insumo-roedores-sustancia" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:11px;" placeholder="Ej: CEBO TÓXICO">
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;font-weight:600;color:#64748b;margin-bottom:4px;">Ingred. Activo</label>
+      <input type="text" class="js-insumo-roedores-ia" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:11px;" placeholder="Autocompletado">
+    </div>
+    <div>
+      <label style="display:block;font-size:10px;font-weight:600;color:#64748b;margin-bottom:4px;">Lote</label>
+      <input type="text" class="js-insumo-roedores-lote" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:11px;" placeholder="Autocompletado">
+    </div>
+    <div>
+      <button type="button" class="btn-icon js-remove-insumo-roedores" style="color:#ef4444;border:none;background:transparent;cursor:pointer;padding:4px;" title="Eliminar fila">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+      </button>
+    </div>
+    <div style="grid-column:1/-1;margin-top:2px;">
+      <label style="display:inline-block;font-size:10px;font-weight:600;color:#64748b;margin-right:6px;">Concentración:</label>
+      <input type="text" class="js-insumo-roedores-concentracion" style="width:200px;padding:6px;border:1px solid #cbd5e1;border-radius:4px;font-size:11px;" placeholder="Ej: 0.005% o No Aplica">
+    </div>
+  `;
+
+  const selectInsumo = row.querySelector('.js-insumo-roedores-producto') as HTMLSelectElement;
+  const inputIa = row.querySelector('.js-insumo-roedores-ia') as HTMLInputElement;
+  const inputLote = row.querySelector('.js-insumo-roedores-lote') as HTMLInputElement;
+  const btnRemove = row.querySelector('.js-remove-insumo-roedores') as HTMLButtonElement;
+
+  selectInsumo.addEventListener('change', () => {
+    const selectedOption = selectInsumo.options[selectInsumo.selectedIndex];
+    if (selectedOption && selectedOption.value) {
+      inputIa.value = selectedOption.dataset.ia || '';
+      inputLote.value = selectedOption.dataset.lote || '';
+    } else {
+      inputIa.value = '';
+      inputLote.value = '';
+    }
+  });
+
+  btnRemove.addEventListener('click', () => {
+    row.remove();
+  });
+
+  container.appendChild(row);
 }
 
 function renderSelectorHallazgosRoedores(
@@ -1225,12 +1515,17 @@ function renderSelectorHallazgosLimpieza(
   const section = document.querySelector('#operaciones-hallazgos-limpieza-section') as HTMLElement | null;
   if (!container) return;
 
-  const candidatos: Array<InformeHallazgoEvidencia & { key: string }> = [];
+  const candidatosPorServicio = new Map<string, Array<InformeHallazgoEvidencia & { key: string }>>();
   const seen = new Set<string>();
 
   for (const visita of group.visitas || []) {
     const entry = formatosPorVisita.find((e) => e.visita.serviceId === visita.serviceId);
     if (!isLimpiezaFormato(entry?.formato ?? null, visita.serviceName)) continue;
+
+    const sName = visita.serviceName || 'OTROS SERVICIOS';
+    if (!candidatosPorServicio.has(sName)) {
+      candidatosPorServicio.set(sName, []);
+    }
 
     for (const url of visita.evidenceImages || []) {
       const cleanUrl = String(url || '').trim();
@@ -1239,38 +1534,54 @@ function renderSelectorHallazgosLimpieza(
       if (seen.has(key)) continue;
       seen.add(key);
 
-      candidatos.push({
+      candidatosPorServicio.get(sName)!.push({
         key,
         url: cleanUrl,
         descripcion: '',
         fecha: visita.fechaLabel || '',
         id_programacion: visita.serviceId,
-        servicio: visita.serviceName || 'LIMPIEZA DE CISTERNAS',
-        tipo_servicio: 'LIMPIEZA DE CISTERNAS',
+        servicio: sName,
+        tipo_servicio: 'OTROS',
       });
     }
   }
 
-  if (candidatos.length === 0) {
+  if (candidatosPorServicio.size === 0 || Array.from(candidatosPorServicio.values()).every(arr => arr.length === 0)) {
     if (section) section.style.display = 'none';
-    container.innerHTML = '<p style="color:#64748b;font-size:12px;grid-column:1/-1;">No hay fotos de servicios de Limpieza de Cisternas para este informe.</p>';
+    container.innerHTML = '<p style="color:#64748b;font-size:12px;grid-column:1/-1;">No hay fotos de otros servicios para este informe.</p>';
     return;
   }
 
   if (section) section.style.display = 'block';
-  container.innerHTML = candidatos.map((item, idx) => `
-    <div class="js-hallazgo-item-limpieza" data-key="${escapeHtml(item.key)}" data-url="${escapeHtml(item.url)}" data-fecha="${escapeHtml(item.fecha)}" data-service-id="${item.id_programacion}" data-servicio="${escapeHtml(item.servicio)}" style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fff;display:grid;gap:6px;">
-      <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:12px;font-weight:600;color:#334155;">
-        <input type="checkbox" class="js-hallazgo-check-limpieza" checked>
-        Incluir foto ${idx + 1}
-      </label>
-      <img src="${escapeHtml(item.url)}" alt="Evidencia Limpieza" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
-      <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
-        <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
-        <textarea class="js-hallazgo-desc-limpieza" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
+
+  let html = '';
+  for (const [sName, candidatos] of candidatosPorServicio.entries()) {
+    if (candidatos.length === 0) continue;
+    
+    html += `
+      <div style="margin-bottom: 20px;">
+        <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">Registro Fotográfico - ${escapeHtml(sName)}</h4>
+        <p style="margin:0 0 10px 0;color:#64748b;font-size:12px;">Selecciona las imágenes que irán en el informe y agrega una descripción.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+          ${candidatos.map((item, idx) => `
+            <div class="js-hallazgo-item-limpieza" data-key="${escapeHtml(item.key)}" data-url="${escapeHtml(item.url)}" data-fecha="${escapeHtml(item.fecha)}" data-service-id="${item.id_programacion}" data-servicio="${escapeHtml(item.servicio)}" style="border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#fff;display:grid;gap:6px;">
+              <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:12px;font-weight:600;color:#334155;">
+                <input type="checkbox" class="js-hallazgo-check-limpieza" checked>
+                Incluir foto ${idx + 1}
+              </label>
+              <img src="${escapeHtml(item.url)}" alt="Evidencia ${escapeHtml(item.servicio)}" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy" />
+              <div style="padding:0 8px 8px 8px;display:grid;gap:6px;">
+                <div style="font-size:11px;color:#475569;">${escapeHtml(item.servicio)}<span class="js-hallazgo-fecha-label">${item.fecha ? ` • ${escapeHtml(item.fecha)}` : ''}</span></div>
+                <textarea class="js-hallazgo-desc-limpieza" rows="2" maxlength="280" placeholder="Escribe una descripción para esta imagen" style="resize:vertical;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"></textarea>
+              </div>
+            </div>
+          `).join('')}
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }
+
+  container.innerHTML = html;
 }
 
 function obtenerHallazgosLimpiezaSeleccionados(): InformeHallazgoEvidencia[] {
@@ -1314,32 +1625,54 @@ function actualizarSeccionesConclusiones(formatosPorVisita: Array<{ visita: Clie
   if (rastrerosSection) rastrerosSection.style.display = tieneRastreros ? 'block' : 'none';
   
   if (limpiezaSection) {
-    limpiezaSection.style.display = tieneLimpieza ? 'block' : 'none';
     if (tieneLimpieza) {
-      const genericEntry = formatosPorVisita.find((entry) => isLimpiezaFormato(entry.formato, entry.visita.serviceName));
-      const serviceName = genericEntry ? genericEntry.visita.serviceName : 'Limpieza de Cisternas';
-      const label = limpiezaSection.querySelector('label') as HTMLElement | null;
-      const textarea = limpiezaSection.querySelector('textarea') as HTMLTextAreaElement | null;
-      if (label) {
-        label.textContent = `Observaciones e Indicaciones - ${serviceName}`;
+      limpiezaSection.style.display = 'block';
+      const seenServices = new Set<string>();
+      let html = '';
+      
+      const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
+      
+      for (const entry of formatosPorVisita) {
+        if (!isLimpiezaFormato(entry.formato, entry.visita.serviceName)) continue;
+        const serviceName = entry.visita.serviceName || 'OTROS SERVICIOS';
+        if (seenServices.has(serviceName)) continue;
+        seenServices.add(serviceName);
+        
+        const tipoServicio = resolveTipoServicio(entry.formato ?? null, serviceName);
+        
+        let initialOpacity = '1';
+        let initialPointerEvents = 'auto';
+        if (form) {
+          const allOfType = Array.from(form.querySelectorAll(`.js-visita-checkbox[data-tipo="${escapeHtml(tipoServicio)}"]`)) as HTMLInputElement[];
+          if (allOfType.length > 0) {
+            const checkedOfType = allOfType.filter(cb => cb.checked).length;
+            if (checkedOfType === 0) {
+              initialOpacity = '0.4';
+              initialPointerEvents = 'none';
+            }
+          }
+        }
+        
+        html += `
+          <div style="margin-bottom: 12px; opacity: ${initialOpacity}; pointer-events: ${initialPointerEvents};" class="js-conclusiones-otros-wrapper" data-tipo="${escapeHtml(tipoServicio)}">
+            <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:13px;">Observaciones e Indicaciones - ${escapeHtml(serviceName)}</label>
+            <textarea class="js-conclusiones-otros" data-servicio="${escapeHtml(serviceName)}" placeholder="Escribe las observaciones e indicaciones para ${escapeHtml(serviceName)}" rows="4" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical;"></textarea>
+          </div>
+        `;
       }
-      if (textarea) {
-        textarea.placeholder = `Escribe las observaciones e indicaciones para ${serviceName}`;
-      }
+      limpiezaSection.innerHTML = html;
+      // Reiniciar explicitamente el estado del contenedor padre para curar cualquier estado viejo atrapado
+      limpiezaSection.style.opacity = '1';
+      limpiezaSection.style.pointerEvents = 'auto';
+    } else {
+      limpiezaSection.style.display = 'none';
+      limpiezaSection.innerHTML = '';
     }
   }
 
   const hallazgosLimpiezaSection = document.querySelector('#operaciones-hallazgos-limpieza-section') as HTMLElement | null;
   if (hallazgosLimpiezaSection) {
     hallazgosLimpiezaSection.style.display = tieneLimpieza ? 'block' : 'none';
-    if (tieneLimpieza) {
-      const genericEntry = formatosPorVisita.find((entry) => isLimpiezaFormato(entry.formato, entry.visita.serviceName));
-      const serviceName = genericEntry ? genericEntry.visita.serviceName : 'Limpieza de Cisternas';
-      const h4 = hallazgosLimpiezaSection.querySelector('h4') as HTMLElement | null;
-      if (h4) {
-        h4.textContent = `Registro Fotográfico - ${serviceName}`;
-      }
-    }
   }
 }
 
@@ -1365,7 +1698,8 @@ document.addEventListener('change', (ev) => {
       fechaLabel = `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
     
-    const hallazgos = document.querySelectorAll(`.js-hallazgo-item[data-service-id="${serviceId}"]`);
+    const query = `.js-hallazgo-item[data-service-id="${serviceId}"], .js-hallazgo-item-voladores[data-service-id="${serviceId}"], .js-hallazgo-item-rastreros[data-service-id="${serviceId}"], .js-hallazgo-item-limpieza[data-service-id="${serviceId}"]`;
+    const hallazgos = document.querySelectorAll(query);
     hallazgos.forEach(item => {
       item.setAttribute('data-fecha', fechaLabel);
       const labelSpan = item.querySelector('.js-hallazgo-fecha-label');
@@ -1390,7 +1724,8 @@ document.addEventListener('change', (ev) => {
       
       if (serviceId) {
         // Toggle the corresponding evidence items to visually indicate they are excluded
-        const evidenciaItems = document.querySelectorAll(`.js-hallazgo-item[data-service-id="${serviceId}"]`);
+        const query = `.js-hallazgo-item[data-service-id="${serviceId}"], .js-hallazgo-item-voladores[data-service-id="${serviceId}"], .js-hallazgo-item-rastreros[data-service-id="${serviceId}"], .js-hallazgo-item-limpieza[data-service-id="${serviceId}"]`;
+        const evidenciaItems = document.querySelectorAll(query);
         evidenciaItems.forEach(item => {
           const checkbox = item.querySelector('.js-hallazgo-check') as HTMLInputElement | null;
           if (checkbox) {
@@ -1400,6 +1735,39 @@ document.addEventListener('change', (ev) => {
           htmlItem.style.opacity = isChecked ? '1' : '0.4';
           htmlItem.style.pointerEvents = isChecked ? 'auto' : 'none';
         });
+      }
+
+      const tipo = input.dataset.tipo;
+      if (tipo) {
+        const allOfType = Array.from(form.querySelectorAll(`.js-visita-checkbox[data-tipo="${tipo}"]`)) as HTMLInputElement[];
+        const checkedOfType = allOfType.filter(cb => cb.checked).length;
+        
+        let sectionId = '';
+        if (tipo === 'CONTROL DE ROEDORES') {
+          sectionId = '#operaciones-conclusiones-roedores-section';
+          const insumosSection = form.querySelector('#operaciones-insumos-roedores-section') as HTMLElement | null;
+          if (insumosSection) {
+            insumosSection.style.opacity = checkedOfType === 0 ? '0.4' : '1';
+            insumosSection.style.pointerEvents = checkedOfType === 0 ? 'none' : 'auto';
+          }
+        }
+        else if (tipo === 'CONTROL DE INSECTOS VOLADORES') sectionId = '#operaciones-conclusiones-voladores-section';
+        else if (tipo === 'CONTROL DE INSECTOS RASTREROS') sectionId = '#operaciones-conclusiones-rastreros-section';
+        
+        if (sectionId) {
+          const section = form.querySelector(sectionId) as HTMLElement | null;
+          if (section) {
+            section.style.opacity = checkedOfType === 0 ? '0.4' : '1';
+            section.style.pointerEvents = checkedOfType === 0 ? 'none' : 'auto';
+          }
+        } else {
+          // Dynamic "otros" services (Desinsectacion Fisica, Limpieza, etc)
+          const wrapper = form.querySelector(`.js-conclusiones-otros-wrapper[data-tipo="${tipo}"]`) as HTMLElement | null;
+          if (wrapper) {
+            wrapper.style.opacity = checkedOfType === 0 ? '0.4' : '1';
+            wrapper.style.pointerEvents = checkedOfType === 0 ? 'none' : 'auto';
+          }
+        }
       }
     }
   }
@@ -1430,7 +1798,7 @@ function renderListaCrearInformeGrupos(groups: ClienteMesGroup[]): string {
   }).join('');
 }
 
-async function cargarDetalleGrupoInforme(group: ClienteMesGroup) {
+async function cargarDetalleGrupoInforme(group: ClienteMesGroup, isInitialLoad = true) {
   const detalleContainer = document.querySelector('#operaciones-informe-detalle') as HTMLElement | null;
   const form = document.querySelector('#operaciones-crear-informe-form-principal') as HTMLFormElement | null;
   if (!detalleContainer || !form) return;
@@ -1449,10 +1817,12 @@ async function cargarDetalleGrupoInforme(group: ClienteMesGroup) {
       optFalsa.text = group.hasFalsa ? "Hoja Falsa (Todas reportadas)" : "Hoja Falsa";
     }
 
-    if (group.hasVerdadera && !group.hasFalsa) {
-      hojaSelect.value = "falsa";
-    } else if (!group.hasVerdadera && group.hasFalsa) {
-      hojaSelect.value = "verdadera";
+    if (isInitialLoad) {
+      if (group.hasVerdadera && !group.hasFalsa) {
+        hojaSelect.value = "falsa";
+      } else if (!group.hasVerdadera && group.hasFalsa) {
+        hojaSelect.value = "verdadera";
+      }
     }
     
     // Add event listener to re-render checkboxes when type changes
@@ -1462,7 +1832,7 @@ async function cargarDetalleGrupoInforme(group: ClienteMesGroup) {
         if (informeGrupoSeleccionadoKey) {
           const activeGroup = informeGruposCache.find(g => g.key === informeGrupoSeleccionadoKey);
           if (activeGroup) {
-            cargarDetalleGrupoInforme(activeGroup);
+            cargarDetalleGrupoInforme(activeGroup, false);
           }
         }
       });
@@ -1582,6 +1952,7 @@ export type ServicioRealizadoCardViewModel = {
 }
 
 export type FichaOperacionalViewModel = {
+  id: number | null;
   estado: string;
   cliente: string;
   direccion: string;
@@ -1622,6 +1993,8 @@ export type FormatoOperacionalViewModel = {
     titulo: string;
     cantidad: number;
     items: Array<{
+      id?: number | null;
+      ocultoEnFalsa?: boolean;
       codigoCaja: string;
       ubicacion: string;
       estadoDispositivoVerdadera: string;
@@ -1656,6 +2029,7 @@ export type ClienteVisitaViewModel = {
   evidenceImages: string[];
   devices?: Array<{ codigo: string; ubicacion: string }>;
   correlativoFicha?: string;
+  insumosEntregados?: any[];
 }
 
 export type ClienteMesGroup = {
@@ -1967,6 +2341,7 @@ function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalVi
               conteoEstadioVerdadera: Number(item?.conteo_estadio_verdadera ?? 0) || 0,
               conteoEstadioFalsa: Number(item?.conteo_estadio_falsa ?? 0) || 0,
               numeroLote: String(item?.numero_lote ?? '').trim(),
+              ocultoEnFalsa: Boolean(item?.oculto_en_falsa ?? item?.ocultoEnFalsa ?? false),
             }))
           : [],
       }))
@@ -2270,6 +2645,7 @@ export function mapServiciosPorClienteMes(items: Programacion[]): ClienteMesGrou
       extraCount: Math.max(0, uniqueImages.length - 4),
       secciones: sections,
       evidenceImages: uniqueImages,
+      insumosEntregados: item.insumos || [],
     };
 
     groups.get(groupKey)!.visitas.push(visita);
@@ -2506,6 +2882,12 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
               Descargar PDF
             </button>
+            <button class="btn-primary js-edit-ficha-btn" type="button" data-ficha-id="${ficha.id}" style="display:flex;align-items:center;gap:6px;background:#f59e0b;color:#fff;border:none;">
+               Editar
+            </button>
+            <button class="btn-primary js-save-ficha-btn" type="button" data-ficha-id="${ficha.id}" style="display:none;align-items:center;gap:6px;background:#10b981;color:#fff;border:none;">
+               Guardar
+            </button>
             <button class="btn-secondary js-close-ficha-modal" type="button">Cerrar</button>
           </div>
         </div>
@@ -2540,23 +2922,37 @@ export function renderFichaOperacionalModal(card: ServicioRealizadoCardViewModel
           <div style="border-top:1px solid #cbd5e1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));">
             <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Cliente:</strong> ${escapeHtml(fallbackText(ficha.cliente))}</div>
             <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Dirección:</strong> ${escapeHtml(fallbackText(ficha.direccion))}</div>
-            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Fecha:</strong> ${escapeHtml(fallbackText(formatFecha(ficha.fecha), 'No registrado'))}</div>
+            <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;">
+              <strong>Fecha:</strong> 
+              <span class="ficha-view-mode">${escapeHtml(fallbackText(formatFecha(ficha.fecha), 'No registrado'))}</span>
+              <input type="date" class="ficha-edit-mode" id="edit-ficha-fecha" value="${escapeHtml(ficha.fecha || '')}" style="display:none; width: 100%; box-sizing: border-box; padding: 4px;">
+            </div>
             <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora llegada:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(ficha.horaLlegada)))}</div>
             <div style="padding:8px 10px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora inicio:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(ficha.horaInicio)))}</div>
             <div style="padding:8px 10px;border-bottom:1px solid #cbd5e1;font-size:14px;"><strong>Hora final:</strong> ${escapeHtml(fallbackText(formatHoraDocumento(ficha.horaFinal)))}</div>
             <div style="padding:8px 10px;border-right:1px solid #cbd5e1;font-size:14px;"><strong>Estado:</strong> ${escapeHtml(fallbackText(ficha.estado))}</div>
-            <div style="padding:8px 10px;font-size:14px;"><strong>Giro:</strong> ${escapeHtml(fallbackText(ficha.giro))}</div>
+            <div style="padding:8px 10px;font-size:14px;">
+              <strong>Giro:</strong> 
+              <span class="ficha-view-mode">${escapeHtml(fallbackText(ficha.giro))}</span>
+              <input type="text" class="ficha-edit-mode" id="edit-ficha-giro" value="${escapeHtml(ficha.giro || '')}" style="display:none; width: 100%; box-sizing: border-box; padding: 4px;">
+            </div>
           </div>
         </div>
 
         <div style="margin-top:0;display:grid;gap:0;">
           <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0;overflow:hidden;">
             <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Diagnóstico</div>
-            <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">${escapeHtml(fallbackText(ficha.diagnostico, 'Sin diagnóstico registrado'))}</div>
+            <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">
+              <span class="ficha-view-mode">${escapeHtml(fallbackText(ficha.diagnostico, 'Sin diagnóstico registrado'))}</span>
+              <textarea class="ficha-edit-mode" id="edit-ficha-diagnostico" style="display:none; width: 100%; height: 100%; min-height: 80px; box-sizing: border-box; padding: 4px; font-family: inherit;">${escapeHtml(ficha.diagnostico || '')}</textarea>
+            </div>
           </div>
           <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0;overflow:hidden;">
             <div style="padding:4px 10px;border-bottom:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:600;color:#334155;">Condición sanitaria de la zona circundante</div>
-            <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">${escapeHtml(fallbackText(ficha.condicionSanitaria, 'Sin condición registrada'))}</div>
+            <div style="min-height:98px;padding:10px 12px;line-height:1.45;color:#0f172a;white-space:pre-wrap;">
+              <span class="ficha-view-mode">${escapeHtml(fallbackText(ficha.condicionSanitaria, 'Sin condición registrada'))}</span>
+              <textarea class="ficha-edit-mode" id="edit-ficha-condicion" style="display:none; width: 100%; height: 100%; min-height: 80px; box-sizing: border-box; padding: 4px; font-family: inherit;">${escapeHtml(ficha.condicionSanitaria || '')}</textarea>
+            </div>
           </div>
 
           <div style="border:1px solid #cbd5e1;border-top:0;border-radius:0;overflow:hidden;">
@@ -2670,8 +3066,9 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
 
   const tituloPrincipal = nombreFormatoAsignado.toUpperCase();
 
-  const renderHoja = (variant: 'verdadera' | 'falsa') => {
-    const sheetTitle = variant === 'verdadera' ? 'HOJA VERDADERA' : 'HOJA FALSA';
+  const renderHoja = (variant: 'verdadera' | 'falsa', isEditMode = false) => {
+    const sheetTitle = variant === 'verdadera' ? 'HOJA VERDADERA' : (isEditMode ? 'HOJA FALSA (MODO EDICIÓN)' : 'HOJA FALSA');
+    const globalCounters: Record<string, number> = {};
 
     // Helpers de renderizado (Movidos fuera para uso general)
     const renderFullRoedores = (seccion: any) => `
@@ -2689,20 +3086,50 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
               </tr>
             </thead>
             <tbody>
-            ${seccion.items.map((item: any) => {
-              const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
-              const hallazgo = variant === 'verdadera' ? item.hallazgoVerdadera : item.hallazgoAuditiva;
-              const senales = variant === 'verdadera' ? item.senalesPresenciaVerdadera : item.senalesPresenciaAuditiva;
+            ${(() => {
+              let currentItems = seccion.items;
+              if (variant === 'falsa' && !isEditMode) {
+                currentItems = seccion.items.filter((i: any) => !i.ocultoEnFalsa);
+              }
+              
+              return currentItems.map((item: any, index: number) => {
+                const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
+                const hallazgo = variant === 'verdadera' ? item.hallazgoVerdadera : item.hallazgoAuditiva;
+                const senales = variant === 'verdadera' ? item.senalesPresenciaVerdadera : item.senalesPresenciaAuditiva;
+                
+                let displayCode = escapeHtml(fallbackText(item.codigoCaja));
+                if (variant === 'falsa' && !isEditMode) {
+                   const match = displayCode.match(/^([A-Za-z\-]+)(\d+)$/);
+                   if (match) {
+                     const prefix = match[1];
+                     globalCounters[prefix] = (globalCounters[prefix] || 0) + 1;
+                     displayCode = prefix + String(globalCounters[prefix]).padStart(match[2].length, '0');
+                   }
+                }
+
+                const editToggleHtml = (variant === 'falsa' && isEditMode && item.id) ? 
+                  `<div style="display:flex;align-items:center;justify-content:center;">
+                     <label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:11px;color:#334155;background:#f1f5f9;padding:2px 6px;border-radius:4px;border:1px solid #cbd5e1;">
+                       <input type="checkbox" class="js-toggle-visibilidad" data-detalle-id="${item.id}" ${!item.ocultoEnFalsa ? 'checked' : ''} style="cursor:pointer;" />
+                       Visible
+                     </label>
+                   </div>` : '';
               return `
-                <tr>
-                  <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
+                <tr style="${item.ocultoEnFalsa && isEditMode ? 'opacity:0.5;background:#f8fafc;' : ''}">
+                  <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;font-weight:700;">
+                    <div style="display:flex;flex-direction:column;gap:4px;">
+                      <span>${displayCode}</span>
+                      ${editToggleHtml}
+                    </div>
+                  </td>
                   <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
                   <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;">${escapeHtml(fallbackText(estado))}</td>
                   <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;">${escapeHtml(fallbackText(hallazgo, '-'))}</td>
                   <td style="padding:6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;">${escapeHtml(fallbackText(senales, '-'))}</td>
                 </tr>
               `;
-            }).join('')}
+              }).join('');
+            })()}
             </tbody>
           </table>
         </div>
@@ -2760,33 +3187,45 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
                 </tr>
               </thead>
               <tbody>
-              ${seccion.items.map((item: any) => {
-                const estadoLamina = fallbackText(item.estadoLamina, '-');
-                const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
-                const keys = Object.keys(conteoPorEstadio).filter(k => estadioOrden.includes(k));
+              ${(() => {
+                let currentItems = seccion.items;
+                if (variant === 'falsa' && !isEditMode) {
+                  currentItems = seccion.items.filter((i: any) => !i.ocultoEnFalsa);
+                }
+                return currentItems.map((item: any) => {
+                  const estadoLamina = fallbackText(item.estadoLamina, '-');
+                  const conteoPorEstadio = parseConteoEstadio(item.conteoEstadio);
+                  const keys = Object.keys(conteoPorEstadio).filter(k => estadioOrden.includes(k));
+                  
+                  let displayCode = escapeHtml(fallbackText(item.codigoCaja));
+                  if (variant === 'falsa' && !isEditMode) {
+                      const match = displayCode.match(/^([A-Za-z\-]+)(\d+)$/);
+                      if (match) {
+                        const prefix = match[1];
+                        globalCounters[prefix] = (globalCounters[prefix] || 0) + 1;
+                        displayCode = prefix + String(globalCounters[prefix]).padStart(match[2].length, '0');
+                      }
+                  }
 
-                if (keys.length > 0) {
-                  return keys.map((est, idx) => `
-                    <tr>
-                      ${idx === 0 ? `<td rowspan="${keys.length}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>` : ''}
-                      ${idx === 0 ? `<td rowspan="${keys.length}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>` : ''}
+                  const editToggleHtml = (variant === 'falsa' && isEditMode && item.id) ? 
+                      `<div style="margin-top:4px;"><label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:10px;color:#334155;background:#f1f5f9;padding:2px 4px;border-radius:4px;border:1px solid #cbd5e1;">
+                         <input type="checkbox" class="js-toggle-visibilidad" data-detalle-id="${item.id}" ${!item.ocultoEnFalsa ? 'checked' : ''} style="cursor:pointer;" /> Visible
+                       </label></div>` : '';
+
+                  const renderRows = (est: string, idx: number) => `
+                    <tr style="${item.ocultoEnFalsa && isEditMode ? 'opacity:0.5;background:#f8fafc;' : ''}">
+                      ${idx === 0 ? `<td rowspan="${keys.length || 1}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>` : ''}
+                      ${idx === 0 ? `<td rowspan="${keys.length || 1}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${displayCode}${editToggleHtml}</td>` : ''}
                       <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(est)}</td>
                       <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? Number(conteoPorEstadio[est]?.verdadera ?? 0) : Number(conteoPorEstadio[est]?.falsa ?? 0)}</td>
-                      ${idx === 0 ? `<td rowspan="${keys.length}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>` : ''}
+                      ${idx === 0 ? `<td rowspan="${keys.length || 1}" style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>` : ''}
                     </tr>
-                  `).join('');
-                }
+                  `;
 
-                return `
-                  <tr>
-                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.ubicacion))}</td>
-                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</td>
-                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(fallbackText(item.estadio, '-'))}</td>
-                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;text-align:center;font-weight:700;">${variant === 'verdadera' ? Number(item.conteoEstadioVerdadera ?? 0) : Number(item.conteoEstadioFalsa ?? 0)}</td>
-                    <td style="padding:8px 6px;border:1px solid #cbd5e1;font-size:12px;">${escapeHtml(estadoLamina)}</td>
-                  </tr>
-                `;
-              }).join('')}
+                  if (keys.length > 0) return keys.map((est, idx) => renderRows(est, idx)).join('');
+                  return renderRows(item.estadio || '-', 0);
+                }).join('');
+              })()}
               </tbody>
             </table>
           </div>
@@ -2800,16 +3239,37 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
           ${escapeHtml(seccion.titulo)} (${seccion.cantidad})
         </div>
         <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fill, minmax(450px, 1fr));gap:16px;">
-          ${seccion.items.map((item: any) => {
+          ${(() => {
+              let currentItems = seccion.items;
+              if (variant === 'falsa' && !isEditMode) {
+                currentItems = seccion.items.filter((i: any) => !i.ocultoEnFalsa);
+              }
+              return currentItems.map((item: any, index: number) => {
             const estado = variant === 'verdadera' ? item.estadoDispositivoVerdadera : item.estadoDispositivoAuditiva;
             const conteos = Object.entries(item.conteoInsectos || {});
             const totalCapturas = conteos.reduce((acc, [_, raw]: [string, any]) => acc + (variant === 'verdadera' ? (Number(raw.verdadera) || 0) : (Number(raw.auditiva) || 0)), 0);
 
+            let displayCode = escapeHtml(fallbackText(item.codigoCaja));
+            if (variant === 'falsa' && !isEditMode) {
+                const match = displayCode.match(/^([A-Za-z\-]+)(\d+)$/);
+                if (match) {
+                  const prefix = match[1];
+                  globalCounters[prefix] = (globalCounters[prefix] || 0) + 1;
+                  displayCode = prefix + String(globalCounters[prefix]).padStart(match[2].length, '0');
+                }
+            }
+            const editToggleHtml = (variant === 'falsa' && isEditMode && item.id) ? 
+                `<label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:11px;color:#334155;background:#f1f5f9;padding:2px 6px;border-radius:4px;border:1px solid #cbd5e1;">
+                   <input type="checkbox" class="js-toggle-visibilidad" data-detalle-id="${item.id}" ${!item.ocultoEnFalsa ? 'checked' : ''} style="cursor:pointer;" />
+                   Visible
+                 </label>` : '';
+
             return `
-              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 3px rgba(0,0,0,0.05); ${item.ocultoEnFalsa && isEditMode ? 'opacity:0.5;' : ''}">
                 <div style="padding:10px 12px;background:#f1f5f9;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
                   <div style="display:flex;align-items:center;gap:8px;">
-                    <span style="background:#0369a1;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">${escapeHtml(fallbackText(item.codigoCaja))}</span>
+                    <span style="background:#0369a1;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">${displayCode}</span>
+                    ${editToggleHtml}
                     <span style="color:#475569;font-size:12px;font-weight:600;">${escapeHtml(fallbackText(item.ubicacion))}</span>
                   </div>
                   <div style="display:flex;align-items:center;gap:10px;">
@@ -2830,7 +3290,8 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
                 </div>
               </div>
             `;
-          }).join('')}
+          }).join('');
+          })()}
         </div>
       </div>
     `;
@@ -2874,6 +3335,12 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
                 <option value="verdadera">Hoja Verdadera</option>
                 <option value="falsa">Hoja Falsa/Auditiva</option>
               </select>
+            <button class="btn-primary js-edit-formato-falsa-btn" type="button" style="display:flex;align-items:center;gap:6px;background:#f59e0b;color:#fff;border:none;">
+               Editar Visibilidad
+            </button>
+            <button class="btn-primary js-save-formato-falsa-btn" type="button" style="display:none;align-items:center;gap:6px;background:#10b981;color:#fff;border:none;">
+               Terminar Edición
+            </button>
             <button class="btn-primary js-download-formato-pdf" type="button" data-service-id="${card.serviceId}" data-group-id="${card.groupId || ''}" style="display:flex;align-items:center;gap:6px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
               Descargar PDF
@@ -2920,8 +3387,15 @@ export function renderFormatoOperacionalModal(card: ServicioRealizadoCardViewMod
         </div>
 
         <div style="margin-top:12px;display:grid;gap:12px;">
-          ${renderHoja('verdadera')}
-          ${renderHoja('falsa')}
+          <div id="operaciones-hoja-verdadera-container">
+            ${renderHoja('verdadera', false)}
+          </div>
+          <div id="operaciones-hoja-falsa-container">
+            ${renderHoja('falsa', false)}
+          </div>
+          <div id="operaciones-hoja-falsa-edit-container" style="display:none;">
+            ${renderHoja('falsa', true)}
+          </div>
         </div>
 
         <div style="margin-top:12px;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;line-height:1.35;color:#334155;font-size:12px;white-space:pre-wrap;">
@@ -3094,6 +3568,24 @@ export function renderCrearInformeTab(): string {
             </div>
           </div>
 
+          <!-- Sección: Insumos de Roedores -->
+          <div id="operaciones-insumos-roedores-section" style="border-top:1px solid #cbd5e1;padding-top:12px;display:none;">
+            <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">Insumos Utilizados (Roedores)</h4>
+            <p style="margin:0 0 10px 0;color:#64748b;font-size:12px;">Agrega o configura los insumos para Control de Roedores.</p>
+            <div id="operaciones-insumos-roedores-container" style="display:flex;flex-direction:column;gap:12px;"></div>
+            <div style="margin-top:12px;display:flex;gap:8px;">
+              <button type="button" class="btn-secondary" style="font-size:11px;padding:4px 8px;" id="btn-add-insumo-cebadera">+ Agregar Insumo Caja Cebadera</button>
+              <button type="button" class="btn-secondary" style="font-size:11px;padding:4px 8px;" id="btn-add-insumo-jaula">+ Agregar Insumo Jaula</button>
+            </div>
+          </div>
+
+          <!-- Sección: Insumos Químicos a Mostrar -->
+          <div id="operaciones-insumos-quimicos-section" style="border-top:1px solid #cbd5e1;padding-top:12px;">
+            <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">Insumos Químicos a Mostrar en el PDF (Opcional)</h4>
+            <p style="margin:0 0 10px 0;color:#64748b;font-size:12px;">Si no marcas ninguno, se mostrarán todos los químicos por defecto. Si marcas alguno, solo se mostrarán los marcados.</p>
+            <div id="operaciones-insumos-quimicos-container" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+
           <!-- Sección: Hallazgos de roedores -->
           <div id="operaciones-hallazgos-roedores-section" style="border-top:1px solid #cbd5e1;padding-top:12px;">
             <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">4. Hallazgos en Dispositivos de Control (Roedores)</h4>
@@ -3123,10 +3615,8 @@ export function renderCrearInformeTab(): string {
 
           <!-- Sección: Hallazgos de limpieza -->
           <div id="operaciones-hallazgos-limpieza-section" style="border-top:1px solid #cbd5e1;padding-top:12px;display:none;">
-            <h4 style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#0f172a;">4. Registro Fotográfico (Limpieza de Cisternas)</h4>
-            <p style="margin:0 0 10px 0;color:#64748b;font-size:12px;">Selecciona las imágenes que irán en el informe y agrega una descripción para cada evidencia.</p>
-            <div id="operaciones-hallazgos-limpieza-picker" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
-              <p style="color:#64748b;font-size:12px;grid-column:1/-1;">Selecciona un cliente para cargar fotos de limpieza de cisternas.</p>
+            <div id="operaciones-hallazgos-limpieza-picker">
+              <p style="color:#64748b;font-size:12px;">Selecciona un cliente para cargar fotos de otros servicios.</p>
             </div>
           </div>
 
@@ -3153,10 +3643,7 @@ export function renderCrearInformeTab(): string {
               <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:13px;">1.4 Observaciones e Indicaciones - Rastreros</label>
               <textarea name="conclusiones_rastreros" placeholder="Escribe las observaciones e indicaciones para Control de Insectos Rastreros" rows="4" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical;"></textarea>
             </div>
-            <div id="operaciones-conclusiones-limpieza-section" style="display:none;">
-              <label style="display:block;font-weight:600;color:#334155;margin-bottom:6px;font-size:13px;">5. Observaciones e Indicaciones - Limpieza de Cisternas</label>
-              <textarea name="conclusiones_limpieza" placeholder="Escribe las observaciones e indicaciones para la limpieza" rows="4" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;resize:vertical;"></textarea>
-            </div>
+            <div id="operaciones-conclusiones-limpieza-section"></div>
             <div style="display:flex;gap:8px;justify-content:flex-end;">
               <button type="reset" class="btn-secondary" style="padding:8px 16px;">Limpiar</button>
               <button type="submit" class="btn-primary" style="padding:8px 16px;">Crear Informe</button>

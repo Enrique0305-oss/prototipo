@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -669,8 +669,6 @@
                                 <li>Informe técnico de las actividades</li>
                                 <li>Fichas técnicas de los productos</li>
                                 <li>Soporte Programa Manejo Integrado de Plagas</li>
-                                <li>Evaluación de riesgo de los establicimientos dentro del programa MIP 
-                                    con soporte bibliográfico</li>
                                 <li>Procedimiento General MIP y procedimiento de actividades específicas</li>
                                 <li>Registros de monitoreo por plaga objetivo</li>
                                 <li>Sabana de planes de acción bajo el estándar de inspecciones DIGESA y auditorias 

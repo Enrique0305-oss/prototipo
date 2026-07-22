@@ -1,5 +1,13 @@
 <div style="page-break-after: always;">
     
+    {{-- Banner --}}
+    <div style="position: relative; margin-bottom: 20px;">
+        <div style="background-color: #002060; color: white; text-align: center; font-weight: bold; padding: 10px; font-size: 14px; margin-right: 20px;">
+            SERVICIO DE {{ strtoupper($tipo) }}
+        </div>
+        <div style="position: absolute; right: 0; top: 0; width: 0; height: 0; border-top: 18px solid transparent; border-bottom: 18px solid transparent; border-left: 20px solid #002060;"></div>
+    </div>
+
     {{-- Tabla de Visitas --}}
     @if(isset($visitasGrupo) && count($visitasGrupo) > 0)
         <table class="content-table text-center" style="margin-bottom: 20px; width: 80%; margin-left: auto; margin-right: auto;">
@@ -25,14 +33,6 @@
             </tbody>
         </table>
     @endif
-
-    {{-- Banner --}}
-    <div style="position: relative; margin-bottom: 20px;">
-        <div style="background-color: #002060; color: white; text-align: center; font-weight: bold; padding: 10px; font-size: 14px; margin-right: 20px;">
-            SERVICIO DE {{ strtoupper($tipo) }}
-        </div>
-        <div style="position: absolute; right: 0; top: 0; width: 0; height: 0; border-top: 18px solid transparent; border-bottom: 18px solid transparent; border-left: 20px solid #002060;"></div>
-    </div>
 
     {{-- 1. Tabla de químicos utilizados --}}
     @php $quimicos = $limpieza['quimicos'] ?? []; @endphp
@@ -199,7 +199,7 @@
     {{-- 5. Observaciones --}}
     @php 
         $conclusionesData = is_array($informe->conclusiones) ? $informe->conclusiones : json_decode($informe->conclusiones, true); 
-        $obs = trim($conclusionesData[strtolower($tipo)] ?? ($conclusionesData['limpieza'] ?? ''));
+        $obs = trim($conclusionesData['otros'][$tipo] ?? ($conclusionesData['limpieza'] ?? ''));
     @endphp
     <div style="font-weight:bold; margin-top:6px; margin-bottom:8px;">5. OBSERVACIONES E INDICACIONES</div>
     @if($obs !== '')

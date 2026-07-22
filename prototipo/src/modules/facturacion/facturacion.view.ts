@@ -1,5 +1,8 @@
 import * as ExcelJS from 'exceljs';
 import { mostrarToast } from '../../shared/toast';
+import { Chart, registerables } from 'chart.js';
+
+Chart.register(...registerables);
 
 function getAuthHeaders(): Record<string, string> {
     const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
@@ -931,11 +934,21 @@ export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: a
     const anioActual = new Date().getFullYear();
 
     return `
-    <div class="page-header">
-      <div>
-        <h1>Facturación y Cobranza</h1>
+    <div class="page-header" style="flex-wrap: wrap; gap: 16px; align-items: flex-start;">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <h1 style="margin: 0; line-height: 1;">Facturación y Cobranza</h1>
+        <div style="display:flex;align-items:center;background:#f1f5f9;border-radius:8px;padding:4px;border:1px solid #e2e8f0;height:40px;box-sizing:border-box; max-width: max-content;">
+          <button id="tab-fact-datos" style="height:100%;padding:0 16px;background:#fff;color:#0f172a;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;align-items:center;gap:6px;transition:all 0.2s;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            Ver Datos
+          </button>
+          <button id="tab-fact-estadistica" style="height:100%;padding:0 16px;background:transparent;color:#64748b;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.2s;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            Ver Estadística
+          </button>
+        </div>
       </div>
-      <div style="display: flex; gap: 12px; align-items: center;">
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
         <select id="selector-mes" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; font-weight: 600; color: #1e293b;">
           ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `
             <option value="${i + 1}" ${i === mesActual ? 'selected' : ''}>${meses[i]} ${anioActual}</option>
@@ -957,6 +970,35 @@ export function renderFacturacion(proyecciones: any[] = [], ordenesPendientes: a
 
     <div id="facturacion-tab-content" style="max-width: 100%; min-width: 0; width: 100%;">
         ${renderOrdenesProyectadasTab(proyecciones)}
+    </div>
+
+    <div id="facturacion-estadistica-content" style="display:none; max-width: 100%; min-width: 0; width: 100%; flex-direction: column; gap: 24px;">
+        <!-- KPIs -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="font-size:13px;color:#64748b;font-weight:600;margin-bottom:8px;">TOTAL PROYECTADO</div>
+            <div id="fact-kpi-proyectado" style="font-size:24px;font-weight:800;color:#0f172a;">S/ 0.00</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Ingreso teórico con IGV</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="font-size:13px;color:#64748b;font-weight:600;margin-bottom:8px;">VERDADERAMENTE FACTURADO</div>
+            <div id="fact-kpi-pagado" style="font-size:24px;font-weight:800;color:#10b981;">S/ 0.00</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Órdenes en estado Pagado</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="font-size:13px;color:#64748b;font-weight:600;margin-bottom:8px;">POR COBRAR</div>
+            <div id="fact-kpi-por-cobrar" style="font-size:24px;font-weight:800;color:#f59e0b;">S/ 0.00</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Diferencia (Proyectado - Pagado)</div>
+          </div>
+        </div>
+
+        <!-- Gráfico Principal -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+          <h3 style="margin:0 0 16px 0;font-size:16px;color:#0f172a;">Comparativa General</h3>
+          <div style="height:350px; display:flex; justify-content:center; align-items:center;">
+            <canvas id="fact-chart-comparativa" style="max-height: 100%; max-width: 100%;"></canvas>
+          </div>
+        </div>
     </div>
 
     ${renderModalFactura()}
@@ -1009,6 +1051,125 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
         }
     });
 
+    // --- TABS (DATOS VS ESTADISTICAS) ---
+    const tabDatos = document.getElementById('tab-fact-datos');
+    const tabEstadistica = document.getElementById('tab-fact-estadistica');
+    const viewDatos = document.getElementById('facturacion-tab-content');
+    const viewEstadistica = document.getElementById('facturacion-estadistica-content');
+
+    let factChart: any = null;
+
+    function actualizarEstadisticasFacturacion(lista: any[]) {
+        let totalProyectado = 0;
+        let totalPagado = 0;
+
+        lista.forEach(p => {
+            // El usuario confirmó usar el total con IGV
+            const total = Number(p.total_final || p.precio_total_os || 0);
+            
+            // Excluir las órdenes anuladas del total esperado (Proyectado)
+            if (p.estado !== 'Anulado') {
+                totalProyectado += total;
+            }
+            
+            // El usuario confirmó considerar "Verdaderamente Facturado" SOLO a los estado "Pagado"
+            if (p.estado === 'Pagado') {
+                totalPagado += total;
+            }
+        });
+
+        const porCobrar = totalProyectado > totalPagado ? totalProyectado - totalPagado : 0;
+
+        const kpiProy = document.getElementById('fact-kpi-proyectado');
+        const kpiPagado = document.getElementById('fact-kpi-pagado');
+        const kpiCobrar = document.getElementById('fact-kpi-por-cobrar');
+
+        if (kpiProy) kpiProy.textContent = 'S/ ' + totalProyectado.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (kpiPagado) kpiPagado.textContent = 'S/ ' + totalPagado.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (kpiCobrar) kpiCobrar.textContent = 'S/ ' + porCobrar.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        // Actualizar gráfico
+        const canvas = document.getElementById('fact-chart-comparativa') as HTMLCanvasElement;
+        if (!canvas) return;
+
+        if (factChart) {
+            factChart.destroy();
+        }
+
+        if (viewEstadistica?.style.display === 'flex') {
+            factChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Facturado (Pagado)', 'Por Cobrar'],
+                    datasets: [{
+                        data: [totalPagado, porCobrar],
+                        backgroundColor: ['#10b981', '#f59e0b'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: { position: 'right' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context: any) {
+                                    let label = context.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed !== null) {
+                                        label += 'S/ ' + context.parsed.toLocaleString('es-PE', {minimumFractionDigits: 2});
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    const updateTabs = (isEstadistica: boolean) => {
+        if (isEstadistica) {
+            if (tabDatos) {
+                tabDatos.style.background = 'transparent';
+                tabDatos.style.color = '#64748b';
+                tabDatos.style.boxShadow = 'none';
+            }
+            if (tabEstadistica) {
+                tabEstadistica.style.background = '#fff';
+                tabEstadistica.style.color = '#0f172a';
+                tabEstadistica.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            }
+            if (viewDatos) viewDatos.style.display = 'none';
+            if (viewEstadistica) {
+                viewEstadistica.style.display = 'flex';
+                // Trigger chart render after making it visible
+                const proys = (window as any).misProyecciones || proyecciones;
+                actualizarEstadisticasFacturacion(proys);
+            }
+        } else {
+            if (tabEstadistica) {
+                tabEstadistica.style.background = 'transparent';
+                tabEstadistica.style.color = '#64748b';
+                tabEstadistica.style.boxShadow = 'none';
+            }
+            if (tabDatos) {
+                tabDatos.style.background = '#fff';
+                tabDatos.style.color = '#0f172a';
+                tabDatos.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            }
+            if (viewEstadistica) viewEstadistica.style.display = 'none';
+            if (viewDatos) viewDatos.style.display = 'block';
+        }
+    };
+
+    tabDatos?.addEventListener('click', () => updateTabs(false));
+    tabEstadistica?.addEventListener('click', () => updateTabs(true));
+
     // --- FUNCIÓN AUXILIAR: Cargar proyecciones con filtros ---
     const cargarProyecciones = async () => {
         const mesSeleccionado = (document.getElementById('selector-mes') as HTMLSelectElement)?.value || (window as any).mesActual;
@@ -1041,6 +1202,11 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
             if (tabContent) {
                 tabContent.innerHTML = renderOrdenesProyectadasTab(nuevasProyecciones);
                 initFacturacionTableEvents(nuevasProyecciones);
+            }
+            
+            // Actualizar el dashboard si estamos en la pestaña
+            if (viewEstadistica && viewEstadistica.style.display !== 'none') {
+                actualizarEstadisticasFacturacion(nuevasProyecciones);
             }
 
             console.log(`Proyecciones filtradas cargadas (mes=${mesSeleccionado}, empresa=${empresaSeleccionada || 'todas'}):`, nuevasProyecciones);

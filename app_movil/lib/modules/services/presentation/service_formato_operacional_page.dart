@@ -290,14 +290,18 @@ class _ServiceFormatoOperacionalPageState extends State<ServiceFormatoOperaciona
             final seenLocations = <String>{};
 
             // Intentar reconstruir ubicaciones desde el historial
+            final locationCounts = <String, int>{};
             for (final h in historial) {
               final loc = (h['ubicacion'] ?? '').toString().trim();
-              if (loc.isNotEmpty && !seenLocations.contains(loc)) {
-                seenLocations.add(loc);
-                final draft = _RastreroLocationDraft(initialQuantity: 1);
-                draft.ubicacionController.text = loc;
-                rastreroLocations.add(draft);
-              }
+              locationCounts[loc] = (locationCounts[loc] ?? 0) + 1;
+            }
+
+            for (final entry in locationCounts.entries) {
+              final loc = entry.key;
+              final count = entry.value;
+              final draft = _RastreroLocationDraft(initialQuantity: count);
+              draft.ubicacionController.text = loc;
+              rastreroLocations.add(draft);
             }
 
             // Si no hay historial o estaba vacío, poner una ubicación vacía por defecto

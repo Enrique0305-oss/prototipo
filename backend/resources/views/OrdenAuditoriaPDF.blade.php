@@ -115,6 +115,20 @@
             <td colspan="2">AUDITOR&Iacute;A</td>
         </tr>
         <tr>
+            <td class="label">TEMA / SERVICIO</td>
+            <td>
+                @php
+                    $detalle = $orden->cotizacion ? $orden->cotizacion->detalles->first() : null;
+                    $nombreServicio = $detalle ? 
+                        ($detalle->catalogoCapAud ? $detalle->catalogoCapAud->nombre : 
+                        ($detalle->servicio ? $detalle->servicio->nombre : 
+                        ($detalle->descripcion_manual ?? '---'))) 
+                        : ($orden->servicio->nombre ?? '---');
+                @endphp
+                {{ mb_strtoupper($nombreServicio) }}
+            </td>
+        </tr>
+        <tr>
             <td class="label">EXPERTO(S)</td>
             <td>{{ $exponentes ?: '---' }}</td>
         </tr>

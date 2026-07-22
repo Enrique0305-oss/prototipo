@@ -70,6 +70,7 @@ class ClienteController extends Controller
             'direccion' => 'nullable|string|max:255',
             'persona_contacto' => 'nullable|string|max:100',
             'telefono_contacto' => 'nullable|string|max:20',
+            'correo' => 'nullable|email|max:100',
             'origen' => 'nullable|string|in:Referido,Web,Llamada,Visita,Redes sociales,Otro',
             'fecha_registro' => 'nullable|date',
             'estado' => 'nullable|in:Acepta,No acepta,Contactado'
@@ -105,6 +106,7 @@ class ClienteController extends Controller
             'direccion' => 'nullable|string|max:255',
             'persona_contacto' => 'nullable|string|max:100',
             'telefono_contacto' => 'nullable|string|max:20',
+            'correo' => 'nullable|email|max:100',
             'origen' => 'nullable|string|in:Referido,Web,Llamada,Visita,Redes sociales,Otro',
             'fecha_registro' => 'nullable|date',
             'estado' => 'sometimes|in:Acepta,No acepta,Contactado'

@@ -67,10 +67,12 @@ class ProgramacionServicioController extends Controller
             'tecnicos',
             'vehiculo',
             'insumos.producto',
+            'insumos.lote',
             'planta',
             'area',
             'grupoProgramacion.cliente',
             'grupoProgramacion.planta',
+            'formatoOperacional',
         ]);
 
         // Filtro por fecha exacta
@@ -138,6 +140,7 @@ class ProgramacionServicioController extends Controller
         $data = $programaciones->map(function ($prog) use ($completadosPorMi) {
             $array = $prog->toArray();
             $array['completado_por_mi'] = in_array($prog->id, $completadosPorMi);
+            $array['tiene_formato_operacional'] = $prog->formatoOperacional !== null;
             return $array;
         });
 
@@ -160,6 +163,7 @@ class ProgramacionServicioController extends Controller
             'tecnicos',
             'vehiculo',
             'insumos.producto',
+            'insumos.lote',
             'creador',
             'planta',
             'area',
@@ -332,6 +336,8 @@ class ProgramacionServicioController extends Controller
                 'tecnicos',
                 'vehiculo',
                 'insumos.producto',
+                'insumos.lote',
+                'formatoOperacional',
                 'planta',
                 'area',
             ]);

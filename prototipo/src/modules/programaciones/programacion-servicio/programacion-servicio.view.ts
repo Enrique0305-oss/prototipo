@@ -1094,12 +1094,24 @@ export function renderProgramacionServicio(): string {
 
     <div class="prog-modal" id="modalFormatoOperacionalAutomatico" style="display:none;">
       <div class="prog-modal-overlay"></div>
-      <div class="prog-modal-content prog-modal-large">
+      <div class="prog-modal-content prog-modal-large" style="width: 90%; max-width: 1000px;">
         <div class="prog-modal-header">
-          <h2>Crear Formato Operacional</h2>
+          <h2>Gestionar Formato Operacional</h2>
           <button class="prog-modal-close" id="closeModalFormatoOperacionalAutomatico">&times;</button>
         </div>
         <div class="prog-modal-body" id="modalFormatoOperacionalAutomaticoBody"></div>
+      </div>
+    </div>
+
+    <!-- Modal Ubicaciones Formato -->
+    <div class="prog-modal" id="modalUbicacionesFormato" style="display:none;">
+      <div class="prog-modal-overlay"></div>
+      <div class="prog-modal-content" style="width: 90%; max-width: 600px;">
+        <div class="prog-modal-header">
+          <h2>Ubicaciones de Equipos</h2>
+          <button class="prog-modal-close" id="closeModalUbicacionesFormato">&times;</button>
+        </div>
+        <div class="prog-modal-body" id="modalUbicacionesFormatoBody" style="max-height: 70vh; overflow-y: auto;"></div>
       </div>
     </div>
 
@@ -1172,6 +1184,10 @@ export async function initProgramacionServicioEvents(): Promise<void> {
   document.getElementById('closeModalNueva')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacion'));
   document.getElementById('closeModalNuevaVisita')?.addEventListener('click', () => cerrarModal('modalNuevaProgramacionVisita'));
   document.getElementById('closeModalFormatoOperacionalAutomatico')?.addEventListener('click', () => cerrarModal('modalFormatoOperacionalAutomatico'));
+  document.getElementById('closeModalUbicacionesFormato')?.addEventListener('click', () => cerrarModal('modalUbicacionesFormato'));
+  document.querySelector('#modalUbicacionesFormato .prog-modal-overlay')?.addEventListener('click', () => {
+    cerrarModal('modalUbicacionesFormato');
+  });
   document.getElementById('closeModalEliminacionProg')?.addEventListener('click', () => cerrarModal('modalConfirmarEliminacionProg'));
   document.getElementById('btnCancelarEliminacionProg')?.addEventListener('click', () => cerrarModal('modalConfirmarEliminacionProg'));
   document.querySelectorAll('.prog-modal-overlay').forEach(el => {
@@ -2975,7 +2991,7 @@ function validarAsignacionFormatoOperacionalAutomatico(secciones: FormatoOperaci
   return null;
 }
 
-async function abrirModalFormatoOperacionalAutomatico(idProgramacion: number, idsProgramaciones?: number[]) {
+export async function abrirModalFormatoOperacionalAutomatico(idProgramacion: number, idsProgramaciones?: number[]) {
   const modal = document.getElementById('modalFormatoOperacionalAutomatico');
   const body = document.getElementById('modalFormatoOperacionalAutomaticoBody');
   if (!modal || !body) return;
@@ -3040,6 +3056,113 @@ async function abrirModalFormatoOperacionalAutomatico(idProgramacion: number, id
       msg = err.message || msg;
     }
     body.innerHTML = `<p style="padding:24px;color:#b91c1c;">${msg}</p>`;
+  }
+}
+
+export async function abrirModalUbicacionesFormato(idProgramacion: number) {
+  const modal = document.getElementById('modalUbicacionesFormato');
+  const body = document.getElementById('modalUbicacionesFormatoBody');
+  if (!modal || !body) return;
+
+  body.innerHTML = '<p style="padding:24px;color:#64748b;">Cargando ubicaciones...</p>';
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const res = await formatoOperacionalAutomaticoService.getFormatoExistente(idProgramacion);
+    const data = res.data;
+    
+    if (!data.secciones || data.secciones.length === 0) {
+      body.innerHTML = '<p style="padding:24px;color:#64748b;">No hay insumos asignados que requieran ubicación.</p>';
+      return;
+    }
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 16px; padding: 16px;">';
+    html += '<p style="font-size: 13px; color: #64748b;">Llene las ubicaciones de los equipos. Si no las conoce, puede dejarlas en blanco para que el técnico las complete.</p>';
+    
+    let hasItems = false;
+    
+    data.secciones.forEach((seccion: any, secIndex: number) => {
+      const items = seccion.items || [];
+      if (items.length === 0) return;
+      hasItems = true;
+      
+      html += `
+        <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+          <div style="background: #f8fafc; padding: 10px 16px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #e2e8f0;">
+            ${seccion.titulo || 'Sección'}
+          </div>
+          <div style="padding: 12px 16px; display: grid; gap: 12px;">
+      `;
+      
+      items.forEach((disp: any, dispIndex: number) => {
+        html += `
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="font-weight: 500; color: #334155; width: 60px; font-size: 13px;">${disp.codigo_caja}</div>
+              <input type="text" class="form-control" style="flex: 1;" placeholder="Ej: Patio trasero, Cocina..." 
+                value="${disp.ubicacion || ''}" 
+                data-id="${disp.id}"
+                id="input-ubicacion-${secIndex}-${dispIndex}">
+            </div>
+        `;
+      });
+      
+      html += `
+          </div>
+        </div>
+      `;
+    });
+    
+    if (!hasItems) {
+      body.innerHTML = '<p style="padding:24px;color:#64748b;">No hay dispositivos que requieran ubicación.</p>';
+      return;
+    }
+
+    html += `
+      <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+        <button class="btn-primary" id="btnGuardarUbicacionesFormato" style="padding: 8px 24px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          Guardar Ubicaciones
+        </button>
+      </div>
+    </div>`;
+    
+    body.innerHTML = html;
+
+    body.querySelector('#btnGuardarUbicacionesFormato')?.addEventListener('click', async () => {
+      const btn = body.querySelector('#btnGuardarUbicacionesFormato') as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+      
+      const ubicaciones: Record<number, string> = {};
+
+      data.secciones?.forEach((seccion: any, secIndex: number) => {
+        seccion.items?.forEach((disp: any, dispIndex: number) => {
+          const input = body.querySelector(`#input-ubicacion-${secIndex}-${dispIndex}`) as HTMLInputElement;
+          if (input && disp.id) {
+            ubicaciones[disp.id] = input.value;
+          }
+        });
+      });
+
+      try {
+        await formatoOperacionalAutomaticoService.updateUbicaciones(idProgramacion, ubicaciones);
+        cerrarModal('modalUbicacionesFormato');
+        mostrarToast('success', 'Guardado', 'Las ubicaciones se han guardado correctamente.');
+      } catch (err) {
+        console.error(err);
+        mostrarToast('error', 'Error', 'No se pudieron guardar las ubicaciones.');
+        btn.disabled = false;
+        btn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          Guardar Ubicaciones
+        `;
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = '<p style="padding:24px;color:#b91c1c;">No se pudieron cargar los datos.</p>';
   }
 }
 

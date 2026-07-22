@@ -250,6 +250,24 @@ class FormatoOperacionalController extends Controller
         }
     }
 
+    public function updateUbicaciones(Request $request, $idProgramacion)
+    {
+        $formato = FormatoOperacional::where('id_programacion_servicio', $idProgramacion)->latest()->first();
+        if (!$formato) {
+            return response()->json(['success' => false, 'message' => 'Formato no encontrado'], 404);
+        }
+
+        $ubicaciones = $request->ubicaciones ?? [];
+        foreach ($ubicaciones as $idDetalle => $ubicacion) {
+            FormatoOperacionalDetalle::where('id', $idDetalle)
+                ->where('id_formato_operacional', $formato->id)
+                ->update(['ubicacion' => $ubicacion]);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+
     public function generarPDFByProgramacion($id)
     {
         $prog = ProgramacionServicio::find($id);
@@ -263,6 +281,8 @@ class FormatoOperacionalController extends Controller
             ], 404);
         }
 
+        $tipoPdf = request('tipo_pdf', 'verdadera');
+
         // --- FILTRADO POR FORMATO ASIGNADO PARA EL PDF ---
         $formatoOficial = !empty($prog->formatos_fichas) && is_array($prog->formatos_fichas) 
             ? $prog->formatos_fichas[0] 
@@ -275,12 +295,18 @@ class FormatoOperacionalController extends Controller
             $esVoladores = str_contains($contextoUpper, 'VOLADORES') || str_contains($contextoUpper, 'LUZ') || str_contains($contextoUpper, 'MOSCA');
             $esRastreros = str_contains($contextoUpper, 'RASTREROS') || str_contains($contextoUpper, 'CUCARACHA') || str_contains($contextoUpper, 'HORMIGA') || str_contains($contextoUpper, 'DESINSECTACION');
 
-            $detallesFiltrados = $formato->detalles->filter(function($detalle) use ($esRoedores, $esVoladores, $esRastreros) {
+            $detallesFiltrados = $formato->detalles->filter(function($detalle) use ($esRoedores, $esVoladores, $esRastreros, $tipoPdf) {
                 $sectionKey = $this->displaySectionKey($detalle);
-                if ($esRoedores) return str_contains($sectionKey, 'roedores') || $sectionKey === 'jaula' || $sectionKey === 'tubo_cebadero';
-                if ($esRastreros) return str_contains($sectionKey, 'rastreros');
-                if ($esVoladores) return $sectionKey === 'trampa_luz';
-                return true; 
+                $keep = true; // Default
+                if ($esRoedores) $keep = str_contains($sectionKey, 'roedores') || $sectionKey === 'jaula' || $sectionKey === 'tubo_cebadero';
+                else if ($esRastreros) $keep = str_contains($sectionKey, 'rastreros');
+                else if ($esVoladores) $keep = $sectionKey === 'trampa_luz';
+                
+                if ($tipoPdf === 'falsa' && $detalle->oculto_en_falsa) {
+                    $keep = false;
+                }
+
+                return $keep;
             });
 
             $formato->setRelation('detalles', $detallesFiltrados->values());
@@ -295,7 +321,6 @@ class FormatoOperacionalController extends Controller
             $secciones = $this->groupDetalles($formato);
 
             $view = $this->resolveViewName($formato);
-            $tipoPdf = request('tipo_pdf', 'verdadera');
             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
                 'formato' => $formato,
                 'secciones' => $secciones,
@@ -330,6 +355,14 @@ class FormatoOperacionalController extends Controller
 
         $view = $this->resolveViewName($formato);
         $tipoPdf = request('tipo_pdf', 'verdadera');
+
+        if ($tipoPdf === 'falsa') {
+            $detallesFiltrados = $formato->detalles->filter(function($detalle) {
+                return !$detalle->oculto_en_falsa;
+            });
+            $formato->setRelation('detalles', $detallesFiltrados->values());
+        }
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
             'formato' => $formato,
             'secciones' => $this->groupDetalles($formato),
@@ -425,6 +458,7 @@ class FormatoOperacionalController extends Controller
                     'conteo_estadio_verdadera' => $detalle->conteo_estadio_verdadera,
                     'conteo_estadio_falsa' => $detalle->conteo_estadio_falsa,
                     'numero_lote' => $detalle->numero_lote,
+                    'oculto_en_falsa' => $detalle->oculto_en_falsa,
                 ];
             })->all();
 
@@ -727,22 +761,33 @@ class FormatoOperacionalController extends Controller
 
     private function displayCodigoCaja(FormatoOperacionalDetalle $detalle, string $sectionKey, int $sequence): string
     {
-        // 1. Si ya tiene un código guardado (ej: C-08), lo respetamos
-        if (!empty($detalle->codigo_caja)) {
-            return strtoupper(trim((string) $detalle->codigo_caja));
+        $codigo = strtoupper(trim((string) $detalle->codigo_caja));
+        
+        // 1. Extraer prefijo si tiene formato estándar (ej. TL-05 -> TL, C-02 -> C)
+        $prefix = '';
+        if (!empty($codigo)) {
+            if (preg_match('/^([a-zA-Z]+)-?\d+$/', $codigo, $matches)) {
+                $prefix = $matches[1];
+            } else {
+                // Si es un código personalizado (ej. "TRAMPA-COCINA-A"), lo respetamos tal cual
+                return $codigo;
+            }
         }
 
-        // 2. Si no tiene código, generamos uno según la sección
-        $prefix = match ($sectionKey) {
-            'roedores_cebo' => 'C',
-            'roedores_lamina' => 'C',
-            'rastreros_lamina' => 'L',
-            'trampa_luz' => 'TL',
-            'jaula' => 'J',
-            'tubo_cebadero' => 'TB',
-            default => 'C',
-        };
+        // 2. Si no tiene prefijo (estaba vacío), generamos uno según la sección
+        if (empty($prefix)) {
+            $prefix = match ($sectionKey) {
+                'roedores_cebo' => 'C',
+                'roedores_lamina' => 'C',
+                'rastreros_lamina' => 'L',
+                'trampa_luz' => 'TL',
+                'jaula' => 'J',
+                'tubo_cebadero' => 'TB',
+                default => 'C',
+            };
+        }
 
+        // 3. Forzar enumeración secuencial en el PDF para evitar saltos (ej. TL-01, TL-02...)
         return sprintf('%s-%02d', $prefix, $sequence);
     }
 
@@ -1019,5 +1064,21 @@ class FormatoOperacionalController extends Controller
             ->where('id_programacion_servicio', $progRequest->id)
             ->latest()
             ->first();
+    }
+
+    public function toggleVisibilidad($id)
+    {
+        $detalle = FormatoOperacionalDetalle::findOrFail($id);
+        $detalle->oculto_en_falsa = !$detalle->oculto_en_falsa;
+        $detalle->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Visibilidad actualizada',
+            'data' => [
+                'id' => $detalle->id,
+                'oculto_en_falsa' => $detalle->oculto_en_falsa,
+            ],
+        ]);
     }
 }

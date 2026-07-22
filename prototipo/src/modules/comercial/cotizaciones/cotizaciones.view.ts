@@ -2062,6 +2062,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
       const filas = tbody.querySelectorAll('tr');
       let tieneLimpiezaCisternas = false;
       let tieneFosfina = false;
+      let requiereVolumenFosfina = false;
 
       filas.forEach(fila => {
         const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
@@ -2073,13 +2074,22 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
           }
           if (esServicioFosfina(servicioNombre)) {
             tieneFosfina = true;
+            if (!servicioNombre.toUpperCase().includes('DESINSECTACION QUIMICA CON FOSFINA')) {
+              requiereVolumenFosfina = true;
+            }
           }
         }
       }); 
 
       seccion.style.display = (tieneLimpiezaCisternas || tieneFosfina) ? 'block' : 'none';
       if (bloqueLimpieza) bloqueLimpieza.style.display = tieneLimpiezaCisternas ? 'flex' : 'none';
-      if (bloqueFosfina) bloqueFosfina.style.display = tieneFosfina ? 'block' : 'none';
+      if (bloqueFosfina) {
+        bloqueFosfina.style.display = tieneFosfina ? 'block' : 'none';
+        const inputVolumen = bloqueFosfina.querySelector('#input-medida-tanque-fosfina') as HTMLElement;
+        if (inputVolumen && inputVolumen.parentElement) {
+          inputVolumen.parentElement.style.display = requiereVolumenFosfina ? 'block' : 'none';
+        }
+      }
     };
 
     // Event listener para cambios en el detalle
@@ -2934,6 +2944,8 @@ function actualizarSeccionLimpiezaCisternas(panelEl: HTMLElement) {
   const filas = tbody.querySelectorAll('tr');
   let tieneLimpiezaCisternas = false;
   let tieneFosfina = false;
+  let requiereVolumenFosfina = false;
+
   filas.forEach(fila => {
     const itemSelect = fila.querySelector('.item-select') as HTMLSelectElement;
     if (itemSelect) {
@@ -2944,12 +2956,21 @@ function actualizarSeccionLimpiezaCisternas(panelEl: HTMLElement) {
       }
       if (esServicioFosfina(servicioNombre)) {
         tieneFosfina = true;
+        if (!servicioNombre.toUpperCase().includes('DESINSECTACION QUIMICA CON FOSFINA')) {
+          requiereVolumenFosfina = true;
+        }
       }
     }
   });
   seccion.style.display = (tieneLimpiezaCisternas || tieneFosfina) ? 'block' : 'none';
   if (bloqueLimpieza) bloqueLimpieza.style.display = tieneLimpiezaCisternas ? 'flex' : 'none';
-  if (bloqueFosfina) bloqueFosfina.style.display = tieneFosfina ? 'block' : 'none';
+  if (bloqueFosfina) {
+    bloqueFosfina.style.display = tieneFosfina ? 'block' : 'none';
+    const inputVolumen = bloqueFosfina.querySelector('#input-medida-tanque-fosfina') as HTMLElement;
+    if (inputVolumen && inputVolumen.parentElement) {
+      inputVolumen.parentElement.style.display = requiereVolumenFosfina ? 'block' : 'none';
+    }
+  }
   if (contenedorMedidas) {
     contenedorMedidas.style.display = tieneLimpiezaCisternas ? 'block' : 'none';
     if (tieneLimpiezaCisternas) {

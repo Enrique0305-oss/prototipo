@@ -17,6 +17,7 @@ class Cliente extends Model
         'direccion',
         'persona_contacto',
         'telefono_contacto',
+        'correo',
         'origen',
         'fecha_registro',
         'estado'
@@ -74,6 +75,7 @@ class Cliente extends Model
             $q->where('nombre_empresa', 'LIKE', "%{$termino}%")
               ->orWhere('ruc', 'LIKE', "%{$termino}%")
               ->orWhere('rubro', 'LIKE', "%{$termino}%")
+              ->orWhere('correo', 'LIKE', "%{$termino}%")
               ->orWhere('persona_contacto', 'LIKE', "%{$termino}%");
         });
     }

@@ -371,6 +371,78 @@
         </table>
     @endif
 
+    @php
+        $mostrarServicioFosfina = $orden->detalles->contains(function($detalle) {
+            return $detalle->servicio && stripos((string) $detalle->servicio->nombre, 'FOSFINA') !== false;
+        });
+        
+        $detalleFosfina = null;
+        if ($mostrarServicioFosfina) {
+            $detalleFosfina = $orden->detalles->first(function($detalle) {
+                return $detalle->servicio && stripos((string) $detalle->servicio->nombre, 'FOSFINA') !== false;
+            });
+        }
+    @endphp
+
+    @if($mostrarServicioFosfina && $detalleFosfina)
+        @php
+            $frecuenciaFosfinaRaw = trim((string)($detalleFosfina->frecuencia ?? ''));
+            $frecuenciaFosfina = $frecuenciaFosfinaRaw !== '' ? $frecuenciaFosfinaRaw : 'A solicitud';
+            if ($frecuenciaFosfinaRaw !== '') {
+                if (preg_match('/\(([^)]+)\)/u', $frecuenciaFosfinaRaw, $m)) {
+                    $dias = array_map('trim', explode(',', $m[1]));
+                    if (count($dias) > 0) {
+                        $frecuenciaFosfina = count($dias) . ' ' . (count($dias) === 1 ? 'día' : 'días') . ' a la semana';
+                    }
+                } elseif (preg_match('/^(\d+)\s*d[ií]a(?:s)?\s+a\s+la\s+semana/iu', $frecuenciaFosfinaRaw, $m2)) {
+                    $n = (int)$m2[1];
+                    $frecuenciaFosfina = $n . ' ' . ($n === 1 ? 'día' : 'días') . ' a la semana';
+                }
+            }
+            $cantidadFosfina = trim((string)($detalleFosfina->fosfina_cantidad ?? ''));
+            $tratamientoFosfina = $detalleFosfina->servicio?->nombre ?? 'DESINSECTACIÓN QUÍMICA CON FOSFINA';
+            $productosFosfina = trim((string)($detalleFosfina->fosfina_producto ?? ''));
+            $medidasTanqueFosfinaRaw = $detalleFosfina->medida_tanque;
+            $medidaTanqueFosfina = '';
+            if (is_array($medidasTanqueFosfinaRaw)) {
+                $medidaTanqueFosfina = trim((string)($medidasTanqueFosfinaRaw[0] ?? ''));
+            } else {
+                $medidaTanqueFosfina = trim((string)($medidasTanqueFosfinaRaw ?? ''));
+            }
+            
+            $hasCantidad = $cantidadFosfina !== '';
+            $hasProductos = $productosFosfina !== '';
+            $hasVolumen = $medidaTanqueFosfina !== '';
+        @endphp
+
+        <div style="margin-top: 15px;">
+            <div class="location-title">
+                DATOS DE OPERACIÓN PARA SERVICIOS ESPECIALES
+            </div>
+            <p style="margin: 5px 0; font-size: 9px;">El siguiente cuadro detalla actividades incluidas en el servicio de desinsectación química con fosfina.</p>
+            <table>
+                <thead>
+                    <tr class="bg-blue">
+                        <th style="width: 35%;">TRATAMIENTO</th>
+                        <th style="width: 25%;">FRECUENCIA</th>
+                        @if($hasCantidad)<th style="width: 15%;">CANTIDAD</th>@endif
+                        @if($hasProductos)<th>PRODUCTOS</th>@endif
+                        @if($hasVolumen)<th>VOLUMEN / MEDIDA</th>@endif
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="text-align: center;">{{ $tratamientoFosfina }}</td>
+                        <td style="text-align: center;">{{ $frecuenciaFosfina }}</td>
+                        @if($hasCantidad)<td style="text-align: center;">{{ $cantidadFosfina }}</td>@endif
+                        @if($hasProductos)<td style="text-align: center;">{{ $productosFosfina }}</td>@endif
+                        @if($hasVolumen)<td style="text-align: center;">{{ $medidaTanqueFosfina }} m&sup3;</td>@endif
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     {{-- ── TOTALES ── --}}
     <table style="margin-top: 8px;">
         <tr>

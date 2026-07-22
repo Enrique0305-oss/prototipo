@@ -76,4 +76,17 @@ export const formatoOperacionalAutomaticoService = {
       payload
     );
   },
+
+  getFormatoExistente: async (idProgramacion: number) => {
+    return apiClient.get<ApiResponse<any>>(
+      `/programacion-servicio/${idProgramacion}/formato-operacional`
+    );
+  },
+
+  updateUbicaciones: async (idProgramacion: number, ubicaciones: Record<number, string>) => {
+    return apiClient.patch<ApiResponse<any>>(
+      `/programacion-servicio/${idProgramacion}/formato-operacional/ubicaciones`,
+      { ubicaciones }
+    );
+  },
 };

@@ -112,13 +112,6 @@ class FichaOperacionalController extends Controller
         // $id es el id de FichaOperacional
         $ficha = FichaOperacional::findOrFail($id);
 
-        if ($ficha->estado !== 'borrador') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Solo se pueden actualizar fichas en estado borrador',
-            ], 422);
-        }
-
         $validated = $request->validate([
             'cliente' => 'nullable|string|max:255',
             'direccion' => 'nullable|string|max:255',

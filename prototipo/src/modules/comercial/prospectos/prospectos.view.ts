@@ -246,6 +246,7 @@ function renderizarTablaProspectos() {
         <td>
           <div>${cliente.persona_contacto || '—'}</div>
           <div style="font-size: 12px; color: #64748b;">${cliente.telefono_contacto || ''}</div>
+          ${cliente.correo ? `<div style="font-size: 12px; color: #0d9488;">${cliente.correo}</div>` : ''}
         </td>
         <td>${cliente.rubro || '—'}</td>
         <td>${fechaRegistro}</td>
@@ -341,6 +342,10 @@ function abrirModalNuevoProspecto() {
               <input type="text" id="new-p-telefono" name="telefono_contacto" maxlength="20" class="form-input" placeholder="Ej: (01) 456-7890">
             </div>
             <div class="form-group">
+              <label for="new-p-correo">Correo Electrónico</label>
+              <input type="email" id="new-p-correo" name="correo" maxlength="100" class="form-input" placeholder="Ej: contacto@empresa.com">
+            </div>
+            <div class="form-group">
               <label for="new-p-direccion">Dirección</label>
               <input type="text" id="new-p-direccion" name="direccion" maxlength="255" class="form-input" placeholder="Dirección del cliente">
             </div>
@@ -405,6 +410,8 @@ function abrirModalNuevoProspecto() {
     if (contacto) data.persona_contacto = contacto;
     const telefono = (formData.get('telefono_contacto') as string)?.trim();
     if (telefono) data.telefono_contacto = telefono;
+    const correo = (formData.get('correo') as string)?.trim();
+    if (correo) data.correo = correo;
     const origen = formData.get('origen') as string;
     if (origen) data.origen = origen;
     const fechaReg = (formData.get('fecha_registro') as string)?.trim();
@@ -486,6 +493,10 @@ async function abrirModalEditarProspecto(id: number) {
               <label for="edit-p-telefono">Teléfono</label>
               <input type="text" id="edit-p-telefono" name="telefono_contacto" maxlength="20" class="form-input" value="${cliente.telefono_contacto || ''}">
             </div>
+            <div class="form-group">
+              <label for="edit-p-correo">Correo Electrónico</label>
+              <input type="email" id="edit-p-correo" name="correo" maxlength="100" class="form-input" value="${cliente.correo || ''}">
+            </div>
             <div class="form-group" style="grid-column: 1 / -1;">
               <label for="edit-p-direccion">Dirección</label>
               <input type="text" id="edit-p-direccion" name="direccion" maxlength="255" class="form-input" value="${cliente.direccion || ''}">
@@ -542,6 +553,7 @@ async function abrirModalEditarProspecto(id: number) {
       direccion: (formData.get('direccion') as string)?.trim() || null,
       persona_contacto: (formData.get('persona_contacto') as string)?.trim() || null,
       telefono_contacto: (formData.get('telefono_contacto') as string)?.trim() || null,
+      correo: (formData.get('correo') as string)?.trim() || null,
       origen: formData.get('origen') as string || null,
       fecha_registro: (formData.get('fecha_registro') as string)?.trim() || null,
       estado: formData.get('estado') as string,

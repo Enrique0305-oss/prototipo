@@ -46,7 +46,14 @@ class CalculoFormatoOperacionalService
         foreach ($serviciosUnicos as $progServicio) {
             $ultimoFormatoServicio = null;
 
-            if ($progServicio->id_orden_servicio) {
+            // 0. Verificar si ya hay un borrador guardado para esta misma programación
+            $borradorActual = FormatoOperacional::where('id_programacion_servicio', $progServicio->id)
+                ->latest()
+                ->first();
+
+            if ($borradorActual) {
+                $ultimoFormatoServicio = $borradorActual;
+            } elseif ($progServicio->id_orden_servicio) {
                 $ultimoFormatoServicio = FormatoOperacional::query()
                     ->whereNotIn('id_programacion_servicio', $ids)
                     ->whereHas('programacionServicio', function ($q) use ($progServicio) {
@@ -98,6 +105,16 @@ class CalculoFormatoOperacionalService
         }
 
         if ($historialDetalles->isNotEmpty()) {
+            // Corregir valores de tipo_seccion guardados con el 'clave' en lugar del 'tipo_seccion' real
+            $historialDetalles->transform(function ($detalle) {
+                if ($detalle->tipo_seccion === 'voladores_trampa_luz') $detalle->tipo_seccion = 'trampa_luz';
+                elseif ($detalle->tipo_seccion === 'roedores_cajas_cebo') $detalle->tipo_seccion = 'cebo';
+                elseif ($detalle->tipo_seccion === 'roedores_laminas' || $detalle->tipo_seccion === 'rastreros_laminas') $detalle->tipo_seccion = 'lamina';
+                elseif ($detalle->tipo_seccion === 'roedores_tubos_cebo') $detalle->tipo_seccion = 'tubo_cebadero';
+                elseif ($detalle->tipo_seccion === 'roedores_jaulas') $detalle->tipo_seccion = 'jaula';
+                return $detalle;
+            });
+
             // Agrupar por tipo de sección
             $historialDetalles = $historialDetalles->groupBy('tipo_seccion');
         } else {
@@ -594,6 +611,9 @@ class CalculoFormatoOperacionalService
             if (str_contains($key, 'tubo')) {
                 return 'TB';
             }
+            if (str_contains($key, 'lamina')) {
+                return 'CL';
+            }
             if (str_contains($key, 'cebo')) {
                 return 'C';
             }
@@ -734,6 +754,13 @@ class CalculoFormatoOperacionalService
 
             $tipoSeccion = trim((string) ($section['tipo_seccion'] ?? $section['tipo'] ?? 'otros'));
             $descripcion = trim((string) ($section['descripcion'] ?? $titulo));
+
+            // CORREGIR BUGS DEL FRONTEND: Si el frontend envía 'clave' en lugar de 'tipo_seccion'
+            if ($tipoSeccion === 'voladores_trampa_luz') $tipoSeccion = 'trampa_luz';
+            elseif ($tipoSeccion === 'roedores_cajas_cebo') $tipoSeccion = 'cebo';
+            elseif ($tipoSeccion === 'roedores_laminas' || $tipoSeccion === 'rastreros_laminas') $tipoSeccion = 'lamina';
+            elseif ($tipoSeccion === 'roedores_tubos_cebo') $tipoSeccion = 'tubo_cebadero';
+            elseif ($tipoSeccion === 'roedores_jaulas') $tipoSeccion = 'jaula';
 
             // RE-CLASIFICACIÓN DE SEGURIDAD: Si viene como 'otros' pero el título o descripción sugiere un equipo conocido, lo corregimos.
             if ($tipoSeccion === 'otros' || $tipoSeccion === '') {

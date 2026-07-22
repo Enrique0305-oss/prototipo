@@ -18,12 +18,16 @@ class DetalleOrdenServicio extends Model
         'id_cliente_planta_area',
         'local',
         'frecuencia',
-        'precio'
+        'precio',
+        'fosfina_producto',
+        'fosfina_cantidad',
+        'medida_tanque'
     ];
 
     protected $casts = [
         'precio' => 'decimal:2',
         'id_cliente_planta_area' => 'array',
+        'medida_tanque' => 'array',
     ];
 
     // Relaciones

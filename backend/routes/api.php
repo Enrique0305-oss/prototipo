@@ -409,10 +409,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/programacion-servicio/{id}/formato-operacional', [FormatoOperacionalController::class, 'show']);
     Route::get('/programacion-servicio/{id}/formato-operacional/pdf', [FormatoOperacionalController::class, 'generarPDFByProgramacion']);
     Route::post('/programacion-servicio/{id}/formato-operacional', [FormatoOperacionalController::class, 'store']);
+    Route::patch('/programacion-servicio/{id}/formato-operacional/ubicaciones', [FormatoOperacionalController::class, 'updateUbicaciones']);
     Route::put('/formatos-operacionales/{id}', [FormatoOperacionalController::class, 'update']);
     Route::post('/formatos-operacionales/{id}/finalizar', [FormatoOperacionalController::class, 'finalize']);
     Route::get('/programacion-servicio/grupos/{idGrupo}/formato-operacional', [FormatoOperacionalController::class, 'showByGrupo']);
     Route::get('/programacion-servicio/grupos/{idGrupo}/formato-operacional/pdf', [FormatoOperacionalController::class, 'generarPDFByGrupo']);
+    Route::patch('/formato-operacional-detalles/{id}/toggle-visibilidad', [FormatoOperacionalController::class, 'toggleVisibilidad']);
 
     // Informes Técnicos :v
     Route::get('/informes-tecnicos/proximo-correlativo', [InformeTecnicoController::class, 'proximoCorrelativo']);

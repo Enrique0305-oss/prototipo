@@ -365,69 +365,76 @@
         {{-- 1. PRODUCTOS --}}
         <div style="font-weight: bold; font-size: 11px; color: #003366; margin-bottom: 10px;">1. INFORMACIÓN DE PRODUCTOS UTILIZADOS</div>
         @if (strpos(strtoupper($tipo), 'ROEDORES') !== false)
-            <table class="products-table" style="margin-bottom: 15px;">
-                <tr class="label-row">
-                    <td style="width: 25%; background-color: #f2f2f2;">DISPOSITIVO</td>
-                    <td colspan="2">CAJA CEBADERA</td>
-                </tr>
-                <tr class="label-row">
-                    <td style="background-color: #f2f2f2;">USO / TIPO</td>
-                    <td style="width: 37.5%; background-color: #fafafa;">CON CEBO</td>
-                    <td style="width: 37.5%; background-color: #fafafa;">CON LÁMINA PEGANTE</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">INSUMO</td>
-                    <td>FINAL ALL-WEATHER BLOX</td>
-                    <td>FUMITRAP (LÁMINA)</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">TIPO SUSTANCIA</td>
-                    <td>CEBO TÓXICO</td>
-                    <td>PEGAJOSA / NO TÓXICA</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">INGRED. ACTIVO</td>
-                    <td>{{ $dataCebo['ingrediente'] !== '---' ? $dataCebo['ingrediente'] : 'BRODIFACOUM' }}</td>
-                    <td>{{ $dataLamina['ingrediente'] !== '---' ? $dataLamina['ingrediente'] : 'Poliisobutileno' }}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">LOTE</td>
-                    <td>{{ $extraData['lote_cebo'] ?? ($dataCebo['lote'] ?? '---') }}</td>
-                    <td>{{ $extraData['lote_lamina'] ?? ($dataLamina['lote'] ?? '---') }}</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">CONCENTRACIÓN</td>
-                    <td>{{ $extraData['concentracion_cebo'] ?? '0.005%' }}</td>
-                    <td>{{ $extraData['concentracion_lamina'] ?? '61.80%' }}</td>
-                </tr>
-            </table>
-            <table class="products-table" style="margin-bottom: 20px;">
-                <tr class="label-row">
-                    <td style="width: 25%; background-color: #f2f2f2;">DISPOSITIVO</td>
-                    <td>JAULAS DE CAPTURA</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">INSUMO</td>
-                    <td>ALIMENTOS VARIOS</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">TIPO SUSTANCIA</td>
-                    <td>NO APLICA</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">INGRED. ACTIVO</td>
-                    <td>NO APLICA</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">LOTE</td>
-                    <td>NO APLICA</td>
-                </tr>
-                <tr>
-                    <td class="label-row" style="background-color: #f2f2f2;">CONCENTRACIÓN</td>
-                    <td>Kg</td>
-                </tr>
-            </table>
+            @php
+                $insumosRoedoresRaw = $informe->insumos['__roedores'] ?? [];
+                
+                // Si no hay datos dinámicos (informes antiguos), usamos data estática como fallback
+                if (empty($insumosRoedoresRaw)) {
+                    $insumosRoedoresRaw = [
+                        ['dispositivo' => 'CAJA CEBADERA', 'uso_tipo' => 'CON CEBO', 'producto' => 'FINAL ALL-WEATHER BLOX', 'tipo_sustancia' => 'CEBO TÓXICO', 'ingrediente_activo' => ($dataCebo['ingrediente'] !== '---' ? $dataCebo['ingrediente'] : 'BRODIFACOUM'), 'lote' => ($extraData['lote_cebo'] ?? ($dataCebo['lote'] ?? '---')), 'concentracion' => ($extraData['concentracion_cebo'] ?? '0.005%')],
+                        ['dispositivo' => 'CAJA CEBADERA', 'uso_tipo' => 'CON LÁMINA PEGANTE', 'producto' => 'FUMITRAP (LÁMINA)', 'tipo_sustancia' => 'PEGAJOSA / NO TÓXICA', 'ingrediente_activo' => ($dataLamina['ingrediente'] !== '---' ? $dataLamina['ingrediente'] : 'Poliisobutileno'), 'lote' => ($extraData['lote_lamina'] ?? ($dataLamina['lote'] ?? '---')), 'concentracion' => ($extraData['concentracion_lamina'] ?? '61.80%')],
+                        ['dispositivo' => 'JAULAS DE CAPTURA', 'uso_tipo' => 'NO APLICA', 'producto' => 'ALIMENTOS VARIOS', 'tipo_sustancia' => 'NO APLICA', 'ingrediente_activo' => 'NO APLICA', 'lote' => 'NO APLICA', 'concentracion' => 'Kg']
+                    ];
+                }
+
+                // Agrupar por dispositivo
+                $groupedRoedores = [];
+                foreach ($insumosRoedoresRaw as $item) {
+                    $disp = strtoupper($item['dispositivo'] ?? 'OTROS');
+                    if (!isset($groupedRoedores[$disp])) {
+                        $groupedRoedores[$disp] = [];
+                    }
+                    $groupedRoedores[$disp][] = $item;
+                }
+            @endphp
+
+            @foreach ($groupedRoedores as $dispName => $items)
+                <table class="products-table" style="margin-bottom: 15px;">
+                    <tr class="label-row">
+                        <td style="width: 25%; background-color: #f2f2f2;">DISPOSITIVO</td>
+                        <td colspan="{{ count($items) }}">{{ $dispName }}</td>
+                    </tr>
+                    @php $hasUso = collect($items)->contains(fn($i) => strtoupper($i['uso_tipo'] ?? '') !== 'NO APLICA' && !empty($i['uso_tipo'])); @endphp
+                    @if ($hasUso)
+                    <tr class="label-row">
+                        <td style="background-color: #f2f2f2;">USO / TIPO</td>
+                        @foreach($items as $c)
+                            <td style="width: {{ 75 / count($items) }}%; background-color: #fafafa;">{{ strtoupper($c['uso_tipo'] ?? 'NO APLICA') }}</td>
+                        @endforeach
+                    </tr>
+                    @endif
+                    <tr>
+                        <td class="label-row" style="background-color: #f2f2f2;">INSUMO</td>
+                        @foreach($items as $c)
+                            <td>{{ strtoupper($c['producto'] ?? '---') }}</td>
+                        @endforeach
+                    </tr>
+                    <tr>
+                        <td class="label-row" style="background-color: #f2f2f2;">TIPO SUSTANCIA</td>
+                        @foreach($items as $c)
+                            <td>{{ strtoupper($c['tipo_sustancia'] ?? '---') }}</td>
+                        @endforeach
+                    </tr>
+                    <tr>
+                        <td class="label-row" style="background-color: #f2f2f2;">INGRED. ACTIVO</td>
+                        @foreach($items as $c)
+                            <td>{{ !empty($c['ingrediente_activo']) ? $c['ingrediente_activo'] : '---' }}</td>
+                        @endforeach
+                    </tr>
+                    <tr>
+                        <td class="label-row" style="background-color: #f2f2f2;">LOTE</td>
+                        @foreach($items as $c)
+                            <td>{{ !empty($c['lote']) ? $c['lote'] : '---' }}</td>
+                        @endforeach
+                    </tr>
+                    <tr>
+                        <td class="label-row" style="background-color: #f2f2f2;">CONCENTRACIÓN</td>
+                        @foreach($items as $c)
+                            <td>{{ !empty($c['concentracion']) ? $c['concentracion'] : '---' }}</td>
+                        @endforeach
+                    </tr>
+                </table>
+            @endforeach
         @elseif ($hasQuimicos)
             <div style="font-weight: bold; font-size: 10px; color: #003366; text-align: center; margin-bottom: 10px;">1.1. DESINSECTACIÓN QUÍMICA PROGRAMADA</div>
             

@@ -95,6 +95,11 @@ class InformeTecnicoController extends Controller
                         $base64 = $convertirImagenBase64($producto->imagen);
                         if ($base64) return ['base64' => $base64];
                     }
+                    $equipo = \App\Models\Equipo::whereRaw('UPPER(descripcion) LIKE ?', ["%".strtoupper($kw)."%"])->whereNotNull('imagen')->first();
+                    if ($equipo) {
+                        $base64 = $convertirImagenBase64($equipo->imagen);
+                        if ($base64) return ['base64' => $base64];
+                    }
                 }
                 return null;
             };
@@ -132,15 +137,26 @@ class InformeTecnicoController extends Controller
                 unset($vRef);
                 $informe->visitas = $visitas;
 
+                $tipoRepList = strtolower($informe->hoja_tipo ?? 'verdadera');
+                $hiddenDevices = [];
+
                 foreach ($formatos as $formato) {
                     if (!$formato->detalles) continue;
                     foreach ($formato->detalles as $det) {
                         $codigo = (string)($det->codigo_caja ?? '---');
+                        
+                        if (($tipoRepList === 'falsa' || $tipoRepList === 'auditiva') && $det->oculto_en_falsa) {
+                            $hiddenDevices[$codigo] = true;
+                            continue;
+                        }
+
                         $ubicacion = (string)($det->ubicacion ?? '---');
                         $tipoSec = strtoupper((string)($det->tipo_seccion ?? ''));
                         $descDet = strtoupper((string)($det->descripcion ?? ''));
                         
-                        if (strpos($tipoSec, 'CEBO') !== false || strpos($descDet, 'CEBO') !== false) {
+                        if (strpos($tipoSec, 'TUBO_CEBADERO') !== false || strpos($descDet, 'TUBO CEBADERO') !== false) {
+                            $dispositivosTuboCebadero[$codigo] = ['codigo' => $codigo, 'ubicacion' => $ubicacion];
+                        } elseif (strpos($tipoSec, 'CEBO') !== false || strpos($descDet, 'CEBO') !== false) {
                             $dispositivosCebo[$codigo] = ['codigo' => $codigo, 'ubicacion' => $ubicacion];
                         } elseif (strpos($tipoSec, 'JAULA') !== false || strpos($descDet, 'JAULA') !== false) {
                             $dispositivosJaula[$codigo] = ['codigo' => $codigo, 'ubicacion' => $ubicacion];
@@ -152,9 +168,13 @@ class InformeTecnicoController extends Controller
                             } else {
                                 $dispositivosLamina[$codigo] = ['codigo' => $codigo, 'ubicacion' => $ubicacion];
                             }
-                        } elseif (strpos($tipoSec, 'TUBO_CEBADERO') !== false || strpos($descDet, 'TUBO CEBADERO') !== false) {
-                            $dispositivosTuboCebadero[$codigo] = ['codigo' => $codigo, 'ubicacion' => $ubicacion];
                         }
+                    }
+                }
+
+                if (!empty($hiddenDevices)) {
+                    foreach (array_keys($hiddenDevices) as $code) {
+                        unset($dispositivosCebo[$code], $dispositivosLamina[$code], $dispositivosJaula[$code], $dispositivosTrampaLuz[$code], $dispositivosRastreros[$code], $dispositivosTuboCebadero[$code]);
                     }
                 }
             }
@@ -217,6 +237,49 @@ class InformeTecnicoController extends Controller
                         $q->where('id_cliente', $id_cliente);
                     })
                     ->whereYear('fecha', $anioActual)->limit(50)->get();
+                
+                // Mapeo automático de datos según tipo de hoja
+                $tipoRep = strtolower($informe->hoja_tipo ?? 'verdadera');
+                if ($tipoRep === 'falsa' || $tipoRep === 'auditiva') {
+                    $applyFalsaLogic = function($formatos) {
+                        foreach ($formatos as $f) {
+                            if ($f->detalles) {
+                                // 1. Filtrar los ocultos
+                                $filtered = $f->detalles->reject(function($d) {
+                                    return $d->oculto_en_falsa;
+                                })->values();
+
+                                // 2. Mapear campos auditivos a campos principales
+                                foreach ($filtered as $d) {
+                                    $d->hallazgo = $d->hallazgo_auditiva ?? $d->hallazgo;
+                                    $d->estado_dispositivo = $d->estado_dispositivo_auditiva ?? $d->estado_dispositivo;
+                                    $d->senales_presencia = $d->senales_presencia_auditiva ?? $d->senales_presencia;
+                                    $d->estado_lamina = $d->estado_lamina_auditiva ?? $d->estado_lamina;
+                                    $d->conteo_estadio = $d->conteo_estadio_falsa ?? $d->conteo_estadio_verdadera ?? $d->conteo_estadio;
+                                    
+                                    // Para conteo_insectos, reemplazamos el valor con el de la auditiva si existe
+                                    if ($d->conteo_insectos) {
+                                        $data = is_string($d->conteo_insectos) ? json_decode($d->conteo_insectos, true) : $d->conteo_insectos;
+                                        if (is_array($data)) {
+                                            $newData = [];
+                                            foreach ($data as $fam => $famData) {
+                                                if (is_array($famData) && isset($famData['auditiva'])) {
+                                                    $newData[$fam] = $famData['auditiva'];
+                                                } else {
+                                                    $newData[$fam] = $famData;
+                                                }
+                                            }
+                                            $d->conteo_insectos = $newData;
+                                        }
+                                    }
+                                }
+                                $f->setRelation('detalles', $filtered);
+                            }
+                        }
+                    };
+                    $applyFalsaLogic($historicoFormatos);
+                    $applyFalsaLogic($formatosAnio);
+                }
 
                 $grupos = [];
                 foreach ($visitas as $v) {
@@ -230,7 +293,7 @@ class InformeTecnicoController extends Controller
                 foreach ($historicoFormatos as $f) {
                     foreach ($f->detalles as $d) {
                         $c = strtoupper((string)($d->codigo_caja ?? ''));
-                        if ($c && strpos($c, 'C-') === 0 && !in_array($c, $labels_cajas)) $labels_cajas[] = $c;
+                        if ($c && !isset($hiddenDevices[$c]) && strpos($c, 'C-') === 0 && !in_array($c, $labels_cajas)) $labels_cajas[] = $c;
                     }
                 }
                 sort($labels_cajas);
@@ -257,7 +320,7 @@ class InformeTecnicoController extends Controller
                             'title' => ['display' => true, 'text' => "CONSUMO RODENTICIDA $mesAnio", 'fontSize' => 14],
                             'legend' => ['position' => 'bottom', 'labels' => ['fontSize' => 10]],
                             'scales' => [
-                                'yAxes' => [['ticks' => ['beginAtZero' => true, 'stepSize' => 1, 'fontSize' => 9]]],
+                                'yAxes' => [['ticks' => ['beginAtZero' => true, 'stepSize' => 1, 'max' => 5, 'fontSize' => 9]]],
                                 'xAxes' => [['ticks' => ['fontSize' => 9]]]
                             ],
                             'plugins' => [
@@ -272,6 +335,7 @@ class InformeTecnicoController extends Controller
                     foreach ($historicoFormatos as $f) {
                         foreach ($f->detalles as $d) {
                             $c = strtoupper((string)($d->codigo_caja ?? ''));
+                            if ($c && isset($hiddenDevices[$c])) continue;
                             $tipoDet = strtoupper((string)($d->tipo_seccion ?? ''));
                             $descDet = strtoupper((string)($d->descripcion ?? ''));
                             if (strpos($tipoDet, 'TRAMPA') !== false || strpos($tipoDet, 'LUZ') !== false || strpos($descDet, 'TRAMPA') !== false || strpos($descDet, 'LUZ') !== false || strncmp($c, 'TL-', 3) === 0) {
@@ -1049,7 +1113,7 @@ class InformeTecnicoController extends Controller
                 foreach ($historicoFormatos as $f) {
                     foreach ($f->detalles as $d) {
                         $c = strtoupper((string)($d->codigo_caja ?? ''));
-                        if ($c && strpos($c, 'J-') === 0 && !in_array($c, $labels_jaulas)) $labels_jaulas[] = $c;
+                        if ($c && !isset($hiddenDevices[$c]) && strpos($c, 'J-') === 0 && !in_array($c, $labels_jaulas)) $labels_jaulas[] = $c;
                     }
                 }
                 sort($labels_jaulas);
@@ -1076,7 +1140,7 @@ class InformeTecnicoController extends Controller
                             'title' => ['display' => true, 'text' => "ACTIVIDAD EN JAULAS $mesAnio", 'fontSize' => 14],
                             'legend' => ['position' => 'bottom', 'labels' => ['fontSize' => 10]],
                             'scales' => [
-                                'yAxes' => [['ticks' => ['beginAtZero' => true, 'stepSize' => 1, 'fontSize' => 9]]],
+                                'yAxes' => [['ticks' => ['beginAtZero' => true, 'stepSize' => 1, 'max' => 5, 'fontSize' => 9]]],
                                 'xAxes' => [['ticks' => ['fontSize' => 9]]]
                             ]
                         ]
@@ -1206,6 +1270,8 @@ class InformeTecnicoController extends Controller
                             $prod = strtoupper(trim($ins['producto'] ?? ''));
                             if (!$prod) continue;
                             
+                            // No filtramos por quimicosSeleccionados porque Rastreros/Voladores tienen formato operacional
+                            
                             $ingActivo = '---';
                             // Intentar buscar ingrediente activo del catálogo
                             $productoDB = \App\Models\Producto::whereRaw('UPPER(descripcion) LIKE ?', ["%$prod%"])->first();
@@ -1277,7 +1343,8 @@ class InformeTecnicoController extends Controller
                         $datosServicios[$tipoServicioUpper] = [
                             'quimicos' => [],
                             'areas_aplicadas' => [],
-                            'productos' => []
+                            'productos' => [],
+                            'equipos_raw' => []
                         ];
                     }
                     
@@ -1290,10 +1357,37 @@ class InformeTecnicoController extends Controller
                         }
                     }
                     
+                    if (is_array($fQ->equipos)) {
+                        foreach ($fQ->equipos as $eq) {
+                            $equipoName = trim(is_array($eq) ? ($eq['equipo'] ?? '') : $eq);
+                            if ($equipoName && !in_array($equipoName, $datosServicios[$tipoServicioUpper]['equipos_raw'])) {
+                                $datosServicios[$tipoServicioUpper]['equipos_raw'][] = $equipoName;
+                            }
+                        }
+                    }
+                    
                     if (is_array($fQ->insumos_utilizados)) {
                         foreach ($fQ->insumos_utilizados as $ins) {
                             $prod = strtoupper(trim($ins['producto'] ?? ''));
                             if (!$prod) continue;
+                            
+                            $quimicosRaw = $insumosDelInfome['__quimicos_seleccionados'] ?? [];
+                            $quimicosSeleccionados = [];
+                            if (is_array($quimicosRaw) && count($quimicosRaw) > 0) {
+                                if (isset($quimicosRaw[0])) {
+                                    $quimicosSeleccionados = $quimicosRaw;
+                                } else {
+                                    $quimicosSeleccionados = $quimicosRaw[$tipoServicioUpper] ?? null;
+                                }
+                            }
+
+                            if (is_array($quimicosSeleccionados) && count($quimicosSeleccionados) > 0) {
+                                // Convertir a mayúsculas para comparar
+                                $qsUpper = array_map('strtoupper', $quimicosSeleccionados);
+                                if (!in_array($prod, $qsUpper)) {
+                                    continue;
+                                }
+                            }
                             
                             $ingActivo = '---';
                             $productoDB = \App\Models\Producto::whereRaw('UPPER(descripcion) LIKE ?', ["%$prod%"])->first();
@@ -1338,6 +1432,63 @@ class InformeTecnicoController extends Controller
                     }
                 }
             }
+            // Mapear insumosEntregados a datosServicios para asegurar que los equipos despachados tengan imagen
+            $visitasMap = [];
+            $visitasRaw = is_array($informe->visitas) ? $informe->visitas : [];
+            foreach ($visitasRaw as $v) {
+                if (isset($v['id_programacion']) && isset($v['tipo_servicio'])) {
+                    $visitasMap[$v['id_programacion']] = strtoupper(trim($v['tipo_servicio']));
+                }
+            }
+            
+            foreach ($insumosEntregados as $ins) {
+                if (!isset($ins->id_programacion) || !$ins->producto) continue;
+                
+                $tServ = $visitasMap[$ins->id_programacion] ?? 'OTROS';
+                
+                $prodDesc = strtoupper(trim($ins->producto->descripcion));
+                
+                $quimicosRaw = $insumosDelInfome['__quimicos_seleccionados'] ?? [];
+                $quimicosSeleccionados = [];
+                if (is_array($quimicosRaw) && count($quimicosRaw) > 0) {
+                    if (isset($quimicosRaw[0])) {
+                        $quimicosSeleccionados = $quimicosRaw;
+                    } else {
+                        $quimicosSeleccionados = $quimicosRaw[$tServ] ?? null;
+                    }
+                }
+                
+                if (is_array($quimicosSeleccionados) && count($quimicosSeleccionados) > 0) {
+                    $qsUpper = array_map('strtoupper', $quimicosSeleccionados);
+                    if (!in_array($prodDesc, $qsUpper)) {
+                        continue;
+                    }
+                }
+                if (!isset($datosServicios[$tServ])) {
+                    $datosServicios[$tServ] = ['quimicos' => [], 'areas_aplicadas' => [], 'productos' => [], 'equipos_raw' => []];
+                }
+                $datosServicios[$tServ]['equipos_raw'][] = $ins->producto->descripcion;
+            }
+
+            // También traer los equipos asignados a la Orden de Servicio de cada Programación
+            if (!empty($idProgramaciones)) {
+                $programacionesParaEquipos = \App\Models\ProgramacionServicio::with(['ordenServicio.equipos.equipo'])
+                    ->whereIn('id', $idProgramaciones)
+                    ->get();
+                foreach ($programacionesParaEquipos as $prog) {
+                    $tServ = $visitasMap[$prog->id] ?? 'OTROS';
+                    if (!isset($datosServicios[$tServ])) {
+                        $datosServicios[$tServ] = ['quimicos' => [], 'areas_aplicadas' => [], 'productos' => [], 'equipos_raw' => []];
+                    }
+                    if ($prog->ordenServicio && $prog->ordenServicio->equipos) {
+                        foreach ($prog->ordenServicio->equipos as $ordEq) {
+                            if ($ordEq->equipo) {
+                                $datosServicios[$tServ]['equipos_raw'][] = $ordEq->equipo->descripcion;
+                            }
+                        }
+                    }
+                }
+            }
 
             // Procesar imágenes y equipos para cada tipo de servicio
             foreach ($datosServicios as $tipoServ => &$ds) {
@@ -1345,6 +1496,11 @@ class InformeTecnicoController extends Controller
                 $insumosAprocesar = [];
                 foreach ($ds['quimicos'] as $q) {
                     $insumosAprocesar[] = ['producto' => $q['producto']];
+                }
+                if (!empty($ds['equipos_raw'])) {
+                    foreach ($ds['equipos_raw'] as $eq) {
+                        $insumosAprocesar[] = ['producto' => $eq];
+                    }
                 }
                 
                 if (str_contains($tipoServ, 'LIMPIEZA')) {
@@ -1581,11 +1737,25 @@ class InformeTecnicoController extends Controller
             'evidencias' => 'nullable|array',
             'conclusiones' => 'nullable',
             'insumos' => 'nullable|array',
+            'insumos_roedores' => 'nullable|array',
+            'insumos_quimicos_seleccionados' => 'nullable|array',
             'estado' => 'nullable|string|max:50',
             'estilo' => 'nullable|string|max:50',
         ]);
 
         $validated['conclusiones'] = $this->normalizarConclusiones($validated['conclusiones'] ?? null);
+        
+        $insumos = $request->input('insumos', []);
+        $insumosRoedores = $request->input('insumos_roedores', []);
+        $insumosQuimicosSeleccionados = $request->input('insumos_quimicos_seleccionados');
+        
+        if (!empty($insumosRoedores)) {
+            $insumos['__roedores'] = $insumosRoedores;
+        }
+        if (is_array($insumosQuimicosSeleccionados)) {
+            $insumos['__quimicos_seleccionados'] = $insumosQuimicosSeleccionados;
+        }
+        $validated['insumos'] = $insumos;
 
         // En este proyecto se usa la tabla 'personal' para usuarios/empleados
         $idUsuario = (int) ($request->user()?->id ?? 10); 
@@ -1634,11 +1804,28 @@ class InformeTecnicoController extends Controller
             'evidencias' => 'nullable|array',
             'conclusiones' => 'nullable',
             'insumos' => 'nullable|array',
+            'insumos_roedores' => 'nullable|array',
+            'insumos_quimicos_seleccionados' => 'nullable|array',
             'estado' => 'nullable|string|max:50',
             'estilo' => 'nullable|string|max:50',
         ]);
 
-        $validated['conclusiones'] = $this->normalizarConclusiones($validated['conclusiones'] ?? null);
+        if (array_key_exists('conclusiones', $validated)) {
+            $validated['conclusiones'] = $this->normalizarConclusiones($validated['conclusiones']);
+        }
+
+        if ($request->has('insumos') || $request->has('insumos_roedores') || $request->has('insumos_quimicos_seleccionados')) {
+            $insumos = $request->input('insumos', $informe->insumos ?? []);
+            $insumosRoedores = $request->input('insumos_roedores');
+            $insumosQuimicosSeleccionados = $request->input('insumos_quimicos_seleccionados');
+            if ($insumosRoedores !== null) {
+                $insumos['__roedores'] = $insumosRoedores;
+            }
+            if ($insumosQuimicosSeleccionados !== null && is_array($insumosQuimicosSeleccionados)) {
+                $insumos['__quimicos_seleccionados'] = $insumosQuimicosSeleccionados;
+            }
+            $validated['insumos'] = $insumos;
+        }
 
         $informe->update($validated);
 
@@ -1669,11 +1856,19 @@ class InformeTecnicoController extends Controller
             $roedores = trim((string) ($value['roedores'] ?? ''));
             $voladores = trim((string) ($value['voladores'] ?? ''));
             $rastreros = trim((string) ($value['rastreros'] ?? ''));
-            $limpieza = trim((string) ($value['limpieza'] ?? ''));
+            $limpieza = trim((string) ($value['limpieza'] ?? '')); // Por compatibilidad
+            
+            $otros = [];
+            if (isset($value['otros']) && is_array($value['otros'])) {
+                foreach ($value['otros'] as $servicio => $texto) {
+                    $otros[trim((string)$servicio)] = trim((string)$texto);
+                }
+            }
+
             $voladoresAnexo = !empty($value['voladores_anexo']) ? true : false;
             $voladoresResultados = trim((string) ($value['voladores_resultados'] ?? ''));
 
-            if ($roedores === '' && $voladores === '' && $rastreros === '' && $limpieza === '' && !$voladoresAnexo && $voladoresResultados === '') {
+            if ($roedores === '' && $voladores === '' && $rastreros === '' && $limpieza === '' && empty($otros) && !$voladoresAnexo && $voladoresResultados === '') {
                 return null;
             }
 
@@ -1682,6 +1877,7 @@ class InformeTecnicoController extends Controller
                 'voladores' => $voladores,
                 'rastreros' => $rastreros,
                 'limpieza' => $limpieza,
+                'otros' => $otros,
                 'voladores_anexo' => $voladoresAnexo,
                 'voladores_resultados' => $voladoresResultados,
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

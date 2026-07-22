@@ -68,8 +68,8 @@ import {
 } from './modules/operaciones/operaciones.view'
 import { programacionServicioService } from './modules/programaciones/programacion-servicio/programacion-servicio.service'
 import type { Programacion } from './modules/programaciones/programaciones.types'
-// Reportes
-import { renderReportes } from './modules/reportes/reportes.view'
+// Investigación
+import { renderInvestigacion } from './modules/investigacion/investigacion.view'
 // Usuarios
 import { renderUsuarios, initUsuariosEvents } from './modules/usuarios/usuarios.view'
 
@@ -99,6 +99,7 @@ let operacionesRealizadosCardsCache = new Map<string, ServicioRealizadoCardViewM
 let operacionesGroupsCache: any[] = [];
 
 type FichaOperacionalApiData = {
+  id?: number | null;
   estado?: string | null;
   cliente?: string | null;
   direccion?: string | null;
@@ -180,7 +181,7 @@ const MENU_PERMISOS: Record<string, string[]> = {
   'Facturación': ['finanzas'],
   'Recursos Humanos': ['rrhh-asistencia', 'rrhh-tecnicos', 'rrhh-reportes', 'marcar-asistencia'],
   'Operaciones': ['ods', 'odp', 'servicios', 'operaciones'],
-  'Reportes': ['dashboard'],  // Todos con dashboard ven reportes
+  'Investigación': ['reportes', 'investigacion', 'dashboard'], // Todos con reporte o investigacion o dashboard lo ven (temporalmente para no romper)
   'Usuarios': ['usuarios'],
 };
 
@@ -291,7 +292,7 @@ const menuItems = [
   { name: 'Facturación', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>', submenu: [] },
   { name: 'Recursos Humanos', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>', submenu: [] },
   { name: 'Operaciones', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path></svg>', submenu: [] },
-  { name: 'Reportes', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>', submenu: [] },
+  { name: 'Investigación', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>', submenu: [] },
   { name: 'Usuarios', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>', submenu: [] }
 ];
 
@@ -420,8 +421,8 @@ function getMainContent() {
     return renderRecursosHumanos();
   } else if (activeMenu === 'Operaciones') {
     return renderOperaciones();
-  } else if (activeMenu === 'Reportes') {
-    return renderReportes();
+  } else if (activeMenu === 'Investigación') {
+    return renderInvestigacion();
   } else if (activeMenu === 'Usuarios') {
     const html = renderUsuarios();
     setTimeout(() => initUsuariosEvents(), 0);
@@ -1320,10 +1321,11 @@ function normalizeFicha(data: FichaOperacionalApiData): FichaOperacionalViewMode
     : null;
 
   return {
+    id: data.id ?? null,
     estado: String(data.estado ?? '').trim(),
     cliente: String(data.cliente ?? '').trim(),
     direccion: String(data.direccion ?? '').trim(),
-    fecha: String(data.fecha ?? '').trim(),
+    fecha: (data.fecha ? String(data.fecha).substring(0, 10) : ''),
     horaLlegada: String(data.hora_llegada ?? '').trim(),
     horaInicio: String(data.hora_inicio ?? '').trim(),
     horaFinal: String(data.hora_final ?? '').trim(),
@@ -1365,6 +1367,8 @@ function normalizeFormato(data: FormatoOperacionalApiData): FormatoOperacionalVi
         ? section.items.map((item) => {
           const itemAny = item as any;
           return {
+            id: Number(itemAny.id ?? 0) || null,
+            ocultoEnFalsa: Boolean(itemAny.oculto_en_falsa),
             codigoCaja: String(itemAny.codigo_caja ?? '').trim(),
             ubicacion: String(itemAny.ubicacion ?? '').trim(),
             estadoDispositivoVerdadera: String(itemAny.estado_dispositivo_verdadera ?? itemAny.estado_dispositivo ?? '').trim(),
@@ -1476,7 +1480,82 @@ function abrirModalFichaOperacional(card: ServicioRealizadoCardViewModel, ficha:
         }
       } catch (error) {
         console.error('Error descargando PDF de ficha operacional:', error);
-        alert('No se pudo descargar el PDF. Verifique que la ficha esté guardada.');
+        const { mostrarToast } = await import('./shared/toast');
+        mostrarToast('error', 'Error', 'No se pudo descargar el PDF de la ficha');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    });
+  });
+
+  // Botón Editar
+  host.querySelectorAll('.js-edit-ficha-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      host.querySelectorAll('.ficha-view-mode').forEach(el => (el as HTMLElement).style.display = 'none');
+      host.querySelectorAll('.ficha-edit-mode').forEach(el => (el as HTMLElement).style.display = 'block');
+      (button as HTMLElement).style.display = 'none';
+      host.querySelector('.js-save-ficha-btn')?.setAttribute('style', 'display:flex;align-items:center;gap:6px;background:#10b981;color:#fff;border:none;padding:0 12px;font-weight:600;border-radius:6px;cursor:pointer;');
+    });
+  });
+
+  // Botón Guardar
+  host.querySelectorAll('.js-save-ficha-btn').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const btn = button as HTMLButtonElement;
+      const fichaId = btn.dataset.fichaId;
+      if (!fichaId || fichaId === 'null') {
+        alert('No se puede guardar porque esta ficha no tiene un ID válido asignado en el sistema.');
+        return;
+      }
+
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span>Guardando...</span>';
+
+      const giro = (host.querySelector('#edit-ficha-giro') as HTMLInputElement)?.value;
+      const fecha = (host.querySelector('#edit-ficha-fecha') as HTMLInputElement)?.value;
+      const diagnostico = (host.querySelector('#edit-ficha-diagnostico') as HTMLTextAreaElement)?.value;
+      const condicionSanitaria = (host.querySelector('#edit-ficha-condicion') as HTMLTextAreaElement)?.value;
+
+      try {
+        const { apiClient } = await import('./core/api/api.client');
+        await apiClient.put(`/fichas-operacionales/${fichaId}`, {
+          giro,
+          fecha,
+          diagnostico,
+          condicion_sanitaria: condicionSanitaria
+        });
+
+        const { mostrarToast } = await import('./shared/toast');
+        mostrarToast('success', 'Guardado', 'La Ficha Operacional se actualizó correctamente');
+
+        // Actualizar UI
+        const viewGiro = host.querySelector('#edit-ficha-giro')?.previousElementSibling;
+        if (viewGiro) viewGiro.textContent = giro || 'No registrado';
+        
+        const viewFecha = host.querySelector('#edit-ficha-fecha')?.previousElementSibling;
+        if (viewFecha) viewFecha.textContent = fecha || 'No registrado';
+        
+        const viewDiag = host.querySelector('#edit-ficha-diagnostico')?.previousElementSibling;
+        if (viewDiag) viewDiag.textContent = diagnostico || 'Sin diagnóstico registrado';
+        
+        const viewCond = host.querySelector('#edit-ficha-condicion')?.previousElementSibling;
+        if (viewCond) viewCond.textContent = condicionSanitaria || 'Sin condición registrada';
+
+        // Volver a modo lectura
+        host.querySelectorAll('.ficha-view-mode').forEach(el => (el as HTMLElement).style.display = ''); 
+        host.querySelectorAll('.ficha-edit-mode').forEach(el => (el as HTMLElement).style.display = 'none');
+        btn.style.display = 'none';
+        
+        const editBtn = host.querySelector('.js-edit-ficha-btn') as HTMLElement;
+        if (editBtn) {
+           editBtn.style.display = 'flex';
+        }
+      } catch (error) {
+        console.error('Error guardando ficha:', error);
+        const { mostrarToast } = await import('./shared/toast');
+        mostrarToast('error', 'Error', 'Ocurrió un error al guardar los cambios.');
       } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -1549,6 +1628,113 @@ function abrirModalFormatoOperacional(card: ServicioRealizadoCardViewModel, form
       }
     });
   });
+
+  // Logic for toggling views between Verdadera and Falsa
+  const selector = host.querySelector('.js-tipo-pdf-selector') as HTMLSelectElement | null;
+  const btnEditFalsa = host.querySelector('.js-edit-formato-falsa-btn') as HTMLButtonElement | null;
+  const btnSaveFalsa = host.querySelector('.js-save-formato-falsa-btn') as HTMLButtonElement | null;
+  const btnDownload = host.querySelector('.js-download-formato-pdf') as HTMLButtonElement | null;
+  
+  const containerVerdadera = host.querySelector('#operaciones-hoja-verdadera-container') as HTMLElement | null;
+  const containerFalsa = host.querySelector('#operaciones-hoja-falsa-container') as HTMLElement | null;
+  const containerFalsaEdit = host.querySelector('#operaciones-hoja-falsa-edit-container') as HTMLElement | null;
+
+  // Initial state for Falsa container
+  if (containerFalsa) containerFalsa.style.display = 'none';
+
+  if (selector && containerVerdadera && containerFalsa && btnEditFalsa) {
+    selector.addEventListener('change', () => {
+      const isFalsa = selector.value === 'falsa';
+      if (isFalsa) {
+        containerVerdadera.style.display = 'none';
+        containerFalsa.style.display = 'block';
+        btnEditFalsa.style.display = 'flex';
+      } else {
+        containerVerdadera.style.display = 'block';
+        containerFalsa.style.display = 'none';
+        btnEditFalsa.style.display = 'none';
+      }
+      if (containerFalsaEdit) containerFalsaEdit.style.display = 'none';
+      if (btnSaveFalsa) btnSaveFalsa.style.display = 'none';
+      if (btnDownload) btnDownload.style.display = 'flex';
+    });
+
+    btnEditFalsa.addEventListener('click', () => {
+      containerVerdadera.style.display = 'none';
+      containerFalsa.style.display = 'none';
+      if (containerFalsaEdit) containerFalsaEdit.style.display = 'block';
+      
+      btnEditFalsa.style.display = 'none';
+      if (btnDownload) btnDownload.style.display = 'none';
+      if (btnSaveFalsa) btnSaveFalsa.style.display = 'flex';
+      selector.style.display = 'none';
+    });
+
+    if (btnSaveFalsa) {
+      btnSaveFalsa.addEventListener('click', async () => {
+        btnSaveFalsa.disabled = true;
+        btnSaveFalsa.innerHTML = 'Recargando...';
+        try {
+          const { apiClient } = await import('./core/api/api.client');
+          const groupUrl = card.groupId 
+            ? `/programacion-servicio/grupos/${card.groupId}/formato-operacional` 
+            : `/programacion-servicio/${card.serviceId}/formato-operacional`;
+          const rawData = await apiClient.get<any>(groupUrl);
+          
+          if (rawData.data) {
+            const updatedFormato = normalizeFormato(rawData.data);
+            host.remove();
+            abrirModalFormatoOperacional(card, updatedFormato);
+            
+            // Open it in "falsa" mode immediately
+            setTimeout(() => {
+              const newHost = document.getElementById('operaciones-formato-modal-host');
+              if (newHost) {
+                 const newSelector = newHost.querySelector('.js-tipo-pdf-selector') as HTMLSelectElement | null;
+                 if (newSelector) {
+                   newSelector.value = 'falsa';
+                   newSelector.dispatchEvent(new Event('change'));
+                 }
+              }
+            }, 50);
+          }
+        } catch (error) {
+          console.error('Error reloading formato:', error);
+          alert('Error recargando la hoja');
+        }
+      });
+    }
+
+    host.querySelectorAll('.js-toggle-visibilidad').forEach((checkbox) => {
+      checkbox.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        const id = target.dataset.detalleId;
+        const isVisible = target.checked;
+        
+        target.disabled = true;
+        try {
+          const { apiClient } = await import('./core/api/api.client');
+          await apiClient.patch(`/formato-operacional-detalles/${id}/toggle-visibilidad`, {});
+          
+          const row = target.closest('tr') || target.closest('div[style*="box-shadow"]');
+          if (row) {
+            if (!isVisible) {
+              row.style.opacity = '0.5';
+              row.style.background = '#f8fafc';
+            } else {
+              row.style.opacity = '1';
+              row.style.background = '#fff';
+            }
+          }
+        } catch (error) {
+          console.error('Error toggle visibilidad:', error);
+          target.checked = !isVisible; // Revert
+        } finally {
+          target.disabled = false;
+        }
+      });
+    });
+  }
 
   document.addEventListener('keydown', function onEsc(event) {
     if (event.key !== 'Escape') return;
