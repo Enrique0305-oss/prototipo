@@ -1044,6 +1044,13 @@ class FormatoOperacionalController extends Controller
                 ->get();
             
             if ($formatosGrupo->isNotEmpty()) {
+                // Priorizar el formato creado específicamente desde esta programación
+                $formatoPropio = $formatosGrupo->firstWhere('id_programacion_servicio', $progRequest->id);
+                if ($formatoPropio) {
+                    // Verificar si el formato propio tiene detalles, si no, igual preferimos el propio
+                    return $formatoPropio;
+                }
+
                 return $formatosGrupo->sortByDesc(function ($f) {
                     return $f->detalles->filter(function ($d) {
                         return !empty($d->estado_dispositivo_verdadera) || 

@@ -486,6 +486,10 @@ export function renderProgramaciones(): string {
           <option value="semanal" ${vistaActual === 'semanal' ? 'selected' : ''}>Vista Semanal</option>
           <option value="mensual" ${vistaActual === 'mensual' ? 'selected' : ''}>Vista Mensual</option>
         </select>
+        <a href="/manuales/manual_programacion.pdf" download="Manual_Programacion_Servicios_QSCI.pdf" class="prog-btn-secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none;" title="Descargar Manual de Programación">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Descargar Manual
+        </a>
         <button class="prog-btn-secondary" id="btnExportarPDF" title="Exportar a PDF">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
           Exportar PDF
@@ -2188,6 +2192,10 @@ function renderFormNueva(body: HTMLElement) {
  * Verifica si hay conflicto de horarios para un técnico en una fecha específica
  */
 function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: string, horaInicio: string, horaFin: string): { hayConflicto: boolean; conflictoDetalle: string } {
+  // Validación de conflicto de horarios desactivada temporalmente
+  return { hayConflicto: false, conflictoDetalle: '' };
+
+  /*
   // Convertir hora a minutos desde medianoche para comparación
   const horaAMinutos = (hora: string | undefined | null): number => {
     if (!hora) return 0;
@@ -2234,6 +2242,7 @@ function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: str
   }
   
   return { hayConflicto: false, conflictoDetalle: '' };
+  */
 }
 
 async function submitIndividual(body: HTMLElement) {

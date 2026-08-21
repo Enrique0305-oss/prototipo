@@ -395,6 +395,10 @@ export function renderDashboardProgramacionServicio(): string {
           <p style="margin:6px 0 0;color:#64748b;font-size:13px;">Vista independiente para control operativo de programación de servicios.</p>
         </div>
         <div class="prog-actions" style="display:flex;gap:8px;align-items:center;">
+          <a href="/manuales/manual_programacion.pdf" download="Manual_Programacion_Servicios_QSCI.pdf" class="prog-btn-secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none;" title="Descargar Manual de Programación">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Descargar Manual
+          </a>
           <button class="prog-btn-icon" id="prog-serv-dash-prev" title="Mes anterior"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
           <span id="prog-serv-dash-period-label" style="min-width:150px;text-align:center;font-weight:600;color:#1e293b;">${formatMonthLabel(dashboardMonth)}</span>
           <button class="prog-btn-icon" id="prog-serv-dash-next" title="Mes siguiente"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg></button>

@@ -2314,6 +2314,10 @@ function renderFormNueva(body: HTMLElement) {
  * Verifica si hay conflicto de horarios para un técnico en una fecha específica
  */
 function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: string, horaInicio: string, horaFin: string): { hayConflicto: boolean; conflictoDetalle: string } {
+  // Validación de conflicto de horarios desactivada temporalmente
+  return { hayConflicto: false, conflictoDetalle: '' };
+
+  /*
   // Convertir hora a minutos desde medianoche para comparación
   const horaAMinutos = (hora: string | undefined | null): number => {
     if (!hora) return 0;
@@ -2360,6 +2364,7 @@ function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: str
   }
   
   return { hayConflicto: false, conflictoDetalle: '' };
+  */
 }
 
 async function submitIndividual(body: HTMLElement) {

@@ -1106,7 +1106,7 @@ function bindEvents() {
         motivo: payload.motivo,
         tipo_mantenimiento: payload.tipo,
         fecha_programada: payload.fecha_programada,
-        frecuencia_meses: payload.tipo === 'Limpieza' ? payload.frecuencia_meses : 0,
+        frecuencia_meses: payload.tipo === 'Limpieza' ? payload.frecuencia_meses : undefined,
         kilometraje: payload.kilometraje,
         observaciones: payload.observaciones,
       } as any);
@@ -1117,7 +1117,7 @@ function bindEvents() {
         motivo: payload.motivo,
         tipo_mantenimiento: payload.tipo,
         fecha_programada: payload.fecha_programada,
-        frecuencia_meses: payload.tipo === 'Limpieza' ? payload.frecuencia_meses : 0,
+        frecuencia_meses: payload.tipo === 'Limpieza' ? payload.frecuencia_meses : undefined,
         kilometraje: payload.kilometraje,
         observaciones: payload.observaciones,
       });

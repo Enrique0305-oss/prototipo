@@ -169,8 +169,8 @@
             <div class="seccion-descripcion">
                 Presentamos a su consideración la oferta económica, a continuación, definiremos los componentes que hacen parte del alcance de la propuesta.
                 <ul>
-                    <li>INFORMACIÓN: La organización cumple con lso parámetros establecidos conforme DS 022 - 2001 SA del MInisterio de Salud que regula las actividades de Saneamiento Ambiental</li>
-                    <li>Las actividades se realizarán en las siguiente dirección: {{ $cotizacion->cliente?->direccion ?? 'No registrada' }}</li>
+                    <li>INFORMACIÓN: La organización cumple con los parámetros establecidos conforme DS 022 - 2001 SA del MInisterio de Salud que regula las actividades de Saneamiento Ambiental</li>
+                    <li>Las actividades se realizarán en la siguiente dirección: {{ $cotizacion->cliente?->direccion ?? 'No registrada' }}</li>
                 </ul>
             </div>
 
@@ -840,7 +840,7 @@
                             <td>
                                 <strong>{{ $detalle->servicio?->nombre ?? $detalle?->descripcion_manual ?? 'N/A' }}</strong>
                                 @if($areaTexto !== '')
-                                    <br><small style="display: block; margin-top: 2px; color: #6CB52D; font-size: 10px; line-height: 1.2;"><em>Área: {{ $areaTexto }}</em></small>
+                                    <br><small style="display: block; margin-top: 2px; color: #131354; font-size: 10px; line-height: 1.2;"><em>Área: {{ $areaTexto }}</em></small>
                                 @endif
                             </td>
                             @if(!$mostrarServicioFosfina)
@@ -954,8 +954,6 @@
                         <li>Se requiere realizar inspección previa para verificar las condiciones e identificar cualquier situación de riesgo para implementar los controles apropiados.</li>
                         <li>Vigencia de la oferta: 15 días.</li>
                     @elseif($esSoloLimpieza)
-                        <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
-                        la actividad</li>
                         <li>El cliente debe garantizar el acceso a las áreas que serán objeto del control para el día que se programe
                         la actividad</li>
                         <li>El presupuesto se basa en la metodología actualmente vigente. Sin embargo, si se determina que es 

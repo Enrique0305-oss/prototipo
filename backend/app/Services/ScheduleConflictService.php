@@ -11,6 +11,10 @@ class ScheduleConflictService
 {
     public static function validarTecnicos(array $tecnicoIds, string $fecha, ?string $horaInicio, ?string $horaFin = null, array $ignore = []): ?array
     {
+        // Validaciones de conflicto de agenda desactivadas temporalmente
+        return null;
+
+        /*
         $tecnicos = self::normalizeIds($tecnicoIds);
         if (empty($tecnicos)) {
             return null;
@@ -50,10 +54,15 @@ class ScheduleConflictService
             . ($idProgramacion > 0 ? ' #' . $idProgramacion : '')
             . ' en ese horario (' . $horario . ').';
         return $conflictoVinculado;
+        */
     }
 
     public static function validarExponentes(array $exponenteIds, string $fecha, ?string $horaInicio, ?string $horaFin = null, array $ignore = []): ?array
     {
+        // Validaciones de conflicto de agenda desactivadas temporalmente
+        return null;
+
+        /*
         $exponentes = self::normalizeIds($exponenteIds);
         if (empty($exponentes)) {
             return null;
@@ -93,16 +102,22 @@ class ScheduleConflictService
             . ($idProgramacion > 0 ? ' #' . $idProgramacion : '')
             . ' en ese horario (' . $horario . ').';
         return $conflictoVinculado;
+        */
     }
 
     public static function validarPersonal(array $personalIds, string $fecha, ?string $horaInicio, ?string $horaFin = null, array $ignore = []): ?array
     {
+        // Validaciones de conflicto de agenda desactivadas temporalmente
+        return null;
+
+        /*
         $personal = self::normalizeIds($personalIds);
         if (empty($personal)) {
             return null;
         }
 
         return self::buscarConflictoPersonalDirecto($personal, $fecha, $horaInicio, $horaFin, $ignore);
+        */
     }
 
     private static function buscarConflictoTecnicoDirecto(array $tecnicoIds, string $fecha, ?string $horaInicio, ?string $horaFin, array $ignore): ?array

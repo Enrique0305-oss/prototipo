@@ -60,8 +60,6 @@ const FORMATOS_FICHAS_SERVICIO = [
   'CONTROL DE ROEDORES',
   'CONTROL DE INSECTOS RASTREROS',
   'CONTROL DE INSECTOS VOLADORES',
-  'REPORTE DE PRE - DESINSECTACION',
-  'REPORTE DE POST - DESINSECTACION',
 ];
 
 type GrupoProgramacionManual = {
@@ -979,6 +977,10 @@ export function renderProgramacionServicio(): string {
           <option value="semanal" ${vistaActual === 'semanal' ? 'selected' : ''}>Vista Semanal</option>
           <option value="mensual" ${vistaActual === 'mensual' ? 'selected' : ''}>Vista Mensual</option>
         </select>
+        <a href="/manuales/manual_programacion.pdf" download="Manual_Programacion_Servicios_QSCI.pdf" class="prog-btn-secondary" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none;" title="Descargar Manual de Programación">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Descargar Manual
+        </a>
         <button class="prog-btn-secondary" id="btnExportarPDF" title="Exportar a PDF">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
           Exportar PDF
@@ -3769,12 +3771,17 @@ function renderFormNueva(body: HTMLElement) {
 
         <!-- ODS -->
         <div class="prog-form-section">
-          <h3 class="prog-form-section-title">Orden de Servicio</h3>
+          <h3 class="prog-form-section-title">Cliente y Orden de Servicio</h3>
           <div class="prog-form-group">
+            <label class="prog-form-label">Cliente (Empresa) <span class="prog-required">*</span></label>
+            <select class="prog-form-control" id="selectClienteODS" required>
+              <option value="">Seleccionar cliente...</option>
+            </select>
+          </div>
+          <div class="prog-form-group" style="margin-top: 12px;">
             <label class="prog-form-label">ODS Aprobada <span class="prog-required">*</span></label>
-            <select class="prog-form-control" name="id_orden_servicio" id="selectODS" required>
-              <option value="">Seleccionar orden...</option>
-              ${odsDisponibles.map(o => `<option value="${o.id}">${o.numero_orden} — ${o.cliente}</option>`).join('')}
+            <select class="prog-form-control" name="id_orden_servicio" id="selectODS" required disabled>
+              <option value="">Primero seleccione un cliente...</option>
             </select>
           </div>
           <div id="detallesODS"></div>
@@ -3947,6 +3954,36 @@ function renderFormNueva(body: HTMLElement) {
   renderFormatoFichasPickerOptionsServicio(body);
   actualizarResumenFormatosFichasServicio(body);
   bindFormatoFichasInteractionsServicio(body);
+
+  const selectClienteODS = body.querySelector('#selectClienteODS') as HTMLSelectElement;
+  if (selectClienteODS) {
+    const clientesUnicos = new Map<number, {id: number, nombre: string}>();
+    odsDisponibles.forEach(o => {
+      if (o.id_cliente && !clientesUnicos.has(o.id_cliente)) {
+        clientesUnicos.set(o.id_cliente, { id: o.id_cliente, nombre: o.cliente });
+      }
+    });
+    const clientesList = Array.from(clientesUnicos.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    selectClienteODS.innerHTML = '<option value="">Seleccionar cliente...</option>' +
+      clientesList.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+
+    selectClienteODS.addEventListener('change', () => {
+      const idCliente = parseInt(selectClienteODS.value);
+      if (isNaN(idCliente)) {
+        selectODS.innerHTML = '<option value="">Primero seleccione un cliente...</option>';
+        selectODS.disabled = true;
+      } else {
+        const odsCliente = odsDisponibles.filter(o => o.id_cliente === idCliente);
+        selectODS.innerHTML = '<option value="">Seleccionar orden...</option>' +
+          odsCliente.map(o => {
+            const servicios = o.detalles.map(d => d.servicio_nombre).join(', ');
+            return `<option value="${o.id}">${o.numero_orden} — ${servicios}</option>`;
+          }).join('');
+        selectODS.disabled = false;
+      }
+      selectODS.dispatchEvent(new Event('change'));
+    });
+  }
 
   selectODS?.addEventListener('change', async () => {
     areaIdsServicioSeleccionado = [];
@@ -4143,6 +4180,10 @@ function renderFormNueva(body: HTMLElement) {
  * Verifica si hay conflicto de horarios para un técnico en una fecha específica
  */
 function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: string, horaInicio: string, horaFin: string): { hayConflicto: boolean; conflictoDetalle: string } {
+  // Validación de conflicto de horarios desactivada temporalmente
+  return { hayConflicto: false, conflictoDetalle: '' };
+
+  /*
   // Convertir hora a minutos desde medianoche para comparación
   const horaAMinutos = (hora: string | undefined | null): number => {
     if (!hora) return 0;
@@ -4190,6 +4231,7 @@ function verificarConflictosHorarios(tecnicosIds: number[], fechaProgramada: str
   }
   
   return { hayConflicto: false, conflictoDetalle: '' };
+  */
 }
 
 async function submitIndividual(body: HTMLElement) {
