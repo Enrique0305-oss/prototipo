@@ -533,7 +533,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Finanzas - Caja Chica
     Route::get('/caja-chica', [CajaChicaController::class, 'index']);
     Route::post('/caja-chica', [CajaChicaController::class, 'store']);
+    Route::put('/caja-chica/{id}', [CajaChicaController::class, 'update']);
     Route::delete('/caja-chica/{id}', [CajaChicaController::class, 'destroy']);
+    Route::get('/caja-chica/{id}/historial', [CajaChicaController::class, 'historial']);
+
+    // Notificaciones Internas
+    Route::get('/notificaciones', [\App\Http\Controllers\API\NotificacionController::class, 'index']);
+    Route::post('/notificaciones/read-all', [\App\Http\Controllers\API\NotificacionController::class, 'markAllAsRead']);
+    Route::post('/notificaciones/{id}/read', [\App\Http\Controllers\API\NotificacionController::class, 'markAsRead']);
     
     Route::get('/estado-cuenta', [EstadoCuentaController::class, 'index']);
     Route::post('/estado-cuenta', [EstadoCuentaController::class, 'store']);

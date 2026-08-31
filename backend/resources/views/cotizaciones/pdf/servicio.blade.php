@@ -651,7 +651,7 @@
                 <div class="proporsal-text">
                     <span class="seccion-titulo-num">2.1.3</span> Documentación 
                     @if($esSoloLimpieza)
-                        <p>Relizamos nuestras actividades bajo estándares de BRC Foods Ver.9, 
+                        <p>Realizamos nuestras actividades bajo estándares de BRC Foods Ver.9, 
                             AIB y FSSC 22000 por tanto, contamos con la siguiente documentación 
                             que es entregada al cliente:</p>
                             <ul>

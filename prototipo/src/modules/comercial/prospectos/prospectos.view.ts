@@ -330,7 +330,7 @@ function abrirModalNuevoProspecto() {
               <input type="text" id="new-p-ruc" name="ruc" required maxlength="11" minlength="11" class="form-input" placeholder="20XXXXXXXXX">
             </div>
             <div class="form-group">
-              <label for="new-p-rubro">Rubro / Sector *</label>
+              <label for="new-p-rubro">Interes *</label>
               <input type="text" id="new-p-rubro" name="rubro" required maxlength="150" class="form-input" placeholder="Ej: Industria Textil">
             </div>
             <div class="form-group">
@@ -482,7 +482,7 @@ async function abrirModalEditarProspecto(id: number) {
               <input type="text" id="edit-p-ruc" name="ruc" required maxlength="11" minlength="11" class="form-input" value="${cliente.ruc}">
             </div>
             <div class="form-group">
-              <label for="edit-p-rubro">Rubro / Sector *</label>
+              <label for="edit-p-rubro">Interes *</label>
               <input type="text" id="edit-p-rubro" name="rubro" required maxlength="150" class="form-input" value="${cliente.rubro}">
             </div>
             <div class="form-group">

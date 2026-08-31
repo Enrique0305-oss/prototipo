@@ -119,7 +119,7 @@ function renderTable(): void {
   } else {
     tbody.innerHTML = filteredMovimientos.map(mov => {
       let rows = `
-      <tr style="border-bottom:1px solid #f1f5f9; ${mov.detalles && mov.detalles.length > 0 ? 'background:#f8fafc;' : ''}">
+      <tr id="caja-row-${mov.id}" style="border-bottom:1px solid #f1f5f9; ${mov.detalles && mov.detalles.length > 0 ? 'background:#f8fafc;' : ''}; transition: background-color 1s ease;">
         <td style="padding:12px 16px;">${formatDate(mov.fecha)}</td>
         <td style="padding:12px 16px;">
           <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;${
@@ -137,6 +137,22 @@ function renderTable(): void {
         <td style="padding:12px 16px;color:#dc2626;font-weight:500;">${mov.tipo_movimiento === 'Egreso' ? formatCurrency(mov.egreso) : '—'}</td>
         <td style="padding:12px 16px;color:#059669;font-weight:500;">${mov.tipo_movimiento === 'Ingreso' ? formatCurrency(mov.ingreso) : '—'}</td>
         <td style="padding:12px 16px;font-weight:700;color:#0f172a;background:#f8fafc;">${formatCurrency(mov.saldo_actual)}</td>
+        <td style="padding:12px 16px;text-align:right;">
+          <div style="display:flex;gap:4px;justify-content:flex-end;">
+            <button type="button" class="btn-historial-caja" data-id="${mov.id}" title="Ver Historial" style="background:none;border:none;color:#64748b;cursor:pointer;padding:4px;" onmouseover="this.style.color='#f59e0b'" onmouseout="this.style.color='#64748b'">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </button>
+            <button type="button" class="btn-editar-caja" data-id="${mov.id}" title="Editar" style="background:none;border:none;color:#64748b;cursor:pointer;padding:4px;" onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#64748b'">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+          </div>
+        </td>
       </tr>`;
       
       if (mov.detalles && mov.detalles.length > 0) {
@@ -157,6 +173,23 @@ function renderTable(): void {
       }
       return rows;
     }).join('');
+
+    // Attach listeners for edit and delete
+    document.querySelectorAll('.btn-editar-caja').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const id = target.getAttribute('data-id');
+        if (id) (window as any).abrirModalEdicionCaja(Number(id));
+      });
+    });
+
+    document.querySelectorAll('.btn-historial-caja').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const id = target.getAttribute('data-id');
+        if (id) await (window as any).abrirModalHistorialCaja(Number(id));
+      });
+    });
   }
 
   const saldoTotalElement = document.getElementById('caja-chica-saldo-total');
@@ -217,16 +250,18 @@ async function loadData(): Promise<void> {
 
 function renderModal(): string {
   return `
+    <!-- MODAL PRINCIPAL -->
     <div id="modal-caja-chica" class="modal-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.6);z-index:9999;align-items:center;justify-content:center;">
       <div style="background:#fff;border-radius:12px;width:100%;max-width:600px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);display:flex;flex-direction:column;max-height:90vh;">
         <div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
-          <h2 style="margin:0;font-size:18px;color:#0f172a;">Nuevo Movimiento - Caja Chica</h2>
+          <h2 id="modal-caja-chica-title" style="margin:0;font-size:18px;color:#0f172a;">Nuevo Movimiento - Caja Chica</h2>
           <button id="btn-cerrar-modal" style="background:none;border:none;color:#64748b;cursor:pointer;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
         <div style="padding:24px;overflow-y:auto;">
           <form id="form-caja-chica" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <input type="hidden" name="id" id="caja-chica-id">
             <div style="grid-column:1/-1;display:flex;gap:16px;">
               <label style="flex:1;cursor:pointer;padding:12px;border:2px solid #e2e8f0;border-radius:8px;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px;">
                 <input type="radio" name="tipo_movimiento" value="Egreso" checked style="accent-color:#dc2626;transform:scale(1.2);">
@@ -295,6 +330,29 @@ function renderModal(): string {
         <div style="padding:20px 24px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:12px;background:#f8fafc;border-radius:0 0 12px 12px;">
           <button type="button" id="btn-cancelar-modal" style="padding:10px 20px;border:1px solid #cbd5e1;background:#fff;border-radius:8px;color:#334155;font-weight:600;cursor:pointer;">Cancelar</button>
           <button type="button" id="btn-guardar-movimiento" style="padding:10px 20px;border:none;background:#2563eb;color:#fff;border-radius:8px;font-weight:600;cursor:pointer;">Guardar Movimiento</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL HISTORIAL -->
+    <div id="modal-historial-caja" class="modal-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.6);z-index:10000;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:12px;width:100%;max-width:550px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);display:flex;flex-direction:column;max-height:90vh;">
+        <div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <h2 style="margin:0;font-size:18px;color:#0f172a;display:flex;align-items:center;gap:8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              Historial de Cambios
+            </h2>
+          </div>
+          <button id="btn-cerrar-historial" style="background:none;border:none;color:#64748b;cursor:pointer;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div style="padding:24px;overflow-y:auto;background:#f8fafc;" id="historial-caja-body">
+          <div style="text-align:center;color:#64748b;">Cargando...</div>
+        </div>
+        <div style="padding:16px 24px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;">
+          <button id="btn-cerrar-historial-2" style="padding:10px 20px;border:1px solid #cbd5e1;background:#fff;border-radius:8px;color:#334155;font-weight:600;cursor:pointer;">Cerrar</button>
         </div>
       </div>
     </div>
@@ -728,6 +786,13 @@ export function initCajaChicaEvents() {
 
   btnNuevo?.addEventListener('click', () => {
     if (modal) modal.style.display = 'flex';
+    (document.getElementById('caja-chica-id') as HTMLInputElement).value = '';
+    (document.getElementById('modal-caja-chica-title') as HTMLElement).textContent = 'Nuevo Movimiento - Caja Chica';
+    
+    if (form) form.reset();
+    if (detallesContainer) detallesContainer.innerHTML = '';
+    detalleIndex = 0;
+    
     const fechaInput = form?.querySelector('input[name="fecha"]') as HTMLInputElement;
     if (fechaInput) {
       fechaInput.value = getLocalDateString();
@@ -796,11 +861,49 @@ export function initCajaChicaEvents() {
       btnGuardar.textContent = 'Guardando...';
       btnGuardar.setAttribute('disabled', 'true');
       
-      const response = await finanzasService.registrarMovimientoCajaChica(data as any);
-      if (response) {
-        mostrarToast('success', 'Éxito', 'Movimiento registrado con éxito');
-        closeModal();
-        loadData();
+      const id = formData.get('id') as string;
+      if (id) {
+        // Update
+        const isEgreso = data.tipo_movimiento === 'Egreso';
+        const putData = {
+           tipo_movimiento: data.tipo_movimiento,
+           fecha: data.fecha,
+           solicitante: data.solicitante || null,
+           area: data.area || null,
+           concepto: data.concepto,
+           proveedor: data.proveedor || null,
+           documento: data.documento || null,
+           tipo_dinero: data.tipo_dinero || null,
+           numero_operacion: data.numero_operacion || null,
+           ingreso: !isEgreso ? data.subtotal : null,
+           egreso: isEgreso ? data.subtotal : null,
+           detalles: data.detalles
+        };
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/caja-chica/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authService.getToken()}`
+          },
+          body: JSON.stringify(putData)
+        });
+        const resData = await response.json();
+        if (response.ok && resData.success) {
+          mostrarToast('success', 'Éxito', resData.message || 'Registro actualizado');
+          closeModal();
+          loadData();
+        } else {
+          mostrarToast('error', 'Error', resData.message || 'Error al actualizar');
+        }
+      } else {
+        // Create
+        const response = await finanzasService.registrarMovimientoCajaChica(data as any);
+        if (response) {
+          mostrarToast('success', 'Éxito', 'Movimiento registrado con éxito');
+          closeModal();
+          loadData();
+        }
       }
     } catch (error) {
       console.error('Error guardando movimiento:', error);
@@ -947,4 +1050,132 @@ export function initCajaChicaEvents() {
       btnExportar.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Exportar Excel';
     }
   });
+
+  (window as any).abrirModalEdicionCaja = (id: number) => {
+    const mov = movimientos.find(m => m.id === id);
+    if (!mov || !modal || !form) return;
+
+    (document.getElementById('caja-chica-id') as HTMLInputElement).value = String(mov.id);
+    (document.getElementById('modal-caja-chica-title') as HTMLElement).textContent = 'Editar Movimiento - Caja Chica';
+    
+    // Set radios
+    const radIngreso = form.querySelector('input[name="tipo_movimiento"][value="Ingreso"]') as HTMLInputElement;
+    const radEgreso = form.querySelector('input[name="tipo_movimiento"][value="Egreso"]') as HTMLInputElement;
+    if (mov.tipo_movimiento === 'Ingreso' && radIngreso) radIngreso.checked = true;
+    if (mov.tipo_movimiento === 'Egreso' && radEgreso) radEgreso.checked = true;
+
+    // Set other fields
+    (form.querySelector('input[name="fecha"]') as HTMLInputElement).value = mov.fecha ? mov.fecha.substring(0, 10) : '';
+    (form.querySelector('input[name="subtotal"]') as HTMLInputElement).value = mov.tipo_movimiento === 'Ingreso' ? String(Number(mov.ingreso)) : String(Number(mov.egreso));
+    (form.querySelector('input[name="concepto"]') as HTMLInputElement).value = mov.concepto || '';
+    
+    // Set selects (they might need a tiny timeout if personalList isn't loaded, but it should be by now)
+    const selSolicitante = form.querySelector('select[name="solicitante"]') as HTMLSelectElement;
+    const selArea = form.querySelector('select[name="area"]') as HTMLSelectElement;
+    if (selSolicitante) selSolicitante.value = mov.solicitante || '';
+    if (selArea) {
+      // It might not have the option if it wasn't triggered by change, but they are loaded in loadPersonal()
+      selArea.value = mov.area || '';
+    }
+
+    (form.querySelector('input[name="proveedor"]') as HTMLInputElement).value = mov.proveedor || '';
+    (form.querySelector('input[name="documento"]') as HTMLInputElement).value = mov.documento || '';
+    (form.querySelector('input[name="tipo_dinero"]') as HTMLInputElement).value = mov.tipo_dinero || '';
+    (form.querySelector('input[name="numero_operacion"]') as HTMLInputElement).value = mov.numero_operacion || '';
+
+    if (detallesContainer) detallesContainer.innerHTML = '';
+    detalleIndex = 0;
+    if (mov.detalles && mov.detalles.length > 0) {
+      mov.detalles.forEach(d => {
+        // Trigger click on btnAddDetalle instead of repeating logic
+        btnAddDetalle?.click();
+        const inputsConcepto = detallesContainer?.querySelectorAll('input[type="text"]') as NodeListOf<HTMLInputElement>;
+        const inputsMonto = detallesContainer?.querySelectorAll('input[type="number"]') as NodeListOf<HTMLInputElement>;
+        if (inputsConcepto && inputsMonto) {
+          inputsConcepto[inputsConcepto.length - 1].value = d.concepto;
+          inputsMonto[inputsMonto.length - 1].value = String(Number(d.monto));
+        }
+      });
+    }
+
+    modal.style.display = 'flex';
+  };
+
+  (window as any).abrirModalHistorialCaja = async (id: number) => {
+    const modalHistorial = document.getElementById('modal-historial-caja');
+    const historialBody = document.getElementById('historial-caja-body');
+    if (!modalHistorial || !historialBody) return;
+
+    historialBody.innerHTML = '<div style="text-align:center;color:#64748b;padding:20px;">Cargando...</div>';
+    modalHistorial.style.display = 'flex';
+
+    try {
+      const token = authService.getToken();
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/caja-chica/${id}/historial`, {
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const result = await response.json();
+      
+      if (result.success && result.data.length > 0) {
+        historialBody.innerHTML = result.data.map((h: any) => {
+          const valsAnt = typeof h.valores_anteriores === 'string' ? JSON.parse(h.valores_anteriores) : h.valores_anteriores;
+          const valsNue = typeof h.valores_nuevos === 'string' ? JSON.parse(h.valores_nuevos) : h.valores_nuevos;
+          
+          return `
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #f1f5f9;padding-bottom:8px;">
+                <span style="font-weight:600;color:#0f172a;font-size:13px;">${h.usuario ? h.usuario.nombre : 'Usuario desconocido'}</span>
+                <span style="font-size:11px;color:#94a3b8;">${new Date(h.created_at).toLocaleString()}</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px;">
+                <div style="background:#fef2f2;padding:12px;border-radius:6px;border:1px solid #fca5a5;">
+                  <div style="color:#dc2626;font-weight:700;margin-bottom:6px;text-transform:uppercase;font-size:10px;">Valores Anteriores</div>
+                  <div style="color:#475569;line-height:1.5;">
+                    <div><b>Tipo:</b> ${valsAnt?.tipo_movimiento || '—'}</div>
+                    <div><b>Concepto:</b> ${valsAnt?.concepto || '—'}</div>
+                    <div><b>Monto:</b> S/ ${Number(valsAnt?.ingreso) > 0 ? valsAnt?.ingreso : valsAnt?.egreso || '0.00'}</div>
+                    <div><b>Solicitante:</b> ${valsAnt?.solicitante || '—'}</div>
+                    <div><b>Área:</b> ${valsAnt?.area || '—'}</div>
+                  </div>
+                </div>
+                <div style="background:#ecfdf5;padding:12px;border-radius:6px;border:1px solid #6ee7b7;">
+                  <div style="color:#059669;font-weight:700;margin-bottom:6px;text-transform:uppercase;font-size:10px;">Valores Nuevos</div>
+                  <div style="color:#475569;line-height:1.5;">
+                    <div><b>Tipo:</b> ${valsNue?.tipo_movimiento || '—'}</div>
+                    <div><b>Concepto:</b> ${valsNue?.concepto || '—'}</div>
+                    <div><b>Monto:</b> S/ ${Number(valsNue?.ingreso) > 0 ? valsNue?.ingreso : valsNue?.egreso || '0.00'}</div>
+                    <div><b>Solicitante:</b> ${valsNue?.solicitante || '—'}</div>
+                    <div><b>Área:</b> ${valsNue?.area || '—'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        historialBody.innerHTML = '<div style="text-align:center;color:#64748b;padding:20px;">No hay historial de cambios para este registro.</div>';
+      }
+    } catch (error) {
+      console.error(error);
+      historialBody.innerHTML = '<div style="text-align:center;color:#dc2626;padding:20px;">Error al cargar el historial.</div>';
+    }
+  };
+
+  document.getElementById('btn-cerrar-historial')?.addEventListener('click', () => {
+    const m = document.getElementById('modal-historial-caja');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('btn-cerrar-historial-2')?.addEventListener('click', () => {
+    const m = document.getElementById('modal-historial-caja');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('modal-historial-caja')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('modal-historial-caja')) {
+      (document.getElementById('modal-historial-caja') as HTMLElement).style.display = 'none';
+    }
+  });
+
 }

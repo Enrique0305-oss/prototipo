@@ -250,6 +250,8 @@ class ProgramacionServicioGrupoController extends Controller
             return ['ok' => false, 'message' => 'Para agrupar, todos deben coincidir en técnicos.'];
         }
 
+        /*
+        // Validación de horas consecutivas desactivada temporalmente
         $ordenadas = $programaciones->sortBy(fn (ProgramacionServicio $prog) => $this->horaToMinutes($prog->hora_inicio))->values();
         for ($i = 1; $i < $ordenadas->count(); $i++) {
             $prev = $ordenadas[$i - 1];
@@ -260,6 +262,7 @@ class ProgramacionServicioGrupoController extends Controller
                 return ['ok' => false, 'message' => 'Los servicios deben ser consecutivos por hora para poder agruparse.'];
             }
         }
+        */
 
         return ['ok' => true];
     }

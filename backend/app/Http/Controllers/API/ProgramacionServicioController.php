@@ -385,14 +385,20 @@ class ProgramacionServicioController extends Controller
             'observaciones'       => 'nullable|string',
             'dias_semana'         => 'nullable|string|max:100',
             'aplicar_recursos_mes_actual' => 'nullable|boolean',
+            'fechas_personalizadas' => 'nullable|array',
+            'fechas_personalizadas.*' => 'date',
         ]);
 
         // Calcular fechas
-        $fechas = $this->calcularFechasPorFrecuencia(
-            $validated['frecuencia'],
-            $validated['fecha_inicio'],
-            $validated['dias_semana'] ?? null
-        );
+        if (!empty($validated['fechas_personalizadas'])) {
+            $fechas = $validated['fechas_personalizadas'];
+        } else {
+            $fechas = $this->calcularFechasPorFrecuencia(
+                $validated['frecuencia'],
+                $validated['fecha_inicio'],
+                $validated['dias_semana'] ?? null
+            );
+        }
 
         if (empty($fechas)) {
             return response()->json([

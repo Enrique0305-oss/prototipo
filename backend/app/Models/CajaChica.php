@@ -30,4 +30,9 @@ class CajaChica extends Model
     {
         return $this->hasMany(CajaChicaDetalle::class, 'caja_chica_id');
     }
+
+    public function historiales()
+    {
+        return $this->hasMany(CajaChicaHistorial::class, 'caja_chica_id');
+    }
 }

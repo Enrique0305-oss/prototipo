@@ -82,6 +82,7 @@ type ItemCalendario = {
   tecnicosLabel: string;
   actividadesLabel: string;
   estadoLabel: string;
+  observacionesLabel: string;
 };
 
 const LOCAL_KEY_GRUPOS_MANUALES = 'prog-servicio-grupos-manuales-v1';
@@ -1804,6 +1805,7 @@ function construirItemCalendarioSingle(p: Programacion): ItemCalendario {
     tecnicosLabel: obtenerLabelTecnicos(p),
     actividadesLabel: nombreActividad(p),
     estadoLabel: p.estado_ejecucion,
+    observacionesLabel: p.observaciones || '',
   };
 }
 
@@ -1833,6 +1835,7 @@ function construirItemCalendarioGrupo(group: GrupoProgramacionManual, programaci
       : ordenadas.some((p) => p.estado_ejecucion === 'En Camino')
       ? 'En Camino'
       : principal.estado_ejecucion,
+    observacionesLabel: Array.from(new Set(ordenadas.map(p => p.observaciones).filter(Boolean))).join(' | '),
   };
 }
 
@@ -1927,6 +1930,8 @@ function validarSeleccionAgrupacion(programacionesSel: Programacion[]): { ok: bo
     return { ok: false, mensaje: 'Para agrupar, todos deben coincidir en técnicos' };
   }
 
+  /*
+  // Validación de horas consecutivas desactivada temporalmente
   const ordenadas = [...programacionesSel].sort((a, b) => parseHoraToMin(a.hora_inicio) - parseHoraToMin(b.hora_inicio));
   for (let i = 1; i < ordenadas.length; i++) {
     const prev = ordenadas[i - 1];
@@ -1937,6 +1942,7 @@ function validarSeleccionAgrupacion(programacionesSel: Programacion[]): { ok: bo
       return { ok: false, mensaje: 'Los servicios deben ser consecutivos por hora para poder agruparse' };
     }
   }
+  */
 
   return { ok: true };
 }
@@ -2161,6 +2167,7 @@ function renderVistaDiaria(): string {
                   <div><strong>Técnico:</strong> ${item.tecnicosLabel}</div>
                   <div><strong>Local:</strong> ${item.plantaLabel}</div>
                   ${item.principal.vehiculo ? `<div><strong>Vehículo:</strong> ${item.principal.vehiculo.placa} - ${item.principal.vehiculo.marca} ${item.principal.vehiculo.modelo}</div>` : ''}
+                  ${item.observacionesLabel ? `<div><strong>Observaciones:</strong> ${item.observacionesLabel}</div>` : ''}
                 </div>
               </div>
             </div>
@@ -4153,13 +4160,22 @@ function renderFormNueva(body: HTMLElement) {
       if (!preview) { resultDiv.innerHTML = '<p>Sin datos</p>'; return; }
       resultDiv.innerHTML = `
         <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-          <div style="padding:12px 16px;background:#f9fafb;font-weight:600;font-size:13px;">Se crearán <strong>${preview.total_programaciones}</strong> programaciones</div>
-          <div style="max-height:200px;overflow-y:auto;padding:8px 16px;">
-            ${preview.fechas.map((f: string, i: number) => `
-              <div style="padding:4px 0;font-size:13px;border-bottom:1px solid #f3f4f6;">
-                ${i + 1}. ${new Date(f + 'T00:00:00').toLocaleDateString('es-PE', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+          <div style="padding:12px 16px;background:#f9fafb;font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center;">
+            <span>Se crearán <strong>${preview.total_programaciones}</strong> programaciones</span>
+            <span style="font-size:11px;font-weight:400;color:#6b7280;">Puedes modificar las fechas</span>
+          </div>
+          <div style="max-height:240px;overflow-y:auto;padding:8px 16px;">
+            ${preview.fechas.map((f: string, i: number) => {
+              const dateObj = new Date(f + 'T00:00:00');
+              const displayDate = dateObj.toLocaleDateString('es-PE', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+              return `
+              <div style="padding:6px 0;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:12px;">
+                <span style="font-size:13px;color:#4b5563;width:24px;text-align:right;">${i + 1}.</span>
+                <input type="date" class="prog-form-control prog-custom-date-input" style="width:140px;padding:4px 8px;font-size:13px;" value="${f}" />
+                <span style="font-size:12px;color:#9ca3af;text-transform:capitalize;">${displayDate.split(',')[0]}</span>
               </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
         </div>`;
     } catch (err) { resultDiv.innerHTML = '<p style="color:#ef4444;">Error al previsualizar</p>'; console.error(err); }
@@ -5056,6 +5072,18 @@ async function submitAnual(body: HTMLElement) {
       return;
     }
     data.dias_semana = checkedDias.map(d => d.value).join(',');
+  }
+
+  // Si el usuario modificó las fechas en la vista previa, recogerlas
+  const dateInputs = body.querySelectorAll('.prog-custom-date-input') as NodeListOf<HTMLInputElement>;
+  if (dateInputs.length > 0) {
+    const customDates: string[] = [];
+    dateInputs.forEach(input => {
+      if (input.value) customDates.push(input.value);
+    });
+    if (customDates.length > 0) {
+      data.fechas_personalizadas = customDates;
+    }
   }
 
   try {

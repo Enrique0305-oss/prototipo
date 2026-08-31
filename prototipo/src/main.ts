@@ -2,7 +2,7 @@ import './style.css'
 import './additional-styles.css'
 import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
-const LOGO_URL = "http://backend.qsci-system.com/images/menu.png";
+const LOGO_URL = "https://backend.qsci-system.com/images/menu.png";
 
 // Inicializar guard de autenticación
 initAuthGuard();
@@ -513,7 +513,28 @@ function renderApp() {
       <!-- Main Content -->
       <main class="main-content${expandedMenu ? ' sidebar-expanded' : ''}${sidebarForceCollapsed ? ' sidebar-force-collapsed' : ''}">
         <header class="top-bar">
-          <div class="user-section">
+          <div class="user-section" style="display:flex; align-items:center; gap: 16px;">
+            <!-- Notification Bell -->
+            <div class="notification-wrapper" style="position:relative; cursor:pointer;" onclick="if(window.toggleNotifications) window.toggleNotifications(event)">
+              <div style="padding:6px; border-radius:50%; transition:background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+              </div>
+              <span id="notification-badge" style="display:none; position:absolute; top:2px; right:4px; background:#ef4444; color:#fff; font-size:10px; font-weight:bold; border-radius:50%; width:16px; height:16px; text-align:center; line-height:16px;">0</span>
+              
+              <div id="notification-dropdown" style="display:none; position:absolute; top:40px; right:0; width:320px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); z-index:1000; overflow:hidden; text-align:left; cursor:default;" onclick="event.stopPropagation()">
+                <div style="padding:14px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+                  <span style="font-weight:600; color:#0f172a;">Notificaciones</span>
+                  <button onclick="if(window.markAllNotificationsRead) window.markAllNotificationsRead()" style="background:none; border:none; color:#3b82f6; font-size:12px; cursor:pointer; font-weight:500;">Marcar leídas</button>
+                </div>
+                <div id="notification-list" style="max-height:300px; overflow-y:auto; padding:0;">
+                  <div style="padding:16px; text-align:center; color:#94a3b8; font-size:13px;">Cargando...</div>
+                </div>
+              </div>
+            </div>
+
             <div class="user-profile" style="cursor: pointer;" onclick="logout()">
               <span>${userName}</span>
               <div class="avatar">${userInitials}</div>
@@ -585,7 +606,7 @@ function renderApp() {
         activeSubMenu = ruta.subMenu;
       }
 
-      // SOLO si es Facturación, traemos la data real
+      // SOLO si es Facturación, traemos la data
       if (menuName === 'Facturación') {
         try {
           const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
@@ -1830,5 +1851,185 @@ function logout() {
 }
 
 (window as any).logout = logout;
+
+// ==========================================
+// NOTIFICATIONS LOGIC
+// ==========================================
+(window as any).toggleNotifications = (event: Event) => {
+  event.stopPropagation();
+  const dropdown = document.getElementById('notification-dropdown');
+  if (dropdown) {
+    if (dropdown.style.display === 'none') {
+      dropdown.style.display = 'block';
+      if ((window as any).loadNotifications) (window as any).loadNotifications();
+    } else {
+      dropdown.style.display = 'none';
+    }
+  }
+};
+
+(window as any).closeNotifications = () => {
+  const dropdown = document.getElementById('notification-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+};
+
+document.addEventListener('click', () => {
+  if ((window as any).closeNotifications) (window as any).closeNotifications();
+});
+
+(window as any).loadNotifications = async () => {
+  const token = authService.getToken();
+  if (!token) return;
+  
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/notificaciones`, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const result = await response.json();
+    if (result.success) {
+      renderNotificationsList(result.data);
+    }
+  } catch (error) {
+    console.error('Error cargando notificaciones:', error);
+  }
+};
+
+function renderNotificationsList(notifs: any[]) {
+  const listEl = document.getElementById('notification-list');
+  const badgeEl = document.getElementById('notification-badge');
+  if (!listEl) return;
+  
+  const unreadCount = notifs.filter(n => !n.read_at).length;
+  if (badgeEl) {
+    if (unreadCount > 0) {
+      badgeEl.style.display = 'block';
+      badgeEl.textContent = String(unreadCount);
+    } else {
+      badgeEl.style.display = 'none';
+    }
+  }
+  
+  if (notifs.length === 0) {
+    listEl.innerHTML = `<div style="padding:16px; text-align:center; color:#94a3b8; font-size:13px;">No tienes notificaciones nuevas</div>`;
+    return;
+  }
+  
+  listEl.innerHTML = notifs.map(n => {
+    const isUnread = !n.read_at;
+    const data = typeof n.data === 'string' ? JSON.parse(n.data) : n.data;
+    
+    return `
+      <div style="padding:12px 14px; border-bottom:1px solid #f1f5f9; display:flex; gap:12px; cursor:pointer; background:${isUnread ? '#f0f9ff' : '#fff'}" onclick="if(window.handleNotificationClick) window.handleNotificationClick('${n.id}', ${data.caja_chica_id})">
+        <div style="margin-top:2px; color:${isUnread ? '#3b82f6' : '#94a3b8'}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="${isUnread ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:13px; font-weight:${isUnread ? '600' : '400'}; color:#0f172a; margin-bottom:4px;">${data.titulo || 'Notificación'}</div>
+          <div style="font-size:12px; color:#64748b; line-height:1.4;">${data.mensaje || ''}</div>
+          <div style="font-size:10px; color:#94a3b8; margin-top:6px;">${new Date(n.created_at).toLocaleString()}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+(window as any).handleNotificationClick = async (notifId: string, cajaId: number) => {
+  if ((window as any).markNotificationRead) {
+    (window as any).markNotificationRead(notifId);
+  }
+  
+  if ((window as any).closeNotifications) {
+    (window as any).closeNotifications();
+  }
+  
+  // Navegar a Finanzas si no estamos ahí
+  if (window.navigateToModule) {
+    window.navigateToModule('Finanzas');
+  } else {
+    const menuFinanzas = document.querySelector('.menu-item[data-menu="Finanzas"]') as HTMLElement;
+    if (menuFinanzas) menuFinanzas.click();
+  }
+  
+  // Buscar la fila y hacerle highlight
+  setTimeout(() => {
+    const row = document.getElementById(`caja-row-${cajaId}`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.style.backgroundColor = '#fef08a'; // yellow highlight
+      setTimeout(() => {
+        row.style.backgroundColor = '';
+      }, 2000);
+    } else {
+       // Si la fila no está, puede que esté en otro mes. Cambiamos el filtro a 'todos'
+       const monthFilter = document.getElementById('cc-month-filter') as HTMLSelectElement;
+       if (monthFilter && monthFilter.value !== 'todos') {
+          monthFilter.value = 'todos';
+          monthFilter.dispatchEvent(new Event('change'));
+          // Esperamos a que recargue la tabla
+          setTimeout(() => {
+             const row2 = document.getElementById(`caja-row-${cajaId}`);
+             if (row2) {
+                row2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                row2.style.backgroundColor = '#fef08a';
+                setTimeout(() => row2.style.backgroundColor = '', 2000);
+             }
+          }, 800);
+       }
+    }
+  }, 300);
+};
+
+(window as any).markNotificationRead = async (id: string) => {
+  const token = authService.getToken();
+  if (!token) return;
+  try {
+    await fetch(`${import.meta.env.VITE_API_URL}/notificaciones/${id}/read`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if ((window as any).loadNotifications) (window as any).loadNotifications();
+  } catch (error) {
+    console.error('Error al marcar leída:', error);
+  }
+};
+
+(window as any).markAllNotificationsRead = async () => {
+  const listEl = document.getElementById('notification-list');
+  if (listEl) listEl.innerHTML = `<div style="padding:16px; text-align:center; color:#94a3b8; font-size:13px;">Marcando...</div>`;
+  
+  const token = authService.getToken();
+  if (!token) return;
+  try {
+    await fetch(`${import.meta.env.VITE_API_URL}/notificaciones/read-all`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if ((window as any).loadNotifications) (window as any).loadNotifications();
+  } catch (error) {
+    console.error('Error al marcar leídas:', error);
+  }
+};
+
+if (authService.isAuthenticated()) {
+  setTimeout(() => {
+    if ((window as any).loadNotifications) (window as any).loadNotifications();
+    setInterval(() => {
+      if ((window as any).loadNotifications) (window as any).loadNotifications();
+    }, 60000);
+  }, 1000);
+}
 
 renderApp();
