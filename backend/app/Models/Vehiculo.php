@@ -16,6 +16,7 @@ class Vehiculo extends Model
         'marca',
         'anio',
         'capacidad_carga',
+        'soat',
         'estado'
     ];
 

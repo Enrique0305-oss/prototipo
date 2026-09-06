@@ -9,6 +9,7 @@ type VehiculoUI = {
   modelo: string;
   anio: number;
   capacidad_carga: number;
+  soat?: string;
   estado: 'Disponible' | 'En Uso' | 'Mantenimiento' | 'Fuera de Servicio';
   programaciones_count?: number;
 };
@@ -334,6 +335,7 @@ function abrirModalVehiculo(v?: VehiculoUI) {
   (document.getElementById('veh-form-modelo') as HTMLInputElement).value = v?.modelo || '';
   (document.getElementById('veh-form-anio') as HTMLInputElement).value = v ? String(v.anio) : String(new Date().getFullYear());
   (document.getElementById('veh-form-capacidad') as HTMLInputElement).value = v ? String(v.capacidad_carga) : '0';
+  (document.getElementById('veh-form-soat') as HTMLInputElement).value = v?.soat || '';
 
   modal.style.display = 'flex';
 }
@@ -350,8 +352,9 @@ function readVehiculoForm() {
   const modelo = (document.getElementById('veh-form-modelo') as HTMLInputElement).value.trim();
   const anio = Number((document.getElementById('veh-form-anio') as HTMLInputElement).value || 0);
   const capacidad_carga = Number((document.getElementById('veh-form-capacidad') as HTMLInputElement).value || 0);
+  const soat = (document.getElementById('veh-form-soat') as HTMLInputElement).value.trim();
 
-  return { id, payload: { placa, marca, modelo, anio, capacidad_carga } };
+  return { id, payload: { placa, marca, modelo, anio, capacidad_carga, soat } };
 }
 
 async function guardarVehiculo() {
@@ -407,6 +410,7 @@ function rowVehiculo(v: VehiculoUI): string {
       <td>${esc(v.modelo)}</td>
       <td>${v.anio}</td>
       <td>${Number(v.capacidad_carga || 0).toFixed(2)} kg</td>
+      <td>${esc(String(v.soat || '-'))}</td>
       <td>${v.programaciones_count ?? 0}</td>
       <td><span class="status-indicator ${badgeEstado(v.estado)}">${v.estado}</span></td>
       <td>
@@ -546,13 +550,14 @@ function bindEvents() {
               <th>MODELO</th>
               <th>AÑO</th>
               <th>CAP. CARGA</th>
+              <th>SOAT</th>
               <th>PROGRAMACIONES</th>
               <th>ESTADO</th>
               <th>ACCIONES</th>
             </tr>
           </thead>
           <tbody id="vehiculos-tbody">
-            <tr><td colspan="8" style="text-align:center; padding: 32px; color:#64748b;">Cargando vehículos...</td></tr>
+            <tr><td colspan="9" style="text-align:center; padding: 32px; color:#64748b;">Cargando vehículos...</td></tr>
           </tbody>
         </table>
       </div>
@@ -571,6 +576,7 @@ function bindEvents() {
               <div class="os-field"><label>Modelo</label><input id="veh-form-modelo" class="os-input" maxlength="100" /></div>
               <div class="os-field"><label>Año</label><input id="veh-form-anio" class="os-input" type="number" min="1900" max="2100" /></div>
               <div class="os-field"><label>Capacidad de Carga (kg)</label><input id="veh-form-capacidad" class="os-input" type="number" min="0" step="0.01" /></div>
+              <div class="os-field"><label>SOAT</label><input id="veh-form-soat" class="os-input" maxlength="20" /></div>
             </div>
           </div>
           <div class="modal-footer">
@@ -1481,6 +1487,7 @@ export async function cargarVehiculos() {
       modelo: v.modelo || '',
       anio: Number(v.anio || 0),
       capacidad_carga: Number(v.capacidad_carga || 0),
+      soat: v.soat || '',
       estado: (v.estado || 'Disponible') as VehiculoUI['estado'],
       programaciones_count: Number(v.programaciones_count || 0),
     }));
@@ -1488,7 +1495,7 @@ export async function cargarVehiculos() {
     asegurarSemillasMantenimiento();
 
     if (cacheVehiculos.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 32px; color:#64748b;">No hay vehículos para los filtros aplicados.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding: 32px; color:#64748b;">No hay vehículos para los filtros aplicados.</td></tr>';
       bindEvents();
       return;
     }
@@ -1497,7 +1504,7 @@ export async function cargarVehiculos() {
     bindEvents();
   } catch (e: any) {
     const msg = e?.data?.message || e?.message || 'No se pudo cargar vehículos';
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 32px; color:#ef4444;">${esc(msg)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 32px; color:#ef4444;">${esc(msg)}</td></tr>`;
     mostrarToast('error', 'Error', msg);
   }
 }

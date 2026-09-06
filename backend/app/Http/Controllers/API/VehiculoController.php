@@ -77,7 +77,8 @@ class VehiculoController extends Controller
             'modelo' => 'required|string|max:100',
             'marca' => 'required|string|max:50',
             'anio' => 'required|integer|min:1900|max:' . (date('Y') + 1),
-            'capacidad_carga' => 'nullable|numeric|min:0'
+            'capacidad_carga' => 'nullable|numeric|min:0',
+            'soat' => 'nullable|string|max:20'
         ], [
             'placa.required' => 'La placa es obligatoria',
             'placa.unique' => 'Ya existe un vehículo con esta placa',
@@ -96,6 +97,7 @@ class VehiculoController extends Controller
             'marca' => $request->marca,
             'anio' => $request->anio,
             'capacidad_carga' => $request->capacidad_carga ?? 0,
+            'soat' => $request->soat,
             'estado' => 'Disponible'
         ]);
 
@@ -138,7 +140,8 @@ class VehiculoController extends Controller
             'modelo' => 'sometimes|string|max:100',
             'marca' => 'sometimes|string|max:50',
             'anio' => 'sometimes|integer|min:1900|max:' . (date('Y') + 1),
-            'capacidad_carga' => 'sometimes|numeric|min:0'
+            'capacidad_carga' => 'sometimes|numeric|min:0',
+            'soat' => 'sometimes|nullable|string|max:20'
         ], [
             'placa.unique' => 'Ya existe otro vehículo con esta placa',
             'anio.min' => 'El año debe ser mayor a 1900',
@@ -148,7 +151,7 @@ class VehiculoController extends Controller
         ]);
 
         // Actualizar solo los campos enviados
-        $camposActualizables = ['placa', 'modelo', 'marca', 'anio', 'capacidad_carga'];
+        $camposActualizables = ['placa', 'modelo', 'marca', 'anio', 'capacidad_carga', 'soat'];
         
         foreach ($camposActualizables as $campo) {
             if ($request->has($campo)) {

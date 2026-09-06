@@ -296,12 +296,13 @@ export interface EquipoFilters extends FilterParams {
 // Vehículos
 
 export interface Vehiculo {
-  id_vehiculo: number;
+  id: number;
   placa: string;
   marca: string;
   modelo: string;
   anio: number;
   capacidad_carga: number;
+  soat?: string;
   estado: 'Disponible' | 'En Uso' | 'Mantenimiento' | 'Fuera de Servicio';
   observaciones?: string;
   created_at?: string;

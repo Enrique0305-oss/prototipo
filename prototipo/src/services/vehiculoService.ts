@@ -22,6 +22,7 @@ export const vehiculoService = {
     modelo: string;
     anio: number;
     capacidad_carga: number;
+    soat?: string;
     observaciones?: string;
   }) => {
     return apiClient.post<ApiResponse<Vehiculo>>('/vehiculos', data);
