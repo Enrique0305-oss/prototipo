@@ -68,17 +68,18 @@
   background: var(--accent-green);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(124, 179, 66, 0.25);
 }
 
 .btn-primary:hover {
   background: #689F38;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(124, 179, 66, 0.3);
+  box-shadow: 0 8px 18px rgba(124, 179, 66, 0.35);
 }
 
 .btn-secondary {
@@ -89,16 +90,18 @@
   background: white;
   color: var(--text-dark);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: var(--shadow-subtle);
 }
 
 .btn-secondary:hover {
   border-color: var(--accent-blue);
   color: var(--accent-blue);
+  background: #f8fafc;
 }
 
 .btn-filter {
@@ -108,9 +111,10 @@
   padding: 10px 16px;
   background: white;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s;
+  font-weight: 500;
 }
 
 .btn-filter:hover {
@@ -138,16 +142,26 @@
 
 .search-input-wrapper svg {
   position: absolute;
-  left: 12px;
+  left: 14px;
   color: var(--text-medium);
 }
 
 .search-input {
   width: 100%;
-  padding: 10px 12px 10px 40px;
+  padding: 11px 14px 11px 42px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
 }
 
 .search-input:focus {

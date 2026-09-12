@@ -489,30 +489,29 @@ export async function cargarAlertaStockBajo() {
 
     if (stockBajo > 0) {
       banner.innerHTML = `
-        <div style="
+        <div id="banner-stock-bajo" style="
+          background: #fef3c7;
+          border: 1px solid #fde68a;
+          border-radius: 16px;
+          padding: 16px 20px;
+          margin-bottom: 20px;
           display: flex;
           align-items: center;
-          gap: 14px;
-          padding: 14px 20px;
-          margin-bottom: 20px;
-          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-          border: 1px solid #f59e0b;
-          border-left: 5px solid #d97706;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(217, 119, 6, 0.15);
-          animation: bannerSlideIn 0.4s ease-out;
+          gap: 16px;
+          box-shadow: 0 10px 20px -5px rgba(217, 119, 6, 0.08);
         ">
           <div style="
-            flex-shrink: 0;
             width: 44px;
             height: 44px;
+            border-radius: 14px;
             background: #d97706;
-            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(217, 119, 6, 0.3);
           ">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
               <line x1="12" y1="9" x2="12" y2="13"></line>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -520,24 +519,25 @@ export async function cargarAlertaStockBajo() {
           </div>
           <div style="flex: 1;">
             <div style="font-weight: 700; font-size: 15px; color: #92400e; margin-bottom: 2px;">
-              ⚠ Alerta de Stock Bajo
+              Alerta de Stock Bajo
             </div>
-            <div style="font-size: 13px; color: #78350f;">
+            <div style="font-size: 13px; color: #78350f; font-weight: 500;">
               Tienes <strong>${stockBajo} producto${stockBajo > 1 ? 's' : ''}</strong> con stock por debajo del nivel de seguridad. Revisa el inventario para reabastecer a tiempo.
             </div>
           </div>
           <button id="btn-ir-inventario" style="
             flex-shrink: 0;
-            padding: 8px 18px;
+            padding: 9px 20px;
             background: #d97706;
             color: white;
             border: none;
-            border-radius: 8px;
-            font-weight: 600;
+            border-radius: 12px;
+            font-weight: 700;
             font-size: 13px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s;
             white-space: nowrap;
+            box-shadow: 0 4px 10px rgba(217, 119, 6, 0.25);
           " onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
             Ir a Inventario →
           </button>
@@ -607,10 +607,6 @@ export async function cargarAlertaMantenimiento() {
     // Color: si hay vencidos → rojo, solo próximos → azul/naranja
     const hayVencidos = vencidos > 0;
     const colorPrimario = hayVencidos ? '#dc2626' : '#2563eb';
-    const colorFondo = hayVencidos
-      ? 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)'
-      : 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 100%)';
-    const colorBorde = hayVencidos ? '#dc2626' : '#2563eb';
     const colorTexto = hayVencidos ? '#991b1b' : '#1e40af';
     const colorTextoSub = hayVencidos ? '#b91c1c' : '#1d4ed8';
 
@@ -646,76 +642,74 @@ export async function cargarAlertaMantenimiento() {
       <div style="
         display: flex;
         align-items: flex-start;
-        gap: 14px;
-        padding: 14px 20px;
+        gap: 16px;
+        padding: 16px 20px;
         margin-bottom: 20px;
-        background: ${colorFondo};
-        border: 1px solid ${colorBorde};
-        border-left: 5px solid ${colorPrimario};
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        animation: bannerSlideIn 0.4s ease-out;
+        background: ${hayVencidos ? '#fef2f2' : '#eff6ff'};
+        border: 1px solid ${hayVencidos ? '#fecaca' : '#bfdbfe'};
+        border-radius: 16px;
+        box-shadow: 0 10px 20px -5px ${hayVencidos ? 'rgba(220, 38, 38, 0.08)' : 'rgba(37, 99, 235, 0.08)'};
       ">
         <div style="
-          flex-shrink: 0;
           width: 44px;
           height: 44px;
+          border-radius: 14px;
           background: ${colorPrimario};
-          border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-top: 2px;
+          flex-shrink: 0;
+          box-shadow: 0 4px 10px ${hayVencidos ? 'rgba(220, 38, 38, 0.3)' : 'rgba(37, 99, 235, 0.3)'};
         ">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="16" y1="2" x2="16" y2="6"></line>
             <line x1="8" y1="2" x2="8" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
         </div>
-        <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 700; font-size: 15px; color: ${colorTexto}; margin-bottom: 4px;">
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 15px; color: ${colorTexto}; margin-bottom: 2px;">
             ${hayVencidos ? 'Mantenimientos Vencidos' : 'Mantenimientos Próximos'}
           </div>
-          <div style="font-size: 13px; color: ${colorTextoSub}; margin-bottom: 8px;">
+          <div style="font-size: 13px; color: ${colorTextoSub}; margin-bottom: 8px; font-weight: 500;">
             ${resumenTexto}
           </div>
-          <div style="display:flex; flex-direction:column; gap:4px;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
             ${itemsHTML}
-            ${masAlertas}
           </div>
+          ${masAlertas}
         </div>
-        <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
-          <button id="btn-ir-mantenimiento" style="
-            padding: 8px 18px;
-            background: ${colorPrimario};
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 13px;
-            cursor: pointer;
-            transition: background 0.2s;
-            white-space: nowrap;
-          " onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-            Ir a Mantenimiento →
-          </button>
-          <button id="btn-cerrar-banner-mant" style="
-            flex-shrink: 0;
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: ${colorTexto};
-            font-size: 20px;
-            line-height: 1;
-            padding: 4px;
-            opacity: 0.6;
-            transition: opacity 0.2s;
-          " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Cerrar alerta">
-            &times;
-          </button>
-        </div>
+        <button id="btn-ir-mantenimiento" style="
+          flex-shrink: 0;
+          padding: 9px 20px;
+          background: ${colorPrimario};
+          color: white;
+          border: none;
+          border-radius: 12px;
+          font-weight: 700;
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.2s;
+          white-space: nowrap;
+          box-shadow: 0 4px 10px ${hayVencidos ? 'rgba(220, 38, 38, 0.25)' : 'rgba(37, 99, 235, 0.25)'};
+        " onmouseover="this.style.background='${colorPrimario}'" onmouseout="this.style.background='${colorPrimario}'">
+          Ir a Mantenimiento →
+        </button>
+        <button id="btn-cerrar-banner-mant" style="
+          flex-shrink: 0;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: ${colorTexto};
+          font-size: 20px;
+          line-height: 1;
+          padding: 4px;
+          opacity: 0.6;
+          transition: opacity 0.2s;
+        " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Cerrar alerta">
+          &times;
+        </button>
       </div>
     `;
 
@@ -769,27 +763,26 @@ export async function cargarAlertaCotizacionesSinOrden() {
       <div style="
         display: flex;
         align-items: center;
-        gap: 14px;
-        padding: 14px 20px;
+        gap: 16px;
+        padding: 16px 20px;
         margin-bottom: 20px;
-        background: linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 100%);
-        border: 1px solid #10b981;
-        border-left: 5px solid #059669;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(5, 150, 105, 0.15);
-        animation: bannerSlideIn 0.4s ease-out;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 16px;
+        box-shadow: 0 10px 20px -5px rgba(5, 150, 105, 0.08);
       ">
         <div style="
-          flex-shrink: 0;
           width: 44px;
           height: 44px;
+          border-radius: 14px;
           background: #059669;
-          border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
+          flex-shrink: 0;
+          box-shadow: 0 4px 10px rgba(5, 150, 105, 0.3);
         ">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
             <line x1="9" y1="15" x2="15" y2="15"></line>
@@ -798,24 +791,25 @@ export async function cargarAlertaCotizacionesSinOrden() {
         </div>
         <div style="flex: 1;">
           <div style="font-weight: 700; font-size: 15px; color: #065f46; margin-bottom: 2px;">
-             Cotizaciones Aceptadas Pendientes
+            Cotizaciones Aceptadas Pendientes
           </div>
-          <div style="font-size: 13px; color: #047857;">
+          <div style="font-size: 13px; color: #047857; font-weight: 500;">
             Tienes <strong>${total}</strong> cotización${total > 1 ? 'es' : ''} aceptada${total > 1 ? 's' : ''} sin orden generada: ${detalleTexto}.
           </div>
         </div>
         <button id="btn-ir-cotizaciones" style="
           flex-shrink: 0;
-          padding: 8px 18px;
+          padding: 9px 20px;
           background: #059669;
           color: white;
           border: none;
-          border-radius: 8px;
-          font-weight: 600;
+          border-radius: 12px;
+          font-weight: 700;
           font-size: 13px;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: all 0.2s;
           white-space: nowrap;
+          box-shadow: 0 4px 10px rgba(5, 150, 105, 0.25);
         " onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
           Ir a Cotizaciones →
         </button>
