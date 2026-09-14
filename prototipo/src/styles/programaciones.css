@@ -922,12 +922,21 @@
 
 .prog-form-control {
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 14px;
   background: white;
   transition: all 0.2s;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.prog-form-control option {
+  white-space: normal;
+  word-wrap: break-word;
+  max-width: 100%;
 }
 
 .prog-form-control:focus {

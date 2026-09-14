@@ -4003,23 +4003,33 @@ function renderFormNueva(body: HTMLElement) {
     const detallesDiv = body.querySelector('#detallesODS') as HTMLElement;
 
     if (ods && ods.detalles.length > 0) {
-      selectServicio.innerHTML = '<option value="">Seleccionar servicio...</option>' +
-        ods.detalles.map(d => {
-          const areaData = Array.isArray((d as any).id_cliente_planta_area)
-            ? (d as any).id_cliente_planta_area.join(',')
-            : ((d as any).id_cliente_planta_area || '');
-          return `<option value="${d.id_servicio}" data-frecuencia="${d.frecuencia || ''}" data-local="${d.local || ''}" data-id-planta="${d.id_cliente_planta || ''}" data-id-area="${areaData}">${d.servicio_nombre}${d.frecuencia ? ' (' + d.frecuencia + ')' : ''}</option>`;
-        }).join('');
-      grupoServicio.style.display = 'block';
-      detallesDiv.innerHTML = `<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;">
-        <strong>Cliente:</strong> ${ods.cliente} &nbsp;|&nbsp; <strong>Servicios:</strong> ${ods.detalles.length}
-      </div>`;
-      // Cargar plantas del cliente de esta ODS
+      // Cargar plantas del cliente de esta ODS antes de construir las opciones
       if (ods.id_cliente) {
         await cargarPlantasClienteProg(ods.id_cliente);
         const plantaSel = body.querySelector('#newPlantaSelect') as HTMLSelectElement;
         if (plantaSel) plantaSel.innerHTML = getPlantaOptionsProg();
       }
+
+      selectServicio.innerHTML = '<option value="">Seleccionar servicio...</option>' +
+        ods.detalles.map(d => {
+          const areaData = Array.isArray((d as any).id_cliente_planta_area)
+            ? (d as any).id_cliente_planta_area.join(',')
+            : ((d as any).id_cliente_planta_area || '');
+
+          // Buscar el nombre de la planta para identificarla en el desplegable
+          let nombrePlanta = (d as any).local || '';
+          if (!nombrePlanta && d.id_cliente_planta) {
+            const plantaEncontrada = plantasClienteDataProg.find((p: any) => p.id == d.id_cliente_planta);
+            if (plantaEncontrada) nombrePlanta = plantaEncontrada.nombre;
+          }
+          const infoPlanta = nombrePlanta ? ` [Planta: ${nombrePlanta}]` : '';
+
+          return `<option value="${d.id_servicio}" data-frecuencia="${d.frecuencia || ''}" data-local="${d.local || ''}" data-id-planta="${d.id_cliente_planta || ''}" data-id-area="${areaData}">${d.servicio_nombre}${d.frecuencia ? ' (' + d.frecuencia + ')' : ''}${infoPlanta}</option>`;
+        }).join('');
+      grupoServicio.style.display = 'block';
+      detallesDiv.innerHTML = `<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;">
+        <strong>Cliente:</strong> ${ods.cliente} &nbsp;|&nbsp; <strong>Servicios:</strong> ${ods.detalles.length}
+      </div>`;
     } else {
       grupoServicio.style.display = 'none';
       detallesDiv.innerHTML = '';
