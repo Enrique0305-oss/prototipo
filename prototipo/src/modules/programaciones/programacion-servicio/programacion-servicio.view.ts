@@ -56,6 +56,15 @@ let resumenPendientesRecursos: ResumenPendientesRecursos = {
 let formatoOperacionalAutomaticoActual: FormatoOperacionalCalculoRespuesta | null = null;
 let formatoOperacionalAutomaticoProgramacionId: number | null = null;
 
+function escapeHtml(texto: string): string {
+  return (texto || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const FORMATOS_FICHAS_SERVICIO = [
   'CONTROL DE ROEDORES',
   'CONTROL DE INSECTOS RASTREROS',
@@ -1291,6 +1300,7 @@ async function cargarDatosIniciales() {
     })) as ProgramacionExtendida[];
 
     programacionesData = [...servicioMapeado, ...visitaMapeado, ...fabricacionMapeado, ...otrosMapeado] as Programacion[];
+    (window as any).__PROGRAMACIONES_DATA__ = programacionesData;
     const tecnicosRaw = extractList<Tecnico>(tecRes);
     const vehiculosRaw = extractList<Vehiculo>(vehRes);
 
@@ -2167,6 +2177,49 @@ function renderVistaDiaria(): string {
                   <div><strong>Técnico:</strong> ${item.tecnicosLabel}</div>
                   <div><strong>Local:</strong> ${item.plantaLabel}</div>
                   ${item.principal.vehiculo ? `<div><strong>Vehículo:</strong> ${item.principal.vehiculo.placa} - ${item.principal.vehiculo.marca} ${item.principal.vehiculo.modelo}</div>` : ''}
+                  ${(() => {
+                    const insumosList = item.programaciones.flatMap((p) => p.insumos || []);
+                    const equiposList = item.programaciones.flatMap((p) => {
+                      const receta = (p as any).orden_servicio?.receta_servicio
+                        || (p as any).orden_servicio?.cotizacion?.receta_servicio
+                        || (p as any).receta_servicio
+                        || [];
+                      return Array.isArray(receta)
+                        ? receta.filter((r: any) => r.equipo || r.equipo_descripcion || r.id_equipo)
+                        : [];
+                    });
+
+                    if (insumosList.length === 0 && equiposList.length === 0) return '';
+
+                    return `
+                      <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #cbd5e1;">
+                        <div style="font-size:12px;font-weight:600;color:#334155;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                          <span>Equipos e Insumos (${equiposList.length + insumosList.length}):</span>
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:5px;">
+                          ${equiposList.map((eq: any) => {
+                            const nombreEq = eq.equipo?.descripcion || eq.equipo?.nombre || eq.equipo_descripcion || 'Equipo';
+                            const cantEq = eq.cantidad || eq.cantidad_asignada || 1;
+                            return `
+                              <span style="display:inline-flex;align-items:center;gap:5px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:500;">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
+                                ${escapeHtml(nombreEq)}
+                                <strong style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:4px;font-size:10px;">x${cantEq}</strong>
+                              </span>
+                            `;
+                          }).join('')}
+                          ${insumosList.map((ins: any) => `
+                            <span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:500;">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                              ${escapeHtml(ins.producto?.descripcion || 'Insumo')}
+                              <strong style="background:#dcfce7;color:#15803d;padding:1px 5px;border-radius:4px;font-size:10px;">x${ins.cantidad_asignada}</strong>
+                            </span>
+                          `).join('')}
+                        </div>
+                      </div>
+                    `;
+                  })()}
                   ${item.observacionesLabel ? `<div><strong>Observaciones:</strong> ${item.observacionesLabel}</div>` : ''}
                 </div>
               </div>
@@ -3781,9 +3834,14 @@ function renderFormNueva(body: HTMLElement) {
           <h3 class="prog-form-section-title">Cliente y Orden de Servicio</h3>
           <div class="prog-form-group">
             <label class="prog-form-label">Cliente (Empresa) <span class="prog-required">*</span></label>
-            <select class="prog-form-control" id="selectClienteODS" required>
-              <option value="">Seleccionar cliente...</option>
-            </select>
+            <select class="prog-form-control" id="selectClienteODS" required style="display:none;"></select>
+            <div id="cliente-combo-prog" style="position:relative;">
+              <input type="text" id="cliente-search-prog" class="prog-form-control" placeholder="Buscar cliente por nombre..." autocomplete="off"
+                style="width:100%;padding-right:32px;" />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+              <div id="cliente-dropdown-prog" style="display:none;position:absolute;z-index:9999;top:100%;left:0;right:0;max-height:220px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+              </div>
+            </div>
           </div>
           <div class="prog-form-group" style="margin-top: 12px;">
             <label class="prog-form-label">ODS Aprobada <span class="prog-required">*</span></label>
@@ -3963,7 +4021,10 @@ function renderFormNueva(body: HTMLElement) {
   bindFormatoFichasInteractionsServicio(body);
 
   const selectClienteODS = body.querySelector('#selectClienteODS') as HTMLSelectElement;
-  if (selectClienteODS) {
+  const clienteSearchProg = body.querySelector('#cliente-search-prog') as HTMLInputElement | null;
+  const clienteDropdownProg = body.querySelector('#cliente-dropdown-prog') as HTMLElement | null;
+
+  if (selectClienteODS && clienteSearchProg && clienteDropdownProg) {
     const clientesUnicos = new Map<number, {id: number, nombre: string}>();
     odsDisponibles.forEach(o => {
       if (o.id_cliente && !clientesUnicos.has(o.id_cliente)) {
@@ -3973,6 +4034,57 @@ function renderFormNueva(body: HTMLElement) {
     const clientesList = Array.from(clientesUnicos.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
     selectClienteODS.innerHTML = '<option value="">Seleccionar cliente...</option>' +
       clientesList.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+
+    const renderDropdownProg = () => {
+      clienteDropdownProg.innerHTML = `<div class="cliente-prog-opt" data-id="" style="padding:8px 12px;cursor:pointer;font-size:13px;color:#94a3b8;border-bottom:1px solid #f1f5f9;">Seleccionar cliente...</div>` +
+        clientesList.map(c => `<div class="cliente-prog-opt" data-id="${c.id}" data-text="${escapeHtml(c.nombre)}" style="padding:8px 12px;cursor:pointer;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;transition:background .15s;">${escapeHtml(c.nombre)}</div>`).join('');
+    };
+
+    renderDropdownProg();
+
+    const filtrarClientesProg = () => {
+      const term = clienteSearchProg.value.toLowerCase().trim();
+      const opts = clienteDropdownProg.querySelectorAll('.cliente-prog-opt');
+      opts.forEach((el) => {
+        const opt = el as HTMLElement;
+        const text = (opt.dataset.text || opt.textContent || '').toLowerCase();
+        if (!term || text.includes(term) || opt.dataset.id === '') {
+          opt.style.display = 'block';
+        } else {
+          opt.style.display = 'none';
+        }
+      });
+    };
+
+    clienteSearchProg.addEventListener('focus', () => {
+      clienteDropdownProg.style.display = 'block';
+      filtrarClientesProg();
+    });
+
+    clienteSearchProg.addEventListener('input', () => {
+      clienteDropdownProg.style.display = 'block';
+      filtrarClientesProg();
+    });
+
+    clienteDropdownProg.addEventListener('click', (e) => {
+      const opt = (e.target as HTMLElement).closest('.cliente-prog-opt') as HTMLElement | null;
+      if (!opt) return;
+      const idStr = opt.dataset.id || '';
+      const textStr = opt.dataset.text || '';
+
+      selectClienteODS.value = idStr;
+      clienteSearchProg.value = idStr ? textStr : '';
+      clienteDropdownProg.style.display = 'none';
+
+      selectClienteODS.dispatchEvent(new Event('change'));
+    });
+
+    document.addEventListener('click', (e) => {
+      const combo = body.querySelector('#cliente-combo-prog') as HTMLElement | null;
+      if (combo && !combo.contains(e.target as Node)) {
+        clienteDropdownProg.style.display = 'none';
+      }
+    });
 
     selectClienteODS.addEventListener('change', () => {
       const idCliente = parseInt(selectClienteODS.value);

@@ -1177,7 +1177,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
 
         try {
             const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
-            let url = `http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesSeleccionado}&anio=${(window as any).anioActual}`;
+            let url = `http://pruebabackend.qsci-system.com/api/v1/proyecciones?mes=${mesSeleccionado}&anio=${(window as any).anioActual}`;
 
             // Agregar filtro de empresa si está seleccionada
             if (empresaSeleccionada) {
@@ -1308,7 +1308,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
             else if (tipo === 'asesoria') {
                 endpoint = 'ordenes-asesoria';
             }
-            const resp = await fetch(`http://backend.qsci-system.com/api/v1/${endpoint}`, { headers: getAuthHeaders() });
+            const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/${endpoint}`, { headers: getAuthHeaders() });
             const result = await resp.json();
 
             selectOrden.disabled = false;
@@ -1332,7 +1332,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
 
         try {
             // LLAMAMOS A LA RUTA QUE PROBASTE EN THUNDER CLIENT
-            const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/buscar-orden/${tipo}/${id}`, { headers: getAuthHeaders() });
+            const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/buscar-orden/${tipo}/${id}`, { headers: getAuthHeaders() });
             const result = await resp.json();
 
             if (result.success) {
@@ -1508,7 +1508,7 @@ export function initFacturacionEvents(proyecciones: any[] = []) {
         console.log("Enviando al controlador:", payload);
 
         try {
-            const resp = await fetch('http://backend.qsci-system.com/api/v1/proyecciones', {
+            const resp = await fetch('http://pruebabackend.qsci-system.com/api/v1/proyecciones', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1624,7 +1624,7 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
     // Función auxiliar para llamar al backend
     async function ejecutarDuplicacion(ids: string[]) {
         try {
-            const resp = await fetch('http://backend.qsci-system.com/api/v1/proyecciones/duplicar', {
+            const resp = await fetch('http://pruebabackend.qsci-system.com/api/v1/proyecciones/duplicar', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1659,7 +1659,7 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
             if (!id) return;
 
             try {
-                const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/${id}`, {
                     headers: getAuthHeaders()
                 });
                 const result = await resp.json();
@@ -1729,7 +1729,7 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
             if (!id) return;
 
             try {
-                const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/${id}`, {
                     headers: getAuthHeaders()
                 });
                 const result = await resp.json();
@@ -1830,7 +1830,7 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
                 btnConfirm.textContent = 'Procesando...';
                 
                 try {
-                    const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${id}`, {
+                    const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/${id}`, {
                         method: 'DELETE',
                         headers: getAuthHeaders()
                     });
@@ -1844,7 +1844,7 @@ export function initFacturacionTableEvents(proyecciones: any[] = []) {
                         const mesActual = (window as any).mesActual || new Date().getMonth() + 1;
                         const anioActual = (window as any).anioActual || new Date().getFullYear();
                         const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
-                        const respuesta = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, {
+                        const respuesta = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, {
                             headers: {
                                 'Accept': 'application/json',
                                 ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -1979,7 +1979,7 @@ export function attachModalHandlers() {
         };
 
         try {
-            const resp = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/${idProyeccion}`, {
+            const resp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/${idProyeccion}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1998,7 +1998,7 @@ export function attachModalHandlers() {
                 const mesActual = (window as any).mesActual || new Date().getMonth() + 1;
                 const anioActual = (window as any).anioActual || new Date().getFullYear();
                 const token = sessionStorage.getItem('qsci_token') || localStorage.getItem('qsci_token');
-                const respuesta = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, {
+                const respuesta = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, {
                     headers: {
                         'Accept': 'application/json',
                         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

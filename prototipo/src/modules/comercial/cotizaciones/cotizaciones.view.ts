@@ -1130,7 +1130,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
       clienteService.getAll({ estado: 'Acepta' } as any),
       servicioService.getAll({ estado: 'activo', per_page: 100 }),
       productoService.getAll({ estado: 'Activo', per_page: 100 } as any),
-      catalogoCapAudService.getAll({ estado: 'activo' })
+      catalogoCapAudService.getAll({ estado: 'activo', per_page: 1000 } as any)
     ]);
 
     console.log('[FORM] ✅ Datos cargados - Clientes:', clientesRes.data?.length, 'Servicios:', serviciosRes.data?.length, 'Productos:', productosRes.data?.length);
@@ -1469,7 +1469,7 @@ async function abrirFormularioCotizacion(tipoFijo?: string) {
             </div>
           </div>
           <div style="font-size:12px;color:#64748b;margin-bottom:8px;">Cargue la receta según los servicios seleccionados y ajuste productos según criterio del cliente.</div>
-          <div class="table-container" style="max-height:620px;overflow:auto;">
+          <div class="table-container" style="overflow:visible;">
             <table class="data-table" style="min-width: 900px;">
               <thead>
                 <tr>
@@ -3405,9 +3405,27 @@ function renderRecetaServicio(panelEl: HTMLElement) {
     </tr>`;
     rows.forEach((r) => {
       const idx = recetaServicioRows.indexOf(r);
+      const productos = getProductosDispositivosReceta();
+      const productoSel = productos.find((p: any) => Number(p.id) === Number(r.id_producto));
+      const labelSel = productoSel ? `${productoSel.descripcion}${productoSel.unidad ? ` (${productoSel.unidad})` : ''}` : '';
+
       html += `<tr>
         <td style="font-size:12px;color:#64748b;">${r.equipo_descripcion || 'Sin equipo'}</td>
-        <td><select class="receta-prod-select" data-idx="${idx}" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;">${buildProductoOptionsReceta(r.id_producto)}</select></td>
+        <td>
+          <div class="receta-producto-combo" style="position:relative;">
+            <input type="hidden" class="receta-prod-id" data-idx="${idx}" value="${r.id_producto || ''}">
+            <input type="text" class="receta-prod-search" data-idx="${idx}" placeholder="Buscar producto..." autocomplete="off" value="${escapeHtml(labelSel)}"
+              style="width:100%;padding:6px 28px 6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;" />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+            <div class="receta-prod-dropdown" style="display:none;position:absolute;z-index:9999;top:100%;left:0;right:0;max-height:180px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+              <div class="receta-prod-option" data-idx="${idx}" data-id="" style="padding:6px 10px;cursor:pointer;font-size:13px;color:#94a3b8;border-bottom:1px solid #f1f5f9;">Seleccione producto...</div>
+              ${productos.map((p: any) => {
+                const text = `${p.descripcion}${p.unidad ? ` (${p.unidad})` : ''}`;
+                return `<div class="receta-prod-option" data-idx="${idx}" data-id="${p.id}" data-text="${escapeHtml(text)}" style="padding:6px 10px;cursor:pointer;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;transition:background .15s;">${escapeHtml(text)}</div>`;
+              }).join('')}
+            </div>
+          </div>
+        </td>
         <td style="text-align:center;"><input type="number" min="0.01" step="0.01" class="receta-cantidad-input" data-idx="${idx}" value="${r.cantidad}" style="width:90px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;text-align:center;"></td>
         <td><input type="text" class="receta-obs-input" data-idx="${idx}" value="${r.observacion || ''}" maxlength="255" placeholder="Opcional" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;"></td>
         <td style="text-align:center;"><button type="button" class="btn-eliminar-receta" data-idx="${idx}" style="background:none;border:none;cursor:pointer;color:#ef4444;padding:4px;" title="Eliminar producto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
@@ -3417,13 +3435,72 @@ function renderRecetaServicio(panelEl: HTMLElement) {
 
   tbody.innerHTML = html;
 
-  panelEl.querySelectorAll('.receta-prod-select').forEach((el) => {
-    el.addEventListener('change', (e) => {
-      const idx = Number((e.target as HTMLSelectElement).dataset.idx || '-1');
-      if (idx < 0 || !recetaServicioRows[idx]) return;
-      recetaServicioRows[idx].id_producto = Number((e.target as HTMLSelectElement).value || 0);
+  // Eventos para combobox buscable de productos en receta
+  panelEl.querySelectorAll('.receta-producto-combo').forEach((combo) => {
+    const searchInput = combo.querySelector('.receta-prod-search') as HTMLInputElement | null;
+    const dropdown = combo.querySelector('.receta-prod-dropdown') as HTMLElement | null;
+    const hiddenInput = combo.querySelector('.receta-prod-id') as HTMLInputElement | null;
+    if (!searchInput || !dropdown || !hiddenInput) return;
+
+    const filtrar = () => {
+      const term = searchInput.value.toLowerCase().trim();
+      const opciones = dropdown.querySelectorAll('.receta-prod-option');
+      let count = 0;
+      opciones.forEach((opt) => {
+        const el = opt as HTMLElement;
+        const text = (el.dataset.text || el.textContent || '').toLowerCase();
+        if (!term || text.includes(term) || el.dataset.id === '') {
+          el.style.display = 'block';
+          count++;
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    };
+
+    searchInput.addEventListener('focus', () => {
+      // Cerrar otros dropdowns de productos abiertos
+      panelEl.querySelectorAll('.receta-prod-dropdown').forEach((d) => {
+        if (d !== dropdown) (d as HTMLElement).style.display = 'none';
+      });
+      dropdown.style.display = 'block';
+      filtrar();
+    });
+
+    searchInput.addEventListener('input', () => {
+      dropdown.style.display = 'block';
+      filtrar();
+    });
+
+    dropdown.addEventListener('click', (e) => {
+      const opt = (e.target as HTMLElement).closest('.receta-prod-option') as HTMLElement | null;
+      if (!opt) return;
+      const idx = Number(hiddenInput.dataset.idx || '-1');
+      const val = Number(opt.dataset.id || '0');
+      const text = opt.dataset.text || (val === 0 ? '' : opt.textContent?.trim() || '');
+
+      hiddenInput.value = val > 0 ? String(val) : '';
+      searchInput.value = text;
+      dropdown.style.display = 'none';
+
+      if (idx >= 0 && recetaServicioRows[idx]) {
+        recetaServicioRows[idx].id_producto = val;
+      }
     });
   });
+
+  // Listener global para cerrar dropdowns de receta si hace clic afuera
+  if (!(panelEl as any)._recetaProdComboClickListener) {
+    const closeListener = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.receta-producto-combo')) {
+        panelEl.querySelectorAll('.receta-prod-dropdown').forEach((d) => {
+          (d as HTMLElement).style.display = 'none';
+        });
+      }
+    };
+    document.addEventListener('click', closeListener);
+    (panelEl as any)._recetaProdComboClickListener = true;
+  }
 
   panelEl.querySelectorAll('.receta-cantidad-input').forEach((el) => {
     el.addEventListener('input', (e) => {

@@ -13,8 +13,13 @@ function getDisabledFieldsState(): DisabledFieldsState {
 
 function buildItemOptions(data: CotizacionTipoData): string {
   let options = '<option value="">Seleccione...</option>';
-  const filtrados = data.tipoCapAudFiltro 
-    ? data.catalogoCapAud.filter((c: any) => c.tipo === data.tipoCapAudFiltro)
+  const filtro = String(data.tipoCapAudFiltro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  const filtrados = filtro 
+    ? data.catalogoCapAud.filter((c: any) => {
+        const tipoItem = String(c?.tipo || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return tipoItem.includes(filtro);
+      })
     : data.catalogoCapAud;
   
   filtrados.forEach((c: any) => {

@@ -142,7 +142,8 @@ async function cargarPendientes() {
           <tbody>
             ${pendientes.map((op) => {
               const cliente = op.cliente?.nombre_empresa || '—';
-              const productos = op.detalles?.reduce((acc, d) => acc + (d.cantidad || 0), 0) || 0;
+              const productosFisicos = op.detalles?.filter((d: any) => d.id_producto && d.id_producto > 0 && d.producto?.id && !d.es_servicio_extra && d.tipo !== 'servicio') || [];
+              const productos = productosFisicos.reduce((acc, d) => acc + (d.cantidad || 0), 0);
               return `
                 <tr>
                   <td><strong>${op.numero_orden}</strong></td>
@@ -203,7 +204,8 @@ async function cargarHistorial() {
           <tbody>
             ${historial.map((op) => {
               const cliente = op.cliente?.nombre_empresa || '—';
-              const productos = op.detalles?.reduce((acc, d) => acc + (d.cantidad || 0), 0) || 0;
+              const productosFisicos = op.detalles?.filter((d: any) => d.id_producto && d.id_producto > 0 && d.producto?.id && !d.es_servicio_extra && d.tipo !== 'servicio') || [];
+              const productos = productosFisicos.reduce((acc, d) => acc + (d.cantidad || 0), 0);
               const fechaSalida = op.salidas_kardex?.[0]?.fecha_movimiento || '';
               return `
                 <tr>
@@ -263,6 +265,34 @@ async function abrirModalConfirmacion(idOrdenProducto: number) {
       return;
     }
 
+    // Filtrar únicamente productos físicos reales (excluyendo servicios extras e intangibles)
+    const detallesFisicos = (orden.detalles || []).filter((det: OrdenProductoSalidaDetalle) => {
+      const tieneProductoId = det.id_producto && det.id_producto > 0;
+      const tieneProductoObj = det.producto && det.producto.id;
+      const esServicioExtra = (det as any).tipo === 'servicio' || (det as any).es_servicio_extra || (det as any).tipo_item === 'servicio_extra';
+      return tieneProductoId && tieneProductoObj && !esServicioExtra;
+    });
+
+    if (detallesFisicos.length === 0) {
+      body.innerHTML = `
+        <div class="sp-info-grid">
+          <div class="sp-info-item"><strong>Orden:</strong> ${orden.numero_orden}</div>
+          <div class="sp-info-item"><strong>Fecha envio:</strong> ${formatearFecha(orden.fecha_envio)}</div>
+          <div class="sp-info-item"><strong>Cliente:</strong> ${orden.cliente?.nombre_empresa || '—'}</div>
+        </div>
+        <div class="sp-empty" style="margin-top:20px;padding:24px;text-align:center;background:#f8fafc;border-radius:12px;border:1px dashed #cbd5e1;">
+          <p style="font-weight:600;color:#334155;margin-bottom:6px;">Esta Orden de Producto contiene únicamente Servicios Extras (sin productos físicos).</p>
+          <p style="font-size:13px;color:#64748b;margin:0;">Los servicios extras no requieren despacho físico ni salida de almacén. La orden queda gestionada a nivel comercial.</p>
+        </div>
+        <div class="prov-modal-footer">
+          <button class="prov-btn-secondary" id="sp-prod-cerrar-solo-servicios">Cerrar</button>
+        </div>
+      `;
+      document.getElementById('sp-prod-cerrar-solo-servicios')?.addEventListener('click', cerrarModal);
+      enlazarEventosCerrarModal();
+      return;
+    }
+
     body.innerHTML = `
       <div class="sp-info-grid">
         <div class="sp-info-item"><strong>Orden:</strong> ${orden.numero_orden}</div>
@@ -283,7 +313,7 @@ async function abrirModalConfirmacion(idOrdenProducto: number) {
             </tr>
           </thead>
           <tbody>
-            ${(orden.detalles || []).map((det: OrdenProductoSalidaDetalle, idx: number) => {
+            ${detallesFisicos.map((det: OrdenProductoSalidaDetalle, idx: number) => {
               const disponible = det.producto?.inventario?.cantidad_disponible || 0;
               const ok = disponible >= det.cantidad;
               return `
@@ -338,7 +368,7 @@ async function abrirModalConfirmacion(idOrdenProducto: number) {
     enlazarEventosCerrarModal();
     document.getElementById('sp-prod-btn-cancelar')?.addEventListener('click', cerrarModal);
     document.getElementById('sp-prod-btn-confirmar')?.addEventListener('click', confirmarSalidaOrden);
-    await inicializarSelectoresLoteSalidaProducto(orden.detalles || []);
+    await inicializarSelectoresLoteSalidaProducto(detallesFisicos);
   } catch (error: any) {
     console.error('Error cargando detalle de orden de producto:', error);
     body.innerHTML = '<div class="sp-error">No se pudo cargar el detalle de la orden</div>';

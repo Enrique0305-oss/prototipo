@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -830,6 +830,9 @@
                     @else
                         @foreach($cotizacion->detalles as $detalle)
                         @php
+                            $plantaDetalle = $detalle->planta ?? ($cotizacion->cliente ? $cotizacion->cliente->plantas()->find($detalle->id_cliente_planta) : null);
+                            $plantaTexto = $plantaDetalle?->nombre ?? '';
+
                             $areasDetalle = collect();
                             if (method_exists($detalle, 'areas')) {
                                 $areasDetalle = $detalle->areas()->pluck('nombre')->filter()->values();
@@ -839,8 +842,11 @@
                         <tr>
                             <td>
                                 <strong>{{ $detalle->servicio?->nombre ?? $detalle?->descripcion_manual ?? 'N/A' }}</strong>
+                                @if($plantaTexto !== '')
+                                    <br><small style="display: block; margin-top: 2px; color: #1e293b; font-size: 10px; line-height: 1.2;"><em>Planta: {{ $plantaTexto }}</em></small>
+                                @endif
                                 @if($areaTexto !== '')
-                                    <br><small style="display: block; margin-top: 2px; color: #131354; font-size: 10px; line-height: 1.2;"><em>Área: {{ $areaTexto }}</em></small>
+                                    <small style="display: block; margin-top: 1px; color: #131354; font-size: 10px; line-height: 1.2;"><em>Área: {{ $areaTexto }}</em></small>
                                 @endif
                             </td>
                             @if(!$mostrarServicioFosfina)

@@ -2,7 +2,7 @@ import './style.css'
 import './additional-styles.css'
 import { initAuthGuard, tieneAccesoModulo } from './modules/auth/auth.guard'
 import { authService } from './modules/auth/auth.service'
-const LOGO_URL = "https://backend.qsci-system.com/images/menu.png";
+const LOGO_URL = "https://pruebabackend.qsci-system.com/images/menu.png";
 
 // Inicializar guard de autenticación
 initAuthGuard();
@@ -72,6 +72,9 @@ import type { Programacion } from './modules/programaciones/programaciones.types
 import { renderInvestigacion } from './modules/investigacion/investigacion.view'
 // Usuarios
 import { renderUsuarios, initUsuariosEvents } from './modules/usuarios/usuarios.view'
+// Asistente IA
+import { renderAsistenteIaWidget, initAsistenteIaEvents } from './modules/asistente-ia/asistente.view'
+
 
 let activeMenu = 'Dashboard';
 let activeSubMenu = '';
@@ -547,6 +550,7 @@ function renderApp() {
         </div>
       </main>
     </div>
+    ${renderAsistenteIaWidget()}
   `;
   // Al final de tu función renderApp() o donde inicializas otros eventos:
   if (activeMenu === 'Facturación') {
@@ -616,18 +620,18 @@ function renderApp() {
           };
 
           // Cargar proyecciones
-          const resProy = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, { headers });
+          const resProy = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones?mes=${mesActual}&anio=${anioActual}`, { headers });
           const resultProy = await resProy.json();
           const rawDataProy = resultProy.data || resultProy;
           misProyecciones = Array.isArray(rawDataProy) ? rawDataProy : [];
 
           // Cargar empresas
-          const resEmp = await fetch(`http://backend.qsci-system.com/api/v1/empresas`, { headers });
+          const resEmp = await fetch(`http://pruebabackend.qsci-system.com/api/v1/empresas`, { headers });
           const resultEmp = await resEmp.json();
           misEmpresas = resultEmp.data || [];
 
           // Cargar órdenes pendientes
-          const resPend = await fetch(`http://backend.qsci-system.com/api/v1/proyecciones/pendientes`, { headers });
+          const resPend = await fetch(`http://pruebabackend.qsci-system.com/api/v1/proyecciones/pendientes`, { headers });
           const resultPend = await resPend.json();
           misOrdenesPendientes = resultPend.data || [];
 
@@ -769,6 +773,9 @@ function renderApp() {
   if (activeMenu === 'Almacén' && activeSubMenu === 'Gestión de Vehículos') {
     setTimeout(() => initVehiculosEvents(), 0);
   }
+
+  // Inicializar eventos del Asistente Virtual QSCI IA
+  setTimeout(() => initAsistenteIaEvents(), 0);
 }
 
 
